@@ -1,0 +1,19 @@
+{
+  "name": "bash-agent",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@langchain/langgraph": "^0.4.9",
+    "@langchain/openai": "^0.4.9",
+    "dotenv": "^17.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.1",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0"
+  }
+}
