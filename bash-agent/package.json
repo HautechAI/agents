@@ -9,7 +9,8 @@
   "dependencies": {
     "@langchain/langgraph": "^0.4.9",
     "@langchain/openai": "^0.4.9",
-    "dotenv": "^17.2.2"
+    "dotenv": "^17.2.2",
+    "zod": "^4.1.9"
   },
   "devDependencies": {
     "@types/node": "^24.5.1",
