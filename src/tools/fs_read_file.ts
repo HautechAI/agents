@@ -1,11 +1,15 @@
 import { readFileSync } from "fs";
 import { z } from "zod";
-import { LoggerService } from "../logger.service";
+import { LoggerService } from "../services/logger.service";
 import { tool } from "@langchain/core/tools";
 
 export function makeFsReadFileTool(logger: LoggerService) {
+  const schema = z.object({
+    path: z.string().describe("Path to the file to read."),
+  });
   return tool(
-    async ({ path }: { path: string }) => {
+    async (input) => {
+      const { path } = schema.parse(input);
       logger.info("Tool called", "fs_read_file", { path });
       try {
         const result = readFileSync(path, "utf-8");
@@ -19,9 +23,7 @@ export function makeFsReadFileTool(logger: LoggerService) {
     {
       name: "fs_read_file",
       description: "Read the contents of a file.",
-      schema: z.object({
-        path: z.string().describe("Path to the file to read."),
-      }),
+      schema,
     },
   );
 }

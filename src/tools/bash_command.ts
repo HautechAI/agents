@@ -1,11 +1,15 @@
 import { exec } from "child_process";
 import { z } from "zod";
-import { LoggerService } from "../logger.service";
+import { LoggerService } from "../services/logger.service";
 import { tool } from "@langchain/core/tools";
 
 export function makeBashCommandTool(logger: LoggerService) {
+  const schema = z.object({
+    command: z.string().describe("The bash command to execute."),
+  });
   return tool(
-    async ({ command }) => {
+    async (input) => {
+      const { command } = schema.parse(input);
       logger.info("Tool called", "bash_command", { command });
       return await new Promise((resolve, reject) => {
         exec(command, (error, stdout, stderr) => {
@@ -21,9 +25,7 @@ export function makeBashCommandTool(logger: LoggerService) {
     {
       name: "bash_command",
       description: "Execute a bash command and return the output.",
-      schema: z.object({
-        command: z.string().describe("The bash command to execute."),
-      }),
+      schema,
     },
   );
 }

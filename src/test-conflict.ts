@@ -1,6 +1,6 @@
-import { ConfigService } from "./config.service";
-import { LoggerService } from "./logger.service";
-import { ConflictAgentService } from "./conflict-agent.service";
+import { ConfigService } from "./services/config.service";
+import { LoggerService } from "./services/logger.service";
+import { ConflictAgentService } from "./agents/conflict.agent";
 
 const configService = ConfigService.fromEnv();
 const logger = new LoggerService();

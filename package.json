@@ -1,16 +1,25 @@
 {
-  "name": "hautech-agents-monorepo",
-  "private": true,
-  "version": "0.0.1",
-  "description": "Monorepo for Hautech AI agents",
-  "workspaces": [
-    "agents",
-    "services"
-  ],
+  "name": "bash-agent",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "type": "module",
   "scripts": {
-    "install:all": "pnpm install -r",
-    "build": "pnpm -r run build",
-    "lint": "pnpm -r run lint || echo 'No lint script'",
-    "start:bash-agent": "pnpm --filter bash-agent start"
+    "start": "tsx /workspaces/agents/bash-agent/src/index.ts"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.73",
+    "@langchain/langgraph": "^0.4.9",
+    "@langchain/openai": "^0.4.9",
+    "@octokit/auth-app": "^8.1.0",
+    "@octokit/rest": "^22.0.0",
+    "dotenv": "^17.2.2",
+    "zod": "^4.1.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.1",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.0.0"
   }
 }

@@ -1,20 +1,33 @@
-import * as fs from "fs";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-
-import { ConfigService } from "./config.service";
-import { AgentService } from "./agent.service";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { EngineeringAgent } from "./agents/engineering.agent";
+import { ConfigService } from "./services/config.service";
+import { GithubService } from "./services/github.service";
+import { LoggerService } from "./services/logger.service";
+import { PRService } from "./services/pr.service";
 
 const configService = ConfigService.fromEnv();
-const agentService = new AgentService(configService);
+const logger = new LoggerService();
+const githubService = new GithubService(configService);
+const prService = new PRService(githubService);
+const engineeringAgent = new EngineeringAgent(configService);
 
-const agent = agentService.createAgent();
+const owner = "HautechAI";
+const repo = "liana";
 
-const Instructions = fs.readFileSync(`${__dirname}/instructions.md`, "utf-8");
+const myPrs = await githubService.listAssignedOpenPullRequestsForRepo(owner, repo);
+const prInfo = await prService.getPRInfo(owner, repo, myPrs[0].number);
 
-const response = await agent.invoke(
+console.log("PR Info:", prInfo);
+
+const Instructions = `
+You are Soren Wilde - Engineering Manager. You role is to review PRs, manage high standard of work execution, make sure engineering team delivers high quality code and executes tasks according to the task definition.
+- Make sure that code is implemented according to the task definition. If you see that task is not properly implemented, request changes and provide detailed explanation what is missing and how it should be implemented.
+- Make sure all checks (linter, tests, e2e tests) are passing. If not, request changes and provide detailed explanation what is missing.
+- Make sure all change requests from other reviewers are addressed. If not, request changes and provide detailed explanation what is missing.
+
+You submit tasks to engineers via work_with_pr tool.
+`;
+
+const response = await engineeringAgent.createAgent().invoke(
   {
     messages: [
       { role: "system", content: Instructions },
@@ -31,6 +44,3 @@ const response = await agent.invoke(
   },
   { recursionLimit: 250 },
 );
-
-const last = response.messages[response.messages.length - 1];
-console.log(last.content);

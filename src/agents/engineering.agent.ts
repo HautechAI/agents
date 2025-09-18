@@ -1,14 +1,11 @@
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { ChatOpenAI } from "@langchain/openai";
-import { makeBashCommandTool } from "./tools/bash_command";
-import { makeFsReadFileTool } from "./tools/fs_read_file";
-import { makeFsWriteFileTool } from "./tools/fs_write_file";
-import { makeFsEditFileTool } from "./tools/fs_edit_file";
-import { ConfigService } from "./config.service";
-import { LoggerService } from "./logger.service";
+import { ConfigService } from "../services/config.service";
+import { LoggerService } from "../services/logger.service";
+import { makeWorkWithPrTool } from "../tools/work_with_pr";
 // Tools are created via factory functions with injected singleton logger
 
-export class AgentService {
+export class EngineeringAgent {
   private configService: ConfigService;
   private logger: LoggerService;
 
@@ -23,15 +20,9 @@ export class AgentService {
       apiKey: this.configService.openaiApiKey,
     });
     // Define tools as objects compatible with createReactAgent
-    const tools = [
-      makeBashCommandTool(this.logger),
-      makeFsReadFileTool(this.logger),
-      makeFsWriteFileTool(this.logger),
-      makeFsEditFileTool(this.logger),
-    ];
     return createReactAgent({
       llm: model,
-      tools,
+      tools: [makeWorkWithPrTool(this.logger)],
     });
   }
 }

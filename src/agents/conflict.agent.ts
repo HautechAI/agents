@@ -1,9 +1,9 @@
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { ChatOpenAI } from "@langchain/openai";
-import { makeRemoteBashCommandTool } from "./tools/remote_bash_command";
-import { ConfigService } from "./config.service";
-import { LoggerService } from "./logger.service";
-import { CodespaceSSHService } from "./codespace-ssh.service";
+import { makeRemoteBashCommandTool } from "../tools/remote_bash_command";
+import { ConfigService } from "../services/config.service";
+import { LoggerService } from "../services/logger.service";
+import { CodespaceSSHService } from "../services/codespace-ssh.service";
 // Tools are created via factory functions with injected singleton logger
 
 export class ConflictAgentService {
