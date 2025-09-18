@@ -5,6 +5,8 @@
 import { StateGraph } from "@langchain/langgraph";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { StateAnnotation } from "./state.js";
+import { ConfigService } from "../services/config.service.js";
+import { AgentService } from "../agents/architect.agent.js";
 
 /**
  * Define a node, these do the work of the graph and should have most of the logic.
@@ -74,9 +76,7 @@ const callModel = async (
  * @param state - The current state of the research builder
  * @returns Either "callModel" to continue research or END to finish the builder
  */
-export const route = (
-  state: typeof StateAnnotation.State,
-): "__end__" | "callModel" => {
+export const route = (state: typeof StateAnnotation.State): "__end__" | "callModel" => {
   if (state.messages.length > 0) {
     return "__end__";
   }
@@ -99,6 +99,11 @@ const builder = new StateGraph(StateAnnotation)
   // Conditional edges optionally route to different nodes (or end)
   .addConditionalEdges("callModel", route);
 
-export const graph = builder.compile();
+const configService = ConfigService.fromEnv();
+const agentService = new AgentService(configService);
+
+export const graph = agentService.createAgent();
+
+// export const graph = builder.compile();
 
 graph.name = "New Agent";

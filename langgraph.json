@@ -1,7 +1,8 @@
 {
   "node_version": "20",
   "graphs": {
-    "agent": "./src/lg/graph.ts:graph"
+    "agent": "./src/agents/memory_agent/graph.ts:graph",
+    "lg": "./src/lg/graph.ts:graph"
   },
   "env": ".env",
   "dependencies": ["."],
