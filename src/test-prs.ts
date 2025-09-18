@@ -11,7 +11,7 @@ const configService = ConfigService.fromEnv();
 const logger = new LoggerService();
 const githubService = new GithubService(configService);
 const prService = new PRService(githubService);
-const engineeringAgent = new EngineeringAgent(configService, logger);
+const engineeringAgent = new EngineeringAgent(configService, logger, githubService);
 
 const owner = "HautechAI";
 const repo = "liana";

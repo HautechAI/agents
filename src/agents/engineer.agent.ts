@@ -12,7 +12,7 @@ import { FsReadFileTool } from "../tools/fs_read_file";
 import { FsWriteFileTool } from "../tools/fs_write_file";
 import { BaseAgent } from "./base.agent";
 
-export class ArchitectAgent extends BaseAgent {
+export class EngineerAgent extends BaseAgent {
   constructor(
     private configService: ConfigService,
     private loggerService: LoggerService,

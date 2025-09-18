@@ -8,11 +8,13 @@ import { WorkWithPrTool } from "../tools/work_with_pr";
 import { BaseAgent } from "./base.agent";
 import { CallModelNode } from "../nodes/callModel.node";
 import { ToolsNode } from "../nodes/tools.node";
+import { GithubService } from "../services/github.service";
 
 export class EngineeringAgent extends BaseAgent {
   constructor(
     private configService: ConfigService,
-    private loggerService: LoggerService = new LoggerService(),
+    private loggerService: LoggerService,
+    private githubService: GithubService,
   ) {
     super();
   }
@@ -29,7 +31,7 @@ export class EngineeringAgent extends BaseAgent {
       apiKey: this.configService.openaiApiKey,
     });
 
-    const tools = [new WorkWithPrTool(this.loggerService)];
+    const tools = [new WorkWithPrTool(this.loggerService, this.githubService)];
     const callModelNode = new CallModelNode(tools, llm);
     const toolsNode = new ToolsNode(tools);
 
