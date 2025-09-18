@@ -17,6 +17,6 @@ export function makeFsWriteFileTool(logger: LoggerService) {
         path: z.string().describe("Path to the file to write."),
         content: z.string().describe("Content to write to the file."),
       }),
-    }
+    },
   );
 }

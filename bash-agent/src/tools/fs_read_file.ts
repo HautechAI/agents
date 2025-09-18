@@ -22,6 +22,6 @@ export function makeFsReadFileTool(logger: LoggerService) {
       schema: z.object({
         path: z.string().describe("Path to the file to read."),
       }),
-    }
+    },
   );
 }

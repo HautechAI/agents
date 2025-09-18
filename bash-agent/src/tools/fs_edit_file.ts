@@ -20,6 +20,6 @@ export function makeFsEditFileTool(logger: LoggerService) {
         old_content: z.string().describe("Content to replace."),
         new_content: z.string().describe("New content to insert."),
       }),
-    }
+    },
   );
 }

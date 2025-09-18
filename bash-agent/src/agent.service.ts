@@ -9,29 +9,29 @@ import { LoggerService } from "./logger.service";
 // Tools are created via factory functions with injected singleton logger
 
 export class AgentService {
-    private configService: ConfigService;
-    private logger: LoggerService;
+  private configService: ConfigService;
+  private logger: LoggerService;
 
-    constructor(configService: ConfigService) {
-        this.configService = configService;
-        this.logger = new LoggerService();
-    }
+  constructor(configService: ConfigService) {
+    this.configService = configService;
+    this.logger = new LoggerService();
+  }
 
-    createAgent() {
-        const model = new ChatOpenAI({
-            model: "gpt-4.1",
-            apiKey: this.configService.getOpenAIKey(),
-        });
-        // Define tools as objects compatible with createReactAgent
-        const tools = [
-            makeBashCommandTool(this.logger),
-            makeFsReadFileTool(this.logger),
-            makeFsWriteFileTool(this.logger),
-            makeFsEditFileTool(this.logger),
-        ];
-        return createReactAgent({
-            llm: model,
-            tools,
-        });
-    }
+  createAgent() {
+    const model = new ChatOpenAI({
+      model: "gpt-5",
+      apiKey: this.configService.getOpenAIKey(),
+    });
+    // Define tools as objects compatible with createReactAgent
+    const tools = [
+      makeBashCommandTool(this.logger),
+      makeFsReadFileTool(this.logger),
+      makeFsWriteFileTool(this.logger),
+      makeFsEditFileTool(this.logger),
+    ];
+    return createReactAgent({
+      llm: model,
+      tools,
+    });
+  }
 }
