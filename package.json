@@ -13,6 +13,7 @@
     "@langchain/openai": "^0.6.13",
     "@octokit/auth-app": "^8.1.0",
     "@octokit/rest": "^22.0.0",
+    "@slack/bolt": "^4.4.0",
     "dockerode": "^4.0.8",
     "dotenv": "^17.2.2",
     "lodash-es": "^4.17.21",

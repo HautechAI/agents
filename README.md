@@ -20,6 +20,7 @@ A TypeScript agent using `@langchain/langgraph` to interact with bash and files.
    OPENAI_API_KEY=your-key-here
    ```
 3. (Optional) Configure GitHub credentials for PR/file operations:
+
    ```env
    # Personal access token (classic or fine-grained) used for commenting, user-scoped actions
    GH_TOKEN=ghp_yourtoken             # or use GITHUB_TOKEN
@@ -30,14 +31,42 @@ A TypeScript agent using `@langchain/langgraph` to interact with bash and files.
    GITHUB_APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...lines...\n-----END PRIVATE KEY-----\n"
    GITHUB_INSTALLATION_ID=987654321
    ```
+
    Notes:
    - `GITHUB_APP_PRIVATE_KEY` may be supplied either with actual newlines or with `\n` escape sequences; the config service normalizes it.
    - If you only need simple authenticated REST calls or PR comments, a personal token (`GH_TOKEN` / `GITHUB_TOKEN`) is sufficient.
    - For organization-wide or installation-scoped access, provide the App credentials.
-3. Run the agent:
+
+4. Run the agent:
+
    ```bash
    pnpm start
    ```
+
+5. (Optional) Enable Slack trigger (Socket Mode):
+
+   ```env
+   SLACK_BOT_TOKEN=xoxb-your-bot-token
+   SLACK_APP_TOKEN=xapp-your-app-level-token
+   ```
+
+   Then you can instantiate and start the trigger:
+
+   ```ts
+   import { SlackTrigger } from "./src/triggers";
+   import { ConfigService } from "./src/services/config.service";
+   import { LoggerService } from "./src/services/logger.service";
+
+   const config = ConfigService.fromEnv();
+   const logger = new LoggerService();
+   const trigger = new SlackTrigger(config, logger);
+   await trigger.start();
+   await trigger.subscribe(async (messages) => {
+     console.log("Slack messages:", messages);
+   });
+   ```
+
+   Any user messages (non-bot) the bot can see will be forwarded to subscribers.
 
 ## Tools
 

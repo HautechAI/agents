@@ -8,7 +8,8 @@ export const configSchema = z.object({
   githubInstallationId: z.string().min(1, "GitHub Installation ID is required"),
   openaiApiKey: z.string().min(1, "OpenAI API key is required"),
   githubToken: z.string().min(1, "GitHub personal access token is required"),
-  // slackBotToken: z.string().min(1, "Slack bot token is required"),
+  slackBotToken: z.string().min(1, "Slack bot token is required"),
+  slackAppToken: z.string().min(1, "Slack app-level token is required (starts with xapp-)"),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -34,6 +35,14 @@ export class ConfigService implements Config {
     return this.params.githubToken;
   }
 
+  get slackBotToken(): string {
+    return this.params.slackBotToken;
+  }
+
+  get slackAppToken(): string {
+    return this.params.slackAppToken;
+  }
+
   static fromEnv(): ConfigService {
     const parsed = configSchema.parse({
       githubAppId: process.env.GITHUB_APP_ID,
@@ -41,7 +50,8 @@ export class ConfigService implements Config {
       githubInstallationId: process.env.GITHUB_INSTALLATION_ID,
       openaiApiKey: process.env.OPENAI_API_KEY,
       githubToken: process.env.GH_TOKEN,
-      // slackBotToken: process.env.SLACK_BOT_TOKEN,
+      slackBotToken: process.env.SLACK_BOT_TOKEN,
+      slackAppToken: process.env.SLACK_APP_TOKEN,
     });
     return new ConfigService(parsed);
   }
