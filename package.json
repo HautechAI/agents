@@ -19,6 +19,7 @@
     "dockerode": "^4.0.8",
     "dotenv": "^17.2.2",
     "lodash-es": "^4.17.21",
+    "md5": "^2.3.0",
     "uuid": "^13.0.0",
     "zod": "^4.1.9"
   },
@@ -26,6 +27,7 @@
     "@langchain/langgraph-cli": "^0.0.66",
     "@types/dockerode": "^3.3.44",
     "@types/lodash-es": "^4.17.12",
+    "@types/md5": "^2.3.5",
     "@types/node": "^24.5.1",
     "prettier": "^3.6.2",
     "ts-node": "^10.0.0",

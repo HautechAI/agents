@@ -86,3 +86,52 @@ A TypeScript agent using `@langchain/langgraph` to interact with bash and files.
 - TypeScript
 - pnpm
 - @langchain/langgraph
+
+## Triggers
+
+### SlackTrigger
+Streams inbound Slack messages with optional `debounceMs` and `waitForBusy` behavior.
+
+### PRTrigger (GitHub Pull Request Polling)
+
+Polls GitHub for open pull requests in specified repositories where the authenticated user is assigned (optionally also authored) and emits messages when a PR's state changes.
+
+Change detection criteria:
+- New timeline event (comment, review, review comment, commit, etc.)
+- Check run status or conclusion change
+- Mergeability (`mergeable`, `mergeableState`) transition
+
+Each PR produces messages on a per-PR thread key: `repo#number`.
+
+Example:
+```ts
+import { PRTrigger } from './src/triggers';
+import { GithubService } from './src/services/github.service';
+import { PRService } from './src/services/pr.service';
+import { LoggerService } from './src/services/logger.service';
+import { ConfigService } from './src/services/config.service';
+
+const config = ConfigService.fromEnv();
+const logger = new LoggerService();
+const github = new GithubService(config);
+const prService = new PRService(github);
+
+const trigger = new PRTrigger(github, prService, logger, {
+   owner: 'my-org',
+   repos: ['frontend', 'backend'],
+   intervalMs: 60_000,
+   includeAuthored: false,
+   debounceMs: 300,
+   waitForBusy: true,
+});
+
+await trigger.subscribe(async (thread, messages) => {
+   messages.forEach(m => {
+      console.log('PR update', thread, m.content, m.info);
+   });
+});
+
+await trigger.start();
+```
+
+Message `info` includes: `mergeable`, `mergeableState`, `checks`, `lastEvent`, and `previous` snapshot (null on first emission).
