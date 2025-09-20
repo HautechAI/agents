@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useCheckpointStream } from '@/hooks/useCheckpointStream';
 import { Button } from '@/components/ui/button';
 import { CheckpointItem } from './CheckpointItem';
+import { StatusChip } from './StatusChip';
 
 interface Props {
   defaultThreadId?: string;
@@ -84,28 +85,11 @@ export function CheckpointStreamPanel({ defaultThreadId = '', defaultCheckpointI
           <p className="p-4 text-center text-sm text-muted-foreground">No writes yet.</p>
         )}
         {status === 'connecting' && <p className="p-2 text-xs text-muted-foreground">Connecting…</p>}
-        {items.map((item) => (
+        {[...items].reverse().map((item) => (
           <CheckpointItem key={item.id} item={item} />
         ))}
       </div>
       <p className="text-xs text-muted-foreground">Leave both inputs empty to stream all writes (capped live list).</p>
     </div>
   );
-}
-
-function StatusChip({ status, connected }: { status: string; connected: boolean }) {
-  const base = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium';
-  if (status === 'error')
-    return <span className={base + ' bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}>error</span>;
-  if (status === 'connecting')
-    return (
-      <span className={base + ' bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}>connecting</span>
-    );
-  if (status === 'ready')
-    return (
-      <span className={base + ' bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'}>
-        {connected ? 'live' : 'disconnected'}
-      </span>
-    );
-  return <span className={base + ' bg-muted text-foreground'}>idle</span>;
 }
