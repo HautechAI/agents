@@ -6,19 +6,16 @@ import { StatusChip } from './StatusChip';
 
 interface Props {
   defaultThreadId?: string;
-  defaultCheckpointId?: string;
   url?: string;
 }
 
-export function CheckpointStreamPanel({ defaultThreadId = '', defaultCheckpointId = '', url }: Props) {
+export function CheckpointStreamPanel({ defaultThreadId = '', url }: Props) {
   const [threadId, setThreadId] = useState(defaultThreadId);
-  const [checkpointId, setCheckpointId] = useState(defaultCheckpointId);
   const [autoScroll, setAutoScroll] = useState(true);
 
   const { items, status, error, connected, isPaused, pause, resume, clear, retry, dropped } = useCheckpointStream({
     url,
     threadId: threadId || undefined,
-    checkpointId: checkpointId || undefined,
   });
 
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -28,6 +25,14 @@ export function CheckpointStreamPanel({ defaultThreadId = '', defaultCheckpointI
     }
   }, [items, autoScroll]);
 
+  const applyThreadFilter = (tid: string) => {
+    setThreadId(tid);
+  };
+
+  const clearThreadFilter = () => {
+    setThreadId('');
+  };
+
   return (
     <div className="w-full max-w-5xl space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -36,12 +41,6 @@ export function CheckpointStreamPanel({ defaultThreadId = '', defaultCheckpointI
           placeholder="threadId (optional)"
           value={threadId}
           onChange={(e) => setThreadId(e.target.value)}
-        />
-        <input
-          className="h-9 flex-1 min-w-[160px] rounded border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          placeholder="checkpointId (optional)"
-          value={checkpointId}
-          onChange={(e) => setCheckpointId(e.target.value)}
         />
         <Button
           type="button"
@@ -56,6 +55,11 @@ export function CheckpointStreamPanel({ defaultThreadId = '', defaultCheckpointI
         <Button type="button" variant="outline" onClick={() => clear()} disabled={!items.length}>
           Clear
         </Button>
+        {threadId && (
+          <Button type="button" variant="secondary" onClick={clearThreadFilter}>
+            Thread: {threadId.slice(0, 8)}… (reset)
+          </Button>
+        )}
         {status === 'error' && (
           <Button type="button" variant="destructive" onClick={retry}>
             Retry
@@ -85,8 +89,13 @@ export function CheckpointStreamPanel({ defaultThreadId = '', defaultCheckpointI
           <p className="p-4 text-center text-sm text-muted-foreground">No writes yet.</p>
         )}
         {status === 'connecting' && <p className="p-2 text-xs text-muted-foreground">Connecting…</p>}
-        {[...items].reverse().map((item) => (
-          <CheckpointItem key={item.id} item={item} />
+        {items.map((item) => (
+          <CheckpointItem
+            key={item.id}
+            item={item}
+            onFilterThread={applyThreadFilter}
+            currentThreadId={threadId || undefined}
+          />
         ))}
       </div>
       <p className="text-xs text-muted-foreground">Leave both inputs empty to stream all writes (capped live list).</p>

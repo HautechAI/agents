@@ -73,11 +73,11 @@ export class CheckpointerService {
     };
   }
 
-  async fetchLatestWrites(filter?: { threadId?: string; checkpointId?: string }, limit = 50): Promise<CheckpointWriteNormalized[]> {
+  async fetchLatestWrites(filter?: { threadId?: string }, limit = 50): Promise<CheckpointWriteNormalized[]> {
     this.ensureBound();
     const mongoFilter: Document = {};
     if (filter?.threadId) mongoFilter.thread_id = filter.threadId;
-    if (filter?.checkpointId) mongoFilter.checkpoint_id = filter.checkpointId;
+  // checkpointId filtering removed – now returns all matching thread writes
     const docs = await this.collection!
       .find(mongoFilter)
       .sort({ _id: -1 })
@@ -87,11 +87,11 @@ export class CheckpointerService {
     return docs.map(d => this.normalize(d));
   }
 
-  watchInserts(filter?: { threadId?: string; checkpointId?: string }): ChangeStream<RawCheckpointWrite> {
+  watchInserts(filter?: { threadId?: string }): ChangeStream<RawCheckpointWrite> {
     this.ensureBound();
     const match: any = { operationType: 'insert' };
     if (filter?.threadId) match['fullDocument.thread_id'] = filter.threadId;
-    if (filter?.checkpointId) match['fullDocument.checkpoint_id'] = filter.checkpointId;
+    // no checkpointId constraint
     return this.collection!.watch([{ $match: match }], { fullDocument: 'updateLookup' });
   }
   getCheckpointer() {

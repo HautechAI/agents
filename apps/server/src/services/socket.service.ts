@@ -4,7 +4,6 @@ import { CheckpointerService } from './checkpointer.service';
 
 interface InitPayload {
   threadId?: string;
-  checkpointId?: string;
 }
 
 export class SocketService {
@@ -35,9 +34,10 @@ export class SocketService {
     socket.on('init', async (payload: InitPayload) => {
       if (closed) return;
       try {
-        const latest = await this.checkpointer.fetchLatestWrites(payload);
+        const { checkpointId, ...rest } = payload as any; // backward compat discard
+        const latest = await this.checkpointer.fetchLatestWrites(rest);
         socket.emit('initial', { items: latest });
-        stream = this.checkpointer.watchInserts(payload);
+        stream = this.checkpointer.watchInserts(rest);
         stream.on('change', (change: any) => {
           if (change.fullDocument) {
             const normalized = this.checkpointer.normalize(change.fullDocument);

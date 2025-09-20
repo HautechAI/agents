@@ -16,7 +16,6 @@ export interface CheckpointWriteClient {
 export interface UseCheckpointStreamParams {
   url?: string;
   threadId?: string;
-  checkpointId?: string;
   maxItems?: number;
   autoStart?: boolean;
 }
@@ -28,7 +27,6 @@ interface InitialPayload { items: any[] } // eslint-disable-line @typescript-esl
 export function useCheckpointStream({
   url = 'http://localhost:3010',
   threadId,
-  checkpointId,
   maxItems = 500,
   autoStart = true,
 }: UseCheckpointStreamParams) {
@@ -95,13 +93,12 @@ export function useCheckpointStream({
 
     const initPayload: Record<string, string> = {};
     if (threadId) initPayload.threadId = threadId;
-    if (checkpointId) initPayload.checkpointId = checkpointId;
     socket.emit('init', initPayload);
 
     return () => {
       socket.disconnect();
     };
-  }, [url, threadId, checkpointId, isPaused, maxItems]);
+  }, [url, threadId, isPaused, maxItems]);
 
   useEffect(() => {
     if (!autoStart) return;

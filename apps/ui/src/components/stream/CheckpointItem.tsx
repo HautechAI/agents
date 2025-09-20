@@ -62,7 +62,13 @@ function parseValue(value: unknown): ParsedMessage {
   }
 }
 
-export function CheckpointItem({ item }: { item: CheckpointWriteClient }) {
+interface CheckpointItemProps {
+  item: CheckpointWriteClient;
+  onFilterThread?: (threadId: string) => void;
+  currentThreadId?: string;
+}
+
+export function CheckpointItem({ item, onFilterThread, currentThreadId }: CheckpointItemProps) {
   const [showRaw, setShowRaw] = useState(false);
   const kindBadge = {
     human: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
@@ -82,6 +88,17 @@ export function CheckpointItem({ item }: { item: CheckpointWriteClient }) {
     </button>
   );
 
+  const threadFilterBtn = onFilterThread && (
+    <button
+      type="button"
+      onClick={() => onFilterThread(item.threadId)}
+      className={`rounded px-1.5 py-0.5 text-[10px] font-medium hover:bg-muted/70 border ${currentThreadId === item.threadId ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-400' : 'bg-muted border-transparent'}`}
+      title={currentThreadId === item.threadId ? 'Currently filtered by this thread' : 'Filter by this thread'}
+    >
+      {currentThreadId === item.threadId ? 'thread ✓' : 'filter thread'}
+    </button>
+  );
+
   if (showRaw) {
     const time = item.createdAt instanceof Date ? item.createdAt : new Date(item.createdAt);
     return (
@@ -94,18 +111,18 @@ export function CheckpointItem({ item }: { item: CheckpointWriteClient }) {
             {typeof item.value === 'string' ? item.value : JSON.stringify(item.value, null, 2)}
           </pre>
         }
-        rawToggleButton={rawToggleBtn}
+        rawToggleButton={<div className="flex gap-1">{rawToggleBtn}{threadFilterBtn}</div>}
       />
     );
   }
   switch (parsed.kind) {
     case 'human':
-      return <HumanCheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={rawToggleBtn} />;
+      return <HumanCheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={<div className="flex gap-1">{rawToggleBtn}{threadFilterBtn}</div>} />;
     case 'ai':
-      return <AICheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={rawToggleBtn} />;
+      return <AICheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={<div className="flex gap-1">{rawToggleBtn}{threadFilterBtn}</div>} />;
     case 'tool':
-      return <ToolCheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={rawToggleBtn} />;
+      return <ToolCheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={<div className="flex gap-1">{rawToggleBtn}{threadFilterBtn}</div>} />;
     default:
-      return <HumanCheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={rawToggleBtn} />;
+      return <HumanCheckpointItem item={item} parsed={parsed} kindBadge={kindBadge} rawToggleButton={<div className="flex gap-1">{rawToggleBtn}{threadFilterBtn}</div>} />;
   }
 }
