@@ -49,8 +49,3 @@ export class SlackTrigger extends BaseTrigger {
     /* trigger has no dynamic config yet */
   }
 }
-
-// Usage example:
-// const trigger = new SlackTrigger(slackService, loggerService, { debounceMs: 500, waitForBusy: true });
-// await trigger.start();
-// await trigger.subscribe(async (thread, messages) => { console.log("Incoming Slack messages", thread, messages); });

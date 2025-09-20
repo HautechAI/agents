@@ -1,5 +1,5 @@
-import { ContainerOpts, ContainerService } from "../services/container.service";
-import { ContainerEntity } from "./container.entity";
+import { ContainerOpts, ContainerService } from '../services/container.service';
+import { ContainerEntity } from './container.entity';
 
 export class ContainerProviderEntity {
   constructor(
@@ -7,6 +7,11 @@ export class ContainerProviderEntity {
     private opts: ContainerOpts,
     private idLabels: (id: string) => Record<string, string>,
   ) {}
+
+  // No-op configurability to satisfy Configurable interface for graph registration
+  setConfig(_cfg: Record<string, unknown>): void {
+    /* no dynamic config */
+  }
 
   async provide(threadId: string) {
     const labels = this.idLabels(threadId);

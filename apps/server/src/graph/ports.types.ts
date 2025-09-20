@@ -6,8 +6,8 @@ export interface BasePortConfig { kind: PortKind; }
 
 export interface MethodPortConfig extends BasePortConfig {
   kind: 'method';
-  create: string; // method name
-  destroy: string; // method name
+  create: string; // method name to establish connection
+  destroy?: string; // optional method name to reverse; if absent runtime will call create with undefined
 }
 
 export interface InstancePortConfig extends BasePortConfig {

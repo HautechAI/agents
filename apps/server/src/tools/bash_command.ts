@@ -16,11 +16,14 @@ const bashCommandSchema = z.object({
 });
 
 export class BashCommandTool extends BaseTool {
-  constructor(
-    private logger: LoggerService,
-    private containerProvider: ContainerProviderEntity,
-  ) {
+  private containerProvider?: ContainerProviderEntity;
+
+  constructor(private logger: LoggerService) {
     super();
+  }
+
+  setContainerProvider(provider: ContainerProviderEntity | undefined): void {
+    this.containerProvider = provider;
   }
 
   private stripAnsi(input: string): string {
@@ -33,6 +36,9 @@ export class BashCommandTool extends BaseTool {
         const { thread_id } = config.configurable;
         if (!thread_id) throw new Error('thread_id is required in configurable to use bash_command tool');
 
+        if (!this.containerProvider) {
+          throw new Error('BashCommandTool: containerProvider not set. Connect via graph edge before use.');
+        }
         const container = await this.containerProvider.provide(thread_id!);
         const { command } = bashCommandSchema.parse(input);
         this.logger.info('Tool called', 'bash_command', { command });

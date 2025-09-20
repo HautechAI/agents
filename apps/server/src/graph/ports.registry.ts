@@ -16,12 +16,13 @@ export class PortsRegistry {
       for (const [handle, port] of Object.entries(ports)) {
         if (port.kind === 'method') {
           const m = port as MethodPortConfig;
-          for (const methodName of [m.create, m.destroy]) {
-            if (typeof instance[methodName] !== 'function') {
-              throw new Error(`Template ${template} port ${handle} expected method '${methodName}' on instance`);
+            if (typeof instance[m.create] !== 'function') {
+              throw new Error(`Template ${template} port ${handle} expected method '${m.create}' on instance`);
+            }
+            if (m.destroy && typeof instance[m.destroy] !== 'function') {
+              throw new Error(`Template ${template} port ${handle} expected destroy method '${m.destroy}' on instance`);
             }
           }
-        }
       }
     };
     checkPorts(cfg.sourcePorts);

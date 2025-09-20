@@ -281,7 +281,12 @@ export class LiveGraphRuntime {
       reversible: true,
       argumentSnapshot: argValue,
       reversal: async () => {
-        await (methodSide.instance as any)[methodCfg.destroy](argValue); // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (methodCfg.destroy) {
+          await (methodSide.instance as any)[methodCfg.destroy](argValue); // eslint-disable-line @typescript-eslint/no-explicit-any
+        } else {
+          // Fallback: call create with undefined to signal disconnection
+          await (methodSide.instance as any)[methodCfg.create](undefined); // eslint-disable-line @typescript-eslint/no-explicit-any
+        }
       },
     };
     this.registerEdgeRecord(record);

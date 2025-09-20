@@ -19,8 +19,6 @@ export class SimpleAgent extends BaseAgent {
   constructor(
     private configService: ConfigService,
     private loggerService: LoggerService,
-    private slackService: SlackService,
-    private containerProvider: ContainerProviderEntity,
     private checkpointerService: CheckpointerService,
   ) {
     super(loggerService);
