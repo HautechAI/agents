@@ -16,10 +16,14 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^19.1.1",
+    "reactflow": "^11.11.4",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss": "^4.1.13"
+    "tailwindcss": "^4.1.13",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
