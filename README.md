@@ -262,3 +262,80 @@ await trigger.subscribe(async (thread, messages) => {
 
 await trigger.start();
 ```
+
+## MCP Server Integration (Experimental)
+
+The graph runtime supports attaching Model Context Protocol (MCP) servers running inside a Docker container to agents.
+
+### Templates
+
+Two templates participate:
+
+- `containerProvider` – provisions or reuses a long-lived container per thread.
+- `mcpServer` – manages a single MCP server process inside a container (via `docker exec` hijacked stdio).
+- `simpleAgent` exposes a `mcp` method port which calls `addMcpServer(server)` to dynamically register all MCP tools (namespaced) with the agent.
+
+### Ports
+
+Template: `mcpServer`
+- Target ports:
+   - `$self` (instance)
+   - `containerProvider` (method: `setContainerProvider`)
+- Source ports:
+   - `register` (instance) – connect this to an agent method port (`mcp`) to invoke `addMcpServer`.
+
+Template: `simpleAgent`
+- Source ports:
+   - `tools` (method: `addTool/removeTool`)
+   - `mcp` (method: `addMcpServer`)
+- Target ports:
+   - `$self` (instance)
+
+### Graph Wiring Example
+
+```ts
+const graph = {
+   nodes: [
+      { id: 'container', data: { template: 'containerProvider' } },
+      { id: 'agent', data: { template: 'simpleAgent' } },
+      { id: 'fsMcp', data: { template: 'mcpServer', config: { namespace: 'fs', command: 'npx -y @modelcontextprotocol/server-filesystem /workspace' } } },
+   ],
+   edges: [
+      // Provide container instance to MCP server
+      { source: 'container', sourceHandle: '$self', target: 'fsMcp', targetHandle: 'containerProvider' },
+      // Register MCP server with agent (adds all tools: namespaced as fs:<toolName>)
+      { source: 'agent', sourceHandle: 'mcp', target: 'fsMcp', targetHandle: 'register' },
+   ],
+};
+```
+
+### Configuration
+
+`mcpServer` node `config` supports standard `McpServerConfig` fields:
+- `namespace` (required) – prefix for registered tool names.
+- `command` – defaults to `mcp start --stdio` if omitted.
+- `image` or `containerId` – optional; when omitted and a `containerProvider` edge is present the provided container is used.
+- `workdir`, `env`, `startupTimeoutMs`, `requestTimeoutMs`, `heartbeatIntervalMs`.
+
+If both a `containerProvider` edge and `image` are supplied the provider edge wins (explicit container binding). If neither `image`, `containerId`, nor provider are available the server will refuse to start.
+
+### Tool Namespacing
+
+Every MCP tool is registered as `<namespace>:<toolName>` inside the agent. Invocation arguments are passed through as-is; JSON Schema -> Zod conversion is currently a placeholder (`z.any()`), to be enhanced later.
+
+### Lifecycle
+
+1. Graph instantiates `mcpServer` (no container yet).
+2. Edge `container->$self` injects the container provider (`setContainerProvider`).
+3. Edge `agent.mcp -> mcpServer.register` calls `addMcpServer(server)` which triggers `start()` (idempotent) then lists tools.
+4. Tools become immediately available for the agent's LangGraph execution loop.
+
+Removing the edge reverses the connection; dynamic tools remain (future enhancement may support removal).
+
+### Notes
+
+- For the filesystem server example the container image must contain Node + npm and network access (or pre-baked package).
+- Output content arrays are flattened to text; structured results retained in `structuredContent` (unused by agent today).
+- Heartbeat pings (`ping`) are optional; set `heartbeatIntervalMs` to enable.
+
+This subsystem is experimental; APIs may change as additional MCP transports (e.g. direct host processes) are added.

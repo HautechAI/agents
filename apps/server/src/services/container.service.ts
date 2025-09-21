@@ -152,6 +152,86 @@ export class ContainerService {
     return { stdout, stderr, exitCode };
   }
 
+  /**
+   * Open a long-lived interactive exec session (duplex) suitable for protocols like MCP over stdio.
+   * Caller is responsible for closing the returned streams via close().
+   */
+  async openInteractiveExec(
+    containerId: string,
+    command: string[] | string,
+    options?: { workdir?: string; env?: Record<string, string> | string[]; tty?: boolean; demuxStderr?: boolean },
+  ): Promise<{
+    stdin: NodeJS.WritableStream;
+    stdout: NodeJS.ReadableStream;
+    stderr?: NodeJS.ReadableStream;
+    close: () => Promise<{ exitCode: number }>;
+    execId: string;
+  }> {
+    const container = this.docker.getContainer(containerId);
+    const inspectData = await container.inspect();
+    if (inspectData.State?.Running !== true) {
+      throw new Error(`Container '${containerId}' is not running`);
+    }
+
+    const Cmd = Array.isArray(command) ? command : ["/bin/sh", "-lc", command];
+    const Env: string[] | undefined = Array.isArray(options?.env)
+      ? options?.env
+      : options?.env
+        ? Object.entries(options.env).map(([k, v]) => `${k}=${v}`)
+        : undefined;
+    const tty = options?.tty ?? false; // Keep false for clean protocol framing
+    const demux = options?.demuxStderr ?? true;
+
+    this.logger.debug(
+      `Interactive exec in container cid=${inspectData.Id.substring(0, 12)} tty=${tty} demux=${demux}: ${Cmd.join(" ")}`,
+    );
+
+    const exec: Exec = await container.exec({
+      Cmd,
+      AttachStdout: true,
+      AttachStderr: true,
+      AttachStdin: true,
+      WorkingDir: options?.workdir,
+      Env,
+      Tty: tty,
+    });
+
+    const stdoutStream = new (require("node:stream").PassThrough)();
+    const stderrStream = new (require("node:stream").PassThrough)();
+
+    const hijackStream: any = await new Promise((resolve, reject) => {
+      exec.start({ hijack: true, stdin: true }, (err, stream) => {
+        if (err) return reject(err);
+        if (!stream) return reject(new Error("No stream returned from exec.start"));
+        resolve(stream);
+      });
+    });
+
+    if (!tty && demux) {
+      this.docker.modem.demuxStream(hijackStream, stdoutStream, stderrStream);
+    } else {
+      hijackStream.pipe(stdoutStream);
+    }
+
+    const close = async (): Promise<{ exitCode: number }> => {
+      try {
+        hijackStream.end();
+      } catch {}
+      // Wait a short grace period; then inspect
+      const details = await exec.inspect();
+      return { exitCode: details.ExitCode ?? -1 };
+    };
+
+    const execDetails = await exec.inspect();
+    return {
+      stdin: hijackStream,
+      stdout: stdoutStream,
+      stderr: demux ? stderrStream : undefined,
+      close,
+      execId: execDetails.ID,
+    };
+  }
+
   private startAndCollectExec(
     exec: Exec,
     timeoutMs?: number,

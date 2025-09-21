@@ -1,16 +1,19 @@
 import { AIMessage, BaseMessage } from '@langchain/core/messages';
 import { RunnableConfig } from '@langchain/core/runnables';
+import { tool as lcTool } from '@langchain/core/tools';
 import { Annotation, CompiledStateGraph, END, START, StateGraph } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
 import { last } from 'lodash-es';
-import { ContainerProviderEntity } from '../entities/containerProvider.entity';
+import { McpServer, McpTool } from '../mcp';
+import { inferArgsSchema } from '../mcp/jsonSchemaToZod';
 import { CallModelNode } from '../nodes/callModel.node';
 import { ToolsNode } from '../nodes/tools.node';
 import { CheckpointerService } from '../services/checkpointer.service';
 import { ConfigService } from '../services/config.service';
 import { LoggerService } from '../services/logger.service';
-import { SlackService } from '../services/slack.service';
 import { BaseAgent } from './base.agent';
+import { BaseTool } from '../tools/base.tool';
+import { LangChainToolAdapter } from '../tools/langchainTool.adapter';
 
 export class SimpleAgent extends BaseAgent {
   private callModelNode!: CallModelNode;
@@ -71,17 +74,48 @@ export class SimpleAgent extends BaseAgent {
     return this;
   }
 
-  addTool(tool: any) {
+  addTool(tool: BaseTool) {
     // using any to avoid circular import issues if BaseTool is extended differently later
     this.callModelNode.addTool(tool);
     this.toolsNode.addTool(tool);
     this.loggerService.info(`Tool added to ArchitectAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
-  removeTool(tool: any) {
+  removeTool(tool: BaseTool) {
     this.callModelNode.removeTool(tool);
     this.toolsNode.removeTool(tool);
     this.loggerService.info(`Tool removed from ArchitectAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
+  }
+
+  /**
+   * Attach an MCP server: starts it (idempotent), lists tools, and registers them as namespaced LangChain tools.
+   */
+  async addMcpServer(server: McpServer): Promise<void> {
+    const namespace = server.namespace;
+    await server.start();
+    const tools: McpTool[] = await server.listTools();
+    for (const t of tools) {
+      const schema = inferArgsSchema(t.inputSchema);
+
+      const dynamic = lcTool(
+        async (raw) => {
+          this.loggerService.info(
+            `Calling MCP tool ${t.name} in namespace ${namespace} with input: ${JSON.stringify(raw)}`,
+          );
+          const res = await server.callTool(t.name, raw);
+          if (res.structuredContent) return JSON.stringify(res.structuredContent);
+          return res.content || '';
+        },
+        {
+          name: `${namespace}_${t.name}`,
+          description: t.description || `MCP tool ${t.name}`,
+          schema,
+        },
+      );
+      // Wrap LangChain tool in adapter implementing BaseTool interface
+      const adapted = new LangChainToolAdapter(dynamic);
+      this.addTool(adapted);
+    }
   }
 
   /**

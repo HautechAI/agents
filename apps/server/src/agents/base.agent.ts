@@ -1,8 +1,8 @@
 import { BaseMessage, HumanMessage } from '@langchain/core/messages';
-import { Annotation, AnnotationRoot, CompiledStateGraph, Messages, messagesStateReducer } from '@langchain/langgraph';
 import { RunnableConfig } from '@langchain/core/runnables';
+import { Annotation, AnnotationRoot, CompiledStateGraph, Messages, messagesStateReducer } from '@langchain/langgraph';
 import { LoggerService } from '../services/logger.service';
-import { TriggerMessage, TriggerListener } from '../triggers/base.trigger';
+import { TriggerListener, TriggerMessage } from '../triggers/base.trigger';
 
 export abstract class BaseAgent implements TriggerListener {
   protected _graph: CompiledStateGraph<unknown, unknown> | undefined;
