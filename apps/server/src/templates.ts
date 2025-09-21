@@ -68,7 +68,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     .register('simpleAgent', () => new SimpleAgent(configService, logger, checkpointerService), {
       sourcePorts: {
         tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
-        mcp: { kind: 'method', create: 'addMcpServer' },
+        mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
       },
       targetPorts: { $self: { kind: 'instance' } },
     })

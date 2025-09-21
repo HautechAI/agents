@@ -69,8 +69,6 @@ export class DockerExecTransport {
     }
 
     this._stdout.on('data', (chunk) => {
-      // DEBUG: capture raw data for handshake
-      console.debug('[DockerExecTransport stdout chunk]', chunk.toString());
       this._readBuffer.append(chunk as Buffer);
       this.processReadBuffer();
     });

@@ -19,6 +19,8 @@ import { BashCommandTool } from '../tools/bash_command';
 export class SimpleAgent extends BaseAgent {
   private callModelNode!: CallModelNode;
   private toolsNode!: ToolsNode;
+  // Track tools registered per MCP server so we can remove them on detachment
+  private mcpServerTools: Map<McpServer, BaseTool[]> = new Map();
 
   constructor(
     private configService: ConfigService,
@@ -93,12 +95,18 @@ export class SimpleAgent extends BaseAgent {
    */
   async addMcpServer(server: McpServer): Promise<void> {
     const namespace = server.namespace;
+    if (this.mcpServerTools.has(server)) {
+      this.loggerService.debug?.(`MCP server ${namespace} already added; skipping duplicate add.`);
+      return;
+    }
+    this.mcpServerTools.set(server, []);
     // Start server in background (non-blocking if dependencies missing)
     void server.start();
 
     const registerTools = async () => {
       try {
         const tools: McpTool[] = await server.listTools();
+        const registered: BaseTool[] = [];
         for (const t of tools) {
           const schema = inferArgsSchema(t.inputSchema);
           const dynamic = lcTool(
@@ -119,8 +127,12 @@ export class SimpleAgent extends BaseAgent {
           );
           const adapted = new LangChainToolAdapter(dynamic);
           this.addTool(adapted);
+          registered.push(adapted);
         }
         this.loggerService.info(`Registered ${tools.length} MCP tools for namespace ${namespace}`);
+        // Store after successful registration
+        const existing = this.mcpServerTools.get(server) || [];
+        this.mcpServerTools.set(server, existing.concat(registered));
       } catch (e: any) {
         this.loggerService.error(`Failed to register MCP tools for ${namespace}: ${e.message}`);
       }
@@ -144,6 +156,27 @@ export class SimpleAgent extends BaseAgent {
     if (parsedConfig.systemPrompt !== undefined) {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('ArchitectAgent system prompt updated');
+    }
+  }
+
+  /**
+   * Detach MCP server: unregister its tools and stop/destroy it if it has lifecycle methods.
+   */
+  async removeMcpServer(server: McpServer): Promise<void> {
+    const tools = this.mcpServerTools.get(server);
+    if (tools && tools.length) {
+      for (const tool of tools) {
+        this.removeTool(tool as BaseTool);
+      }
+    }
+    this.mcpServerTools.delete(server);
+    // Attempt to call stop/destroy lifecycle if available
+    const anyServer: any = server;
+    try {
+      if (typeof anyServer.destroy === 'function') await anyServer.destroy();
+      else if (typeof anyServer.stop === 'function') await anyServer.stop();
+    } catch (e) {
+      this.loggerService.error(`Error destroying MCP server ${server.namespace}: ${(e as any)?.message || e}`);
     }
   }
 }

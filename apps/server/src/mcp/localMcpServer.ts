@@ -316,6 +316,20 @@ export class LocalMCPServer implements McpServer {
     this.logger.info(`[MCP:${this.namespace}] Stopped`);
   }
 
+  /**
+   * Full teardown invoked by graph runtime when node removed. Ensures no further retries
+   * or background timers are left running and clears intent flags so the server will not
+   * auto-start again due to late dependency resolution events.
+   */
+  async destroy(): Promise<void> {
+    this.wantStart = false; // cancel intent so maybeStart() does nothing further
+    await this.stop();
+    this.toolsCache = null;
+    this.toolsDiscovered = false;
+    this.restartAttempts = 0;
+    this.pendingStart = undefined;
+  }
+
   on(event: 'ready' | 'exit' | 'error' | 'restarted', handler: (...a: any[]) => void): this {
     this.emitter.on(event, handler);
     return this;
