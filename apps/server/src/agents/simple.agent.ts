@@ -98,11 +98,12 @@ export class SimpleAgent extends BaseAgent {
       const schema = inferArgsSchema(t.inputSchema);
 
       const dynamic = lcTool(
-        async (raw) => {
+        async (raw, config) => {
           this.loggerService.info(
             `Calling MCP tool ${t.name} in namespace ${namespace} with input: ${JSON.stringify(raw)}`,
           );
-          const res = await server.callTool(t.name, raw);
+          const threadId = config?.configurable?.thread_id;
+          const res = await server.callTool(t.name, raw, { threadId });
           if (res.structuredContent) return JSON.stringify(res.structuredContent);
           return res.content || '';
         },

@@ -1,6 +1,6 @@
 import { DynamicStructuredTool, tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { EngineerAgent } from "../agents/engineer.agent";
+// import { EngineerAgent } from "../agents/engineer.agent"; // TODO: This agent doesn't exist
 import { ContainerProviderEntity } from "../entities/containerProvider.entity";
 import { ConfigService } from "../services/config.service";
 import { LoggerService } from "../services/logger.service";
@@ -24,21 +24,12 @@ export class AskEngineerTool extends BaseTool {
   }
 
   init(): DynamicStructuredTool {
-    const egineerAgent = new EngineerAgent(this.configService, this.logger, this.containerProvider);
-
+    // const egineerAgent = new EngineerAgent(this.configService, this.logger, this.containerProvider);
+    
     return tool(
       async (rawInput, config) => {
-        const { owner, repo, branch, task } = schema.parse(rawInput);
-        const { thread_id } = config.configurable;
-        if (!thread_id) throw new Error("thread_id is required in configurable to use ask_engineer tool");
-
-        this.logger.info("Tool called", "ask_engineer", { owner, repo, branch, task });
-
-        const response = (await egineerAgent.graph.invoke(
-          { messages: [new HumanMessage(JSON.stringify({ content: task, info: { owner, repo, branch } }))] },
-          { configurable: { thread_id: `engineer_${thread_id}` } },
-        )) as { messages: BaseMessage[] };
-        return response.messages[response.messages.length - 1].text;
+        // TODO: Implement when engineer agent is available
+        throw new Error('Engineer agent not implemented yet');
       },
       {
         name: "ask_engineer",

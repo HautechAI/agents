@@ -42,7 +42,7 @@ export interface McpServer {
   start(): Promise<void>;
   stop(): Promise<void>;
   listTools(force?: boolean): Promise<McpTool[]>;
-  callTool(name: string, args: any, options?: { timeoutMs?: number }): Promise<McpToolCallResult>;
+  callTool(name: string, args: any, options?: { timeoutMs?: number; threadId?: string }): Promise<McpToolCallResult>;
   on(event: 'ready' | 'exit' | 'error' | 'restarted', handler: (...a: any[]) => void): this;
 }
 

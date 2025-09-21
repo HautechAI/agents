@@ -120,7 +120,14 @@ describe('LocalMCPServer (mock)', () => {
     });
     server = new LocalMCPServer(containerService, logger);
     // Provide a dummy container provider to satisfy start precondition (reuse mocked docker above)
-    (server as any).setContainerProvider({ provide: async () => ({ id: 'mock-container' }) });
+    const mockProvider = {
+      provide: async (threadId: string) => ({ 
+        id: `mock-container-${threadId}`,
+        stop: async () => {},
+        remove: async () => {}
+      })
+    };
+    (server as any).setContainerProvider(mockProvider);
     const cfg: McpServerConfig = { namespace: 'mock', command: 'ignored' } as any;
     await server.setConfig(cfg);
     await server.start();
@@ -136,7 +143,7 @@ describe('LocalMCPServer (mock)', () => {
   });
 
   it('calls tool', async () => {
-    const result = await server.callTool('echo', { text: 'hello' });
+    const result = await server.callTool('echo', { text: 'hello' }, { threadId: 'test-thread' });
     expect(result.content).toContain('echo:hello');
   });
 });

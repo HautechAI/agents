@@ -82,7 +82,9 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           $self: { kind: 'instance' },
           containerProvider: { kind: 'method', create: 'setContainerProvider' },
         },
-        sourcePorts: {},
+        sourcePorts: {
+          register: { kind: 'instance' },
+        },
       })
   );
 }
