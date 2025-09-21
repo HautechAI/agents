@@ -1,4 +1,4 @@
-import { useCallback, useRef, useMemo } from 'react';
+import { useCallback, useRef, useMemo, useState, useEffect } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -19,6 +19,7 @@ import { DND_ITEM_NODE } from './dnd';
 import { makeNodeTypes } from './nodeTypes';
 import { TemplatesProvider } from './TemplatesProvider';
 import type { NodeTypes } from 'reactflow';
+import { CheckpointStreamPanel } from '@/components/stream/CheckpointStreamPanel';
 import { LeftPalette } from './panels/LeftPalette';
 import { RightPropertiesPanel } from './panels/RightPropertiesPanel';
 import { useBuilderState } from './hooks/useBuilderState';
@@ -107,6 +108,21 @@ function CanvasArea({ nodes, edges, onNodesChange, onEdgesChange, onConnect, add
 export function AgentBuilder() {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, selectedNode, updateNodeData, deleteSelected, templates, loading, saveState } = useBuilderState();
   const nodeTypes = useMemo(() => makeNodeTypes(templates), [templates]);
+  const [rightTab, setRightTab] = useState<'properties' | 'checkpoint'>('properties');
+
+  // Reset tab when selection changes or if selected node no longer supports checkpoint view
+  useEffect(() => {
+    if (!selectedNode) {
+      setRightTab('properties');
+      return;
+    }
+    const tpl = selectedNode.data.template;
+    if (tpl !== 'simpleAgent' && rightTab === 'checkpoint') {
+      setRightTab('properties');
+    }
+  }, [selectedNode, rightTab]);
+
+  const isCheckpointEligible = selectedNode?.data.template === 'simpleAgent';
   return (
     <DndProvider backend={HTML5Backend}>
       <ReactFlowProvider>
@@ -131,10 +147,33 @@ export function AgentBuilder() {
               nodeTypes={nodeTypes}
             />
           </TemplatesProvider>
-          <aside className="w-72 shrink-0 border-l bg-sidebar p-4 overflow-y-auto">
-            <div className="sticky top-0">
-              <h2 className="mb-3 text-sm font-semibold">Properties</h2>
-              <RightPropertiesPanel node={selectedNode} onChange={updateNodeData} />
+          <aside className="w-96 shrink-0 border-l bg-sidebar p-0 flex flex-col overflow-hidden">
+            <div className="border-b flex items-center gap-2 px-4 h-10">
+              <div className="text-xs font-semibold tracking-wide">{selectedNode ? selectedNode.data.template : 'No Selection'}</div>
+              {isCheckpointEligible && (
+                <div className="ml-auto flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRightTab('properties')}
+                    className={`px-2 py-1 text-[11px] rounded ${rightTab==='properties' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}
+                  >Props</button>
+                  <button
+                    type="button"
+                    onClick={() => setRightTab('checkpoint')}
+                    className={`px-2 py-1 text-[11px] rounded ${rightTab==='checkpoint' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}
+                  >Checkpoint</button>
+                </div>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {rightTab === 'checkpoint' && isCheckpointEligible ? (
+                <div className="space-y-4">
+                  <div className="text-[10px] uppercase text-muted-foreground">Checkpoint Stream</div>
+                  <CheckpointStreamPanel />
+                </div>
+              ) : (
+                <RightPropertiesPanel node={selectedNode} onChange={updateNodeData} />
+              )}
             </div>
           </aside>
         </div>
