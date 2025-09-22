@@ -9,13 +9,10 @@ import { BaseMessage } from '@langchain/core/messages';
 
 const invocationSchema = z.object({
   input: z.string().min(1).describe('The message to forward to the target agent.'),
-  context: z
-    .any()
-    .optional()
-    .describe('Optional structured metadata; forwarded into TriggerMessage.info'),
+  context: z.any().optional().describe('Optional structured metadata; forwarded into TriggerMessage.info'),
 });
 
-const configSchema = z.object({ description: z.string().min(1) });
+const configSchema = z.object({ description: z.string().min(1).optional() });
 
 type WithThreadId = LangGraphRunnableConfig & { configurable?: { thread_id?: string } };
 
@@ -48,15 +45,17 @@ export class CallAgentTool extends BaseTool {
 
         if (!this.targetAgent) return 'Target agent is not connected';
 
-        const threadId = (runtimeCfg as WithThreadId | undefined)?.configurable?.thread_id ??
+        const threadId =
+          (runtimeCfg as WithThreadId | undefined)?.configurable?.thread_id ??
           (config as WithThreadId | undefined)?.configurable?.thread_id;
         if (!threadId) {
           throw new Error('thread_id is required');
         }
 
-        const info = parsed.context && typeof parsed.context === 'object' && !Array.isArray(parsed.context)
-          ? (parsed.context as Record<string, unknown>)
-          : {};
+        const info =
+          parsed.context && typeof parsed.context === 'object' && !Array.isArray(parsed.context)
+            ? (parsed.context as Record<string, unknown>)
+            : {};
         const triggerMessage: TriggerMessage = {
           content: parsed.input,
           info,
