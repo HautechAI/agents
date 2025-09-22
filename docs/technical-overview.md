@@ -47,28 +47,28 @@ flowchart LR
     GStore[(MongoDB graphs collection)]
   end
   subgraph Runtime
-    TR(TemplateRegistry) --> PR(PortsRegistry)
-    PR --> LGR(LiveGraphRuntime)
-    LGR -->|instantiate| Nodes[Nodes]
-    LGR -->|connect| Edges[Edges]
+    TR[TemplateRegistry] --> PR[PortsRegistry]
+    PR --> LGR[LiveGraphRuntime]
+    LGR -->|instantiate| Nodes((Nodes))
+    LGR -->|connect| Edges((Edges))
   end
   subgraph IO
-    Slack(SlackTrigger) --> Agent
-    PRTrig(PRTrigger) --> Agent
-    UI[UI (Socket.IO)] <-- Checkpoints --> Server
+    Slack[SlackTrigger] --> Agent
+    PRTrig[PRTrigger] --> Agent
+    UI[UI Socket IO] <-->|Checkpoints| Server
   end
   subgraph Agents
     Agent[SimpleAgent]
-    ToolsNode --> LLM(CallModel/MemCall)
+    ToolsNode[ToolsNode] --> LLM([CallModel/MemCall])
     LLM --> Tools
   end
   subgraph Tools
-    BashTool
-    GHCloneTool
-    SlackMsgTool
-    MCP(LocalMCPServer)
+    BashTool[BashCommandTool]
+    GHCloneTool[GithubCloneRepoTool]
+    SlackMsgTool[SendSlackMessageTool]
+    MCP[LocalMCPServer]
   end
-  GStore --load/apply--> LGR
+  GStore -->|load/apply| LGR
   Agent <--> ToolsNode
   ToolsNode --> BashTool
   ToolsNode --> GHCloneTool
