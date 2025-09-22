@@ -43,9 +43,12 @@ export class SimpleAgent extends BaseAgent {
 
   init(config: RunnableConfig = { recursionLimit: 250 }) {
     // Ensure each agent instance persists to its own checkpoint namespace by default
+    const existingConfigurable: Record<string, unknown> | undefined = (config as RunnableConfig).configurable as
+      | Record<string, unknown>
+      | undefined;
     const mergedConfig: RunnableConfig = {
       ...config,
-      configurable: { ...(config as any).configurable, checkpoint_ns: this.agentId },
+      configurable: { ...(existingConfigurable ?? {}), checkpoint_ns: this.agentId },
     } as RunnableConfig;
     this._config = mergedConfig;
 
