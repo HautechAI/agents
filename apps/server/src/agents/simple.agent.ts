@@ -81,13 +81,13 @@ export class SimpleAgent extends BaseAgent {
     // using any to avoid circular import issues if BaseTool is extended differently later
     this.callModelNode.addTool(tool);
     this.toolsNode.addTool(tool);
-    this.loggerService.info(`Tool added to ArchitectAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
+    this.loggerService.info(`Tool added to SimpleAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
   removeTool(tool: BaseTool) {
     this.callModelNode.removeTool(tool);
     this.toolsNode.removeTool(tool);
-    this.loggerService.info(`Tool removed from ArchitectAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
+    this.loggerService.info(`Tool removed from SimpleAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
   /**
@@ -153,7 +153,7 @@ export class SimpleAgent extends BaseAgent {
     const parsedConfig = config as { systemPrompt?: string }; // TODO: fix
     if (parsedConfig.systemPrompt !== undefined) {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
-      this.loggerService.info('ArchitectAgent system prompt updated');
+      this.loggerService.info('SimpleAgent system prompt updated');
     }
   }
 
