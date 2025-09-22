@@ -29,6 +29,7 @@ export interface DependencyBag {
 export interface FactoryContext {
   deps: DependencyBag;
   get: (id: string) => unknown; // access previously instantiated node (must exist already)
+  nodeId: string; // id of the node currently being instantiated (for namespacing / awareness)
 }
 
 // All factories must return a Configurable instance that implements setConfig

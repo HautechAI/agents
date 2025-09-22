@@ -191,7 +191,8 @@ export class LiveGraphRuntime {
     const factory = this.templateRegistry.get(node.data.template);
     if (!factory) throw Errors.unknownTemplate(node.data.template, node.id);
     // Factories receive a minimal context (deps deprecated -> empty object)
-    const created = await factory({ deps: {}, get: (id: string) => this.state.nodes.get(id)?.instance });
+    const created = await factory({ deps: {}, get: (id: string) => this.state.nodes.get(id)?.instance, nodeId: node.id });
+    // NOTE: setGraphNodeId reflection removed; prefer factories to leverage ctx.nodeId directly.
     const live: LiveNode = { id: node.id, template: node.data.template, instance: created, config: node.data.config };
     this.state.nodes.set(node.id, live);
     if (node.data.config) {

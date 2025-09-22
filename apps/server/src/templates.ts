@@ -26,14 +26,14 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
   return new TemplateRegistry()
     .register(
       'containerProvider',
-      () =>
+      (ctx) =>
         new ContainerProviderEntity(
           containerService,
           {
             cmd: ['sleep', 'infinity'],
             workingDir: '/workspace',
           },
-          (threadId) => ({ 'hautech.ai/thread_id': `architect_${threadId}` }),
+          (threadId) => ({ 'hautech.ai/thread_id': `${ctx.nodeId}__${threadId}` }),
         ),
       {
         sourcePorts: { $self: { kind: 'instance' } },
@@ -72,14 +72,18 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       },
       targetPorts: { $self: { kind: 'instance' } },
     })
-    .register('mcpServer', () => {
-      const server = new LocalMCPServer(containerService, logger);
-      void server.start();
-      return server;
-    }, {
-      targetPorts: {
-        $self: { kind: 'instance' },
-        containerProvider: { kind: 'method', create: 'setContainerProvider' },
+    .register(
+      'mcpServer',
+      () => {
+        const server = new LocalMCPServer(containerService, logger);
+        void server.start();
+        return server;
       },
-    });
+      {
+        targetPorts: {
+          $self: { kind: 'instance' },
+          containerProvider: { kind: 'method', create: 'setContainerProvider' },
+        },
+      },
+    );
 }
