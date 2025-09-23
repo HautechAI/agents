@@ -110,8 +110,11 @@ export interface BuildResult {
 }
 
 // Introspection of TemplateRegistry for UI palette generation
+export type TemplateKind = 'trigger' | 'agent' | 'tool';
 export interface TemplateNodeSchema {
-  name: string; // template name
+  name: string; // template name (technical identifier)
+  title: string; // human-readable default title (UI label)
+  kind: TemplateKind; // node kind for UI badges and grouping
   sourcePorts: string[]; // names of source handles (emitters / publishers / tool collections)
   targetPorts: string[]; // names of target handles (accept dependencies / tools / instances)
 }

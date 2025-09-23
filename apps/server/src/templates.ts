@@ -7,7 +7,7 @@ import { ConfigService } from './services/config.service';
 import { ContainerService } from './services/container.service';
 import { LoggerService } from './services/logger.service';
 import { SlackService } from './services/slack.service';
-import { BashCommandTool } from './tools/bash_command';
+import { ShellTool } from './tools/shell_command';
 import { GithubCloneRepoTool } from './tools/github_clone_repo';
 import { SendSlackMessageTool } from './tools/send_slack_message.tool';
 import { CallAgentTool } from './tools/call_agent.tool';
@@ -39,26 +39,27 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       {
         sourcePorts: { $self: { kind: 'instance' } },
       },
+      { title: 'Workspace', kind: 'tool' }
     )
-    .register('bashCommandTool', () => new BashCommandTool(logger), {
+    .register('shellTool', () => new ShellTool(logger), {
       targetPorts: {
         $self: { kind: 'instance' },
         containerProvider: { kind: 'method', create: 'setContainerProvider' },
       },
-    })
+    }, { title: 'Shell', kind: 'tool' })
     .register('githubCloneRepoTool', () => new GithubCloneRepoTool(configService, logger), {
       targetPorts: {
         $self: { kind: 'instance' },
         containerProvider: { kind: 'method', create: 'setContainerProvider' },
       },
-    })
+    }, { title: 'Github clone', kind: 'tool' })
     .register('sendSlackMessageTool', () => new SendSlackMessageTool(slackService, logger), {
       targetPorts: { $self: { kind: 'instance' } },
-    })
+    }, { title: 'Send Slack message', kind: 'tool' })
     .register('callAgentTool', () => new CallAgentTool(logger), {
       targetPorts: { $self: { kind: 'instance' } },
       sourcePorts: { agent: { kind: 'method', create: 'setAgent' } },
-    })
+    }, { title: 'Call agent', kind: 'tool' })
     .register(
       'slackTrigger',
       () => {
@@ -69,6 +70,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       {
         sourcePorts: { subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' } },
       },
+      { title: 'Slack trigger', kind: 'trigger' }
     )
     .register('simpleAgent', (ctx) => new SimpleAgent(configService, logger, checkpointerService, ctx.nodeId), {
       sourcePorts: {
@@ -76,7 +78,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
       },
       targetPorts: { $self: { kind: 'instance' } },
-    })
+    }, { title: 'Agent', kind: 'agent' })
     .register(
       'mcpServer',
       () => {
@@ -90,5 +92,6 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           containerProvider: { kind: 'method', create: 'setContainerProvider' },
         },
       },
+      { title: 'MCP Server', kind: 'tool' }
     );
 }
