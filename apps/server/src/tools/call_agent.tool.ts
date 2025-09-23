@@ -10,6 +10,13 @@ import { BaseMessage } from '@langchain/core/messages';
 const invocationSchema = z.object({
   input: z.string().min(1).describe('The message to forward to the target agent.'),
   context: z.any().optional().describe('Optional structured metadata; forwarded into TriggerMessage.info'),
+  childThreadId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Optional child thread identifier. If provided, the target agent will be invoked in `${parentThreadId}__${childThreadId}`.',
+    ),
 });
 
 const configSchema = z.object({ description: z.string().min(1).optional() }); // TODO: make description non optional
@@ -45,12 +52,16 @@ export class CallAgentTool extends BaseTool {
 
         if (!this.targetAgent) return 'Target agent is not connected';
 
-        const threadId =
+        const parentThreadId =
           (runtimeCfg as WithThreadId | undefined)?.configurable?.thread_id ??
           (config as WithThreadId | undefined)?.configurable?.thread_id;
-        if (!threadId) {
+        if (!parentThreadId) {
           throw new Error('thread_id is required');
         }
+
+        const targetThreadId = parsed.childThreadId
+          ? `${parentThreadId}__${parsed.childThreadId}`
+          : parentThreadId;
 
         const info =
           parsed.context && typeof parsed.context === 'object' && !Array.isArray(parsed.context)
@@ -62,7 +73,7 @@ export class CallAgentTool extends BaseTool {
         };
 
         try {
-          const res: BaseMessage | undefined = await this.targetAgent.invoke(threadId, [triggerMessage]);
+          const res: BaseMessage | undefined = await this.targetAgent.invoke(targetThreadId, [triggerMessage]);
           if (!res) return '';
           return res.text ?? '';
         } catch (err: any) {

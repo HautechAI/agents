@@ -37,7 +37,7 @@ describe('CallAgentTool unit', () => {
   it('calls attached agent and returns its response.text', async () => {
     const tool = new CallAgentTool(new LoggerService());
     await tool.setConfig({ description: 'desc' });
-    const agent = new FakeAgent(new LoggerService(), async (thread, msgs) => {
+    const agent = new FakeAgent(new LoggerService(), async (thread, _msgs) => {
       expect(thread).toBe('t2');
       return new AIMessage('OK');
     });
@@ -66,6 +66,22 @@ describe('CallAgentTool unit', () => {
     const dynamic = tool.init();
     expect(dynamic.description).toBe('My desc');
     expect(dynamic.name).toBe('call_agent');
+  });
+
+  it('concatenates childThreadId with parent thread_id when provided', async () => {
+    const tool = new CallAgentTool(new LoggerService());
+    await tool.setConfig({ description: 'desc' });
+    const agent = new FakeAgent(new LoggerService(), async (thread, _msgs) => {
+      expect(thread).toBe('parent__sub');
+      return new AIMessage('OK');
+    });
+    tool.setAgent(agent);
+    const dynamic = tool.init();
+    const out = await dynamic.invoke(
+      { input: 'ping', childThreadId: 'sub' },
+      { configurable: { thread_id: 'parent' } } as any,
+    );
+    expect(out).toBe('OK');
   });
 });
 
