@@ -1,7 +1,6 @@
-import { AIMessage, BaseMessage, HumanMessage, SystemMessage, RemoveMessage } from '@langchain/core/messages';
+import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { trimMessages } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
-import { REMOVE_ALL_MESSAGES } from '@langchain/langgraph';
 
 export type ChatState = { messages: BaseMessage[]; summary?: string };
 
@@ -32,16 +31,17 @@ export async function countTokens(llm: ChatOpenAI, messagesOrText: BaseMessage[]
   return total;
 }
 
-export async function buildContextForModel(state: ChatState, opts: SummarizationOptions): Promise<BaseMessage[]> {
+function buildBaseContext(state: ChatState, opts: SummarizationOptions): BaseMessage[] {
   const recent = opts.keepLast > 0 ? state.messages.slice(-opts.keepLast) : [];
   const summaryText = state.summary && state.summary.trim().length > 0 ? state.summary.trim() : undefined;
   const summarySystem = summaryText
-    ? new SystemMessage(`${opts.summarySystemNote ?? 'Conversation summary:'}\n${summaryText}`)
+    ? new SystemMessage(`${opts.summarySystemNote ?? 'Conversation summary so far:'}\n${summaryText}`)
     : undefined;
+  return summarySystem ? [summarySystem, ...recent] : [...recent];
+}
 
-  const base: BaseMessage[] = summarySystem ? [summarySystem, ...recent] : [...recent];
-
-  // Ensure we stay within budget while keeping potential system summary
+export async function buildContextForModel(state: ChatState, opts: SummarizationOptions): Promise<BaseMessage[]> {
+  const base = buildBaseContext(state, opts);
   const trimmed = await trimMessages(base, {
     maxTokens: opts.maxTokens,
     tokenCounter: opts.llm as any,
@@ -52,30 +52,18 @@ export async function buildContextForModel(state: ChatState, opts: Summarization
 }
 
 export async function shouldSummarize(state: ChatState, opts: SummarizationOptions): Promise<boolean> {
-  // If nothing to drop, don't summarize
-  if (state.messages.length <= (opts.keepLast ?? 0)) return false;
-
-  const recent = opts.keepLast > 0 ? state.messages.slice(-opts.keepLast) : [];
-  const summaryText = state.summary && state.summary.trim().length > 0 ? state.summary.trim() : undefined;
-  const summarySystem = summaryText
-    ? new SystemMessage(`${opts.summarySystemNote ?? 'Conversation summary:'}\n${summaryText}`)
-    : undefined;
-  const contextForCount: BaseMessage[] = summarySystem ? [summarySystem, ...recent] : [...recent];
-  const tokenCount = await countTokens(opts.llm, contextForCount);
-  if (tokenCount > opts.maxTokens) return true;
-
-  // First pass: if we have older history and no summary yet
-  if (!summaryText && state.messages.length > (opts.keepLast ?? 0) + 2) return true;
-
-  return false;
+  const hasTail = state.messages.length > (opts.keepLast ?? 0);
+  if (!hasTail) return false; // nothing older than keepLast to fold
+  const base = buildBaseContext(state, opts);
+  const tokenCount = await countTokens(opts.llm, base);
+  return tokenCount > opts.maxTokens;
 }
 
 export async function summarizationNode(state: ChatState, opts: SummarizationOptions): Promise<ChatState> {
   const { keepLast, llm } = opts;
-  if (state.messages.length <= keepLast) return state;
-
   const recent = keepLast > 0 ? state.messages.slice(-keepLast) : [];
   const older = keepLast > 0 ? state.messages.slice(0, -keepLast) : state.messages;
+  if (older.length === 0) return state;
 
   const sys = new SystemMessage(
     'You update a running summary of a conversation. Keep key facts, goals, decisions, constraints, names, deadlines, and follow-ups. Be concise; use compact sentences; omit chit-chat.',
@@ -92,7 +80,7 @@ export async function summarizationNode(state: ChatState, opts: SummarizationOpt
   const res = (await llm.invoke([sys, human])) as AIMessage;
   const newSummary = typeof res.content === 'string' ? res.content : JSON.stringify(res.content);
 
-  // Clear old messages and keep only recent K
+  // Return updated summary and keep only recent K (older folded into summary)
   return { summary: newSummary, messages: recent };
 }
 
@@ -125,11 +113,15 @@ export class SummarizationNode {
       summarySystemNote: this.summarySystemNote,
     };
 
-    if (await shouldSummarize(state, opts)) {
-      const out = await summarizationNode(state, opts);
-      return { summary: out.summary, messages: out.messages };
+    let working: ChatState = { messages: state.messages, summary: state.summary };
+
+    // Summarize only if base context tokens exceed budget and there is a tail
+    if (await shouldSummarize(working, opts)) {
+      working = await summarizationNode(working, opts);
     }
 
-    return { summary: state.summary ?? '' };
+    // Always build trimmed context for the model and store into state.messages
+    const trimmed = await buildContextForModel(working, opts);
+    return { summary: working.summary ?? '', messages: trimmed };
   }
 }
