@@ -15,7 +15,7 @@ const bashCommandSchema = z.object({
   command: z.string().describe('The bash command to execute.'),
 });
 
-export class BashCommandTool extends BaseTool {
+export class ShellTool extends BaseTool {
   private containerProvider?: ContainerProviderEntity;
 
   constructor(private logger: LoggerService) {
@@ -34,14 +34,14 @@ export class BashCommandTool extends BaseTool {
     return tool(
       async (input, config) => {
         const { thread_id } = config.configurable;
-        if (!thread_id) throw new Error('thread_id is required in configurable to use bash_command tool');
+        if (!thread_id) throw new Error('thread_id is required in configurable to use shell_command tool');
 
         if (!this.containerProvider) {
-          throw new Error('BashCommandTool: containerProvider not set. Connect via graph edge before use.');
+          throw new Error('ShellTool: containerProvider not set. Connect via graph edge before use.');
         }
         const container = await this.containerProvider.provide(thread_id!);
         const { command } = bashCommandSchema.parse(input);
-        this.logger.info('Tool called', 'bash_command', { command });
+        this.logger.info('Tool called', 'shell_command', { command });
         const response = await container.exec(command);
 
         const cleanedStdout = this.stripAnsi(response.stdout);
@@ -57,8 +57,8 @@ export class BashCommandTool extends BaseTool {
         return cleanedStdout;
       },
       {
-        name: 'bash_command',
-        description: 'Execute a bash command and return the output.',
+        name: 'shell_command',
+        description: 'Execute a shell command and return the output.',
         schema: bashCommandSchema,
       },
     );
