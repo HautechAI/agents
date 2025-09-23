@@ -13,16 +13,17 @@ module.exports = {
     'prettier'
   ],
   rules: {
-    // Keep no-explicit-any
     '@typescript-eslint/no-explicit-any': ['error'],
-    // Prefer const
     'prefer-const': 'warn',
-    // Unused imports cleanup
     'unused-imports/no-unused-imports': 'warn',
-    // TS-specific unused vars
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-    // Import order (groups roughly)
     'import/order': ['warn', { 'newlines-between': 'always', alphabetize: { order: 'asc', caseInsensitive: true } }],
   },
   ignorePatterns: ['**/dist/**', '**/build/**', '**/*.d.ts', 'node_modules/**'],
+  overrides: [
+    {
+      files: ['**/*.ts', '**/*.tsx'],
+      extends: [],
+    },
+  ],
 };
