@@ -110,7 +110,7 @@ export interface BuildResult {
 }
 
 // Introspection of TemplateRegistry for UI palette generation
-export type TemplateKind = 'trigger' | 'agent' | 'tool';
+export type TemplateKind = 'trigger' | 'agent' | 'tool' | 'mcp';
 export interface TemplateNodeSchema {
   name: string; // template name (technical identifier)
   title: string; // human-readable default title (UI label)

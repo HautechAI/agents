@@ -92,6 +92,6 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           containerProvider: { kind: 'method', create: 'setContainerProvider' },
         },
       },
-      { title: 'MCP Server', kind: 'tool' }
+      { title: 'MCP Server', kind: 'mcp' }
     );
 }
