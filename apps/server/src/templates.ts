@@ -105,6 +105,14 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       { title: 'Agent', kind: 'agent' },
     )
     .register(
+      'memoryNode',
+      (ctx) => new (require('./nodes/memory.node').MemoryNode)(logger, ctx.nodeId),
+      {
+        sourcePorts: { $self: { kind: 'instance' } },
+      },
+      { title: 'Memory', kind: 'tool' },
+    )
+    .register(
       'mcpServer',
       () => {
         const server = new LocalMCPServer(containerService, logger);
