@@ -4,6 +4,8 @@ import { TemplatePortConfig, TemplatePortsRegistry } from './ports.types';
 export interface TemplateMeta {
   title: string;
   kind: TemplateKind;
+  capabilities?: TemplateNodeSchema['capabilities'];
+  staticConfigSchema?: import('schema-json').JSONSchema;
 }
 
 export class TemplateRegistry {
@@ -38,7 +40,15 @@ export class TemplateRegistry {
       const sourcePorts = portCfg?.sourcePorts ? Object.keys(portCfg.sourcePorts) : [];
       const targetPorts = portCfg?.targetPorts ? Object.keys(portCfg.targetPorts) : [];
       const meta = this.meta.get(name) ?? { title: name, kind: 'tool' as TemplateKind };
-      schemas.push({ name, title: meta.title, kind: meta.kind, sourcePorts, targetPorts });
+      schemas.push({
+        name,
+        title: meta.title,
+        kind: meta.kind,
+        sourcePorts,
+        targetPorts,
+        capabilities: meta.capabilities,
+        staticConfigSchema: meta.staticConfigSchema,
+      });
     }
     return schemas.sort((a, b) => a.name.localeCompare(b.name));
   }
