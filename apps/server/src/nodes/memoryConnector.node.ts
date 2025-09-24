@@ -1,30 +1,36 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
-import { SystemMessage } from '@langchain/core/messages';
-import { MemoryService } from '../services/memory.service';
+import { LoggerService } from '../services/logger.service';
 
-export type MemoryConnectorConfig = {
-  placement: 'after_system' | 'last_message';
-  content: 'full' | 'tree';
-};
+export type MemoryPlacement = 'after_system' | 'last_message';
+export type MemoryContent = 'full' | 'tree';
 
 export class MemoryConnectorNode {
-  private config: MemoryConnectorConfig = { placement: 'after_system', content: 'full' };
-  private memoryService?: MemoryService;
+  private config: { placement: MemoryPlacement; content: MemoryContent } = {
+    placement: 'after_system',
+    content: 'full',
+  };
+  private memoryService?: unknown;
 
-  setConfig(cfg: MemoryConnectorConfig): void {
+  constructor(private logger: LoggerService) {}
+
+  setConfig(cfg: { placement: MemoryPlacement; content: MemoryContent }): void {
     this.config = { ...this.config, ...cfg };
   }
 
-  setMemoryService(svc: MemoryService): void {
-    this.memoryService = svc;
+  setMemoryService(ms: unknown): void {
+    this.memoryService = ms;
   }
 
   clearMemoryService(): void {
     this.memoryService = undefined;
   }
 
-  async renderMessage(_config: RunnableConfig): Promise<SystemMessage | null> {
-    // Implemented in Phase 3
+  getConfig(): { placement: MemoryPlacement; content: MemoryContent } {
+    return this.config;
+  }
+
+  async renderMessage(_config: RunnableConfig): Promise<null> {
+    // Placeholder for Phase 3
     return null;
   }
 }

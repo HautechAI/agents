@@ -113,18 +113,27 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       { title: 'Memory', kind: 'tool' },
     )
     .register(
-      'mcpServer',
-      () => {
-        const server = new LocalMCPServer(containerService, logger);
-        void server.start();
+    'memoryConnector',
+    () => new (require('./nodes/memoryConnector.node').MemoryConnectorNode)(logger),
+    {
+    sourcePorts: { $self: { kind: 'instance' } },
+    targetPorts: { memory: { kind: 'method', create: 'setMemoryService', destroy: 'clearMemoryService' } },
+    },
+    { title: 'Memory Connector', kind: 'tool' },
+    )
+    .register(
+    'mcpServer',
+    () => {
+      const server = new LocalMCPServer(containerService, logger);
+      void server.start();
         return server;
-      },
-      {
-        targetPorts: {
-          $self: { kind: 'instance' },
-          containerProvider: { kind: 'method', create: 'setContainerProvider' },
-        },
-      },
-      { title: 'MCP Server', kind: 'mcp' },
-    );
+       },
+       {
+         targetPorts: {
+           $self: { kind: 'instance' },
+           containerProvider: { kind: 'method', create: 'setContainerProvider' },
+         },
+       },
+       { title: 'MCP Server', kind: 'mcp' },
+     );
 }
