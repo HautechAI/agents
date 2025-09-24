@@ -12,6 +12,7 @@ import { LoggerService } from '../services/logger.service';
 import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
 import { TemplateRegistry } from './templateRegistry';
+import type { Pausable, ProvisionStatus, Provisionable, DynamicConfigurable } from './capabilities';
 
 const configsEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -45,9 +46,42 @@ export class LiveGraphRuntime {
     return Array.from(this.state.executedEdges.values());
   }
 
+  // Return the live node instance (if present)
+  getNodeInstance(id: string): unknown {
+    return this.state.nodes.get(id)?.instance;
+  }
+
   async apply(graph: GraphDefinition): Promise<GraphDiffResult> {
     this.applying = this.applying.then(() => this._applyGraphInternal(graph));
     return this.applying;
+  }
+
+  // Runtime helpers for Pausable/Provisionable
+  async pauseNode(id: string): Promise<void> {
+    const inst: any = this.state.nodes.get(id)?.instance;
+    if (inst && typeof inst.pause === 'function') await inst.pause();
+  }
+  async resumeNode(id: string): Promise<void> {
+    const inst: any = this.state.nodes.get(id)?.instance;
+    if (inst && typeof inst.resume === 'function') await inst.resume();
+  }
+  async provisionNode(id: string): Promise<void> {
+    const inst: any = this.state.nodes.get(id)?.instance;
+    if (inst && typeof inst.provision === 'function') await inst.provision();
+  }
+  async deprovisionNode(id: string): Promise<void> {
+    const inst: any = this.state.nodes.get(id)?.instance;
+    if (inst && typeof inst.deprovision === 'function') await inst.deprovision();
+  }
+  getNodeStatus(id: string): { isPaused?: boolean; provisionStatus?: ProvisionStatus; dynamicConfigReady?: boolean } {
+    const inst: any = this.state.nodes.get(id)?.instance;
+    const out: { isPaused?: boolean; provisionStatus?: ProvisionStatus; dynamicConfigReady?: boolean } = {};
+    if (inst) {
+      if (typeof inst.isPaused === 'function') out.isPaused = !!inst.isPaused();
+      if (typeof inst.getProvisionStatus === 'function') out.provisionStatus = inst.getProvisionStatus();
+      if (typeof inst.isDynamicConfigReady === 'function') out.dynamicConfigReady = !!inst.isDynamicConfigReady();
+    }
+    return out;
   }
 
   private async _applyGraphInternal(next: GraphDefinition): Promise<GraphDiffResult> {

@@ -9,6 +9,8 @@ import {
   PersistedGraphUpsertResponse,
   TemplateNodeSchema,
 } from '../graph/types';
+import type { ProvisionStatus } from '../graph/capabilities';
+import { LiveGraphRuntime } from '../graph/liveGraph.manager';
 
 interface GraphDocument {
   _id: string; // name
@@ -20,12 +22,19 @@ interface GraphDocument {
 
 export class GraphService {
   private collection?: Collection<GraphDocument>;
+  // Simple registry mapping graph name to its runtime. In production, this should be managed by a runtime manager.
+  private runtimes = new Map<string, LiveGraphRuntime>();
+
   constructor(
     private readonly db: Db,
     private readonly logger: LoggerService,
     private readonly templateRegistry: TemplateRegistry,
   ) {
     this.collection = this.db.collection<GraphDocument>('graphs');
+  }
+
+  attachRuntime(name: string, runtime: LiveGraphRuntime) {
+    this.runtimes.set(name, runtime);
   }
 
   async get(name: string): Promise<PersistedGraph | null> {
@@ -67,6 +76,44 @@ export class GraphService {
     };
     await this.collection!.replaceOne({ _id: name }, updated);
     return this.toPersisted(updated);
+  }
+
+  // API-like helpers to be wired to HTTP in a follow-up
+  getTemplates() {
+    return this.templateRegistry.toSchema();
+  }
+
+  getNodeStatus(name: string, nodeId: string): { isPaused?: boolean; provisionStatus?: ProvisionStatus; dynamicConfigReady?: boolean } | null {
+    const rt = this.runtimes.get(name);
+    if (!rt) return null;
+    return rt.getNodeStatus(nodeId);
+  }
+
+  async nodeAction(
+    name: string,
+    nodeId: string,
+    action: 'pause' | 'resume' | 'provision' | 'deprovision',
+  ): Promise<void> {
+    const rt = this.runtimes.get(name);
+    if (!rt) return;
+    if (action === 'pause') return rt.pauseNode(nodeId);
+    if (action === 'resume') return rt.resumeNode(nodeId);
+    if (action === 'provision') return rt.provisionNode(nodeId);
+    if (action === 'deprovision') return rt.deprovisionNode(nodeId);
+  }
+
+  async setNodeConfig(name: string, nodeId: string, cfg: Record<string, unknown>): Promise<void> {
+    const rt = this.runtimes.get(name);
+    if (!rt) return; // TODO: decide whether to persist-only if runtime not attached
+    const inst: any = rt.getNodeInstance(nodeId);
+    if (inst && typeof inst.setConfig === 'function') await inst.setConfig(cfg);
+  }
+
+  async setNodeDynamicConfig(name: string, nodeId: string, cfg: Record<string, unknown>): Promise<void> {
+    const rt = this.runtimes.get(name);
+    if (!rt) return;
+    const inst: any = rt.getNodeInstance(nodeId);
+    if (inst && typeof inst.setDynamicConfig === 'function') await inst.setDynamicConfig(cfg);
   }
 
   private validate(req: PersistedGraphUpsertRequest, schema: TemplateNodeSchema[]) {
