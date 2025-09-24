@@ -1,4 +1,5 @@
-import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
+import Docker, { ContainerCreateOptions, Exec, ImagePullOptions } from 'dockerode';
+import { PassThrough, Writable } from 'node:stream';
 import { ContainerEntity } from '../entities/container.entity';
 import { LoggerService } from './logger.service';
 
@@ -8,7 +9,7 @@ export type ContainerOpts = {
   image?: string;
   name?: string;
   cmd?: string[];
-  entrypoint?: string;
+  entrypoint?: string | string[];
   env?: Record<string, string> | string[];
   workingDir?: string;
   autoRemove?: boolean; // --rm behavior
@@ -60,9 +61,9 @@ export class ContainerService {
         if (err) return reject(err);
         if (!stream) return reject(new Error('No pull stream returned'));
         this.docker.modem.followProgress(
-          stream as NodeJS.ReadableStream,
-          (doneErr: any) => {
-            if (doneErr) return reject(doneErr);
+          stream,
+          (doneErr: unknown) => {
+            if (doneErr) return reject(doneErr as Error);
             this.logger.info(`Finished pulling image '${image}'${platform ? ` for platform ${platform}` : ''}`);
             resolve();
           },
@@ -76,8 +77,8 @@ export class ContainerService {
         );
       };
       if (platform) {
-        // Pass platform to ensure correct architecture is pulled; use any to avoid type issues across dockerode versions
-        (this.docker as any).pull(image, { platform }, cb);
+        const pullOpts: ImagePullOptions = { platform };
+        this.docker.pull(image, pullOpts, cb);
       } else {
         this.docker.pull(image, cb);
       }
@@ -112,11 +113,11 @@ export class ContainerService {
       AttachStdout: true,
       AttachStderr: true,
       Labels: optsWithDefaults.labels,
-    } as any;
+      Entrypoint: optsWithDefaults.entrypoint,
+    };
 
     if (optsWithDefaults.platform) {
-      // Prefer platform at container creation time if provided
-      (createOptions as any).Platform = optsWithDefaults.platform;
+      createOptions.Platform = optsWithDefaults.platform;
     }
 
     this.logger.info(
@@ -209,10 +210,10 @@ export class ContainerService {
       Tty: tty,
     });
 
-    const stdoutStream = new (require('node:stream').PassThrough)();
-    const stderrStream = new (require('node:stream').PassThrough)();
+    const stdoutStream = new PassThrough();
+    const stderrStream = new PassThrough();
 
-    const hijackStream: any = await new Promise((resolve, reject) => {
+    const hijackStream = await new Promise<NodeJS.ReadWriteStream>((resolve, reject) => {
       exec.start({ hijack: true, stdin: true }, (err, stream) => {
         if (err) return reject(err);
         if (!stream) return reject(new Error('No stream returned from exec.start'));
@@ -230,7 +231,6 @@ export class ContainerService {
       try {
         hijackStream.end();
       } catch {}
-      // Wait a short grace period; then inspect
       const details = await exec.inspect();
       return { exitCode: details.ExitCode ?? -1 };
     };
@@ -270,13 +270,6 @@ export class ContainerService {
           return reject(new Error('No stream returned from exec.start'));
         }
 
-        // If exec created without TTY, docker multiplexes stdout/stderr
-        if (!exec.inspect) {
-          // Very unlikely, but guard.
-          this.logger.error('Exec instance missing inspect method');
-        }
-
-        // Try to determine if we should demux. We'll inspect later.
         (async () => {
           try {
             const details = await exec.inspect();
@@ -286,22 +279,21 @@ export class ContainerService {
                 stdout += chunk.toString();
               });
             } else {
-              this.docker.modem.demuxStream(
-                stream,
-                {
-                  write: (chunk: any) => {
-                    stdout += Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
-                  },
-                } as any,
-                {
-                  write: (chunk: any) => {
-                    stderr += Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
-                  },
-                } as any,
-              );
+              const outCollector = new Writable({
+                write(chunk, _enc, cb) {
+                  stdout += chunk.toString();
+                  cb();
+                },
+              });
+              const errCollector = new Writable({
+                write(chunk, _enc, cb) {
+                  stderr += chunk.toString();
+                  cb();
+                },
+              });
+              this.docker.modem.demuxStream(stream, outCollector, errCollector);
             }
-          } catch (e) {
-            // Fallback: treat as single combined stream
+          } catch {
             stream.on('data', (c: Buffer | string) => (stdout += c.toString()));
           }
         })();
@@ -322,7 +314,6 @@ export class ContainerService {
         stream.on('error', (e) => {
           if (finished) return;
           if (timer) clearTimeout(timer);
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           finished = true;
           reject(e);
         });
