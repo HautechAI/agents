@@ -1,7 +1,6 @@
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
-import { task, withTask } from '@traceloop/node-server-sdk';
-import { trimMessages } from '@langchain/core/messages';
+import { withTask } from '@traceloop/node-server-sdk';
 import { NodeOutput } from '../types';
 
 export type ChatState = { messages: BaseMessage[]; summary?: string };
