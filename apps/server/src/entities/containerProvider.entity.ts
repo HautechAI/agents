@@ -2,7 +2,7 @@ import { ContainerOpts, ContainerService } from '../services/container.service';
 import { ContainerEntity } from './container.entity';
 
 export class ContainerProviderEntity {
-  private cfg?: Pick<ContainerOpts, 'image' | 'env'>;
+  private cfg?: Pick<ContainerOpts, 'image' | 'env' | 'platform'>;
 
   constructor(
     private containerService: ContainerService,
@@ -12,7 +12,7 @@ export class ContainerProviderEntity {
 
   // No-op configurability to satisfy Configurable interface for graph registration
   setConfig(cfg: Record<string, unknown>): void {
-    this.cfg = cfg as Pick<ContainerOpts, 'image' | 'env'>; // TODO: do proper parsing/validation with schema
+    this.cfg = cfg as Pick<ContainerOpts, 'image' | 'env' | 'platform'>; // TODO: do proper parsing/validation with schema
   }
 
   async provide(threadId: string) {
