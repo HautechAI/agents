@@ -14,8 +14,8 @@ import { ChatOpenAI } from '@langchain/openai';
 import { last } from 'lodash-es';
 import { McpServer, McpTool } from '../mcp';
 import { inferArgsSchema } from '../mcp/jsonSchemaToZod';
-import { CallModelNode } from '../nodes/callModel.node';
-import { ToolsNode } from '../nodes/tools.node';
+import { CallModelNode } from '../lgnodes/callModel.lgnode';
+import { ToolsNode } from '../lgnodes/tools.lgnode';
 import { CheckpointerService } from '../services/checkpointer.service';
 import { ConfigService } from '../services/config.service';
 import { LoggerService } from '../services/logger.service';
@@ -23,7 +23,7 @@ import { BaseAgent } from './base.agent';
 import { BaseTool } from '../tools/base.tool';
 import { LangChainToolAdapter } from '../tools/langchainTool.adapter';
 import { BashCommandTool } from '../tools/bash_command';
-import { SummarizationNode } from '../nodes/summarization.node';
+import { SummarizationNode } from '../lgnodes/summarization.lgnode';
 import { NodeOutput } from '../types';
 
 export class SimpleAgent extends BaseAgent {

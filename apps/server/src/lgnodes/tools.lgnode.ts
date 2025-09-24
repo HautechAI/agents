@@ -3,7 +3,7 @@ import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { withTool } from '@traceloop/node-server-sdk';
 import { BaseTool } from '../tools/base.tool';
 import { NodeOutput } from '../types';
-import { BaseNode } from './base.node';
+import { BaseNode } from './base.lgnode';
 
 export class ToolsNode extends BaseNode {
   constructor(private tools: BaseTool[]) {
