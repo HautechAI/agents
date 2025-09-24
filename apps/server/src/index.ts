@@ -1,5 +1,7 @@
 import * as traceloop from '@traceloop/node-server-sdk';
-traceloop.initialize({ disableBatch: true });
+traceloop.initialize({
+  disableBatch: true,
+});
 
 import http from 'http';
 import { Server } from 'socket.io';

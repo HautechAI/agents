@@ -28,7 +28,7 @@ export class ToolsNode extends BaseNode {
 
     const toolMessages: ToolMessage[] = await Promise.all(
       toolCalls.map(async (tc) => {
-        return await withTool({ name: tc.name }, async () => {
+        return await withTool({ name: tc.name, inputParameters: [tc.args] }, async () => {
           const callId = tc.id ?? `missing_id_${Math.random().toString(36).slice(2)}`;
           const tool = tools.find((t) => t.name === tc.name);
           const createMessage = (content: string) =>

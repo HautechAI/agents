@@ -32,7 +32,7 @@ export class SimpleAgent extends BaseAgent {
   // Track tools registered per MCP server so we can remove them on detachment
   private mcpServerTools: Map<McpServer, BaseTool[]> = new Map();
 
-  private summarizationKeepLast?: number;
+  private summarizationKeepTokens?: number; // token budget for verbatim tail
   private summarizationMaxTokens?: number;
   private summarizeNode!: SummarizationNode;
 
@@ -58,7 +58,7 @@ export class SimpleAgent extends BaseAgent {
       }),
     });
   }
-  
+
   init(config: RunnableConfig = { recursionLimit: 250 }) {
     if (!this.agentId) throw new Error('agentId is required to initialize SimpleAgent');
 
@@ -72,7 +72,7 @@ export class SimpleAgent extends BaseAgent {
     this.callModelNode = new CallModelNode([], llm);
     this.toolsNode = new ToolsNode([]);
     this.summarizeNode = new SummarizationNode(llm, {
-      keepLast: this.summarizationKeepLast ?? 0,
+      keepTokens: this.summarizationKeepTokens ?? 0,
       maxTokens: this.summarizationMaxTokens ?? 0,
     });
 
@@ -180,7 +180,8 @@ export class SimpleAgent extends BaseAgent {
   setConfig(config: Record<string, unknown>): void {
     const parsedConfig = config as {
       systemPrompt?: string;
-      summarizationKeepLast?: number;
+      summarizationKeepTokens?: number; // new
+      summarizationKeepLast?: number; // deprecated
       summarizationMaxTokens?: number;
     };
     if (parsedConfig.systemPrompt !== undefined) {
@@ -189,17 +190,21 @@ export class SimpleAgent extends BaseAgent {
     }
 
     // Extend to accept summarization options
-    const keepLastRaw = parsedConfig.summarizationKeepLast;
+    // Accept both new (summarizationKeepTokens) and legacy (summarizationKeepLast) keys.
+    const keepTokensRaw =
+      (parsedConfig as any).summarizationKeepTokens !== undefined
+        ? (parsedConfig as any).summarizationKeepTokens
+        : parsedConfig.summarizationKeepLast; // fallback legacy
     const maxTokensRaw = parsedConfig.summarizationMaxTokens;
     const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
 
-    const updates: { keepLast?: number; maxTokens?: number } = {};
-    if (keepLastRaw !== undefined) {
-      if (!(isInt(keepLastRaw) && keepLastRaw >= 0)) {
-        this.loggerService.error('summarizationKeepLast must be an integer >= 0');
+    const updates: { keepTokens?: number; maxTokens?: number } = {};
+    if (keepTokensRaw !== undefined) {
+      if (!(isInt(keepTokensRaw) && keepTokensRaw >= 0)) {
+        this.loggerService.error('summarizationKeepTokens must be an integer >= 0');
       } else {
-        this.summarizationKeepLast = keepLastRaw;
-        updates.keepLast = keepLastRaw;
+        this.summarizationKeepTokens = keepTokensRaw;
+        updates.keepTokens = keepTokensRaw;
       }
     }
     if (maxTokensRaw !== undefined) {
@@ -211,7 +216,7 @@ export class SimpleAgent extends BaseAgent {
       }
     }
 
-    if (updates.keepLast !== undefined || updates.maxTokens !== undefined) {
+    if (updates.keepTokens !== undefined || updates.maxTokens !== undefined) {
       this.summarizeNode.setOptions(updates);
       this.loggerService.info('SimpleAgent summarization options updated');
     }

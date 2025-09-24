@@ -46,7 +46,7 @@ export abstract class BaseAgent implements TriggerListener {
   }
 
   async invoke(thread: string, messages: TriggerMessage[] | TriggerMessage): Promise<BaseMessage | undefined> {
-    return await withAgent({ name: 'agent.invoke' }, async () => {
+    return await withAgent({ name: 'agent.invoke', inputParameters: [{ thread }, { messages }] }, async () => {
       const batch = Array.isArray(messages) ? messages : [messages];
       this.logger.info(`New trigger event in thread ${thread} with messages: ${JSON.stringify(batch)}`);
       const response = (await this.graph.invoke(
