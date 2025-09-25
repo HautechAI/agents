@@ -35,6 +35,7 @@ async function bootstrap() {
     configService: config,
     slackService: slackService,
     checkpointerService: checkpointer,
+    db: mongo.getDb(),
   });
 
   const runtime = new LiveGraphRuntime(logger, templateRegistry);

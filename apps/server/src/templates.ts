@@ -12,6 +12,7 @@ import { GithubCloneRepoTool } from './tools/github_clone_repo';
 import { SendSlackMessageTool } from './tools/send_slack_message.tool';
 import { ShellTool } from './tools/shell_command';
 import { SlackTrigger } from './triggers';
+import type { Db } from 'mongodb';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
@@ -19,10 +20,11 @@ export interface TemplateRegistryDeps {
   configService: ConfigService;
   slackService: SlackService;
   checkpointerService: CheckpointerService;
+  db: Db;
 }
 
 export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
-  const { logger, containerService, configService, slackService, checkpointerService } = deps;
+  const { logger, containerService, configService, slackService, checkpointerService, db } = deps;
 
   return new TemplateRegistry()
     .register(
@@ -106,7 +108,11 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     )
     .register(
       'memoryNode',
-      (ctx) => new (require('./nodes/memory.node').MemoryNode)(logger, ctx.nodeId),
+      (ctx) => {
+        const node = new (require('./nodes/memory.node').MemoryNode)(logger, ctx.nodeId);
+        node.setDb(db);
+        return node;
+      },
       {
         sourcePorts: { $self: { kind: 'instance' } },
       },
