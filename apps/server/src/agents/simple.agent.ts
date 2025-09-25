@@ -25,6 +25,7 @@ import { LangChainToolAdapter } from '../tools/langchainTool.adapter';
 import { BashCommandTool } from '../tools/bash_command';
 import { SummarizationNode } from '../lgnodes/summarization.lgnode';
 import { NodeOutput } from '../types';
+import { MemoryConnectorNode } from '../nodes/memoryConnector.node';
 
 export class SimpleAgent extends BaseAgent {
   private callModelNode!: CallModelNode;
@@ -103,6 +104,14 @@ export class SimpleAgent extends BaseAgent {
     }) as CompiledStateGraph<unknown, unknown>;
 
     return this;
+  }
+
+  setMemoryConnector(conn: MemoryConnectorNode): void {
+    this.callModelNode.setMemoryConnector(conn);
+  }
+
+  clearMemoryConnector(): void {
+    this.callModelNode.clearMemoryConnector();
   }
 
   addTool(tool: BaseTool) {

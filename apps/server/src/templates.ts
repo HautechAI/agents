@@ -100,7 +100,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
           mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
         },
-        targetPorts: { $self: { kind: 'instance' } },
+        targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryConnector', destroy: 'clearMemoryConnector' } },
       },
       { title: 'Agent', kind: 'agent' },
     )
