@@ -122,18 +122,58 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     { title: 'Memory Connector', kind: 'tool' },
     )
     .register(
-    'mcpServer',
-    () => {
-      const server = new LocalMCPServer(containerService, logger);
-      void server.start();
-        return server;
-       },
-       {
-         targetPorts: {
-           $self: { kind: 'instance' },
-           containerProvider: { kind: 'method', create: 'setContainerProvider' },
-         },
-       },
-       { title: 'MCP Server', kind: 'mcp' },
-     );
+     'memory_read',
+     () => new (require('./tools/memory/memory_read.tool').MemoryReadTool)(logger),
+    {
+     targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryService' } },
+    },
+    { title: 'Memory Read', kind: 'tool' },
+    )
+    .register(
+    'memory_list',
+    () => new (require('./tools/memory/memory_list.tool').MemoryListTool)(logger),
+    {
+      targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryService' } },
+    },
+      { title: 'Memory List', kind: 'tool' },
+    )
+    .register(
+      'memory_append',
+      () => new (require('./tools/memory/memory_append.tool').MemoryAppendTool)(logger),
+      {
+        targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryService' } },
+      },
+      { title: 'Memory Append', kind: 'tool' },
+    )
+    .register(
+      'memory_update',
+      () => new (require('./tools/memory/memory_update.tool').MemoryUpdateTool)(logger),
+      {
+        targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryService' } },
+      },
+      { title: 'Memory Update', kind: 'tool' },
+    )
+    .register(
+      'memory_delete',
+      () => new (require('./tools/memory/memory_delete.tool').MemoryDeleteTool)(logger),
+      {
+        targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryService' } },
+      },
+      { title: 'Memory Delete', kind: 'tool' },
+    )
+     .register(
+     'mcpServer',
+     () => {
+       const server = new LocalMCPServer(containerService, logger);
+       void server.start();
+       return server;
+      },
+      {
+        targetPorts: {
+          $self: { kind: 'instance' },
+          containerProvider: { kind: 'method', create: 'setContainerProvider' },
+        },
+      },
+      { title: 'MCP Server', kind: 'mcp' },
+    );
 }
