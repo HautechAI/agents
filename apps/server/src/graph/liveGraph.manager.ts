@@ -12,6 +12,7 @@ import { LoggerService } from '../services/logger.service';
 import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
 import { TemplateRegistry } from './templateRegistry';
+import type { Pausable, ProvisionStatus, Provisionable, DynamicConfigurable } from './capabilities';
 
 const configsEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -25,7 +26,10 @@ export class LiveGraphRuntime {
     lastGraph: undefined,
   };
 
-  private applying: Promise<any> = Promise.resolve(); // serialize updates
+  // Track paused state for nodes that don't implement isPaused()
+  private pausedFallback = new Set<string>();
+
+  private applying: Promise<unknown> = Promise.resolve(); // serialize updates
   private portsRegistry: PortsRegistry;
 
   constructor(
@@ -45,9 +49,70 @@ export class LiveGraphRuntime {
     return Array.from(this.state.executedEdges.values());
   }
 
+  // Return the live node instance (if present)
+  getNodeInstance(id: string): unknown {
+    return this.state.nodes.get(id)?.instance;
+  }
+
   async apply(graph: GraphDefinition): Promise<GraphDiffResult> {
     this.applying = this.applying.then(() => this._applyGraphInternal(graph));
     return this.applying;
+  }
+
+  // Runtime helpers for Pausable/Provisionable
+  private hasMethod(o: unknown, name: string): boolean {
+    return !!o && typeof (o as Record<string, unknown>)[name] === 'function';
+  }
+  private isPausable(o: unknown): o is Pausable {
+    return this.hasMethod(o, 'pause') && this.hasMethod(o, 'resume');
+  }
+  private isProvisionable(o: unknown): o is Provisionable {
+    return this.hasMethod(o, 'getProvisionStatus') && this.hasMethod(o, 'provision') && this.hasMethod(o, 'deprovision');
+  }
+  private isDynConfigurable(o: unknown): o is DynamicConfigurable {
+    return this.hasMethod(o, 'isDynamicConfigReady');
+  }
+
+  async pauseNode(id: string): Promise<void> {
+    const inst = this.state.nodes.get(id)?.instance as unknown;
+    if (this.isPausable(inst)) await inst.pause();
+    else this.pausedFallback.add(id);
+  }
+  async resumeNode(id: string): Promise<void> {
+    const inst = this.state.nodes.get(id)?.instance as unknown;
+    if (this.isPausable(inst)) await inst.resume();
+    else this.pausedFallback.delete(id);
+  }
+  async provisionNode(id: string): Promise<void> {
+    const inst = this.state.nodes.get(id)?.instance as unknown;
+    if (this.isProvisionable(inst)) await inst.provision();
+  }
+  async deprovisionNode(id: string): Promise<void> {
+    const inst = this.state.nodes.get(id)?.instance as unknown;
+    if (this.isProvisionable(inst)) await inst.deprovision();
+  }
+  getNodeStatus(id: string): { isPaused?: boolean; provisionStatus?: ProvisionStatus; dynamicConfigReady?: boolean } {
+    const inst = this.state.nodes.get(id)?.instance as unknown;
+    const out: { isPaused?: boolean; provisionStatus?: ProvisionStatus; dynamicConfigReady?: boolean } = {};
+    if (inst) {
+      if (this.hasMethod(inst, 'isPaused')) {
+        const fn = (inst as Record<string, unknown>)['isPaused'] as () => unknown;
+        out.isPaused = !!fn.call(inst);
+      } else {
+        out.isPaused = this.pausedFallback.has(id);
+      }
+      if (this.isProvisionable(inst)) {
+        const fn = (inst as Record<string, unknown>)['getProvisionStatus'] as () => unknown;
+        out.provisionStatus = fn.call(inst) as ProvisionStatus;
+      }
+      if (this.isDynConfigurable(inst)) {
+        const fn = (inst as Record<string, unknown>)['isDynamicConfigReady'] as () => unknown;
+        out.dynamicConfigReady = !!fn.call(inst);
+      }
+    } else {
+      out.isPaused = this.pausedFallback.has(id);
+    }
+    return out;
   }
 
   private async _applyGraphInternal(next: GraphDefinition): Promise<GraphDiffResult> {
@@ -93,7 +158,8 @@ export class LiveGraphRuntime {
       const live = this.state.nodes.get(nodeId);
       if (!live) continue;
       try {
-        await live.instance.setConfig(nodeDef.data.config || {});
+        const setter = (live.instance as Record<string, unknown>)['setConfig'];
+        if (typeof setter === 'function') await (setter as Function).call(live.instance, nodeDef.data.config || {});
         live.config = nodeDef.data.config || {};
       } catch (e) {
         logger?.error?.('Config update failed', nodeId, e);
@@ -196,7 +262,8 @@ export class LiveGraphRuntime {
     const live: LiveNode = { id: node.id, template: node.data.template, instance: created, config: node.data.config };
     this.state.nodes.set(node.id, live);
     if (node.data.config) {
-      await created.setConfig(node.data.config);
+      const setter = (created as Record<string, unknown>)['setConfig'];
+      if (typeof setter === 'function') await (setter as Function).call(created, node.data.config);
     }
   }
 
@@ -221,23 +288,21 @@ export class LiveGraphRuntime {
       }
     }
     // Call lifecycle teardown if present
-    const inst: any = live.instance;
+    const inst = live.instance as unknown;
     if (inst) {
-      if (typeof inst.destroy === 'function') {
+      const destroy = (inst as Record<string, unknown>)['destroy'];
+      if (typeof destroy === 'function') {
         try {
-          await inst.destroy();
-        } catch {
-          /* ignore */
-        }
+          await (destroy as Function).call(inst);
+        } catch {}
       } else {
         // fallback legacy
-        for (const method of ['dispose', 'close', 'stop']) {
-          if (typeof inst[method] === 'function') {
+        for (const method of ['dispose', 'close', 'stop'] as const) {
+          const fn = (inst as Record<string, unknown>)[method];
+          if (typeof fn === 'function') {
             try {
-              await inst[method]();
-            } catch {
-              /* ignore */
-            }
+              await (fn as Function).call(inst);
+            } catch {}
             break;
           }
         }
@@ -279,7 +344,10 @@ export class LiveGraphRuntime {
     const argValue = instanceSide.instance; // basic rule: pass the other instance
     const key = edgeKey(edge);
 
-    await (methodSide.instance as any)[methodCfg.create](argValue); // eslint-disable-line @typescript-eslint/no-explicit-any
+    {
+      const createFn = (methodSide.instance as Record<string, unknown>)[methodCfg.create];
+      if (typeof createFn === 'function') await (createFn as Function).call(methodSide.instance, argValue);
+    }
 
     const record: ExecutedEdgeRecord = {
       key,
@@ -291,10 +359,12 @@ export class LiveGraphRuntime {
       argumentSnapshot: argValue,
       reversal: async () => {
         if (methodCfg.destroy) {
-          await (methodSide.instance as any)[methodCfg.destroy](argValue); // eslint-disable-line @typescript-eslint/no-explicit-any
+          const destroyFn = (methodSide.instance as Record<string, unknown>)[methodCfg.destroy];
+          if (typeof destroyFn === 'function') await (destroyFn as Function).call(methodSide.instance, argValue);
         } else {
           // Fallback: call create with undefined to signal disconnection
-          await (methodSide.instance as any)[methodCfg.create](undefined); // eslint-disable-line @typescript-eslint/no-explicit-any
+          const createFn = (methodSide.instance as Record<string, unknown>)[methodCfg.create];
+          if (typeof createFn === 'function') await (createFn as Function).call(methodSide.instance, undefined);
         }
       },
     };

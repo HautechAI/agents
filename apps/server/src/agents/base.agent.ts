@@ -5,8 +5,11 @@ import { LoggerService } from '../services/logger.service';
 import { TriggerListener, TriggerMessage } from '../triggers/base.trigger';
 import { NodeOutput } from '../types';
 import { withAgent } from '@traceloop/node-server-sdk';
+import type { StaticConfigurable } from '../graph/capabilities';
+import type { JSONSchema7 as JSONSchema } from 'json-schema';
+import * as z from 'zod';
 
-export abstract class BaseAgent implements TriggerListener {
+export abstract class BaseAgent implements TriggerListener, StaticConfigurable {
   protected _graph: CompiledStateGraph<unknown, unknown> | undefined;
   protected _config: RunnableConfig | undefined;
 
@@ -43,6 +46,18 @@ export abstract class BaseAgent implements TriggerListener {
     return Annotation.Root({
       // systemPrompt: Annotation<string>(),
     });
+  }
+
+  getConfigSchema(): JSONSchema {
+    const schema = z
+      .object({
+        systemPrompt: z.string().optional(),
+        summarizationKeepLast: z.number().int().min(0).optional(),
+        summarizationMaxTokens: z.number().int().min(1).optional(),
+      })
+      .passthrough();
+    // Zod v4 API: use z.toJSONSchema directly (JSON Schema 7)
+    return z.toJSONSchema(schema) as unknown as JSONSchema;
   }
 
   async invoke(thread: string, messages: TriggerMessage[] | TriggerMessage): Promise<BaseMessage | undefined> {

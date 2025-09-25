@@ -20,6 +20,9 @@ interface GraphDocument {
 
 export class GraphService {
   private collection?: Collection<GraphDocument>;
+  // Stateless service: persistence only and template exposure.
+  // Single-graph endpoint shape expected at /graph/nodes/:nodeId for runtime actions (handled elsewhere).
+
   constructor(
     private readonly db: Db,
     private readonly logger: LoggerService,
@@ -27,6 +30,7 @@ export class GraphService {
   ) {
     this.collection = this.db.collection<GraphDocument>('graphs');
   }
+
 
   async get(name: string): Promise<PersistedGraph | null> {
     const doc = await this.collection!.findOne({ _id: name });
@@ -67,6 +71,12 @@ export class GraphService {
     };
     await this.collection!.replaceOne({ _id: name }, updated);
     return this.toPersisted(updated);
+  }
+
+  // API-like helpers to be wired to HTTP in a follow-up
+  // Endpoints should reflect single-graph model, e.g., /graph/nodes/:nodeId for runtime actions (handled elsewhere)
+  getTemplates() {
+    return this.templateRegistry.toSchema();
   }
 
   private validate(req: PersistedGraphUpsertRequest, schema: TemplateNodeSchema[]) {
