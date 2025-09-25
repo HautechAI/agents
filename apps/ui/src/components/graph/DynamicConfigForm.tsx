@@ -29,11 +29,7 @@ export default function DynamicConfigForm({ nodeId, templateName }: { nodeId: st
             onError: () => alert('Failed to save'),
           })
         }
-      >
-        <button type="submit" className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50" disabled={!!set.isPending}>
-          Save
-        </button>
-      </Form>
+      ></Form>
     </div>
   );
 }

@@ -1,9 +1,8 @@
-import React from 'react';
-import { beforeAll, afterAll, afterEach, describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { server, TestProviders, emitNodeStatus } from './testUtils';
-import { NodeDetailsPanel, StaticConfigForm, DynamicConfigForm } from '../components/graph';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { DynamicConfigForm, NodeDetailsPanel, StaticConfigForm } from '../../src/components/graph';
+import { emitNodeStatus, server, TestProviders } from './testUtils';
 
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -77,9 +76,7 @@ describe('Integration flows: Node actions, dynamic/static config', () => {
 
   it('Static config submission and error handling', async () => {
     // Force POST /config to error
-    server.use(
-      http.post('/graph/nodes/:nodeId/config', () => new HttpResponse(null, { status: 500 })),
-    );
+    server.use(http.post('/graph/nodes/:nodeId/config', () => new HttpResponse(null, { status: 500 })));
 
     render(
       <TestProviders>

@@ -1,4 +1,5 @@
-import { SimpleAgent } from './agents/simple.agent';
+import { toJSONSchema } from 'zod';
+import { SimpleAgent, SimpleAgentStaticConfigSchema } from './agents/simple.agent';
 import { ContainerProviderEntity } from './entities/containerProvider.entity';
 import { TemplateRegistry } from './graph';
 import { LocalMCPServer, McpServerConfig } from './mcp';
@@ -90,7 +91,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       {
         sourcePorts: { subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' } },
       },
-      { title: 'Slack trigger', kind: 'trigger' },
+      { title: 'Slack trigger', kind: 'trigger', capabilities: { provisionable: true, pausable: true } },
     )
     .register(
       'simpleAgent',
@@ -102,7 +103,13 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         },
         targetPorts: { $self: { kind: 'instance' } },
       },
-      { title: 'Agent', kind: 'agent' },
+      {
+        title: 'Agent',
+        kind: 'agent',
+        capabilities: { pausable: true, staticConfigurable: true },
+        // Raw Zod -> JSON Schema (UI is responsible for any draft normalization / root extraction)
+        staticConfigSchema: toJSONSchema(SimpleAgentStaticConfigSchema),
+      },
     )
     .register(
       'mcpServer',
@@ -117,6 +124,6 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           containerProvider: { kind: 'method', create: 'setContainerProvider' },
         },
       },
-      { title: 'MCP Server', kind: 'mcp' },
+      { title: 'MCP Server', kind: 'mcp', capabilities: { provisionable: true } },
     );
 }

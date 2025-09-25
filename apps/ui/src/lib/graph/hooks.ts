@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
+import type { PersistedGraphUpsertRequestUI } from './api';
 import { graphSocket } from './socket';
-import type { NodeStatus, NodeStatusEvent, TemplateSchema } from './types';
+import type { NodeStatus, NodeStatusEvent } from './types';
 
 export function useTemplates() {
   return useQuery({
@@ -23,7 +24,7 @@ export function useNodeStatus(nodeId: string) {
   });
 
   useEffect(() => {
-    const sock = graphSocket.connect();
+    graphSocket.connect();
     const off = graphSocket.onNodeStatus(nodeId, (ev: NodeStatusEvent) => {
       // Authoritative event overwrites optimistic cache
       qc.setQueryData<NodeStatus>(['graph', 'node', nodeId, 'status'], (prev) => ({ ...(prev || {}), ...ev }));
@@ -45,7 +46,8 @@ export function useNodeAction(nodeId: string) {
       // Optimistic update rules
       let optimistic: Partial<NodeStatus> = {};
       if (action === 'provision') optimistic = { provisionStatus: { state: 'provisioning' as const }, isPaused: false };
-      if (action === 'deprovision') optimistic = { provisionStatus: { state: 'deprovisioning' as const }, isPaused: false };
+      if (action === 'deprovision')
+        optimistic = { provisionStatus: { state: 'deprovisioning' as const }, isPaused: false };
       if (action === 'pause') optimistic = { isPaused: true };
       if (action === 'resume') optimistic = { isPaused: false };
       qc.setQueryData(key, { ...(prev || {}), ...optimistic });
@@ -53,27 +55,42 @@ export function useNodeAction(nodeId: string) {
     },
     onError: (err: unknown, _action, ctx) => {
       if (ctx?.prev) qc.setQueryData(['graph', 'node', nodeId, 'status'], ctx.prev);
-      notifyError(`Action failed: ${String((err as any)?.message || err)}`);
+      const message = err instanceof Error ? err.message : String(err);
+      notifyError(`Action failed: ${message}`);
     },
   });
 }
 
-export function useSetNodeConfig(nodeId: string) {
+// New: full graph save hook
+export function useSaveGraph() {
   return useMutation({
-    mutationFn: (cfg: Record<string, unknown>) => api.postNodeConfig(nodeId, cfg),
-    onError: (err) => notifyError(`Save config failed: ${String((err as any)?.message || err)}`),
+    mutationFn: (graph: PersistedGraphUpsertRequestUI) => api.saveFullGraph(graph),
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      notifyError(`Save graph failed: ${message}`);
+    },
   });
 }
 
-export function useDynamicConfig(nodeId: string) {
-  const schema = useQuery({
-    queryKey: ['graph', 'node', nodeId, 'dynSchema'],
-    queryFn: () => api.getDynamicConfigSchema(nodeId),
-    staleTime: 1000 * 60 * 10,
+// Temporary adapter preserving existing component API; expects caller to supply full graph via updater
+export function useSetNodeConfig(nodeId: string) {
+  return useMutation({
+    mutationFn: async (cfg: Record<string, unknown>) => {
+      // Fetch current graph from API
+      const graph = await (await fetch(`${location.protocol}//${location.hostname}:3010/api/graph`)).json();
+      const typed: PersistedGraphUpsertRequestUI = {
+        name: graph.name,
+        version: graph.version,
+        nodes: graph.nodes,
+        edges: graph.edges,
+      };
+      const node = typed.nodes.find((n) => n.id === nodeId);
+      if (node) node.config = cfg; // replace config
+      return api.saveFullGraph(typed);
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      notifyError(`Save config failed: ${message}`);
+    },
   });
-  const set = useMutation({
-    mutationFn: (cfg: Record<string, unknown>) => api.postDynamicConfig(nodeId, cfg),
-    onError: (err) => notifyError(`Save dynamic config failed: ${String((err as any)?.message || err)}`),
-  });
-  return { schema, set };
 }

@@ -2,9 +2,9 @@ import React from 'react';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TemplatesProvider } from '../lib/graph/templates.provider';
-import * as socketModule from '../lib/graph/socket';
-import type { NodeStatusEvent, TemplateSchema } from '../lib/graph/types';
+import { TemplatesProvider } from '../../src/lib/graph/templates.provider';
+import * as socketModule from '../../src/lib/graph/socket';
+import type { NodeStatusEvent, TemplateSchema } from '../../src/lib/graph/types';
 
 // Mock socket emitter
 export const emitted: Array<NodeStatusEvent> = [];

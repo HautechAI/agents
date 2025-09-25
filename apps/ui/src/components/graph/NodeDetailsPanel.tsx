@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useTemplatesCache } from '../../lib/graph/templates.provider';
 import { useNodeAction, useNodeStatus } from '../../lib/graph/hooks';
-import { canPause } from '../../lib/graph/capabilities';
+import { canPause, canProvision } from '../../lib/graph/capabilities';
 import type { ProvisionState } from '../../lib/graph/types';
 
 function Chip({ color, children }: { color: 'gray' | 'blue' | 'green' | 'red' | 'yellow'; children: React.ReactNode }) {
@@ -38,13 +38,14 @@ export function NodeDetailsPanel({ nodeId, templateName }: { nodeId: string; tem
   const action = useNodeAction(nodeId);
 
   const pausable = tmpl ? canPause(tmpl) : false;
+  const provisionable = tmpl ? canProvision(tmpl) : false;
   const state = status?.provisionStatus?.state ?? 'not_ready';
   const isPaused = !!status?.isPaused;
 
   // Compute disabled states
   const disableAll = state === 'deprovisioning';
-  const canStart = state === 'not_ready' && !disableAll;
-  const canStop = (state === 'ready' || state === 'provisioning') && !disableAll;
+  const canStart = provisionable && state === 'not_ready' && !disableAll;
+  const canStop = provisionable && (state === 'ready' || state === 'provisioning') && !disableAll;
   const canPauseBtn = pausable && state === 'ready' && !isPaused && !disableAll;
   const canResumeBtn = pausable && state === 'ready' && isPaused && !disableAll;
 
@@ -73,18 +74,38 @@ export function NodeDetailsPanel({ nodeId, templateName }: { nodeId: string; tem
       </div>
 
       <div className="flex items-center gap-2 pt-2">
-        <button className="px-3 py-1 rounded bg-green-600 text-white disabled:opacity-50" onClick={onStart} disabled={!canStart}>
-          Start
-        </button>
-        <button className="px-3 py-1 rounded bg-red-600 text-white disabled:opacity-50" onClick={onStop} disabled={!canStop}>
-          Stop
-        </button>
+        {provisionable && (
+          <>
+            <button
+              className="px-3 py-1 rounded bg-green-600 text-white disabled:opacity-50"
+              onClick={onStart}
+              disabled={!canStart}
+            >
+              Start
+            </button>
+            <button
+              className="px-3 py-1 rounded bg-red-600 text-white disabled:opacity-50"
+              onClick={onStop}
+              disabled={!canStop}
+            >
+              Stop
+            </button>
+          </>
+        )}
         {pausable && (
           <>
-            <button className="px-3 py-1 rounded bg-yellow-600 text-white disabled:opacity-50" onClick={onPause} disabled={!canPauseBtn}>
+            <button
+              className="px-3 py-1 rounded bg-yellow-600 text-white disabled:opacity-50"
+              onClick={onPause}
+              disabled={!canPauseBtn}
+            >
               Pause
             </button>
-            <button className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50" onClick={onResume} disabled={!canResumeBtn}>
+            <button
+              className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+              onClick={onResume}
+              disabled={!canResumeBtn}
+            >
               Resume
             </button>
           </>

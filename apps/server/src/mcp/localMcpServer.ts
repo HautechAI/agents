@@ -190,8 +190,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   }
 
   /** Update runtime configuration (only env/workdir/command currently applied to next restart). */
-  async setConfig(cfg: McpServerConfig): Promise<void> {
-    this.cfg = cfg;
+  async setConfig(cfg: Record<string, unknown>): Promise<void> {
+    this.cfg = cfg; //TODO: parse with schema
 
     // TODO: check if namespace was updated and reprovision all tools
   }
@@ -202,9 +202,6 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     const all = force && this.toolsDiscovered ? (this.toolsCache ?? []) : this.toolsCache || [];
     if (!this._enabledTools) return all;
     return all.filter((t) => this._enabledTools!.has(t.name));
-    const all = (force && this.toolsDiscovered) ? (this.toolsCache ?? []) : (this.toolsCache || []);
-    if (!this._enabledTools) return all;
-    return all.filter(t => this._enabledTools!.has(t.name));
   }
 
   async callTool(
@@ -349,7 +346,9 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   private setProvisionStatus(s: ProvisionStatus) {
     this._provStatus = s;
     for (const l of this._provListeners) {
-      try { l(s); } catch {}
+      try {
+        l(s);
+      } catch {}
     }
   }
 
