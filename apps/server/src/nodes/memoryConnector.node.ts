@@ -1,15 +1,19 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
+import { SystemMessage } from '@langchain/core/messages';
 import { LoggerService } from '../services/logger.service';
+import { MemoryService } from '../services/memory.service';
 
 export type MemoryPlacement = 'after_system' | 'last_message';
 export type MemoryContent = 'full' | 'tree';
+
+const SIZE_CAP = 20_000;
 
 export class MemoryConnectorNode {
   private config: { placement: MemoryPlacement; content: MemoryContent } = {
     placement: 'after_system',
     content: 'full',
   };
-  private memoryService?: unknown;
+  private memoryService?: MemoryService;
 
   constructor(private logger: LoggerService) {}
 
@@ -18,7 +22,7 @@ export class MemoryConnectorNode {
   }
 
   setMemoryService(ms: unknown): void {
-    this.memoryService = ms;
+    this.memoryService = ms as MemoryService;
   }
 
   clearMemoryService(): void {
@@ -29,8 +33,54 @@ export class MemoryConnectorNode {
     return this.config;
   }
 
-  async renderMessage(_config: RunnableConfig): Promise<null> {
-    // Placeholder for Phase 3
-    return null;
+  private async buildTree(prefix = '/'): Promise<string> {
+    if (!this.memoryService) return '';
+    const items = await this.memoryService.list(prefix);
+    const lines: string[] = [];
+    for (const it of items) {
+      lines.push(`${it.type === 'dir' ? '[dir] ' : '[file] '}${it.name}`);
+    }
+    return `<memory-tree>\n${lines.join('\n')}\n</memory-tree>`;
+  }
+
+  private async buildFull(): Promise<string> {
+    if (!this.memoryService) return '';
+    // Walk recursively from root and produce key paths with values
+    const walk = async (path: string, acc: Record<string, any>) => {
+      const stat = await this.memoryService!.stat(path);
+      if (!stat.exists) return;
+      if (stat.kind === 'dir') {
+        const items = await this.memoryService!.list(path);
+        for (const it of items) {
+          const childPath = path === '/' ? `/${it.name}` : `${path}/${it.name}`;
+          await walk(childPath, acc);
+        }
+      } else {
+        const value = await this.memoryService!.read(path);
+        const normalized = path === '/' ? '' : this.memoryService!._normalizePath(path);
+        acc[normalized] = value;
+      }
+    };
+    const acc: Record<string, any> = {};
+    await walk('/', acc);
+    return `<memory>${JSON.stringify(acc)}</memory>`;
+  }
+
+  async renderMessage(_config: RunnableConfig): Promise<SystemMessage | null> {
+    if (!this.memoryService) return null;
+
+    const mode = this.config.content;
+    let content = '';
+    if (mode === 'tree') {
+      content = await this.buildTree('/');
+    } else {
+      content = await this.buildFull();
+      if (content.length > SIZE_CAP) {
+        const tree = await this.buildTree('/');
+        content = `Memory content truncated; showing tree only\n${tree}`;
+      }
+    }
+
+    return new SystemMessage(content);
   }
 }
