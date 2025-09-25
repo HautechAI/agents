@@ -24,17 +24,24 @@ jobs:
         run: |
           node -v
           pnpm -v
-      - name: Install workspace deps
-        run: pnpm -w install
+      - name: Install deps
+        run: pnpm install
       - name: Frozen install
-        run: pnpm -w install --frozen-lockfile
+        run: |
+          set -o pipefail
+          pnpm install --frozen-lockfile 2>&1 | tee frozen-install.log
+      - name: Upload frozen install log
+        uses: actions/upload-artifact@v4
+        with:
+          name: frozen-install-log
+          path: frozen-install.log
       - name: Commit lockfile changes
         run: |
           git config user.email "bot@hautech.ai"
           git config user.name "HautechAI Bot"
           if [[ -n "$(git status --porcelain pnpm-lock.yaml)" ]]; then
             git add pnpm-lock.yaml
-            git commit -m "chore: update lockfile after capability runtime/API changes"
+            git commit -m "chore(server): add @types/schema-json via pnpm and refresh lockfile"
             git push
           else
             echo "No lockfile changes to commit"
