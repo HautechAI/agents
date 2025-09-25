@@ -13,10 +13,10 @@ export class MemoryUpdateTool extends BaseTool {
     return new DynamicStructuredTool({
       name: 'memory_update',
       description: 'Update data at memory path',
-      schema: z.object({ path: z.string(), old_data: z.any(), new_data: z.any() }),
-      func: async (input) => {
+      schema: z.object({ path: z.string(), old_data: z.string(), new_data: z.string() }),
+      func: async ({ path, old_data, new_data }) => {
         if (!this.ms) throw new Error('MemoryService not set');
-        const res = await this.ms.update(input.path, (input as any).old_data, (input as any).new_data);
+        const res = await this.ms.update(path, old_data, new_data);
         return res as any;
       },
     });

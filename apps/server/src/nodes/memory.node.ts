@@ -35,7 +35,7 @@ export class MemoryNode {
   getMemoryService(config: { configurable?: { thread_id?: string } }): MemoryService {
     if (!this.db) throw new Error('Database not set');
     const scope = this.config.scope || 'global';
-    const threadResolver = () => config?.configurable?.thread_id;
-    return new MemoryService(this.db, this.logger, { nodeId: this.nodeId, scope, threadResolver });
+    const threadId = config?.configurable?.thread_id;
+    return new MemoryService(this.db, this.logger, { nodeId: this.nodeId, scope, threadId });
   }
 }

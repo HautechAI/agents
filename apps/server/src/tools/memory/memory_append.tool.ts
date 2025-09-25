@@ -13,12 +13,12 @@ export class MemoryAppendTool extends BaseTool {
     return new DynamicStructuredTool({
       name: 'memory_append',
       description: 'Append to list at memory path',
-      schema: z.object({ path: z.string(), data: z.any() }),
-      func: async (input) => {
+      schema: z.object({ path: z.string(), data: z.string() }),
+      func: async ({ path, data }) => {
         if (!this.ms) throw new Error('MemoryService not set');
-        const st = await this.ms.stat(input.path);
+        const st = await this.ms.stat(path);
         if (st.kind === 'dir') throw new Error('Cannot append to a directory');
-        await this.ms.append(input.path, (input as any).data);
+        await this.ms.append(path, data);
         return { ok: true } as any;
       },
     });

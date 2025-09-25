@@ -35,35 +35,23 @@ export class MemoryConnectorNode {
 
   private async buildTree(prefix = '/'): Promise<string> {
     if (!this.memoryService) return '';
-    const items = await this.memoryService.list(prefix);
+    const dotMap = await this.memoryService.dump();
+    const topLevel = new Set<string>();
+    for (const key of Object.keys(dotMap)) {
+      const first = key.split('.')[0];
+      if (first) topLevel.add(first);
+    }
     const lines: string[] = [];
-    for (const it of items) {
-      lines.push(`${it.type === 'dir' ? '[dir] ' : '[file] '}${it.name}`);
+    for (const name of Array.from(topLevel).sort()) {
+      lines.push(`[dir] ${name}`);
     }
     return `<memory-tree>\n${lines.join('\n')}\n</memory-tree>`;
   }
 
   private async buildFull(): Promise<string> {
     if (!this.memoryService) return '';
-    // Walk recursively from root and produce key paths with values
-    const walk = async (path: string, acc: Record<string, any>) => {
-      const stat = await this.memoryService!.stat(path);
-      if (!stat.exists) return;
-      if (stat.kind === 'dir') {
-        const items = await this.memoryService!.list(path);
-        for (const it of items) {
-          const childPath = path === '/' ? `/${it.name}` : `${path}/${it.name}`;
-          await walk(childPath, acc);
-        }
-      } else {
-        const value = await this.memoryService!.read(path);
-        const normalized = path === '/' ? '' : this.memoryService!._normalizePath(path);
-        acc[normalized] = value;
-      }
-    };
-    const acc: Record<string, any> = {};
-    await walk('/', acc);
-    return `<memory>${JSON.stringify(acc)}</memory>`;
+    const dotMap = await this.memoryService.dump();
+    return `<memory>${JSON.stringify(dotMap)}</memory>`;
   }
 
   async renderMessage(_config: RunnableConfig): Promise<SystemMessage | null> {

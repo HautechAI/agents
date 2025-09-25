@@ -20,7 +20,7 @@ export class MemoryService {
   constructor(
     private db: Db,
     private logger: LoggerService,
-    private opts: { nodeId: string; scope: MemoryScope; threadResolver: () => string | undefined },
+    private opts: { nodeId: string; scope: MemoryScope; threadResolver?: () => string | undefined; threadId?: string },
   ) {}
 
   private coll(): Collection<Document> {
@@ -29,16 +29,20 @@ export class MemoryService {
 
   private async ensureIndexes() {
     if (this.indexesEnsured) return;
-    // Unique index for perThread docs (threadId exists)
-    await this.coll().createIndex(
-      { nodeId: 1, scope: 1, threadId: 1 },
-      { unique: true, name: 'memories_unique_per_thread', partialFilterExpression: { threadId: { $exists: true } } },
-    );
-    // Unique index for global docs (no threadId)
-    await this.coll().createIndex(
-      { nodeId: 1, scope: 1 },
-      { unique: true, name: 'memories_unique_global', partialFilterExpression: { threadId: { $exists: false } } },
-    );
+    const existing = await this.coll().listIndexes().toArray();
+    const names = new Set(existing.map((i: any) => i.name));
+    if (!names.has('memories_unique_per_thread')) {
+      await this.coll().createIndex(
+        { nodeId: 1, scope: 1, threadId: 1 },
+        { unique: true, name: 'memories_unique_per_thread', partialFilterExpression: { threadId: { $exists: true } } },
+      );
+    }
+    if (!names.has('memories_unique_global')) {
+      await this.coll().createIndex(
+        { nodeId: 1, scope: 1 },
+        { unique: true, name: 'memories_unique_global', partialFilterExpression: { threadId: { $exists: false } } },
+      );
+    }
     this.indexesEnsured = true;
   }
 
@@ -50,9 +54,8 @@ export class MemoryService {
     if (trimmed === '' || trimmed === '/') return '';
     if (!trimmed.startsWith('/')) throw new Error('Invalid path: must start with /');
     if (trimmed.includes('..')) throw new Error('Invalid path: path cannot contain ..');
-    // collapse multiple slashes
-    trimmed = trimmed.replace(/\/+/, '/');
-    if (trimmed.includes('//')) throw new Error('Invalid path: path cannot contain //');
+    // collapse multiple slashes globally
+    trimmed = trimmed.replace(/\/+ /g, '/');
     const parts = trimmed
       .split('/')
       .filter(Boolean)
@@ -67,9 +70,9 @@ export class MemoryService {
   }
 
   private ensureDocKey(): Key {
-    const { nodeId, scope, threadResolver } = this.opts;
+    const { nodeId, scope, threadResolver, threadId: directTid } = this.opts;
     if (scope === 'global') return { nodeId, scope };
-    const threadId = threadResolver();
+    const threadId = directTid ?? threadResolver?.();
     if (!threadId) throw new Error('threadId is required for perThread scope');
     return { nodeId, scope, threadId };
   }
@@ -330,6 +333,31 @@ export class MemoryService {
     );
 
     return { deleted: count || 1 };
+  }
+
+  async dump(): Promise<Record<string, string>> {
+    await this.ensureIndexes();
+    const { key, doc } = await this.getDoc();
+    const data = doc?.data ?? {};
+    const acc: Record<string, string> = {};
+    const walk = (obj: any, base: string) => {
+      if (obj !== null && typeof obj === 'object' && !Array.isArray(obj)) {
+        for (const k of Object.keys(obj)) {
+          const next = base ? `${base}.${k}` : k;
+          walk(obj[k], next);
+        }
+      } else if (obj !== undefined) {
+        acc[base] = String(obj);
+      }
+    };
+    walk(data, '');
+    // remove leading dot keys if any
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(acc)) {
+      const keyPath = k.startsWith('.') ? k.slice(1) : k;
+      cleaned[keyPath] = v;
+    }
+    return cleaned;
   }
 
   // Expose helpers for tests
