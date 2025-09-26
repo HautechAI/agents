@@ -1,40 +1,34 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { EventEmitter } from 'events';
-import type { JSONSchema7 as JSONSchema } from 'json-schema';
 import { v4 as uuidv4 } from 'uuid';
-import { z } from 'zod';
+import { toJSONSchema, z } from 'zod';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity.js';
 import type { DynamicConfigurable, ProvisionStatus, Provisionable } from '../graph/capabilities.js';
 import { ContainerService } from '../services/container.service.js';
 import { LoggerService } from '../services/logger.service.js';
 import { DockerExecTransport } from './dockerExecTransport.js';
 import { DEFAULT_MCP_COMMAND, McpError, McpServer, McpTool, McpToolCallResult } from './types.js';
+import { JSONSchema } from 'zod/v4/core';
 
-export const LocalMcpServerStaticConfigSchema = z
-  .object({
-    title: z.string().optional(),
-    namespace: z.string().min(1).default('mcp').describe('Namespace prefix for exposed MCP tools.'),
-    command: z
-      .string()
-      .optional()
-      .describe('Startup command executed inside the container (default: mcp start --stdio).'),
-    workdir: z.string().optional().describe('Working directory inside the container.'),
-    requestTimeoutMs: z.number().int().positive().optional().describe('Per-request timeout in ms.'),
-    startupTimeoutMs: z.number().int().positive().optional().describe('Startup handshake timeout in ms.'),
-    heartbeatIntervalMs: z.number().int().positive().optional().describe('Interval for heartbeat pings in ms.'),
-    restart: z
-      .object({
-        maxAttempts: z
-          .number()
-          .int()
-          .positive()
-          .default(5)
-          .describe('Maximum restart attempts during resilient start.'),
-        backoffMs: z.number().int().positive().default(2000).describe('Base backoff (ms) between restart attempts.'),
-      })
-      .describe('Restart strategy configuration.'),
-  })
-  .strict();
+export const LocalMcpServerStaticConfigSchema = z.object({
+  title: z.string().optional(),
+  namespace: z.string().min(1).default('mcp').describe('Namespace prefix for exposed MCP tools.'),
+  command: z
+    .string()
+    .optional()
+    .describe('Startup command executed inside the container (default: mcp start --stdio).'),
+  workdir: z.string().optional().describe('Working directory inside the container.'),
+  requestTimeoutMs: z.number().int().positive().optional().describe('Per-request timeout in ms.'),
+  startupTimeoutMs: z.number().int().positive().optional().describe('Startup handshake timeout in ms.'),
+  heartbeatIntervalMs: z.number().int().positive().optional().describe('Interval for heartbeat pings in ms.'),
+  restart: z
+    .object({
+      maxAttempts: z.number().int().positive().default(5).describe('Maximum restart attempts during resilient start.'),
+      backoffMs: z.number().int().positive().default(2000).describe('Base backoff (ms) between restart attempts.'),
+    })
+    .describe('Restart strategy configuration.'),
+});
+// .strict();
 
 export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigurable<Record<string, boolean>> {
   /**
@@ -83,6 +77,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
 
   // Dynamic config: enabled tools (if undefined => all enabled by default)
   private _enabledTools: Set<string> | undefined;
+  // Cached dynamic config zod schema (rebuilt after discovery)
+  private _dynamicConfigZodSchema?: z.ZodTypeAny;
 
   constructor(
     private containerService: ContainerService,
@@ -170,6 +166,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       this.toolsDiscovered = true;
       // Initialize dynamic enabled set to all tools by default
       this._enabledTools = undefined; // undefined means "all enabled"
+      this._dynamicConfigZodSchema = undefined; // invalidate dynamic schema cache
     } catch (err) {
       this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Tool discovery failed: ${err}`);
     } finally {
@@ -218,7 +215,9 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   async setConfig(cfg: Record<string, unknown>): Promise<void> {
     const parsed = LocalMcpServerStaticConfigSchema.safeParse(cfg);
     if (!parsed.success) {
-      this.logger.error(`LocalMCPServer: invalid config: ${JSON.stringify(parsed.error.issues)}`);
+      this.logger.error(
+        `LocalMCPServer: invalid config: ${JSON.stringify(parsed.error.issues)} @ ${JSON.stringify(cfg)}`,
+      );
       throw new Error('Invalid MCP server config');
     }
     // Cast to McpServerConfig (schema is stricter than interface; compatible subset)
@@ -440,22 +439,53 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     return this.toolsDiscovered;
   }
 
-  getDynamicConfigSchema(): JSONSchema | undefined {
+  getDynamicConfigSchema(): JSONSchema.BaseSchema | undefined {
     if (!this.toolsDiscovered || !this.toolsCache) return undefined;
-    const properties: Record<string, any> = {};
-    for (const t of this.toolsCache) properties[t.name] = { type: 'boolean', default: true };
-    return { type: 'object', properties } as JSONSchema;
+    // Lazily build and cache zod schema
+    if (!this._dynamicConfigZodSchema) this._dynamicConfigZodSchema = this.buildDynamicConfigZodSchema();
+    return toJSONSchema(this._dynamicConfigZodSchema);
   }
 
   setDynamicConfig(cfg: Record<string, boolean>): void {
     if (!this.toolsDiscovered || !this.toolsCache) {
       // accept config but will only apply once discovered
     }
+    // Ensure schema exists (for validation & defaults)
+    if (this.toolsDiscovered && this.toolsCache && !this._dynamicConfigZodSchema) {
+      this._dynamicConfigZodSchema = this.buildDynamicConfigZodSchema();
+    }
+    let normalized: Record<string, boolean> = cfg;
+    if (this._dynamicConfigZodSchema) {
+      try {
+        // Incoming shape from UI is flat map; wrap under tools for parsing
+        const parsed = this._dynamicConfigZodSchema.parse({ tools: cfg }) as { tools: Record<string, boolean> };
+        normalized = parsed.tools;
+      } catch (e) {
+        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed: ${(e as Error).message}`);
+      }
+    }
     const enabled = new Set<string>();
-    for (const [name, on] of Object.entries(cfg || {})) {
+    for (const [name, on] of Object.entries(normalized || {})) {
       if (on) enabled.add(name);
     }
     this._enabledTools = enabled;
+  }
+
+  // Build zod schema representing dynamic config: { tools: { toolName: boolean().default(true) ... } }
+  private buildDynamicConfigZodSchema(): z.ZodTypeAny {
+    const shape: Record<string, z.ZodTypeAny> = {};
+    for (const t of this.toolsCache || []) {
+      shape[t.name] = z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe(t.description || '');
+    }
+    return z
+      .object({
+        tools: z.object(shape).default({}).describe('Enable/disable individual MCP tools (true = enabled).'),
+      })
+      .strict();
   }
 
   // ----------------- Resilient start internals -----------------

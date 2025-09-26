@@ -1,35 +1,44 @@
-import React from 'react';
-import { useNodeStatus, useDynamicConfig } from '../../lib/graph/hooks';
-import Form from '@rjsf/core';
-import validator from '@rjsf/validator-ajv8';
+import { useState } from 'react';
+import { useDynamicConfig, useNodeStatus } from '../../lib/graph/hooks';
+import { ReusableForm } from './form/ReusableForm';
+import type { JsonSchemaObject } from './form/types';
 
-export default function DynamicConfigForm({ nodeId, templateName }: { nodeId: string; templateName: string }) {
+export default function DynamicConfigForm({
+  nodeId,
+  initialConfig,
+  onConfigChange,
+}: {
+  nodeId: string;
+  initialConfig: Record<string, unknown>;
+  onConfigChange?: (cfg: Record<string, unknown>) => void;
+}) {
   const { data: status } = useNodeStatus(nodeId);
   const ready = !!status?.dynamicConfigReady;
   const { schema, set } = useDynamicConfig(nodeId);
+  const isPending = (set as { isPending?: boolean }).isPending === true;
+
+  const [formData, setFormData] = useState<Record<string, unknown> | undefined>(initialConfig);
 
   if (!ready) {
     return <div className="text-sm text-gray-600">Dynamic config not available yet</div>;
   }
 
-  const jsonSchema = schema.data as any | undefined | null;
-  if (!jsonSchema) {
-    return <div className="text-sm text-gray-600">Loading dynamic config schema...</div>;
-  }
+  const jsonSchema = (schema.data || { type: 'object', properties: {} }) as JsonSchemaObject;
 
   return (
     <div className="space-y-2">
-      <Form
+      <ReusableForm
         schema={jsonSchema}
-        validator={validator}
-        formData={{}}
-        onSubmit={({ formData }) =>
-          set.mutate(formData as Record<string, unknown>, {
-            onSuccess: () => alert('Saved'),
-            onError: () => alert('Failed to save'),
-          })
-        }
-      ></Form>
+        formData={formData}
+        disableSubmit={true}
+        hideSubmitButton
+        submitDisabled={isPending}
+        onChange={(next) => {
+          // touched.current = true;
+          setFormData(next as Record<string, unknown>);
+          onConfigChange?.(next as Record<string, unknown>);
+        }}
+      />
     </div>
   );
 }

@@ -39,12 +39,11 @@ describe('StaticConfigForm', () => {
     );
   };
 
-  it('renders input and submits value', () => {
+  it('renders input and autosaves value on change', () => {
     renderForm();
     const input = screen.getByLabelText('systemPrompt');
     expect(input).toBeInTheDocument();
     fireEvent.change(input, { target: { value: 'hello' } });
-    fireEvent.click(screen.getByText('Save'));
     expect(mutateImpl).toHaveBeenCalled();
     const arg = (mutateImpl as any).mock.calls[0][0];
     expect(arg.systemPrompt).toBe('hello');
@@ -61,7 +60,7 @@ describe('StaticConfigForm', () => {
     expect(screen.getByText(/No static config available/)).toBeInTheDocument();
   });
 
-  it('shows error toast on failed mutate', () => {
+  it('still triggers mutate (error path) on change without Save button', () => {
     mutateImpl = vi.fn((_data: any, opts?: any) => opts?.onError?.(new Error('x')));
     const qc = new QueryClient();
     render(
@@ -69,7 +68,8 @@ describe('StaticConfigForm', () => {
         <StaticConfigForm nodeId="n1" templateName="tmpl" initialConfig={{}} />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByText('Save'));
+    const input = screen.getByLabelText('systemPrompt');
+    fireEvent.change(input, { target: { value: 'new' } });
     expect(mutateImpl).toHaveBeenCalled();
   });
 });

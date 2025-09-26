@@ -163,6 +163,23 @@ async function bootstrap() {
     }
   });
   // Removed per-node config & dynamic-config endpoints; config updates now flow through full /api/graph saves.
+  // New: dynamic config schema endpoint (read-only). Saving still uses full /api/graph mechanism.
+  fastify.get('/graph/nodes/:nodeId/dynamic-config/schema', async (req, reply) => {
+    const { nodeId } = req.params as { nodeId: string };
+    try {
+      const inst = (runtime as any).getNodeInstance?.(nodeId) || (runtime as any)['getNodeInstance']?.(nodeId);
+      if (!inst) {
+        reply.code(404);
+        return { error: 'node_not_found' };
+      }
+      const ready = typeof (inst as any).isDynamicConfigReady === 'function' ? !!(inst as any).isDynamicConfigReady() : false;
+      const schema = ready && typeof (inst as any).getDynamicConfigSchema === 'function' ? (inst as any).getDynamicConfigSchema() : undefined;
+      return { ready, schema };
+    } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      reply.code(500);
+      return { error: e.message || 'dynamic_config_schema_error' };
+    }
+  });
 
   // Start Fastify then attach Socket.io
   const PORT = Number(process.env.PORT) || 3010;

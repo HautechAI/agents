@@ -38,8 +38,14 @@ export const handlers = [
   http.get('/graph/nodes/:nodeId/dynamic-config-schema', () =>
     HttpResponse.json({ type: 'object', properties: { toolA: { type: 'boolean', title: 'toolA' }, toolB: { type: 'boolean', title: 'toolB' } } }),
   ),
-  http.post('/graph/nodes/:nodeId/config', () => new HttpResponse(null, { status: 204 })),
-  http.post('/graph/nodes/:nodeId/dynamic-config', () => new HttpResponse(null, { status: 204 })),
+  // Full graph endpoints used by setNodeConfig / dynamic set mutation
+  http.get('/api/graph', () =>
+    HttpResponse.json({ name: 'g', version: 1, nodes: [{ id: 'n4', template: 'mock', config: {} }, { id: 'n3', template: 'mock', config: {} }, { id: 'n2', template: 'mock', config: {} }, { id: 'n1', template: 'mock', config: {} }], edges: [] }),
+  ),
+  http.post('/api/graph', async ({ request }) => {
+    await request.json().catch(() => ({}));
+    return HttpResponse.json({ version: Date.now(), updatedAt: new Date().toISOString() });
+  }),
 ];
 
 export const server = setupServer(...handlers);

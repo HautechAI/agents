@@ -29,7 +29,7 @@ describe('DynamicConfigForm', () => {
     const qc = new QueryClient();
     return render(
       <QueryClientProvider client={qc}>
-        <DynamicConfigForm nodeId="n1" templateName="tmpl" />
+  <DynamicConfigForm nodeId="n1" />
       </QueryClientProvider>,
     );
   };
@@ -39,32 +39,33 @@ describe('DynamicConfigForm', () => {
     expect(screen.getByText(/Dynamic config not available yet/)).toBeInTheDocument();
   });
 
-  it('renders form when ready and submits', () => {
+  it('renders form when ready and autosaves on toggle', () => {
     ready = true;
     schemaData = { type: 'object', properties: { a: { type: 'boolean', title: 'a' } } };
     const qc = new QueryClient();
     render(
       <QueryClientProvider client={qc}>
-        <DynamicConfigForm nodeId="n1" templateName="tmpl" />
+  <DynamicConfigForm nodeId="n1" />
       </QueryClientProvider>,
     );
     const input = screen.getByLabelText('a') as HTMLInputElement;
     expect(input).toBeInTheDocument();
     fireEvent.click(input);
-    fireEvent.click(screen.getByText('Save'));
     expect(setMutateImpl).toHaveBeenCalled();
   });
 
-  it('disables Save while pending', () => {
+  it('does not render Save button (hidden) while pending but still autosaves', () => {
     ready = true;
     schemaData = { type: 'object', properties: { a: { type: 'boolean', title: 'a' } } };
     pending = true;
     const qc = new QueryClient();
     render(
       <QueryClientProvider client={qc}>
-        <DynamicConfigForm nodeId="n1" templateName="tmpl" />
+  <DynamicConfigForm nodeId="n1" />
       </QueryClientProvider>,
     );
-    expect(screen.getByText('Save')).toBeDisabled();
+    const input = screen.getByLabelText('a');
+    fireEvent.click(input);
+    expect(setMutateImpl).toHaveBeenCalled();
   });
 });

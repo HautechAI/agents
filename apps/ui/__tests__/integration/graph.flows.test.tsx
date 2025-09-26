@@ -57,7 +57,7 @@ describe('Integration flows: Node actions, dynamic/static config', () => {
   it('Dynamic config readiness, schema fetch, submit', async () => {
     render(
       <TestProviders>
-        <DynamicConfigForm nodeId="n3" templateName="mock" />
+  <DynamicConfigForm nodeId="n3" />
       </TestProviders>,
     );
 
@@ -70,8 +70,7 @@ describe('Integration flows: Node actions, dynamic/static config', () => {
     // Checkbox presence
     await waitFor(() => expect(screen.getByLabelText('toolA')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('toolA'));
-    fireEvent.click(screen.getByText('Save'));
+  fireEvent.click(screen.getByLabelText('toolA'));
   });
 
   it('Static config submission and error handling', async () => {
@@ -80,13 +79,12 @@ describe('Integration flows: Node actions, dynamic/static config', () => {
 
     render(
       <TestProviders>
-        <StaticConfigForm nodeId="n4" templateName="mock" />
+  <StaticConfigForm nodeId="n4" templateName="mock" />
       </TestProviders>,
     );
 
     // Form appears
     const input = await screen.findByLabelText('systemPrompt');
-    fireEvent.change(input, { target: { value: 'xyz' } });
-    fireEvent.click(screen.getByText('Save'));
+  fireEvent.change(input, { target: { value: 'xyz' } });
   });
 });

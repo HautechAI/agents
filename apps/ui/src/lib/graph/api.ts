@@ -9,7 +9,11 @@ export interface PersistedGraphUpsertRequestUI {
 // Base host for graph API; override via VITE_GRAPH_API_BASE
 interface ViteEnv { VITE_GRAPH_API_BASE?: string }
 const envHost = (typeof import.meta !== 'undefined' ? (import.meta as unknown as { env?: ViteEnv }).env?.VITE_GRAPH_API_BASE : undefined);
-const BASE = envHost || 'http://localhost:3010';
+// In test (node) environment we prefer relative paths so MSW handlers using relative URL match.
+const isNode = typeof window === 'undefined';
+// In vitest (process.env.VITEST) use relative URLs so MSW relative handlers intercept.
+const isVitest = typeof process !== 'undefined' && typeof (process as unknown as { env?: Record<string, string | undefined> }).env?.VITEST === 'string';
+const BASE = envHost || (isVitest ? '' : isNode ? '' : 'http://localhost:3010');
 
 async function http<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const res = await fetch(input, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
@@ -25,6 +29,30 @@ async function http<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 export const api = {
   getTemplates: () => http<TemplateSchema[]>(`${BASE}/graph/templates`),
   getNodeStatus: (nodeId: string) => http<NodeStatus>(`${BASE}/graph/nodes/${encodeURIComponent(nodeId)}/status`),
+  // Dynamic config schema endpoint: try the newer '/dynamic-config/schema' first, fallback to legacy '/dynamic-config-schema'
+  getDynamicConfigSchema: async (nodeId: string) => {
+    // Prefer legacy path first (currently implemented server / tests), then new structured path
+    const legacy = `${BASE}/graph/nodes/${encodeURIComponent(nodeId)}/dynamic-config-schema`;
+    const structured = `${BASE}/graph/nodes/${encodeURIComponent(nodeId)}/dynamic-config/schema`;
+    async function tryFetch(url: string) {
+      try {
+        const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+        if (res.status === 404) return undefined;
+        if (!res.ok) return undefined; // treat non-2xx as miss so we can fallback
+        try { return await res.json(); } catch { return undefined; }
+      } catch {
+        return undefined;
+      }
+    }
+    let data = await tryFetch(legacy);
+    if (!data) data = await tryFetch(structured);
+    // Normalize accepted shapes: either { ready, schema } or plain schema object
+    if (data && typeof data === 'object' && 'schema' in data) {
+      const rec = data as Record<string, unknown>;
+      if (rec.schema && typeof rec.schema === 'object') return rec.schema as Record<string, unknown>;
+    }
+    return (data || {}) as Record<string, unknown>;
+  },
   postNodeAction: (nodeId: string, action: 'pause' | 'resume' | 'provision' | 'deprovision') =>
     http<void>(`${BASE}/graph/nodes/${encodeURIComponent(nodeId)}/actions`, { method: 'POST', body: JSON.stringify({ action }) }),
   saveFullGraph: (graph: PersistedGraphUpsertRequestUI) =>

@@ -3,9 +3,9 @@ import type { TemplateNodeSchema } from 'shared';
 import { useTemplates } from '../useTemplates';
 // Runtime graph components & hooks
 // Removed NodeDetailsPanel wrapper; using granular components directly
-import { StaticConfigForm } from '@/components/graph';
+import { StaticConfigForm, DynamicConfigForm } from '@/components/graph';
 import { useTemplatesCache } from '@/lib/graph/templates.provider';
-import { hasStaticConfigByName } from '@/lib/graph/capabilities';
+import { hasStaticConfigByName, hasDynamicConfigByName } from '@/lib/graph/capabilities';
 import { NodeStatusBadges } from '@/components/graph/NodeStatusBadges';
 import { NodeActionButtons } from '@/components/graph/NodeActionButtons';
 import { useNodeAction, useNodeStatus } from '@/lib/graph/hooks';
@@ -15,6 +15,7 @@ interface BuilderPanelNodeData {
   template: string;
   name?: string;
   config?: Record<string, unknown>;
+  dynamicConfig?: Record<string, unknown>;
 }
 interface Props {
   node: Node<BuilderPanelNodeData> | null;
@@ -32,10 +33,11 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
   const tpl = templates.find((t: TemplateNodeSchema) => t.name === data.template);
   const update = (patch: Record<string, unknown>) => onChange(node.id, patch);
   const cfg = (data.config || {}) as Record<string, unknown>;
+  const dynamicConfig = (data.dynamicConfig || {}) as Record<string, unknown>;
 
   // Runtime capabilities (may be absent if backend templates not yet loaded)
   const runtimeStaticCap = hasStaticConfigByName(data.template, runtimeTemplates.getTemplate);
-  // Dynamic config removed (endpoints deprecated)
+  const runtimeDynamicCap = hasDynamicConfigByName(data.template, runtimeTemplates.getTemplate);
   const runtimeTemplate = runtimeTemplates.getTemplate(data.template);
   const hasRuntimeCaps = runtimeTemplate ? canProvision(runtimeTemplate) || canPause(runtimeTemplate) : false;
 
@@ -93,15 +95,25 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
             // preventing the previous node's in-memory form state from leaking and overwriting
             // the newly selected node's config (which caused empty config saves).
             key={node.id}
+            nodeId={node.id}
             templateName={data.template}
             initialConfig={cfg}
             onConfigChange={(next) => update({ config: next })}
           />
         </div>
       )}
-      {/* Dynamic configuration UI removed */}
+      {runtimeDynamicCap && (
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase text-muted-foreground">Dynamic Configuration</div>
+          <DynamicConfigForm
+            key={node.id}
+            nodeId={node.id}
+            initialConfig={dynamicConfig}
+            onConfigChange={(next) => update({ dynamicConfig: next })}
+          />
+        </div>
+      )}
       <hr className="border-border" />
-      <div className="text-[10px] uppercase text-muted-foreground">Design-Time Properties</div>
       <div className="text-[10px] uppercase text-muted-foreground">
         Template: {data.template}
         {tpl?.title ? (
