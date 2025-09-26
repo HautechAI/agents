@@ -26,7 +26,8 @@ export const LocalMcpServerStaticConfigSchema = z.object({
       maxAttempts: z.number().int().positive().default(5).describe('Maximum restart attempts during resilient start.'),
       backoffMs: z.number().int().positive().default(2000).describe('Base backoff (ms) between restart attempts.'),
     })
-    .describe('Restart strategy configuration.'),
+    .optional()
+    .describe('Restart strategy configuration (optional).'),
 });
 // .strict();
 
@@ -457,9 +458,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     let normalized: Record<string, boolean> = cfg;
     if (this._dynamicConfigZodSchema) {
       try {
-        // Incoming shape from UI is flat map; wrap under tools for parsing
-        const parsed = this._dynamicConfigZodSchema.parse({ tools: cfg }) as { tools: Record<string, boolean> };
-        normalized = parsed.tools;
+        // New flat shape: tool names are top-level boolean properties
+        normalized = this._dynamicConfigZodSchema.parse(cfg) as Record<string, boolean>;
       } catch (e) {
         this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed: ${(e as Error).message}`);
       }
@@ -471,7 +471,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     this._enabledTools = enabled;
   }
 
-  // Build zod schema representing dynamic config: { tools: { toolName: boolean().default(true) ... } }
+  // Build zod schema representing dynamic config: flat shape { toolName?: boolean } (default true)
   private buildDynamicConfigZodSchema(): z.ZodTypeAny {
     const shape: Record<string, z.ZodTypeAny> = {};
     for (const t of this.toolsCache || []) {
@@ -481,11 +481,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         .default(true)
         .describe(t.description || '');
     }
-    return z
-      .object({
-        tools: z.object(shape).default({}).describe('Enable/disable individual MCP tools (true = enabled).'),
-      })
-      .strict();
+    return z.object(shape).strict();
   }
 
   // ----------------- Resilient start internals -----------------
