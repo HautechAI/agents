@@ -4,6 +4,7 @@ import { withTool } from '@traceloop/node-server-sdk';
 import { BaseTool } from '../tools/base.tool';
 import { NodeOutput } from '../types';
 import { BaseNode } from './base.node';
+import { TerminateResponse } from '../tools/terminateResponse';
 
 export class ToolsNode extends BaseNode {
   constructor(private tools: BaseTool[]) {
@@ -30,6 +31,8 @@ export class ToolsNode extends BaseNode {
 
     const tools = this.tools.map((tool) => tool.init(config));
 
+    let terminated = false;
+
     const toolMessages: ToolMessage[] = await Promise.all(
       toolCalls.map(async (tc) => {
         return await withTool({ name: tc.name, inputParameters: [tc.args] }, async () => {
@@ -46,13 +49,18 @@ export class ToolsNode extends BaseNode {
             return createMessage(`Tool '${tc.name}' not found.`);
           }
           try {
-            const output = await tool.invoke(tc, {
+            const output = await tool.invoke(tc.args as any, {
               configurable: {
                 thread_id: config?.configurable?.thread_id,
                 // pass through the caller agent if provided by the parent agent's runtime
                 caller_agent: (config as any)?.configurable?.caller_agent,
               },
             });
+            if (output instanceof TerminateResponse) {
+              terminated = true;
+              const msg = output.message || 'Finished';
+              return createMessage(msg);
+            }
             const content = typeof output === 'string' ? output : JSON.stringify(output);
             if (content.length > 50000) {
               return createMessage(`Error (output too long: ${content.length} characters).`);
@@ -66,6 +74,6 @@ export class ToolsNode extends BaseNode {
       }),
     );
 
-    return { messages: { method: 'append', items: toolMessages } };
+    return { messages: { method: 'append', items: toolMessages }, done: terminated };
   }
 }
