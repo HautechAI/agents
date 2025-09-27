@@ -33,11 +33,11 @@ class FakeCollection<T extends MemoryDoc> {
     if (!doc) return { value: null };
     if (update.$set) {
       for (const [k, v] of Object.entries(update.$set)) {
-        setByPath(doc, k as string, v);
+        setByPathFlat(doc, k as string, v);
       }
     }
     if (update.$unset) {
-      for (const k of Object.keys(update.$unset)) unsetByPath(doc, k);
+      for (const k of Object.keys(update.$unset)) unsetByPathFlat(doc, k);
     }
     return { value: doc };
   }
@@ -52,10 +52,10 @@ class FakeCollection<T extends MemoryDoc> {
     }
     if (!doc) return { matchedCount: 0, modifiedCount: 0 };
     if (update.$set) {
-      for (const [k, v] of Object.entries(update.$set)) setByPath(doc, k as string, v);
+      for (const [k, v] of Object.entries(update.$set)) setByPathFlat(doc, k as string, v);
     }
     if (update.$unset) {
-      for (const k of Object.keys(update.$unset)) unsetByPath(doc, k);
+      for (const k of Object.keys(update.$unset)) unsetByPathFlat(doc, k);
     }
     return { matchedCount: 1, modifiedCount: 1 };
   }
@@ -80,6 +80,19 @@ function setByPath(obj: any, path: string, value: any) {
   }
   curr[parts[parts.length - 1]] = value;
 }
+
+// Special handling: Mongo-style paths like 'data.a.b' should become doc.data['a.b'] in our flat map representation
+function setByPathFlat(doc: any, path: string, value: any) {
+  const [root, ...rest] = path.split('.');
+  if (root === 'data' || root === 'dirs') {
+    const key = rest.join('.');
+    if (!doc[root]) doc[root] = {};
+    doc[root][key] = value;
+    return;
+  }
+  setByPath(doc, path, value);
+}
+
 function unsetByPath(obj: any, path: string) {
   const parts = path.split('.');
   let curr = obj;
@@ -89,6 +102,16 @@ function unsetByPath(obj: any, path: string) {
     curr = curr[p];
   }
   delete curr[parts[parts.length - 1]];
+}
+
+function unsetByPathFlat(doc: any, path: string) {
+  const [root, ...rest] = path.split('.');
+  if (root === 'data' || root === 'dirs') {
+    const key = rest.join('.');
+    if (doc[root]) delete doc[root][key];
+    return;
+  }
+  unsetByPath(doc, path);
 }
 
 describe('MemoryService', () => {
