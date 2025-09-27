@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BaseTrigger, BaseTriggerOptions, TriggerMessage } from '../src/triggers/base.trigger';
+import { BaseTrigger, TriggerMessage } from '../src/triggers/base.trigger';
 
 // Concrete test subclass exposing protected notify
 class TestTrigger extends BaseTrigger {
-  constructor(options?: BaseTriggerOptions) {
-    super(options);
+  constructor() {
+    super();
   }
   emit(thread: string, messages: TriggerMessage[]) {
     return this.notify(thread, messages);
@@ -16,7 +16,7 @@ describe('BaseTrigger', () => {
     vi.useRealTimers();
   });
 
-  it('delivers immediately without debounce/waitForBusy', async () => {
+  it('delivers immediately without any buffering', async () => {
     const trigger = new TestTrigger();
     const received: { thread: string; messages: TriggerMessage[] }[] = [];
     await trigger.subscribe({
@@ -29,97 +29,66 @@ describe('BaseTrigger', () => {
     expect(received[0].messages.map((m) => m.content)).toEqual(['a']);
   });
 
-  it('debounces messages within window', async () => {
-    vi.useFakeTimers();
-    const trigger = new TestTrigger({ debounceMs: 100 });
+  it('delivers multiple messages immediately', async () => {
+    const trigger = new TestTrigger();
     const received: TriggerMessage[][] = [];
     await trigger.subscribe({
       invoke: async (_thread, messages) => {
         received.push(messages);
       },
     });
-    trigger.emit('t1', [{ content: 'a', info: {} }]);
-    vi.advanceTimersByTime(50);
-    trigger.emit('t1', [{ content: 'b', info: {} }]);
-    vi.advanceTimersByTime(99); // still not fired
-    expect(received.length).toBe(0);
-    vi.advanceTimersByTime(1); // reach 100ms since last
-    await Promise.resolve(); // allow microtasks
+    
+    // First emit
+    await trigger.emit('t1', [{ content: 'a', info: {} }]);
     expect(received.length).toBe(1);
-    expect(received[0].map((m) => m.content)).toEqual(['a', 'b']);
-    vi.useRealTimers();
+    expect(received[0].map((m) => m.content)).toEqual(['a']);
+    
+    // Second emit - should be delivered immediately as separate batch
+    await trigger.emit('t1', [{ content: 'b', info: {} }]);
+    expect(received.length).toBe(2);
+    expect(received[1].map((m) => m.content)).toEqual(['b']);
   });
 
-  it('waitForBusy aggregates while listener busy (no debounce)', async () => {
-    const trigger = new TestTrigger({ waitForBusy: true });
-    const receivedBatches: string[][] = [];
-    const first = { resolve: null as null | (() => void) };
+  it('supports multiple listeners', async () => {
+    const trigger = new TestTrigger();
+    const received1: string[] = [];
+    const received2: string[] = [];
+    
     await trigger.subscribe({
       invoke: async (_thread, messages) => {
-        receivedBatches.push(messages.map((m) => m.content));
-        if (!first.resolve) {
-          await new Promise<void>((res) => {
-            first.resolve = res;
-          });
+        received1.push(...messages.map(m => m.content));
+      },
+    });
+    
+    await trigger.subscribe({
+      invoke: async (_thread, messages) => {
+        received2.push(...messages.map(m => m.content));
+      },
+    });
+    
+    await trigger.emit('t1', [{ content: 'test', info: {} }]);
+    
+    expect(received1).toEqual(['test']);
+    expect(received2).toEqual(['test']);
+  });
+
+  it('handles multiple threads independently', async () => {
+    const trigger = new TestTrigger();
+    const received: Array<{ thread: string; content: string }> = [];
+    
+    await trigger.subscribe({
+      invoke: async (thread, messages) => {
+        for (const msg of messages) {
+          received.push({ thread, content: msg.content });
         }
       },
     });
-    // First emit starts busy listener
-    trigger.emit('t1', [{ content: 'a', info: {} }]);
-    // During busy, we emit more messages
-    trigger.emit('t1', [{ content: 'b', info: {} }]);
-    trigger.emit('t1', [{ content: 'c', info: {} }]);
-    expect(receivedBatches.length).toBe(1); // only first delivered so far
-    // Finish first listener
-    if (first.resolve) {
-      first.resolve();
-    }
-    // Allow event loop to process next flush
-    await new Promise((res) => setTimeout(res, 0));
-    expect(receivedBatches.length).toBe(2);
-    expect(receivedBatches[1]).toEqual(['b', 'c']);
-  });
-
-  it('waitForBusy + debounce merges messages and flushes after busy then debounce', async () => {
-    vi.useFakeTimers();
-    const trigger = new TestTrigger({ waitForBusy: true, debounceMs: 50 });
-    const batches: string[][] = [];
-    let firstResolve: (() => void) | null = null as any;
-    await trigger.subscribe({
-      invoke: async (_thread, messages) => {
-        batches.push(messages.map((m) => m.content));
-        if (!firstResolve) {
-          await new Promise<void>((res) => {
-            firstResolve = res;
-          });
-        }
-      },
-    });
-    // Emit first message at t=0 (debounce 50ms)
-    trigger.emit('t1', [{ content: 'a', info: {} }]);
-    vi.advanceTimersByTime(49);
-    expect(batches.length).toBe(0);
-    vi.advanceTimersByTime(1); // t=50ms first flush -> listener busy (unresolved promise)
-    await Promise.resolve();
-    expect(batches.length).toBe(1);
-    // Emit two more messages during busy period
-    trigger.emit('t1', [{ content: 'b', info: {} }]);
-    trigger.emit('t1', [{ content: 'c', info: {} }]);
-    expect(batches.length).toBe(1);
-    // Resolve first busy listener -> schedules second debounce (50ms)
-    if (firstResolve) firstResolve();
-    // Allow promise resolution and scheduling of debounce timer
-    await Promise.resolve();
-    await Promise.resolve();
-    // Still only first batch
-    expect(batches.length).toBe(1);
-    // Advance almost full debounce window - should not flush yet
-  await vi.advanceTimersByTimeAsync(49);
-    expect(batches.length).toBe(1);
-  // Advance remaining 1ms to trigger flush and await async timers
-  await vi.advanceTimersByTimeAsync(1);
-    expect(batches.length).toBe(2);
-    expect(batches[1]).toEqual(['b', 'c']);
-    vi.useRealTimers();
+    
+    await trigger.emit('thread1', [{ content: 'msg1', info: {} }]);
+    await trigger.emit('thread2', [{ content: 'msg2', info: {} }]);
+    
+    expect(received).toHaveLength(2);
+    expect(received[0]).toEqual({ thread: 'thread1', content: 'msg1' });
+    expect(received[1]).toEqual({ thread: 'thread2', content: 'msg2' });
   });
 });

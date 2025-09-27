@@ -9,6 +9,7 @@ import {
   StateGraph,
   Messages,
   messagesStateReducer,
+  LangGraphRunnableConfig,
 } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
 import { last } from 'lodash-es';
@@ -25,6 +26,7 @@ import { BaseTool } from '../tools/base.tool';
 import { LangChainToolAdapter } from '../tools/langchainTool.adapter';
 import { SummarizationNode } from '../nodes/summarization.node';
 import { NodeOutput } from '../types';
+import { HumanMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 
 /**
@@ -52,6 +54,20 @@ export const SimpleAgentStaticConfigSchema = z
       .min(1)
       .default(512)
       .describe('Maximum token budget for generated summaries.'),
+    debounceMs: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe('Debounce window in milliseconds for coalescing rapid messages per thread.'),
+    whenBusy: z
+      .enum(['wait', 'injectAfterTools'])
+      .default('wait')
+      .describe('How to handle new messages when agent is busy: wait for completion or inject after tools phase.'),
+    processBuffer: z
+      .enum(['allTogether', 'oneByOne'])
+      .default('allTogether')
+      .describe('Process all buffered messages together or one at a time.'),
   })
   .strict();
 
@@ -108,6 +124,45 @@ export class SimpleAgent extends BaseAgent {
       maxTokens: this.summarizationMaxTokens ?? 0,
     });
 
+    // Create wrapped tools action that supports injection after tools
+    const wrappedToolsAction = async (state: { messages: BaseMessage[] }, config: LangGraphRunnableConfig): Promise<NodeOutput> => {
+      // Execute the original tools action
+      const originalResult = await this.toolsNode.action(state, config);
+      
+      // Check if we should inject pending messages after tools
+      const threadId = config?.configurable?.thread_id;
+      if (threadId) {
+        const pendingMessages = this.drainPendingMessages(threadId);
+        if (pendingMessages.length > 0) {
+          this.loggerService.info(`Injecting ${pendingMessages.length} pending messages after tools in thread ${threadId}`);
+          
+          // Convert pending messages to HumanMessages and append them to the result
+          const humanMessages = pendingMessages.map(msg => new HumanMessage(JSON.stringify(msg)));
+          
+          if (originalResult.messages) {
+            // Combine original tool messages with pending messages
+            const originalItems = originalResult.messages.method === 'append' ? originalResult.messages.items : [];
+            return {
+              messages: {
+                method: 'append',
+                items: [...originalItems, ...humanMessages]
+              }
+            };
+          } else {
+            // No original tool messages, just add pending messages
+            return {
+              messages: {
+                method: 'append',
+                items: humanMessages
+              }
+            };
+          }
+        }
+      }
+      
+      return originalResult;
+    };
+
     const builder = new StateGraph(
       {
         stateSchema: this.state(),
@@ -116,7 +171,7 @@ export class SimpleAgent extends BaseAgent {
     )
       .addNode('summarize', this.summarizeNode.action.bind(this.summarizeNode))
       .addNode('call_model', this.callModelNode.action.bind(this.callModelNode))
-      .addNode('tools', this.toolsNode.action.bind(this.toolsNode))
+      .addNode('tools', wrappedToolsAction) // Use wrapped action instead of direct binding
       .addEdge(START, 'summarize')
       .addEdge('tools', 'summarize')
       .addEdge('summarize', 'call_model')
@@ -302,10 +357,13 @@ export class SimpleAgent extends BaseAgent {
    * Dynamically set configuration values like the system prompt.
    */
   setConfig(config: Record<string, unknown>): void {
+    // First update base agent config (debounceMs, whenBusy, processBuffer)
+    this.updateAgentConfig(config);
+    
     const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(
       Object.fromEntries(
         Object.entries(config).filter(([k]) =>
-          ['title', 'model', 'systemPrompt', 'summarizationKeepTokens', 'summarizationMaxTokens'].includes(k),
+          ['title', 'model', 'systemPrompt', 'summarizationKeepTokens', 'summarizationMaxTokens', 'debounceMs', 'whenBusy', 'processBuffer'].includes(k),
         ),
       ),
     ) as Partial<SimpleAgentStaticConfig> & Record<string, any>;
