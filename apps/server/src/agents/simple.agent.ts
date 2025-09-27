@@ -52,6 +52,21 @@ export const SimpleAgentStaticConfigSchema = z
       .min(1)
       .default(512)
       .describe('Maximum token budget for generated summaries.'),
+    // MessagesBuffer configuration
+    debounceMs: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe('Debounce window in milliseconds for coalescing rapid messages per thread.'),
+    whenBusy: z
+      .enum(['wait', 'injectAfterTools'])
+      .default('wait')
+      .describe('Behavior when agent is busy processing messages.'),
+    processBuffer: z
+      .enum(['oneByOne', 'allTogether'])
+      .default('allTogether')
+      .describe('How to process buffered messages.'),
   })
   .strict();
 
@@ -108,6 +123,19 @@ export class SimpleAgent extends BaseAgent {
       maxTokens: this.summarizationMaxTokens ?? 0,
     });
 
+    // Create a wrapper for ToolsNode.action that notifies when tools phase completes
+    const wrappedToolsAction = async (state: any, config: any) => {
+      const result = await this.toolsNode.action(state, config);
+      
+      // Notify MessagesBuffer that tools phase has completed
+      const threadId = config?.configurable?.thread_id;
+      if (threadId) {
+        this.onToolsCompleted(threadId);
+      }
+      
+      return result;
+    };
+
     const builder = new StateGraph(
       {
         stateSchema: this.state(),
@@ -116,7 +144,7 @@ export class SimpleAgent extends BaseAgent {
     )
       .addNode('summarize', this.summarizeNode.action.bind(this.summarizeNode))
       .addNode('call_model', this.callModelNode.action.bind(this.callModelNode))
-      .addNode('tools', this.toolsNode.action.bind(this.toolsNode))
+      .addNode('tools', wrappedToolsAction)
       .addEdge(START, 'summarize')
       .addEdge('tools', 'summarize')
       .addEdge('summarize', 'call_model')
@@ -302,10 +330,14 @@ export class SimpleAgent extends BaseAgent {
    * Dynamically set configuration values like the system prompt.
    */
   setConfig(config: Record<string, unknown>): void {
+    // First update MessagesBuffer configuration
+    this.updateMessagesBufferConfig(config);
+
     const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(
       Object.fromEntries(
         Object.entries(config).filter(([k]) =>
-          ['title', 'model', 'systemPrompt', 'summarizationKeepTokens', 'summarizationMaxTokens'].includes(k),
+          ['title', 'model', 'systemPrompt', 'summarizationKeepTokens', 'summarizationMaxTokens', 
+           'debounceMs', 'whenBusy', 'processBuffer'].includes(k),
         ),
       ),
     ) as Partial<SimpleAgentStaticConfig> & Record<string, any>;

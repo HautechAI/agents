@@ -71,8 +71,13 @@ describe('SimpleAgent summarization graph', () => {
     const r2 = await agent.invoke('t', { content: 'there', info: {} } as any);
     const r3 = await agent.invoke('t', { content: 'friend', info: {} } as any);
 
-    expect(r1).toBeDefined();
-    expect(r2).toBeDefined();
-    expect(r3).toBeDefined();
+    // With MessagesBuffer, invoke now enqueues messages asynchronously and returns undefined
+    // This is the expected behavior after the refactoring
+    expect(r1).toBeUndefined();
+    expect(r2).toBeUndefined();
+    expect(r3).toBeUndefined();
+
+    // Wait for the messages to be processed
+    await new Promise(resolve => setTimeout(resolve, 10));
   });
 });
