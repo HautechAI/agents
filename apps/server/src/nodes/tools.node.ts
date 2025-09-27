@@ -2,6 +2,7 @@ import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { withTool } from '@traceloop/node-server-sdk';
 import { BaseTool } from '../tools/base.tool';
+import { TerminateResponse } from '../tools/terminateResponse';
 import { NodeOutput } from '../types';
 import { BaseNode } from './base.node';
 
@@ -29,6 +30,7 @@ export class ToolsNode extends BaseNode {
     if (!toolCalls.length) return {};
 
     const tools = this.tools.map((tool) => tool.init(config));
+    let terminated = false;
 
     const toolMessages: ToolMessage[] = await Promise.all(
       toolCalls.map(async (tc) => {
@@ -46,13 +48,21 @@ export class ToolsNode extends BaseNode {
             return createMessage(`Tool '${tc.name}' not found.`);
           }
           try {
-            const output = await tool.invoke(tc, {
+            const output = await tool.invoke(tc.args, {
               configurable: {
                 thread_id: config?.configurable?.thread_id,
                 // pass through the caller agent if provided by the parent agent's runtime
                 caller_agent: (config as any)?.configurable?.caller_agent,
               },
             });
+
+            // Check if output is a TerminateResponse
+            if (output instanceof TerminateResponse) {
+              terminated = true;
+              const content = output.message || 'Task completed.';
+              return createMessage(content);
+            }
+
             const content = typeof output === 'string' ? output : JSON.stringify(output);
             if (content.length > 50000) {
               return createMessage(`Error (output too long: ${content.length} characters).`);
@@ -66,6 +76,14 @@ export class ToolsNode extends BaseNode {
       }),
     );
 
-    return { messages: { method: 'append', items: toolMessages } };
+    const output: NodeOutput = { 
+      messages: { method: 'append', items: toolMessages }
+    };
+    
+    if (terminated) {
+      output.done = true;
+    }
+    
+    return output;
   }
 }

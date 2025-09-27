@@ -9,6 +9,7 @@ import { ContainerService } from './services/container.service';
 import { LoggerService } from './services/logger.service';
 import { SlackService } from './services/slack.service';
 import { CallAgentTool, CallAgentToolStaticConfigSchema } from './tools/call_agent.tool';
+import { FinishTool } from './tools/finish.tool';
 import { GithubCloneRepoTool, GithubCloneRepoToolStaticConfigSchema } from './tools/github_clone_repo';
 import { SendSlackMessageTool, SendSlackMessageToolStaticConfigSchema } from './tools/send_slack_message.tool';
 import { ShellTool, ShellToolStaticConfigSchema } from './tools/shell_command';
@@ -106,6 +107,17 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         kind: 'tool',
         capabilities: { staticConfigurable: true },
         staticConfigSchema: toJSONSchema(CallAgentToolStaticConfigSchema),
+      },
+    )
+    .register(
+      'finishTool',
+      () => new FinishTool(),
+      {
+        targetPorts: { $self: { kind: 'instance' } },
+      },
+      {
+        title: 'Finish',
+        kind: 'tool',
       },
     )
     .register(

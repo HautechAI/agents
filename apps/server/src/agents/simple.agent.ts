@@ -16,6 +16,7 @@ import { McpServer, McpTool } from '../mcp';
 import { isDynamicConfigurable } from '../graph/capabilities';
 import { inferArgsSchema } from '../mcp/jsonSchemaToZod';
 import { CallModelNode } from '../nodes/callModel.node';
+import { EnforceRestrictionNode } from '../nodes/enforceRestriction.node';
 import { ToolsNode } from '../nodes/tools.node';
 import { CheckpointerService } from '../services/checkpointer.service';
 import { ConfigService } from '../services/config.service';
@@ -52,6 +53,20 @@ export const SimpleAgentStaticConfigSchema = z
       .min(1)
       .default(512)
       .describe('Maximum token budget for generated summaries.'),
+    restrictOutput: z
+      .boolean()
+      .default(false)
+      .describe('Require tool call before finishing. If true, the agent must call a tool before ending.'),
+    restrictionMessage: z
+      .string()
+      .default("Do not produce a final answer directly. Before finishing, call a tool. If no tool is needed, call the 'finish' tool.")
+      .describe('Message injected when model tries to finish without calling a tool.'),
+    restrictionMaxInjections: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe('Maximum restriction injections per turn. 0 = unlimited (bounded by recursion limit).'),
   })
   .strict();
 
@@ -67,6 +82,7 @@ export class SimpleAgent extends BaseAgent {
   private summarizationKeepTokens?: number; // token budget for verbatim tail
   private summarizationMaxTokens?: number;
   private summarizeNode!: SummarizationNode;
+  private enforceRestrictionNode!: EnforceRestrictionNode;
 
   constructor(
     private configService: ConfigService,
@@ -88,6 +104,18 @@ export class SimpleAgent extends BaseAgent {
         reducer: (left, right) => right ?? left,
         default: () => '',
       }),
+      done: Annotation<boolean, boolean>({
+        reducer: (left, right) => right ?? left,
+        default: () => false,
+      }),
+      restrictionInjectionCount: Annotation<number, number>({
+        reducer: (left, right) => right ?? left,
+        default: () => 0,
+      }),
+      restrictionInjected: Annotation<boolean, boolean>({
+        reducer: (left, right) => right ?? left,
+        default: () => false,
+      }),
     });
   }
 
@@ -107,6 +135,11 @@ export class SimpleAgent extends BaseAgent {
       keepTokens: this.summarizationKeepTokens ?? 0,
       maxTokens: this.summarizationMaxTokens ?? 0,
     });
+    this.enforceRestrictionNode = new EnforceRestrictionNode({
+      restrictOutput: false, // default
+      restrictionMessage: "Do not produce a final answer directly. Before finishing, call a tool. If no tool is needed, call the 'finish' tool.",
+      restrictionMaxInjections: 0,
+    });
 
     const builder = new StateGraph(
       {
@@ -117,14 +150,30 @@ export class SimpleAgent extends BaseAgent {
       .addNode('summarize', this.summarizeNode.action.bind(this.summarizeNode))
       .addNode('call_model', this.callModelNode.action.bind(this.callModelNode))
       .addNode('tools', this.toolsNode.action.bind(this.toolsNode))
+      .addNode('enforce', this.enforceRestrictionNode.action.bind(this.enforceRestrictionNode))
       .addEdge(START, 'summarize')
-      .addEdge('tools', 'summarize')
       .addEdge('summarize', 'call_model')
       .addConditionalEdges(
         'call_model',
-        (state) => (last(state.messages as AIMessage[])?.tool_calls?.length ? 'tools' : END),
+        (state) => (last(state.messages as AIMessage[])?.tool_calls?.length ? 'tools' : 'enforce'),
         {
           tools: 'tools',
+          enforce: 'enforce',
+        },
+      )
+      .addConditionalEdges(
+        'enforce',
+        (state) => (state.restrictionInjected === true ? 'call_model' : END),
+        {
+          call_model: 'call_model',
+          [END]: END,
+        },
+      )
+      .addConditionalEdges(
+        'tools',
+        (state) => (state.done === true ? END : 'summarize'),
+        {
+          summarize: 'summarize',
           [END]: END,
         },
       );
@@ -305,7 +354,7 @@ export class SimpleAgent extends BaseAgent {
     const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(
       Object.fromEntries(
         Object.entries(config).filter(([k]) =>
-          ['title', 'model', 'systemPrompt', 'summarizationKeepTokens', 'summarizationMaxTokens'].includes(k),
+          ['title', 'model', 'systemPrompt', 'summarizationKeepTokens', 'summarizationMaxTokens', 'restrictOutput', 'restrictionMessage', 'restrictionMaxInjections'].includes(k),
         ),
       ),
     ) as Partial<SimpleAgentStaticConfig> & Record<string, any>;
@@ -350,6 +399,23 @@ export class SimpleAgent extends BaseAgent {
     if (updates.keepTokens !== undefined || updates.maxTokens !== undefined) {
       this.summarizeNode.setOptions(updates);
       this.loggerService.info('SimpleAgent summarization options updated');
+    }
+
+    // Handle restriction configuration
+    const restrictionUpdates: { restrictOutput?: boolean; restrictionMessage?: string; restrictionMaxInjections?: number } = {};
+    if (parsedConfig.restrictOutput !== undefined) {
+      restrictionUpdates.restrictOutput = parsedConfig.restrictOutput;
+    }
+    if (parsedConfig.restrictionMessage !== undefined) {
+      restrictionUpdates.restrictionMessage = parsedConfig.restrictionMessage;
+    }
+    if (parsedConfig.restrictionMaxInjections !== undefined) {
+      restrictionUpdates.restrictionMaxInjections = parsedConfig.restrictionMaxInjections;
+    }
+
+    if (Object.keys(restrictionUpdates).length > 0) {
+      this.enforceRestrictionNode.setOptions(restrictionUpdates);
+      this.loggerService.info('SimpleAgent restriction options updated');
     }
   }
 

@@ -37,7 +37,13 @@ export class SummarizationNode {
   async action(state: ChatState): Promise<NodeOutput> {
     const keepTokens = this.keepTokens ?? 0;
     const maxTokens = this.maxTokens ?? 0;
-    if (!(keepTokens >= 0) || !(maxTokens > 0)) return { summary: state.summary ?? '' };
+    if (!(keepTokens >= 0) || !(maxTokens > 0)) {
+      return { 
+        summary: state.summary ?? '',
+        restrictionInjectionCount: 0,
+        restrictionInjected: false,
+      };
+    }
 
     const opts: SummarizationOptions = {
       llm: this.llm,
@@ -65,7 +71,12 @@ export class SummarizationNode {
       return keep;
     });
 
-    return { summary: working.summary ?? '', messages: { method: 'replace', items: omitAiWithoutToolCalls } };
+    return { 
+      summary: working.summary ?? '', 
+      messages: { method: 'replace', items: omitAiWithoutToolCalls },
+      restrictionInjectionCount: 0,
+      restrictionInjected: false,
+    };
   }
 
   async countTokens(llm: ChatOpenAI, messagesOrText: BaseMessage[] | string): Promise<number> {
