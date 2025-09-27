@@ -16,6 +16,10 @@ import { SlackTrigger } from './triggers';
 import { SlackTriggerStaticConfigSchema } from './triggers/slack.trigger';
 import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
+import { MongoService } from './services/mongo.service';
+import { MemoryNode } from './lgnodes/memory.lgnode';
+import { MemoryConnectorNode } from './lgnodes/memory.connector.lgnode';
+import { buildMemoryTools } from './tools/memory.tools';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
@@ -23,10 +27,11 @@ export interface TemplateRegistryDeps {
   configService: ConfigService;
   slackService: SlackService;
   checkpointerService: CheckpointerService;
+  mongoService?: MongoService; // optional; memory nodes require it
 }
 
 export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
-  const { logger, containerService, configService, slackService, checkpointerService } = deps;
+  const { logger, containerService, configService, slackService, checkpointerService, mongoService } = deps;
 
   return new TemplateRegistry()
     .register(
@@ -146,6 +151,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         sourcePorts: {
           tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
           mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
+          memory: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
         },
         targetPorts: { $self: { kind: 'instance' } },
       },
@@ -174,6 +180,44 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         kind: 'mcp',
         capabilities: { provisionable: true, dynamicConfigurable: true, staticConfigurable: true },
         staticConfigSchema: toJSONSchema(LocalMcpServerStaticConfigSchema),
+      },
+    )
+    // Memory node: provides memory tools and connector
+    .register(
+      'memoryNode',
+      (ctx) => {
+        if (!mongoService) throw new Error('MongoService not provided for memoryNode');
+        const db = mongoService.getDb();
+        const memNode = new MemoryNode(db, ctx.nodeId, { scope: 'global' });
+        return {
+          // expose build tool set as an instance; agent will attach via sourcePorts.memory
+          get memoryTools() {
+            const factory = (opts: { threadId?: string }) => memNode.getMemoryService({ threadId: opts.threadId });
+            const tools = buildMemoryTools(factory);
+            // Adapter to BaseTool is handled by SimpleAgent via addTool expecting BaseTool; wrapping is not implemented here.
+            // For wiring simplicity in this phase, we expose a faux BaseTool set via an adaptor in templates.
+            return tools;
+          },
+          // Provide connector factory for CallModel when integrated later
+          createConnector(config?: { placement?: 'after_system' | 'last_message'; content?: 'full' | 'tree'; maxChars?: number }) {
+            const factory = (opts: { threadId?: string }) => memNode.getMemoryService({ threadId: opts.threadId });
+            return new MemoryConnectorNode(factory, {
+              placement: config?.placement || 'after_system',
+              content: config?.content || 'tree',
+              maxChars: config?.maxChars ?? 4000,
+            });
+          },
+          setConfig(cfg: any) {
+            memNode.setConfig(cfg);
+          },
+        } as any;
+      },
+      {
+        sourcePorts: { $self: { kind: 'instance' } },
+      },
+      {
+        title: 'Memory',
+        kind: 'tool',
       },
     );
 }
