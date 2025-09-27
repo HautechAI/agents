@@ -15,7 +15,7 @@ export default function DynamicConfigForm({
   onConfigChange,
 }: {
   nodeId: string;
-  initialConfig: Record<string, unknown>;
+  initialConfig?: Record<string, unknown>;
   onConfigChange?: (cfg: Record<string, unknown>) => void;
 }) {
   const { data: status } = useNodeStatus(nodeId);
@@ -64,6 +64,8 @@ export default function DynamicConfigForm({
         onChange={(next) => {
           setFormData(next as Record<string, unknown>);
           onConfigChange?.(next as Record<string, unknown>);
+          // autosave dynamic config via hook
+          (set as any).mutate?.(next as Record<string, unknown>);
         }}
       />
     </div>

@@ -80,6 +80,21 @@ export class ToolsNode extends BaseNode {
       }),
     );
 
-    return { messages: { method: 'append', items: toolMessages }, done: terminated };
+    // Agent-controlled injection hook: after tools complete, allow caller agent to inject buffered messages
+    const injected = (() => {
+      const agent: any = (config as any)?.configurable?.caller_agent;
+      const threadId = (config as any)?.configurable?.thread_id;
+      if (agent && typeof agent['maybeDrainForInjection'] === 'function' && threadId) {
+        try {
+          const extra = agent['maybeDrainForInjection'](threadId);
+          return Array.isArray(extra) ? extra : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    })();
+
+    return { messages: { method: 'append', items: [...toolMessages, ...injected] }, done: terminated };
   }
 }

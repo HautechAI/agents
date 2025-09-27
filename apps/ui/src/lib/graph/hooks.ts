@@ -73,6 +73,29 @@ export function useNodeAction(nodeId: string) {
   });
 }
 
+// Static config setter used by StaticConfigForm
+export function useSetNodeConfig(nodeId: string) {
+  return useMutation({
+    mutationFn: async (cfg: Record<string, unknown>) => {
+      const graph = await (await fetch(`${location.protocol}//${location.hostname}:3010/api/graph`)).json();
+      const node = (graph.nodes as Array<{ id: string; config?: Record<string, unknown> }>).find((n) => n.id === nodeId);
+      if (node) {
+        node.config = { ...(cfg || {}) } as Record<string, unknown>;
+      }
+      await fetch(`${location.protocol}//${location.hostname}:3010/api/graph`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(graph),
+      });
+      return cfg;
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      notifyError(`Save config failed: ${message}`);
+    },
+  });
+}
+
 // Dynamic config schema + setter (saving still uses full graph save outside this hook)
 export function useDynamicConfig(nodeId: string) {
   const schema = useQuery<Record<string, unknown> | null>({
