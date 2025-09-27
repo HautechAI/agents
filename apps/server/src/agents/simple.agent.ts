@@ -140,7 +140,10 @@ export class SimpleAgent extends BaseAgent {
     });
 
     // Read restriction config from static config and store locally for closures
-    const cfg = (this as any)._staticConfig as Partial<SimpleAgentStaticConfig> | undefined;
+    const cfgUnknown = this._staticConfig;
+    const cfg = (cfgUnknown && typeof cfgUnknown === 'object'
+      ? (cfgUnknown as Partial<SimpleAgentStaticConfig>)
+      : undefined);
     this.restrictOutput = !!cfg?.restrictOutput;
     this.restrictionMessage =
       cfg?.restrictionMessage ||
