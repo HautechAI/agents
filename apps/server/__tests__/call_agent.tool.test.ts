@@ -92,6 +92,108 @@ describe('CallAgentTool unit', () => {
     );
     expect(out).toBe('OK');
   });
+
+  it('supports async response mode with caller agent', async () => {
+    const tool = new CallAgentTool(new LoggerService());
+    await tool.setConfig({ description: 'desc', response: 'async' });
+    
+    const callbackInvocations: Array<{ thread: string; msgs: Msg[] }> = [];
+    const callerAgent = new FakeAgent(new LoggerService(), async (thread, msgs) => {
+      callbackInvocations.push({ thread, msgs });
+      return new AIMessage('callback received');
+    });
+    
+    const childAgent = new FakeAgent(new LoggerService(), async (thread, _msgs) => {
+      expect(thread).toBe('parent__child1');
+      return new AIMessage('Child response');
+    });
+    
+    tool.setAgent(childAgent);
+    const dynamic = tool.init();
+    
+    const out = await dynamic.invoke(
+      { input: 'test message', childThreadId: 'child1' },
+      { configurable: { thread_id: 'parent', caller_agent: callerAgent } } as any,
+    );
+    
+    expect(out).toEqual({ status: 'sent' });
+    
+    // Wait a bit for async operation to complete
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    expect(callbackInvocations).toHaveLength(1);
+    expect(callbackInvocations[0].thread).toBe('parent');
+    expect(callbackInvocations[0].msgs[0].content).toBe('parent__child1');
+    expect(callbackInvocations[0].msgs[0].info.childResponse).toBe('Child response');
+    expect(callbackInvocations[0].msgs[0].info.type).toBe('async_callback');
+  });
+
+  it('falls back to sync mode when no caller agent in async mode', async () => {
+    const tool = new CallAgentTool(new LoggerService());
+    await tool.setConfig({ description: 'desc', response: 'async' });
+    
+    const agent = new FakeAgent(new LoggerService(), async (thread, _msgs) => {
+      expect(thread).toBe('parent__child1');
+      return new AIMessage('Sync fallback response');
+    });
+    
+    tool.setAgent(agent);
+    const dynamic = tool.init();
+    
+    const out = await dynamic.invoke(
+      { input: 'test message', childThreadId: 'child1' },
+      { configurable: { thread_id: 'parent' } } as any,
+    );
+    
+    expect(out).toBe('Sync fallback response');
+  });
+
+  it('supports ignore response mode', async () => {
+    const tool = new CallAgentTool(new LoggerService());
+    await tool.setConfig({ description: 'desc', response: 'ignore' });
+    
+    let childInvoked = false;
+    const agent = new FakeAgent(new LoggerService(), async (thread, _msgs) => {
+      childInvoked = true;
+      expect(thread).toBe('parent__child1');
+      return new AIMessage('Ignored response');
+    });
+    
+    tool.setAgent(agent);
+    const dynamic = tool.init();
+    
+    const out = await dynamic.invoke(
+      { input: 'test message', childThreadId: 'child1' },
+      { configurable: { thread_id: 'parent' } } as any,
+    );
+    
+    expect(out).toBe('Message sent (ignore mode)');
+    
+    // Wait a bit for async operation to complete
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    expect(childInvoked).toBe(true);
+  });
+
+  it('defaults to sync mode when response not specified', async () => {
+    const tool = new CallAgentTool(new LoggerService());
+    await tool.setConfig({ description: 'desc' }); // no response specified
+    
+    const agent = new FakeAgent(new LoggerService(), async (thread, _msgs) => {
+      expect(thread).toBe('parent__child1');
+      return new AIMessage('Default sync response');
+    });
+    
+    tool.setAgent(agent);
+    const dynamic = tool.init();
+    
+    const out = await dynamic.invoke(
+      { input: 'test message', childThreadId: 'child1' },
+      { configurable: { thread_id: 'parent' } } as any,
+    );
+    
+    expect(out).toBe('Default sync response');
+  });
 });
 
 // Graph wiring test

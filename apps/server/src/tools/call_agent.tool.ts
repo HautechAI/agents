@@ -28,14 +28,25 @@ export const CallAgentToolStaticConfigSchema = z.object({
     .regex(/^[a-z0-9_]{1,64}$/)
     .optional()
     .describe('Optional tool name (a-z, 0-9, underscore). Default: call_agent'),
+  response: z
+    .enum(['sync', 'async', 'ignore'])
+    .optional()
+    .default('sync')
+    .describe('Response mode: sync (await child response), async (return immediately and callback), ignore (fire-and-forget)'),
 });
 
-type WithThreadId = LangGraphRunnableConfig & { configurable?: { thread_id?: string } };
+type WithThreadId = LangGraphRunnableConfig & { 
+  configurable?: { 
+    thread_id?: string;
+    caller_agent?: BaseAgent;
+  } 
+};
 
 export class CallAgentTool extends BaseTool {
   private description = 'Call another agent with a message and optional context.';
   private name: string | undefined;
   private targetAgent: BaseAgent | undefined;
+  private response: 'sync' | 'async' | 'ignore' = 'sync';
 
   constructor(private logger: LoggerService) {
     super();
@@ -52,6 +63,7 @@ export class CallAgentTool extends BaseTool {
     }
     this.description = parsed.data.description ?? this.description;
     this.name = parsed.data.name ?? this.name;
+    this.response = parsed.data.response;
   }
 
   init(config?: LangGraphRunnableConfig): DynamicStructuredTool {
@@ -82,9 +94,67 @@ export class CallAgentTool extends BaseTool {
         };
 
         try {
-          const res: BaseMessage | undefined = await this.targetAgent.invoke(targetThreadId, [triggerMessage]);
-          if (!res) return '';
-          return res.text ?? '';
+          // Handle different response modes
+          if (this.response === 'ignore') {
+            // Fire-and-forget: invoke child but don't wait for response
+            this.targetAgent.invoke(targetThreadId, [triggerMessage]).catch((err: any) => {
+              this.logger.error('Error in ignore mode call_agent', err?.message || err, err?.stack);
+            });
+            return 'Message sent (ignore mode)';
+          } else if (this.response === 'async') {
+            // Async: return immediately, callback when child completes
+            const callerAgent = (runtimeCfg as WithThreadId | undefined)?.configurable?.caller_agent ??
+                               (config as WithThreadId | undefined)?.configurable?.caller_agent;
+            
+            if (!callerAgent) {
+              // Fallback to sync mode if no caller agent available
+              this.logger.info('No caller_agent in config for async mode, falling back to sync');
+              const res: BaseMessage | undefined = await this.targetAgent.invoke(targetThreadId, [triggerMessage]);
+              if (!res) return '';
+              return res.text ?? '';
+            }
+
+            // Start async child invocation
+            this.targetAgent.invoke(targetThreadId, [triggerMessage])
+              .then((res: BaseMessage | undefined) => {
+                if (res) {
+                  // Trigger callback to parent agent with child response
+                  const callbackMessage: TriggerMessage = {
+                    content: `${parentThreadId}__${parsed.childThreadId}`,
+                    info: { 
+                      childResponse: res.text ?? '',
+                      originalChildThreadId: parsed.childThreadId,
+                      type: 'async_callback'
+                    }
+                  };
+                  callerAgent.invoke(parentThreadId, [callbackMessage]).catch((err: any) => {
+                    this.logger.error('Error in async callback to parent agent', err?.message || err, err?.stack);
+                  });
+                }
+              })
+              .catch((err: any) => {
+                this.logger.error('Error in async call_agent', err?.message || err, err?.stack);
+                // Send error callback to parent
+                const errorMessage: TriggerMessage = {
+                  content: `${parentThreadId}__${parsed.childThreadId}`,
+                  info: {
+                    error: err?.message || String(err),
+                    originalChildThreadId: parsed.childThreadId,
+                    type: 'async_callback'
+                  }
+                };
+                callerAgent.invoke(parentThreadId, [errorMessage]).catch((callbackErr: any) => {
+                  this.logger.error('Error in async error callback', callbackErr?.message || callbackErr, callbackErr?.stack);
+                });
+              });
+
+            return { status: 'sent' };
+          } else {
+            // Sync mode (default): await child response
+            const res: BaseMessage | undefined = await this.targetAgent.invoke(targetThreadId, [triggerMessage]);
+            if (!res) return '';
+            return res.text ?? '';
+          }
         } catch (err: any) {
           this.logger.error('Error calling agent', err?.message || err, err?.stack);
           return `Error calling agent: ${err?.message || String(err)}`;

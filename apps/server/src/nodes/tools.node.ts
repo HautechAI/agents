@@ -46,7 +46,7 @@ export class ToolsNode extends BaseNode {
             return createMessage(`Tool '${tc.name}' not found.`);
           }
           try {
-            const output = await tool.invoke(tc, { configurable: { thread_id: config?.configurable?.thread_id } });
+            const output = await tool.invoke(tc, { configurable: config?.configurable });
             const content = typeof output === 'string' ? output : JSON.stringify(output);
             if (content.length > 50000) {
               return createMessage(`Error (output too long: ${content.length} characters).`);
