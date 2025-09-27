@@ -46,6 +46,7 @@ class FakeCollection<T extends MemoryDoc> {
     let doc = this.store.get(key);
     if (!doc && options?.upsert) {
       doc = { ...filter };
+      if (update.$setOnInsert) Object.assign(doc, update.$setOnInsert);
       this.store.set(key, doc);
     }
     if (!doc) return { matchedCount: 0, modifiedCount: 0 };
