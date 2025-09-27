@@ -67,7 +67,8 @@ flowchart LR
     BashTool[BashCommandTool]
     GHCloneTool[GithubCloneRepoTool]
     SlackMsgTool[SendSlackMessageTool]
-  CallAgentTool[CallAgentTool]
+    CallAgentTool[CallAgentTool]
+    FinishTool[FinishTool]
     MCP[LocalMCPServer]
   end
   GStore -->|load/apply| LGR
@@ -76,6 +77,7 @@ flowchart LR
   ToolsNode --> GHCloneTool
   ToolsNode --> SlackMsgTool
   ToolsNode --> CallAgentTool
+  ToolsNode --> FinishTool
   ToolsNode --> MCP
 ```
 
@@ -192,6 +194,13 @@ C. MCP tool call
 2) On tool call, LocalMCPServer.callTool(name,args,{threadId}) launches docker exec in the thread’s container and performs JSON-RPC call.
 3) Output content array is flattened to text; structuredContent is kept in result.
 
+D. Tool call enforcement and termination
+1) SimpleAgent can be configured with `restrictOutput: true` to require tool calls before finishing.
+2) When enabled, if the LLM tries to end without calling tools, EnforceRestrictionNode injects a SystemMessage with `restrictionMessage` and loops back to CallModelNode.
+3) The `restrictionMaxInjections` setting controls how many times per turn the restriction is enforced (default 0 = unlimited, bounded by recursionLimit).
+4) The FinishTool provides explicit termination via TerminateResponse, allowing the LLM to signal completion when output is restricted.
+5) When any tool returns TerminateResponse, ToolsNode sets `done=true` and the agent exits gracefully via the graph's conditional edges.
+
 7. Configuration & Dependencies
 Environment variables (server)
 - GITHUB_APP_ID: GitHub App ID (required)
@@ -288,5 +297,8 @@ Glossary
 - ExecutedEdgeRecord: Runtime record of an executed edge with a reversal closure.
 - Trigger: External event source feeding agent threads.
 - Tool: Action callable by LLM tool calls; implemented as BaseTool returning DynamicStructuredTool.
+- TerminateResponse: Special response class from tools that signals graceful agent termination with an optional message.
+- FinishTool: Built-in tool that returns TerminateResponse to allow explicit agent completion when output is restricted.
+- EnforceRestrictionNode: Graph node that enforces tool calling requirements by injecting SystemMessage reminders when the LLM attempts to finish without calling tools.
 - MCP: Model Context Protocol; a tool discovery and invocation protocol over stdio or sockets.
 - ContainerProviderEntity: A provider that ensures a per-thread Docker container with persistent labels.
