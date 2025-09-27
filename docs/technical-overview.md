@@ -83,14 +83,15 @@ Layers
 - Application server (apps/server/src/index.ts): wires services, loads persisted graph, exposes minimal REST (templates/graph) and a Socket.IO stream for checkpoints.
 - Graph runtime (apps/server/src/graph/*): live diff/apply engine (LiveGraphRuntime) enforcing reversible edges via PortsRegistry and TemplateRegistry wiring.
 - Templates (apps/server/src/templates.ts): declarative registration of node factories and their ports.
-- Triggers (apps/server/src/triggers/*): external event sources (Slack, PR polling) that push messages into agents.
+- Triggers (apps/server/src/triggers/*): external event sources (Slack, PR polling) that push messages into agents. Triggers are now thin event sources with no internal buffering.
+- Agents (apps/server/src/agents/*): BaseAgent implements TriggerListener and uses MessagesBuffer for message scheduling/buffering with configurable debounce, whenBusy behavior, and buffer processing modes.
 - Nodes (apps/server/src/nodes/*): graph components like LLM invocation (CallModelNode, MemoryCallModelNode, ToolsNode).
 - Tools (apps/server/src/tools/*): actions callable by the LLM (bash, GitHub clone, Slack message) and adapters.
 - MCP (apps/server/src/mcp/*): LocalMCPServer and DockerExecTransport to expose MCP tools from a container as agent tools.
 - Services (apps/server/src/services/*): infra clients and helpers (config, docker container provision, Mongo, Slack, GitHub, checkpointer, sockets).
 
 Data and control flow
-- Control: Triggers notify agents; agents run a LangGraph state machine that may call tools; the runtime manages which node instances exist and how they are connected.
+- Control: Triggers notify agents immediately; agents use MessagesBuffer to manage debouncing, busy states, and buffer processing before running LangGraph state machines that may call tools; the runtime manages which node instances exist and how they are connected.
 - Data: Persisted graph (Mongo) -> GraphService validate/upsert -> LiveGraphRuntime apply -> Node instances with ports -> Executed edges recorded for reversal.
 
 3. File & Directory Organization
@@ -106,7 +107,8 @@ Key server paths
 - apps/server/src/index.ts: bootstrap, REST endpoints, Socket.IO server, live graph application from persistence.
 - apps/server/src/graph/*: core runtime types, PortsRegistry, TemplateRegistry, LiveGraphRuntime.
 - apps/server/src/templates.ts: template registration and ports configuration.
-- apps/server/src/triggers/*: SlackTrigger, PRTrigger, BaseTrigger.
+- apps/server/src/triggers/*: SlackTrigger, PRTrigger, BaseTrigger (thin event sources).
+- apps/server/src/agents/*: BaseAgent (with MessagesBuffer), SimpleAgent.
 - apps/server/src/nodes/*: BaseNode, CallModelNode, MemoryCallModelNode, ToolsNode.
 - apps/server/src/tools/*: BaseTool + concrete tools (bash_command, github_clone_repo, send_slack_message).
 - apps/server/src/mcp/*: LocalMCPServer and DockerExecTransport.
@@ -157,6 +159,7 @@ MCP integration
 Triggers
 - SlackTrigger: Socket Mode listener that forwards user messages as TriggerMessage with thread computed from user and Slack thread_ts.
 - PRTrigger: Polls GitHub for PRs where the authenticated user is assignee (optionally include authored). Computes a composite md5 over updated_at, checks, events, and mergeability to detect changes; emits per-PR thread messages.
+- All triggers are now thin event sources that immediately notify agents via MessagesBuffer, with no internal buffering or scheduling logic.
 
 Fault tolerance and correctness
 - Edge reversal during node disposal is best-effort; failures are logged and ignored to ensure forward progress.
