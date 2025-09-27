@@ -73,58 +73,14 @@ export function useNodeAction(nodeId: string) {
   });
 }
 
-// Static config setter used by StaticConfigForm
-export function useSetNodeConfig(nodeId: string) {
-  return useMutation({
-    mutationFn: async (cfg: Record<string, unknown>) => {
-      const graph = await (await fetch(`${location.protocol}//${location.hostname}:3010/api/graph`)).json();
-      const node = (graph.nodes as Array<{ id: string; config?: Record<string, unknown> }>).find((n) => n.id === nodeId);
-      if (node) {
-        node.config = { ...(cfg || {}) } as Record<string, unknown>;
-      }
-      await fetch(`${location.protocol}//${location.hostname}:3010/api/graph`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(graph),
-      });
-      return cfg;
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      notifyError(`Save config failed: ${message}`);
-    },
-  });
-}
-
-// Dynamic config schema + setter (saving still uses full graph save outside this hook)
+// Dynamic config schema only; saving is handled by Builder autosave via node data changes
 export function useDynamicConfig(nodeId: string) {
   const schema = useQuery<Record<string, unknown> | null>({
     queryKey: ['graph', 'node', nodeId, 'dynamic', 'schema'],
     queryFn: () => api.getDynamicConfigSchema(nodeId),
     staleTime: 1000 * 60, // cache briefly
   });
-  // Placeholder mutation: caller still expected to merge into full graph config for persistence
-  const set = useMutation({
-    mutationFn: async (dynCfg: Record<string, unknown>) => {
-      // Fetch current graph, update node config.dynamic (namespaced) and save full graph
-      const graph = await (await fetch(`${location.protocol}//${location.hostname}:3010/api/graph`)).json();
-      const node = (graph.nodes as Array<{ id: string; config?: Record<string, unknown>; dynamicConfig?: Record<string, unknown> }>).find((n) => n.id === nodeId);
-      if (node) {
-        node.dynamicConfig = { ...(dynCfg || {}) } as Record<string, unknown>;
-      }
-      await fetch(`${location.protocol}//${location.hostname}:3010/api/graph`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(graph),
-      });
-      return dynCfg;
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      notifyError(`Save dynamic config failed: ${message}`);
-    },
-  });
-  return { schema, set };
+  return { schema };
 }
 
 // New: full graph save hook

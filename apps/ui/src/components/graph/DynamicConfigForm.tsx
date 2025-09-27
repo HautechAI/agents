@@ -20,8 +20,7 @@ export default function DynamicConfigForm({
 }) {
   const { data: status } = useNodeStatus(nodeId);
   const ready = !!status?.dynamicConfigReady;
-  const { schema, set } = useDynamicConfig(nodeId);
-  const isPending = (set as { isPending?: boolean }).isPending === true;
+  const { schema } = useDynamicConfig(nodeId);
 
   const [formData, setFormData] = useState<Record<string, unknown> | undefined>(initialConfig);
 
@@ -60,12 +59,10 @@ export default function DynamicConfigForm({
         formData={formData}
         disableSubmit={true}
         hideSubmitButton
-        submitDisabled={isPending}
         onChange={(next) => {
           setFormData(next as Record<string, unknown>);
+          // Upstream (builder) autosave captures node data changes
           onConfigChange?.(next as Record<string, unknown>);
-          // autosave dynamic config via hook
-          (set as any).mutate?.(next as Record<string, unknown>);
         }}
       />
     </div>

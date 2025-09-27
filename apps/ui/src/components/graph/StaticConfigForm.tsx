@@ -1,10 +1,9 @@
-// Static configuration autosave form
+// Static configuration form; persistence is handled upstream by builder autosave
 import { useEffect, useRef, useState } from 'react';
 import { useTemplatesCache } from '../../lib/graph/templates.provider';
 import { normalizeForRjsf } from './form/normalize';
 import { ReusableForm } from './form/ReusableForm';
 import type { JsonSchemaObject } from './form/types';
-import { useSetNodeConfig } from '../../lib/graph/hooks';
 
 function coerceSchema(s: unknown): JsonSchemaObject | null {
   return s && typeof s === 'object' ? (s as JsonSchemaObject) : null;
@@ -15,9 +14,7 @@ export default function StaticConfigForm({
   initialConfig,
   onConfigChange,
   submitDisabled,
-  nodeId,
 }: {
-  nodeId: string;
   templateName: string;
   initialConfig?: Record<string, unknown>;
   onConfigChange?: (cfg: Record<string, unknown>) => void;
@@ -32,7 +29,6 @@ export default function StaticConfigForm({
   const [formData, setFormData] = useState<Record<string, unknown> | undefined>(initialConfig);
   const touched = useRef(false);
   const latest = useRef<Record<string, unknown> | undefined>(initialConfig);
-  const setConfig = useSetNodeConfig(nodeId);
 
   // Sync incoming initialConfig only when user hasn't started editing (avoid reset flash)
   useEffect(() => {
@@ -56,9 +52,8 @@ export default function StaticConfigForm({
         onChange={(next) => {
           touched.current = true;
           setFormData(next as Record<string, unknown>);
+          // Upstream (builder) autosave persists graph changes
           onConfigChange?.(next as Record<string, unknown>);
-          // autosave
-          setConfig.mutate(next as Record<string, unknown>);
         }}
       />
     </div>
