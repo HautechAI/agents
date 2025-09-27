@@ -52,7 +52,7 @@ export default function StaticConfigForm({
         onChange={(next) => {
           touched.current = true;
           setFormData(next as Record<string, unknown>);
-          // Upstream (builder) autosave persists graph changes
+          // Upstream autosave persists graph changes; keep this component passive
           onConfigChange?.(next as Record<string, unknown>);
         }}
       />

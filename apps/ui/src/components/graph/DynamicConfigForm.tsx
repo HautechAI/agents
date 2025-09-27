@@ -61,7 +61,7 @@ export default function DynamicConfigForm({
         hideSubmitButton
         onChange={(next) => {
           setFormData(next as Record<string, unknown>);
-          // Upstream (builder) autosave captures node data changes
+          // Upstream autosave persists changes; keep this component passive
           onConfigChange?.(next as Record<string, unknown>);
         }}
       />
