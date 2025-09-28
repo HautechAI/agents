@@ -47,6 +47,10 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         ),
       {
         sourcePorts: { $self: { kind: 'instance' } },
+        targetPorts: {
+          // Allow wiring memory connector into CallModel at runtime
+          callModel: { kind: 'method', create: 'setMemoryConnector' },
+        },
       },
       {
         title: 'Workspace',
