@@ -17,8 +17,8 @@ import { SlackTriggerStaticConfigSchema } from './triggers/slack.trigger';
 import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
 import { MongoService } from './services/mongo.service';
-import { MemoryNode } from './lgnodes/memory.lgnode';
-import { MemoryConnectorNode } from './lgnodes/memory.connector.lgnode';
+import { MemoryNode } from './lgnodes/memory.node';
+import { MemoryConnectorNode } from './lgnodes/memory.connector.node';
 import { buildMemoryToolAdapters } from './tools/memory.adapters';
 
 export interface TemplateRegistryDeps {

@@ -6,3 +6,4 @@ agent_instances
 # lock files (pnpm only)
 package-lock.json
 **/package-lock.json
+*/package-lock.json
