@@ -36,14 +36,14 @@ export class SlackTrigger extends BaseTrigger {
       try {
         if (!event.text) return;
         const thread = `${event.user}_${event.thread_ts ?? event.ts}`;
+        const ch = (event as Record<string, unknown>).channel_type;
         const msg: TriggerHumanMessage = {
           kind: 'human',
           content: event.text,
           info: {
             user: event.user,
             channel: event.channel,
-            // access optional channel_type without unsafe casts
-            channel_type: typeof (event as Record<string, unknown>).channel_type === 'string' ? (event as any).channel_type : undefined,
+            channel_type: typeof ch === 'string' ? ch : undefined,
             thread_ts: event.thread_ts ?? event.ts,
           },
         };

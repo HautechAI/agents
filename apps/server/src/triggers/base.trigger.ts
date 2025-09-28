@@ -11,11 +11,8 @@ export type TriggerSystemMessage = TriggerMessage & { kind: 'system' };
 
 // Small centralized type guards for trigger messages
 export function isSystemTrigger(msg: TriggerMessage): msg is TriggerSystemMessage {
-  // Use loose check on discriminator without casting
+  // Check discriminator without leaking details of other variants
   return (msg as Partial<TriggerSystemMessage>).kind === 'system';
-}
-export function isHumanTrigger(msg: TriggerMessage): msg is TriggerHumanMessage {
-  return (msg as Partial<TriggerHumanMessage>).kind === 'human' || (msg as any).kind === undefined;
 }
 
 export interface TriggerListener {
