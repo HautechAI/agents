@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RemindMeTool } from '../tools/remind_me.tool';
 import { LoggerService } from '../services/logger.service';
 
+// Minimal typed stub for the caller agent used by the tool
+interface CallerAgentStub {
+  invoke(thread: string, messages: Array<{ kind: 'system' | 'human'; content: string; info: Record<string, unknown> }>): Promise<unknown>;
+}
+
 // Helper to extract callable tool
 function getToolInstance() {
   const logger = new LoggerService();
@@ -14,6 +19,7 @@ describe('RemindMeTool', () => {
     vi.useFakeTimers();
   });
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -22,12 +28,12 @@ describe('RemindMeTool', () => {
     const tool = getToolInstance();
 
     const invokeSpy = vi.fn(async () => undefined);
-    const caller_agent = { invoke: invokeSpy } as any;
+    const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const thread_id = 't-123';
 
     const res = await tool.invoke(
       { delayMs: 1000, note: 'Ping' },
-      { configurable: { thread_id, caller_agent } } as any,
+      { configurable: { thread_id, caller_agent } },
     );
 
     // Immediate ack
@@ -46,17 +52,36 @@ describe('RemindMeTool', () => {
     ]);
   });
 
+  it('schedules immediate reminder when delayMs=0', async () => {
+    const tool = getToolInstance();
+    const invokeSpy = vi.fn(async () => undefined);
+    const caller_agent: CallerAgentStub = { invoke: invokeSpy };
+    const config = { configurable: { thread_id: 't-0', caller_agent } };
+
+    const res = await tool.invoke({ delayMs: 0, note: 'Now' }, config);
+    const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+    expect(parsed.status).toBe('scheduled');
+    expect(parsed.etaMs).toBe(0);
+
+    // Run pending timers immediately
+    await vi.runOnlyPendingTimersAsync();
+    expect(invokeSpy).toHaveBeenCalledTimes(1);
+    expect(invokeSpy.mock.calls[0][1]).toEqual([
+      { kind: 'system', content: 'Now', info: { reason: 'reminded' } },
+    ]);
+  });
+
   it('returns error when thread_id missing', async () => {
     const tool = getToolInstance();
-    const caller_agent = { invoke: vi.fn() } as any;
-    const res = await tool.invoke({ delayMs: 1, note: 'x' }, { configurable: { caller_agent } } as any);
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+    const res = await tool.invoke({ delayMs: 1, note: 'x' }, { configurable: { caller_agent } });
     expect(typeof res).toBe('string');
     expect(String(res)).toContain('missing thread_id');
   });
 
   it('returns error when caller_agent missing', async () => {
     const tool = getToolInstance();
-    const res = await tool.invoke({ delayMs: 1, note: 'x' }, { configurable: { thread_id: 't' } } as any);
+    const res = await tool.invoke({ delayMs: 1, note: 'x' }, { configurable: { thread_id: 't' } });
     expect(typeof res).toBe('string');
     expect(String(res)).toContain('missing caller_agent');
   });

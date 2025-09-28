@@ -42,7 +42,8 @@ export class SlackTrigger extends BaseTrigger {
           info: {
             user: event.user,
             channel: event.channel,
-            channel_type: (event as any).channel_type,
+            // access optional channel_type without unsafe casts
+            channel_type: typeof (event as Record<string, unknown>).channel_type === 'string' ? (event as any).channel_type : undefined,
             thread_ts: event.thread_ts ?? event.ts,
           },
         };

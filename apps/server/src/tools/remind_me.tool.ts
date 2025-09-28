@@ -5,7 +5,13 @@ import { LoggerService } from '../services/logger.service';
 
 const remindMeSchema = z.object({ delayMs: z.number().int().min(0), note: z.string().min(1) });
 
+// Minimal interface for the caller agent used by this tool
+interface CallerAgentLike {
+  invoke(thread: string, messages: Array<{ kind: 'system' | 'human'; content: string; info: Record<string, unknown> }>): Promise<unknown>;
+}
+
 export class RemindMeTool extends BaseTool {
+  private lastTimeout?: ReturnType<typeof setTimeout>; // useful for tests/cleanup
   constructor(private logger: LoggerService) {
     super();
   }
@@ -14,8 +20,12 @@ export class RemindMeTool extends BaseTool {
     return tool(
       async (raw, config) => {
         const { delayMs, note } = remindMeSchema.parse(raw);
-        const threadId = (config?.configurable as any)?.thread_id as string | undefined;
-        const callerAgent = (config?.configurable as any)?.caller_agent as any | undefined;
+        // Guarded extraction of configurable context
+        const cfg = (config && typeof config === 'object' ? (config as Record<string, unknown>).configurable : undefined) as
+          | Record<string, unknown>
+          | undefined;
+        const threadId = cfg && typeof cfg.thread_id === 'string' ? (cfg.thread_id as string) : undefined;
+        const callerAgent = cfg && typeof cfg.caller_agent === 'object' && cfg.caller_agent !== null ? (cfg.caller_agent as CallerAgentLike) : undefined;
 
         if (!threadId) {
           const msg = 'RemindMeTool error: missing thread_id in runtime config.';
@@ -29,13 +39,14 @@ export class RemindMeTool extends BaseTool {
         }
 
         // Schedule async reminder; do not await or reject the original call.
-        setTimeout(async () => {
+        this.lastTimeout = setTimeout(async () => {
           try {
             await callerAgent.invoke(threadId, [
               { kind: 'system', content: note, info: { reason: 'reminded' } },
             ]);
-          } catch (e: any) {
-            this.logger.error('RemindMeTool scheduled invoke error', e);
+          } catch (e) {
+            const err = e instanceof Error ? e : new Error(typeof e === 'string' ? e : 'Unknown error');
+            this.logger.error('RemindMeTool scheduled invoke error', err);
           }
         }, delayMs);
 
