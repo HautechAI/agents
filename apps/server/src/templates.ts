@@ -151,10 +151,12 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         sourcePorts: {
           tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
           mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
-          // Attach/detach memory connector explicitly
+        },
+        targetPorts: {
+          $self: { kind: 'instance' },
+          // Attach/detach memory connector via explicit methods on the agent
           memory: { kind: 'method', create: 'setMemoryConnector', destroy: 'clearMemoryConnector' },
         },
-        targetPorts: { $self: { kind: 'instance' } },
       },
       {
         title: 'Agent',
@@ -187,10 +189,11 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     .register(
       'memoryNode',
       (ctx) => {
+        if (!mongoService) throw new Error('MongoService is required for memoryNode');
         const db = mongoService.getDb();
         const memNode = new MemoryNode(db, ctx.nodeId, { scope: 'global' });
         return {
-          // Return connector per requested config
+          // Light factory: delegate construction to MemoryConnectorNode and adapters
           createConnector(config?: { placement?: 'after_system' | 'last_message'; content?: 'full' | 'tree'; maxChars?: number }) {
             const factory = (opts: { threadId?: string }) => memNode.getMemoryService({ threadId: opts.threadId });
             return new MemoryConnectorNode(factory, {
@@ -199,12 +202,11 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
               maxChars: config?.maxChars ?? 4000,
             });
           },
-          // Memory tool adapters for agent
           get memoryTools() {
             const factory = (opts: { threadId?: string }) => memNode.getMemoryService({ threadId: opts.threadId });
             return buildMemoryToolAdapters(factory);
           },
-          setConfig(cfg: Record<string, unknown>) { memNode.setConfig(cfg as any); },
+          setConfig(cfg: Record<string, unknown>) { memNode.setConfig(cfg as unknown as Partial<{ scope: any } >); },
         };
       },
       {
