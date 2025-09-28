@@ -45,17 +45,40 @@ export class MemoryConnectorNode {
   }
 
   async renderMessage(opts: { threadId?: string; path?: string }): Promise<SystemMessage | null> {
-    const service = this.serviceFactory({ threadId: opts.threadId });
+    const path = opts.path || '/';
     const max = this.config.maxChars ?? 4000;
-    let text: string;
+
+    // Primary service scoped to thread if provided
+    const service = this.serviceFactory({ threadId: opts.threadId });
+
+    let text: string = '';
     if (this.config.content === 'full') {
       text = await this.buildFull(service);
+      if (!text || text.length === 0) {
+        // Fallback to global scope when per-thread memory is empty
+        if (opts.threadId) {
+          const globalSvc = this.serviceFactory({});
+          const fallback = await this.buildFull(globalSvc);
+          text = fallback;
+        }
+      }
       if (text.length > max) {
-        text = await this.buildTree(service, opts.path || '/');
+        text = await this.buildTree(service, path);
+        if (text === `${path}\n` && opts.threadId) {
+          // Per-thread tree empty (no children); fallback to global tree
+          const globalSvc = this.serviceFactory({});
+          text = await this.buildTree(globalSvc, path);
+        }
       }
     } else {
-      text = await this.buildTree(service, opts.path || '/');
+      text = await this.buildTree(service, path);
+      if (text === `${path}\n` && opts.threadId) {
+        // Per-thread tree empty (no children); fallback to global tree
+        const globalSvc = this.serviceFactory({});
+        text = await this.buildTree(globalSvc, path);
+      }
     }
+
     if (!text || text.trim().length === 0) return null;
     return this.toSystemMessage(`Memory\n${text}`);
   }
