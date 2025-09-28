@@ -14,6 +14,10 @@ export class MemoryConnectorNode {
     this.config = { ...this.config, ...config };
   }
 
+  getPlacement(): MemoryConnectorConfig['placement'] {
+    return this.config.placement;
+  }
+
   private toSystemMessage(text: string | null) {
     return text ? new SystemMessage(text) : null;
   }

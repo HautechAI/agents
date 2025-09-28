@@ -7,6 +7,7 @@ import { task, withAgent, withLLMCall, withTask, withTool } from '@traceloop/nod
 
 export class CallModelNode extends BaseNode {
   private systemPrompt: string = '';
+  private memoryConnector?: { renderMessage: (opts: { threadId?: string; path?: string }) => Promise<SystemMessage | null>; getPlacement: () => 'after_system' | 'last_message' };
 
   constructor(
     private tools: BaseTool[],
@@ -29,6 +30,11 @@ export class CallModelNode extends BaseNode {
     this.systemPrompt = systemPrompt;
   }
 
+  // Inject/clear memory connector at runtime via ports wiring
+  setMemoryConnector(connector?: { renderMessage: (opts: { threadId?: string; path?: string }) => Promise<SystemMessage | null>; getPlacement: () => 'after_system' | 'last_message' }) {
+    this.memoryConnector = connector;
+  }
+
   async action(state: { messages: BaseMessage[]; summary?: string }, config: any): Promise<NodeOutput> {
     const tools = this.tools.map((tool) => tool.init(config));
 
@@ -42,6 +48,20 @@ export class CallModelNode extends BaseNode {
       ...(state.summary ? [new SystemMessage(`Summary of the previous conversation:\n${state.summary}`)] : []),
       ...(state.messages as BaseMessage[]),
     ];
+
+    // Optionally inject memory as a SystemMessage per connector placement
+    if (this.memoryConnector) {
+      const threadId = config?.configurable?.thread_id;
+      const memMsg = await this.memoryConnector.renderMessage({ threadId });
+      if (memMsg) {
+        if (this.memoryConnector.getPlacement() === 'after_system') {
+          // insert after the first SystemMessage (systemPrompt)
+          finalMessages.splice(1, 0, memMsg);
+        } else {
+          finalMessages.push(memMsg);
+        }
+      }
+    }
 
     const result = await withTask({ name: 'llm', inputParameters: [finalMessages.slice(-10)] }, async () => {
       return await boundLLM.invoke(finalMessages, {

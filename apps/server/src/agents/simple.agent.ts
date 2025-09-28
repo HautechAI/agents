@@ -199,6 +199,22 @@ export class SimpleAgent extends BaseAgent {
     return this;
   }
 
+  // Inject/clear a memory connector into the underlying CallModel
+  setMemoryConnector(mem: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    // Accept either a connector-like object or a memory node exposing getConnector/createConnector
+    let connector = mem;
+    if (mem && typeof mem.getConnector === 'function') {
+      connector = mem.getConnector?.();
+      if (!connector && typeof mem.createConnector === 'function') connector = mem.createConnector();
+    }
+    this.callModelNode.setMemoryConnector(connector);
+    this.loggerService.info('SimpleAgent memory connector updated');
+  }
+  clearMemoryConnector() {
+    this.callModelNode.setMemoryConnector(undefined as any);
+    this.loggerService.info('SimpleAgent memory connector cleared');
+  }
+
   addTool(tool: BaseTool) {
     // using any to avoid circular import issues if BaseTool is extended differently later
     this.callModelNode.addTool(tool);

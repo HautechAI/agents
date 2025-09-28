@@ -47,6 +47,10 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         ),
       {
         sourcePorts: { $self: { kind: 'instance' } },
+        targetPorts: {
+          // Allow wiring memory connector into CallModel at runtime
+          callModel: { kind: 'method', create: 'setMemoryConnector' },
+        },
       },
       {
         title: 'Workspace',
@@ -189,26 +193,29 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         if (!mongoService) throw new Error('MongoService not provided for memoryNode');
         const db = mongoService.getDb();
         const memNode = new MemoryNode(db, ctx.nodeId, { scope: 'global' });
-        return {
-          // expose build tool set as an instance; agent will attach via sourcePorts.memory
+        const instance = {
+          // Adapter tools set for SimpleAgent consumption
           get memoryTools() {
             const factory = (opts: { threadId?: string }) => memNode.getMemoryService({ threadId: opts.threadId });
-            // Return BaseTool adapters consumable by SimpleAgent
             return buildMemoryToolAdapters(factory);
           },
-          // Provide connector factory for CallModel when integrated later
+          // Provide connector factory and cached current connector for wiring
+          _connector: undefined as undefined | MemoryConnectorNode,
           createConnector(config?: { placement?: 'after_system' | 'last_message'; content?: 'full' | 'tree'; maxChars?: number }) {
             const factory = (opts: { threadId?: string }) => memNode.getMemoryService({ threadId: opts.threadId });
-            return new MemoryConnectorNode(factory, {
+            instance._connector = new MemoryConnectorNode(factory, {
               placement: config?.placement || 'after_system',
               content: config?.content || 'tree',
               maxChars: config?.maxChars ?? 4000,
             });
+            return instance._connector;
           },
+          getConnector() { return instance._connector; },
           setConfig(cfg: any) {
             memNode.setConfig(cfg);
           },
         } as any;
+        return instance;
       },
       {
         sourcePorts: { $self: { kind: 'instance' } },
