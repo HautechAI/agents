@@ -122,7 +122,7 @@ export class SimpleAgent extends BaseAgent {
     });
   }
 
-  init(config: RunnableConfig = { recursionLimit: 250 }) {
+  init(config: RunnableConfig = { recursionLimit: 2500 }) {
     if (!this.agentId) throw new Error('agentId is required to initialize SimpleAgent');
 
     this._config = config;
