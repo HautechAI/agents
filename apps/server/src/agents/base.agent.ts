@@ -1,4 +1,4 @@
-import { BaseMessage, HumanMessage } from '@langchain/core/messages';
+import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, AnnotationRoot, CompiledStateGraph } from '@langchain/langgraph';
 import { LoggerService } from '../services/logger.service';
@@ -67,7 +67,15 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable {
       this.logger.info(`New trigger event in thread ${thread} with messages: ${JSON.stringify(batch)}`);
       const response = (await this.graph.invoke(
         {
-          messages: { method: 'append', items: batch.map((msg) => new HumanMessage(JSON.stringify(msg))) },
+          messages: {
+            method: 'append',
+            items: batch.map((msg) =>
+              // Serialize entire message to JSON as payload; treat missing kind as 'human'
+              msg && (msg as any).kind === 'system'
+                ? new SystemMessage(JSON.stringify(msg))
+                : new HumanMessage(JSON.stringify(msg)),
+            ),
+          },
         },
         { ...this.config, configurable: { ...this.config?.configurable, thread_id: thread, caller_agent: this } },
       )) as { messages: BaseMessage[] };
