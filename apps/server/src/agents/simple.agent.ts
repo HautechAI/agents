@@ -205,10 +205,11 @@ export class SimpleAgent extends BaseAgent {
     let connector: MemoryConnector | undefined = undefined;
     if (mem && typeof (mem as MemoryConnector).renderMessage === 'function') {
       connector = mem as MemoryConnector;
-    } else if (mem && typeof (mem as any).getConnector === 'function') {
-      connector = (mem as { getConnector: () => MemoryConnector | undefined }).getConnector?.();
-      if (!connector && typeof (mem as any).createConnector === 'function') {
-        connector = (mem as { createConnector: () => MemoryConnector }).createConnector();
+    } else if (mem && 'getConnector' in mem && typeof mem.getConnector === 'function') {
+      const prov = mem;
+      connector = prov.getConnector?.();
+      if (!connector && 'createConnector' in prov && typeof prov.createConnector === 'function') {
+        connector = prov.createConnector();
       }
     }
     this.callModelNode.setMemoryConnector(connector);
