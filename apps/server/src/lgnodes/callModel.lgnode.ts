@@ -65,7 +65,7 @@ export class CallModelNode extends BaseNode {
 
     const result = await withTask({ name: 'llm', inputParameters: [finalMessages.slice(-10)] }, async () => {
       return await boundLLM.invoke(finalMessages, {
-        recursionLimit: 250,
+        recursionLimit: 2500,
       });
     });
 
