@@ -24,3 +24,12 @@ Socket updates
 - Event: node_status
 - Payload: { nodeId, isPaused?, provisionStatus?, dynamicConfigReady?, updatedAt? }
 - The UI subscribes per-node and reconciles socket events into React Query cache.
+
+Trigger events (socket-only)
+- For trigger nodes, UI uses Socket.io messages to stream events.
+- Messages:
+  - trigger_init { nodeId, threadId? } → server replies with trigger_initial { nodeId, items }
+  - trigger_update { nodeId, threadId? } → server replies with trigger_initial
+  - trigger_close { nodeId }
+  - trigger_event { nodeId, event }
+- No HTTP endpoints are exposed for trigger events.

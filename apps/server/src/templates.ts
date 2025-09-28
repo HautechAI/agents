@@ -17,16 +17,19 @@ import { SlackTriggerStaticConfigSchema } from './triggers/slack.trigger';
 import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
 
+import { TriggerEventsService } from './services/trigger-events.service';
+
 export interface TemplateRegistryDeps {
   logger: LoggerService;
   containerService: ContainerService;
   configService: ConfigService;
   slackService: SlackService;
   checkpointerService: CheckpointerService;
+  triggerEvents: TriggerEventsService;
 }
 
 export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
-  const { logger, containerService, configService, slackService, checkpointerService } = deps;
+  const { logger, containerService, configService, slackService, checkpointerService, triggerEvents } = deps;
 
   return new TemplateRegistry()
     .register(
@@ -124,8 +127,10 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     )
     .register(
       'slackTrigger',
-      () => {
+      (ctx) => {
         const trigger = new SlackTrigger(slackService, logger);
+        // Bind trigger events to in-memory store for this node
+        triggerEvents.bind(ctx.nodeId, trigger);
         void trigger.start();
         return trigger;
       },

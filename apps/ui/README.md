@@ -31,6 +31,10 @@ Docs
   - Components: NodeDetailsPanel, StaticConfigForm, DynamicConfigForm
   - Socket.io status updates (no polling)
 
+Trigger Events Panel
+- For trigger nodes (e.g., Slack Trigger), the Right Properties panel shows "Trigger Events".
+- It streams via Socket.io only; supports optional `threadId` filter. No HTTP endpoints involved.
+
 Notes
 - Server emits JSON Schema 7 generated from Zod v4. UI uses RJSF with ajv8.
 - Actions are optimistic; authoritative socket events reconcile cache.

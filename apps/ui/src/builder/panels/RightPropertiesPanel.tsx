@@ -11,6 +11,8 @@ import { NodeActionButtons } from '@/components/graph/NodeActionButtons';
 import { useNodeAction, useNodeStatus } from '@/lib/graph/hooks';
 import { canPause, canProvision } from '@/lib/graph/capabilities';
 
+import { TriggerEventsPanel } from '@/components/stream/TriggerEventsPanel';
+
 interface BuilderPanelNodeData {
   template: string;
   name?: string;
@@ -78,6 +80,8 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
     );
   }
 
+  const isTrigger = runtimeTemplate?.kind === 'trigger';
+
   return (
     <div className="space-y-4">
       {/* Runtime status & actions */}
@@ -85,6 +89,11 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
         <div className="space-y-2">
           <div className="text-[10px] uppercase text-muted-foreground">Runtime Status</div>
           <RuntimeNodeSection nodeId={node.id} templateName={data.template} />
+        </div>
+      )}
+      {isTrigger && (
+        <div className="space-y-2">
+          <TriggerEventsPanel nodeId={node.id} />
         </div>
       )}
       {runtimeStaticCap && (

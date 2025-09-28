@@ -18,12 +18,15 @@ import { GraphDefinition, PersistedGraphUpsertRequest } from './graph/types.js';
 import { ContainerService } from './services/container.service.js';
 import { SlackService } from './services/slack.service.js';
 
+import { TriggerEventsService } from './services/trigger-events.service.js';
+
 const logger = new LoggerService();
 const config = ConfigService.fromEnv();
 const mongo = new MongoService(config, logger);
 const checkpointer = new CheckpointerService(logger);
 const containerService = new ContainerService(logger);
 const slackService = new SlackService(config, logger);
+const triggerEvents = new TriggerEventsService();
 
 async function bootstrap() {
   await mongo.connect();
@@ -36,6 +39,7 @@ async function bootstrap() {
     configService: config,
     slackService: slackService,
     checkpointerService: checkpointer,
+    triggerEvents,
   });
 
   const runtime = new LiveGraphRuntime(logger, templateRegistry);
@@ -203,7 +207,7 @@ async function bootstrap() {
   logger.info(`HTTP server listening on :${PORT}`);
 
   const io = new Server(fastify.server, { cors: { origin: '*' } });
-  const socketService = new SocketService(io, logger, checkpointer);
+  const socketService = new SocketService(io, logger, checkpointer, triggerEvents);
   socketService.register();
 
   function emitStatus(nodeId: string) {
