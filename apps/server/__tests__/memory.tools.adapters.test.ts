@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { Db } from 'mongodb';
 import { MemoryService, type MemoryDoc } from '../src/services/memory.service';
-import { buildMemoryToolAdapters } from '../src/tools/memory.adapters';
+import { MemoryReadTool } from '../src/tools/memory/memory_read.tool';
+import { MemoryListTool } from '../src/tools/memory/memory_list.tool';
+import { MemoryAppendTool } from '../src/tools/memory/memory_append.tool';
+import { MemoryUpdateTool } from '../src/tools/memory/memory_update.tool';
+import { MemoryDeleteTool } from '../src/tools/memory/memory_delete.tool';
 
 // In-memory fake Db compatible with MemoryService for deterministic tests
 class FakeCollection<T extends MemoryDoc> {
@@ -56,7 +60,14 @@ describe('Memory tool adapters', () => {
   it('wrap LangChain tools and operate on MemoryService via config.thread_id', async () => {
     const db = new FakeDb() as unknown as Db;
     const serviceFactory = (opts: { threadId?: string }) => new MemoryService(db, 'nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId);
-    const adapters = buildMemoryToolAdapters(serviceFactory);
+    const mk = (t: any) => { t.setMemoryFactory(serviceFactory); return t; };
+    const adapters = [
+      mk(new MemoryAppendTool()),
+      mk(new MemoryDeleteTool()),
+      mk(new MemoryListTool()),
+      mk(new MemoryReadTool()),
+      mk(new MemoryUpdateTool()),
+    ];
     const names = adapters.map((a) => a.init().name).sort();
     expect(names).toEqual(['memory_append','memory_delete','memory_list','memory_read','memory_update']);
 
