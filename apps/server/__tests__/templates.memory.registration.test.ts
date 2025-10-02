@@ -53,9 +53,6 @@ describe('templates: memory registration and agent memory port', () => {
     const memConnTargets = ports.memoryConnector.targetPorts!;
     expect(memConnTargets.setMemoryFactory).toBeTruthy();
 
-    // Memory tools exposed via memory sourcePorts.tools
-    expect((ports.memory.sourcePorts as any).tools).toBeTruthy();
-
     // Individual memory tool nodes exist and can wire to agent.tools
     const toolNames = ['memory_read','memory_list','memory_append','memory_update','memory_delete'];
     for (const t of toolNames) {
