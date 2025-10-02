@@ -17,7 +17,8 @@ import { SlackTriggerStaticConfigSchema } from './triggers/slack.trigger';
 import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
 import { MongoService } from './services/mongo.service';
-import { createMemoryRegistry } from './memory/memory.registry';
+import { MemoryNode } from './nodes/memory.node';
+import { MemoryConnectorNode } from './nodes/memory.connector.node';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
@@ -183,19 +184,27 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         staticConfigSchema: toJSONSchema(LocalMcpServerStaticConfigSchema),
       },
     )
-    // Memory node: thin factory; complex logic lives in dedicated classes
+    // Memory: provide MemoryNode and MemoryConnectorNode as explicit templates with ports
     .register(
-      'memoryNode',
+      'memory',
       (ctx) => {
-        if (!mongoService) throw new Error('MongoService is required for memoryNode');
-        return createMemoryRegistry(mongoService, ctx.nodeId);
+        const db = mongoService.getDb();
+        return new MemoryNode(db, ctx.nodeId, { scope: 'global' });
       },
       {
+        // Expose an accessor to obtain a MemoryService scoped to optional threadId
+        sourcePorts: { getService: { kind: 'method', create: 'getMemoryService' } },
+      },
+      { title: 'Memory', kind: 'tool' },
+    )
+    .register(
+      'memoryConnector',
+      () => new MemoryConnectorNode(() => { throw new Error('MemoryConnectorNode: memory factory not set'); }, { placement: 'after_system', content: 'tree', maxChars: 4000 }),
+      {
+        // Accept service factory from Memory node; expose self to Agent
+        targetPorts: { setMemoryFactory: { kind: 'method', create: 'setServiceFactory' } },
         sourcePorts: { $self: { kind: 'instance' } },
       },
-      {
-        title: 'Memory',
-        kind: 'tool',
-      },
+      { title: 'Memory Connector', kind: 'tool' },
     );
 }

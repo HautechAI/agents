@@ -10,6 +10,17 @@ export interface MemoryConnectorConfig {
 export class MemoryConnectorNode {
   constructor(private serviceFactory: (opts: { threadId?: string }) => MemoryService, private config: MemoryConnectorConfig) {}
 
+  // Allow late injection of a MemoryService factory from a MemoryNode instance or a direct function.
+  setServiceFactory(factoryOrNode: ((opts: { threadId?: string }) => MemoryService) | { getMemoryService: (opts: { threadId?: string }) => MemoryService }) {
+    if (typeof factoryOrNode === 'function') {
+      this.serviceFactory = factoryOrNode as (opts: { threadId?: string }) => MemoryService;
+    } else if (factoryOrNode && typeof (factoryOrNode as any).getMemoryService === 'function') {
+      this.serviceFactory = (opts: { threadId?: string }) => (factoryOrNode as any).getMemoryService(opts);
+    } else {
+      throw new Error('Invalid argument to setServiceFactory');
+    }
+  }
+
   setConfig(config: Partial<MemoryConnectorConfig>) {
     this.config = { ...this.config, ...config };
   }

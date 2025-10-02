@@ -7,9 +7,9 @@ import type { SlackService } from '../src/services/slack.service';
 import type { CheckpointerService } from '../src/services/checkpointer.service';
 import type { MongoService } from '../src/services/mongo.service';
 
-// Build a registry and assert memory template and agent memory port wiring are present.
+// Build a registry and assert memory templates and agent memory port wiring are present.
 describe('templates: memory registration and agent memory port', () => {
-  it('registers memoryNode template and exposes SimpleAgent memory target port', () => {
+  it('registers memory and memoryConnector templates and exposes SimpleAgent memory target port', () => {
     const deps = {
       logger: {} as unknown as LoggerService,
       containerService: {} as unknown as ContainerService,
@@ -22,8 +22,19 @@ describe('templates: memory registration and agent memory port', () => {
     const reg = buildTemplateRegistry(deps);
     const ports = reg.getPortsMap();
 
-    expect(Object.keys(ports)).toContain('memoryNode');
+    expect(Object.keys(ports)).toContain('memory');
+    expect(Object.keys(ports)).toContain('memoryConnector');
     expect(ports.simpleAgent).toBeTruthy();
+    // memory node exposes getService port; memoryConnector exposes $self
+    const memorySources = ports.memory.sourcePorts!;
+    expect(memorySources.getService).toBeTruthy();
+
+    const memConnSources = ports.memoryConnector.sourcePorts!;
+    expect(memConnSources.$self).toBeTruthy();
+
+    const memConnTargets = ports.memoryConnector.targetPorts!;
+    expect(memConnTargets.setMemoryFactory).toBeTruthy();
+
     const agentTargets = ports.simpleAgent.targetPorts!;
     expect(agentTargets.memory).toBeTruthy();
     // Method mapping to attach/detach memory connector
