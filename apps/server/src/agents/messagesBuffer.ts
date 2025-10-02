@@ -26,7 +26,8 @@ export class MessagesBuffer {
   }
 
   setDebounceMs(ms: number) {
-    this.debounceMs = Math.max(0, ms | 0);
+    // Use Math.trunc to avoid bitwise coercion pitfalls and preserve large values
+    this.debounceMs = Math.max(0, Math.trunc(ms));
   }
 
   enqueue(thread: string, msgs: TriggerMessage[] | TriggerMessage, now = Date.now()): void {
@@ -50,10 +51,10 @@ export class MessagesBuffer {
     }
   }
 
-  nextReadyAt(thread: string): number | undefined {
+  nextReadyAt(thread: string, now = Date.now()): number | undefined {
     const s = this.threads.get(thread);
     if (!s || s.queue.length === 0) return undefined;
-    if (this.debounceMs === 0) return Date.now();
+    if (this.debounceMs === 0) return now;
     return s.lastEnqueueAt + this.debounceMs;
   }
 

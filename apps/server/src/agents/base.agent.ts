@@ -12,7 +12,12 @@ import { MessagesBuffer, ProcessBuffer } from './messagesBuffer';
 
 export type WhenBusyMode = 'wait' | 'injectAfterTools';
 
-export abstract class BaseAgent implements TriggerListener, StaticConfigurable {
+// Minimal interface exposed to nodes to request agent-controlled injections.
+export interface InjectionProvider {
+  getInjectedMessages(thread: string): BaseMessage[];
+}
+
+export abstract class BaseAgent implements TriggerListener, StaticConfigurable, InjectionProvider {
   protected _graph: CompiledStateGraph<unknown, unknown> | undefined;
   protected _config: RunnableConfig | undefined;
   // Optional static config injected by the runtime; typed loosely on purpose.
@@ -88,13 +93,20 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable {
    * Allow subclasses to apply runtime scheduling config conveniently.
    */
   protected applyRuntimeConfig(cfg: Record<string, unknown>): void {
-    const debounce = (cfg as any).debounceMs;
-    const when = (cfg as any).whenBusy as WhenBusyMode | undefined;
-    const proc = (cfg as any).processBuffer as 'allTogether' | 'oneByOne' | undefined;
-    if (typeof debounce === 'number' && debounce >= 0) this.buffer.setDebounceMs(debounce);
-    if (when === 'wait' || when === 'injectAfterTools') this.whenBusy = when;
-    if (proc === 'allTogether') this.processBuffer = ProcessBuffer.AllTogether;
-    if (proc === 'oneByOne') this.processBuffer = ProcessBuffer.OneByOne;
+    const SchedulingCfg = z
+      .object({
+        debounceMs: z.number().int().min(0).optional(),
+        whenBusy: z.enum(['wait', 'injectAfterTools']).optional(),
+        processBuffer: z.enum(['allTogether', 'oneByOne']).optional(),
+      })
+      .passthrough();
+    const parsed = SchedulingCfg.safeParse(cfg);
+    if (!parsed.success) return;
+    const c = parsed.data;
+    if (typeof c.debounceMs === 'number') this.buffer.setDebounceMs(c.debounceMs);
+    if (c.whenBusy) this.whenBusy = c.whenBusy;
+    if (c.processBuffer === 'allTogether') this.processBuffer = ProcessBuffer.AllTogether;
+    if (c.processBuffer === 'oneByOne') this.processBuffer = ProcessBuffer.OneByOne;
   }
 
   async invoke(thread: string, messages: TriggerMessage[] | TriggerMessage): Promise<BaseMessage | undefined> {
@@ -124,40 +136,30 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable {
     return s;
   }
 
+  private scheduleOrRun(thread: string) {
+  const s = this.ensureThread(thread);
+  if (s.running) return;
+  const drained = this.buffer.tryDrain(thread, this.processBuffer);
+  if (!drained.length) {
+  const at = this.buffer.nextReadyAt(thread);
+  if (at === undefined) return;
+  const delay = Math.max(0, at - Date.now());
+  if (s.timer) clearTimeout(s.timer);
+  s.timer = setTimeout(() => {
+  s.timer = undefined;
+  this.scheduleOrRun(thread);
+  }, delay);
+  return;
+  }
+  this.startRun(thread, drained);
+  }
+
   private maybeStart(thread: string) {
-    const s = this.ensureThread(thread);
-    if (s.running) return;
-    const drained = this.buffer.tryDrain(thread, this.processBuffer);
-    if (!drained.length) {
-      const at = this.buffer.nextReadyAt(thread);
-      if (at === undefined) return;
-      const delay = Math.max(0, at - Date.now());
-      if (s.timer) clearTimeout(s.timer);
-      s.timer = setTimeout(() => {
-        s.timer = undefined;
-        this.startNext(thread);
-      }, delay);
-      return;
-    }
-    this.startRun(thread, drained);
+  this.scheduleOrRun(thread);
   }
 
   private startNext(thread: string) {
-    const s = this.ensureThread(thread);
-    if (s.running) return;
-    const drained = this.buffer.tryDrain(thread, this.processBuffer);
-    if (!drained.length) {
-      const at = this.buffer.nextReadyAt(thread);
-      if (at === undefined) return;
-      const delay = Math.max(0, at - Date.now());
-      if (s.timer) clearTimeout(s.timer);
-      s.timer = setTimeout(() => {
-        s.timer = undefined;
-        this.startNext(thread);
-      }, delay);
-      return;
-    }
-    this.startRun(thread, drained);
+  this.scheduleOrRun(thread);
   }
 
   private async startRun(thread: string, batch: TriggerMessage[]): Promise<void> {
@@ -185,25 +187,35 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable {
       {
         messages: { method: 'append', items: batch.map((msg) => new HumanMessage(JSON.stringify(msg))) },
       },
-      { ...this.config, configurable: { ...this.config?.configurable, thread_id: thread, caller_agent: this } },
+      { ...this.config, configurable: { ...this.config?.configurable, thread_id: thread, caller_agent: this as InjectionProvider } },
     )) as { messages: BaseMessage[] };
     return response.messages?.[response.messages.length - 1];
   }
 
-  // Called by Tools node wrapper to try injection when whenBusy === 'injectAfterTools'
-  protected maybeDrainForInjection(thread: string): BaseMessage[] | null {
-    if (this.whenBusy !== 'injectAfterTools') return null;
+  // Public injection surface: nodes may ask for injected messages to include in the same turn.
+  getInjectedMessages(thread: string): BaseMessage[] {
+    if (this.whenBusy !== 'injectAfterTools') return [];
     const drained = this.buffer.tryDrain(thread, this.processBuffer);
-    if (!drained.length) return null;
+    if (!drained.length) return [];
     return drained.map((m) => new HumanMessage(JSON.stringify(m)));
   }
 
   // New universal teardown hook for graph runtime
   async destroy(): Promise<void> {
-    // default no-op; subclasses can override
+    // Resolve any pending awaiters to avoid hangs on teardown
+    for (const [, s] of this.threads) {
+      if (s.timer) clearTimeout(s.timer);
+      const awaiters = s.awaiters.slice();
+      s.awaiters.length = 0;
+      for (const res of awaiters) {
+        try {
+          res(undefined);
+        } catch {
+          // ignore
+        }
+      }
+    }
     this.buffer.destroy();
-    // clear timers
-    for (const s of this.threads.values()) if (s.timer) clearTimeout(s.timer);
     this.threads.clear();
   }
 

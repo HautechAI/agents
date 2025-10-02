@@ -4,6 +4,7 @@ import { BaseTool } from '../tools/base.tool';
 import { BaseNode } from './base.node';
 import { NodeOutput } from '../types';
 import { withTask } from '@traceloop/node-server-sdk';
+import type { InjectionProvider } from '../agents/base.agent';
 
 export class CallModelNode extends BaseNode {
   private systemPrompt: string = '';
@@ -29,7 +30,10 @@ export class CallModelNode extends BaseNode {
     this.systemPrompt = systemPrompt;
   }
 
-  async action(state: { messages: BaseMessage[]; summary?: string }, config: any): Promise<NodeOutput> {
+  async action(
+    state: { messages: BaseMessage[]; summary?: string },
+    config: { configurable?: { thread_id?: string; caller_agent?: InjectionProvider } },
+  ): Promise<NodeOutput> {
     const tools = this.tools.map((tool) => tool.init(config));
 
     const boundLLM = this.llm.withConfig({
@@ -37,14 +41,14 @@ export class CallModelNode extends BaseNode {
       tool_choice: 'auto',
     });
 
-    // Agent-controlled injection: after tools complete, allow the caller agent to inject buffered messages
+    // Agent-controlled injection: ask provider for any messages to include in this turn (type-safe)
     const injected: BaseMessage[] = (() => {
-      const agent: any = (config as any)?.configurable?.caller_agent;
-      const threadId = (config as any)?.configurable?.thread_id;
-      if (agent && typeof agent['maybeDrainForInjection'] === 'function' && threadId) {
+      const agent = config?.configurable?.caller_agent;
+      const threadId = config?.configurable?.thread_id;
+      if (agent && threadId && typeof agent.getInjectedMessages === 'function') {
         try {
-          const extra = agent['maybeDrainForInjection'](threadId);
-          return Array.isArray(extra) ? (extra as BaseMessage[]) : [];
+          const extra = agent.getInjectedMessages(threadId);
+          return Array.isArray(extra) ? extra : [];
         } catch {
           return [];
         }
