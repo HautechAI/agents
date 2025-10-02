@@ -173,31 +173,31 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     .register(
       'memory_read',
       () => new MemoryReadTool(),
-      { targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryFactory' } } },
+      { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
       { title: 'Memory Read', kind: 'tool', capabilities: { provisionable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(MemoryReadToolStaticConfigSchema) }
     )
     .register(
       'memory_list',
       () => new MemoryListTool(),
-      { targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryFactory' } } },
+      { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
       { title: 'Memory List', kind: 'tool', capabilities: { provisionable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(MemoryListToolStaticConfigSchema) }
     )
     .register(
       'memory_append',
       () => new MemoryAppendTool(),
-      { targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryFactory' } } },
+      { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
       { title: 'Memory Append', kind: 'tool', capabilities: { provisionable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(MemoryAppendToolStaticConfigSchema) }
     )
     .register(
       'memory_update',
       () => new MemoryUpdateTool(),
-      { targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryFactory' } } },
+      { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
       { title: 'Memory Update', kind: 'tool', capabilities: { provisionable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(MemoryUpdateToolStaticConfigSchema) }
     )
     .register(
       'memory_delete',
       () => new MemoryDeleteTool(),
-      { targetPorts: { $self: { kind: 'instance' }, memory: { kind: 'method', create: 'setMemoryFactory' } } },
+      { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
       { title: 'Memory Delete', kind: 'tool', capabilities: { provisionable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(MemoryDeleteToolStaticConfigSchema) }
     )
     .register(
@@ -228,8 +228,8 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         return new MemoryNode(db, ctx.nodeId, { scope: 'global' });
       },
       {
-        // Expose an accessor to obtain a MemoryService scoped to optional threadId
-        sourcePorts: { getService: { kind: 'method', create: 'getMemoryService' } },
+        // Expose $self for instance wiring and a factory accessor for optional use
+        sourcePorts: { $self: { kind: 'instance' }, getService: { kind: 'method', create: 'getMemoryService' } },
       },
       {
         title: 'Memory',
@@ -242,8 +242,8 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       'memoryConnector',
       () => new MemoryConnectorNode(() => { throw new Error('MemoryConnectorNode: memory factory not set'); }, { placement: 'after_system', content: 'tree', maxChars: 4000 }),
       {
-        // Accept service factory from Memory node; expose self to Agent
-        targetPorts: { setMemoryFactory: { kind: 'method', create: 'setServiceFactory' } },
+        // Accept memory source (node or factory) from Memory node; expose self to Agent
+        targetPorts: { $memory: { kind: 'method', create: 'setMemorySource' } },
         sourcePorts: { $self: { kind: 'instance' } },
       },
       {

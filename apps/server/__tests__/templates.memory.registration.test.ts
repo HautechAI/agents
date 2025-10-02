@@ -43,15 +43,16 @@ describe('templates: memory registration and agent memory port', () => {
     expect(memConnSchema?.capabilities?.staticConfigurable).toBe(true);
     expect(memSchema?.capabilities?.dynamicConfigurable).toBeUndefined();
     expect(memConnSchema?.capabilities?.dynamicConfigurable).toBeUndefined();
-    // memory node exposes getService port; memoryConnector exposes $self
+    // memory node exposes $self and getService port; memoryConnector exposes $self and $memory target
     const memorySources = ports.memory.sourcePorts!;
+    expect(memorySources.$self).toBeTruthy();
     expect(memorySources.getService).toBeTruthy();
 
     const memConnSources = ports.memoryConnector.sourcePorts!;
     expect(memConnSources.$self).toBeTruthy();
 
     const memConnTargets = ports.memoryConnector.targetPorts!;
-    expect(memConnTargets.setMemoryFactory).toBeTruthy();
+    expect(memConnTargets.$memory).toBeTruthy();
 
     // Individual memory tool nodes exist and can wire to agent.tools
     const toolNames = ['memory_read','memory_list','memory_append','memory_update','memory_delete'];
@@ -60,7 +61,7 @@ describe('templates: memory registration and agent memory port', () => {
       expect(entry?.kind).toBe('tool');
       const p = (ports as any)[t];
       expect(p).toBeTruthy();
-      expect(p.targetPorts.memory).toBeTruthy();
+      expect(p.targetPorts.$memory).toBeTruthy();
       expect(p.targetPorts.$self).toBeTruthy();
     }
 

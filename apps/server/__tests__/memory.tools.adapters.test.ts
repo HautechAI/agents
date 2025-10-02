@@ -60,7 +60,7 @@ describe('Memory tool adapters', () => {
   it('wrap LangChain tools and operate on MemoryService via config.thread_id', async () => {
     const db = new FakeDb() as unknown as Db;
     const serviceFactory = (opts: { threadId?: string }) => new MemoryService(db, 'nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId);
-    const mk = (t: any) => { t.setMemoryFactory(serviceFactory); return t; };
+    const mk = (t: any) => { t.setMemorySource(serviceFactory); return t; };
     const adapters = [
       mk(new MemoryAppendTool()),
       mk(new MemoryDeleteTool()),

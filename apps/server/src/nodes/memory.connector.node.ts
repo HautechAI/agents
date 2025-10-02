@@ -21,7 +21,7 @@ export type MemoryConnectorStaticConfig = z.infer<typeof MemoryConnectorStaticCo
 export class MemoryConnectorNode {
   constructor(private serviceFactory: (opts: { threadId?: string }) => MemoryService, private config: MemoryConnectorConfig) {}
 
-  // Allow late injection of a MemoryService factory from a MemoryNode instance or a direct function.
+  // Allow late injection of a MemoryService source from a MemoryNode instance or a direct factory function.
   setServiceFactory(factoryOrNode: ((opts: { threadId?: string }) => MemoryService) | { getMemoryService: (opts: { threadId?: string }) => MemoryService }) {
     if (typeof factoryOrNode === 'function') {
       this.serviceFactory = factoryOrNode as (opts: { threadId?: string }) => MemoryService;
@@ -30,6 +30,11 @@ export class MemoryConnectorNode {
     } else {
       throw new Error('Invalid argument to setServiceFactory');
     }
+  }
+
+  // Preferred alias for UI wiring: accepts either MemoryNode-like or factory function.
+  setMemorySource(source: ((opts: { threadId?: string }) => MemoryService) | { getMemoryService: (opts: { threadId?: string }) => MemoryService }) {
+    this.setServiceFactory(source);
   }
 
   setConfig(config: Partial<MemoryConnectorConfig> & Partial<MemoryConnectorStaticConfig>) {
