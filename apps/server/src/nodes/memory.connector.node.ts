@@ -1,4 +1,5 @@
 import { SystemMessage } from '@langchain/core/messages';
+import { z } from 'zod';
 import { MemoryService } from '../services/memory.service';
 
 export interface MemoryConnectorConfig {
@@ -6,6 +7,16 @@ export interface MemoryConnectorConfig {
   content: 'full' | 'tree';
   maxChars?: number;
 }
+
+// Static config exposed to UI for MemoryConnectorNode
+export const MemoryConnectorStaticConfigSchema = z
+  .object({
+    placement: z.enum(['after_system', 'last_message']).default('after_system'),
+    content: z.enum(['full', 'tree']).default('tree'),
+    maxChars: z.number().int().positive().max(20000).default(4000),
+  })
+  .strict();
+export type MemoryConnectorStaticConfig = z.infer<typeof MemoryConnectorStaticConfigSchema>;
 
 export class MemoryConnectorNode {
   constructor(private serviceFactory: (opts: { threadId?: string }) => MemoryService, private config: MemoryConnectorConfig) {}
@@ -21,8 +32,12 @@ export class MemoryConnectorNode {
     }
   }
 
-  setConfig(config: Partial<MemoryConnectorConfig>) {
-    this.config = { ...this.config, ...config };
+  setConfig(config: Partial<MemoryConnectorConfig> & Partial<MemoryConnectorStaticConfig>) {
+    const next: Partial<MemoryConnectorConfig> = { ...this.config };
+    if (config.placement !== undefined) next.placement = config.placement as any;
+    if (config.content !== undefined) next.content = config.content as any;
+    if (config.maxChars !== undefined) next.maxChars = config.maxChars;
+    this.config = { ...this.config, ...next } as MemoryConnectorConfig;
   }
 
   getPlacement(): MemoryConnectorConfig['placement'] {

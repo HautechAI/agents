@@ -21,10 +21,20 @@ describe('templates: memory registration and agent memory port', () => {
 
     const reg = buildTemplateRegistry(deps);
     const ports = reg.getPortsMap();
+    const schema = reg.toSchema();
 
     expect(Object.keys(ports)).toContain('memory');
     expect(Object.keys(ports)).toContain('memoryConnector');
     expect(ports.simpleAgent).toBeTruthy();
+    // Schema contains static config for memory and memoryConnector
+    const memSchema = schema.find((s) => s.name === 'memory');
+    expect(memSchema?.staticConfigSchema).toBeTruthy();
+    const memConnSchema = schema.find((s) => s.name === 'memoryConnector');
+    expect(memConnSchema?.staticConfigSchema).toBeTruthy();
+
+    // Capabilities include staticConfigurable
+    expect(memSchema?.capabilities?.staticConfigurable).toBe(true);
+    expect(memConnSchema?.capabilities?.staticConfigurable).toBe(true);
     // memory node exposes getService port; memoryConnector exposes $self
     const memorySources = ports.memory.sourcePorts!;
     expect(memorySources.getService).toBeTruthy();

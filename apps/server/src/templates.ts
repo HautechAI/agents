@@ -17,8 +17,8 @@ import { SlackTriggerStaticConfigSchema } from './triggers/slack.trigger';
 import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
 import { MongoService } from './services/mongo.service';
-import { MemoryNode } from './nodes/memory.node';
-import { MemoryConnectorNode } from './nodes/memory.connector.node';
+import { MemoryNode, MemoryNodeStaticConfigSchema } from './nodes/memory.node';
+import { MemoryConnectorNode, MemoryConnectorStaticConfigSchema } from './nodes/memory.connector.node';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
@@ -195,7 +195,12 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         // Expose an accessor to obtain a MemoryService scoped to optional threadId
         sourcePorts: { getService: { kind: 'method', create: 'getMemoryService' } },
       },
-      { title: 'Memory', kind: 'tool' },
+      {
+        title: 'Memory',
+        kind: 'tool',
+        capabilities: { provisionable: true, dynamicConfigurable: true, staticConfigurable: true },
+        staticConfigSchema: toJSONSchema(MemoryNodeStaticConfigSchema),
+      },
     )
     .register(
       'memoryConnector',
@@ -205,6 +210,11 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         targetPorts: { setMemoryFactory: { kind: 'method', create: 'setServiceFactory' } },
         sourcePorts: { $self: { kind: 'instance' } },
       },
-      { title: 'Memory Connector', kind: 'tool' },
+      {
+        title: 'Memory Connector',
+        kind: 'tool',
+        capabilities: { provisionable: true, dynamicConfigurable: true, staticConfigurable: true },
+        staticConfigSchema: toJSONSchema(MemoryConnectorStaticConfigSchema),
+      },
     );
 }
