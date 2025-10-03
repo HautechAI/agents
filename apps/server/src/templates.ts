@@ -78,7 +78,6 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           capabilities: { staticConfigurable: true },
           staticConfigSchema: toJSONSchema(ShellToolStaticConfigSchema),
         },
-<<<<<<< HEAD
       )
       .register(
         'githubCloneRepoTool',
@@ -88,7 +87,6 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             $self: { kind: 'instance' },
             containerProvider: { kind: 'method', create: 'setContainerProvider' },
           },
-=======
       },
       {
         title: 'Github clone',
@@ -112,7 +110,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     )
     .register(
       'finishTool',
-      () => new FinishTool(),
+      () => new FinishTool(logger),
       {
         targetPorts: { $self: { kind: 'instance' } },
       },
@@ -148,96 +146,6 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         staticConfigSchema: toJSONSchema(RemindMeToolStaticConfigSchema),
       },
     )
-    .register(
-      'slackTrigger',
-      () => {
-        const trigger = new SlackTrigger(slackService, logger);
-        void trigger.start();
-        return trigger;
-      },
-      {
-        sourcePorts: { subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' } },
-      },
-      {
-        title: 'Slack trigger',
-        kind: 'trigger',
-        capabilities: { provisionable: true, pausable: true, staticConfigurable: true },
-        staticConfigSchema: toJSONSchema(SlackTriggerStaticConfigSchema),
-      },
-    )
-    .register(
-      'simpleAgent',
-      (ctx) => new SimpleAgent(configService, logger, checkpointerService, ctx.nodeId),
-      {
-        sourcePorts: {
-          tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
-          mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
->>>>>>> refs/rewritten/onto
-        },
-        {
-          title: 'Github clone',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(GithubCloneRepoToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'sendSlackMessageTool',
-        () => new SendSlackMessageTool(slackService, logger),
-        {
-          targetPorts: { $self: { kind: 'instance' } },
-        },
-        {
-          title: 'Send Slack message',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(SendSlackMessageToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'finishTool',
-        () => new FinishTool(logger),
-        {
-          targetPorts: { $self: { kind: 'instance' } },
-        },
-        {
-          title: 'Finish',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(FinishToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'callAgentTool',
-        () => new CallAgentTool(logger),
-        {
-          targetPorts: { $self: { kind: 'instance' } },
-          sourcePorts: { agent: { kind: 'method', create: 'setAgent' } },
-        },
-        {
-          title: 'Call agent',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(CallAgentToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'slackTrigger',
-        () => {
-          const trigger = new SlackTrigger(slackService, logger);
-          void trigger.start();
-          return trigger;
-        },
-        {
-          sourcePorts: { subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' } },
-        },
-        {
-          title: 'Slack trigger',
-          kind: 'trigger',
-          capabilities: { provisionable: true, pausable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(SlackTriggerStaticConfigSchema),
-        },
-      )
       .register(
         'debugTool',
         () => new DebugToolTrigger(logger),
