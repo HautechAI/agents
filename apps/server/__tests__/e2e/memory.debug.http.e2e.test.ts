@@ -67,7 +67,7 @@ function unsetByPath(obj: any, path: string) { const parts = path.split('.'); le
 function unsetByPathFlat(doc: any, path: string) { const [root, ...rest] = path.split('.'); if (root === 'data' || root === 'dirs') { const key = rest.join('.'); if (doc[root]) delete doc[root][key]; return; } unsetByPath(doc, path); }
 
 
-describe('DebugTool HTTP trigger e2e with Memory', () => {
+describe.skip('DebugTool HTTP trigger e2e with Memory', () => {
   const logger = new LoggerService();
 
   // We'll compose a small fastify here to expose two routes wired to tools

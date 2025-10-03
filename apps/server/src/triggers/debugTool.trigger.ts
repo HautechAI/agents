@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { BaseTrigger } from './base.trigger';
 import { LoggerService } from '../services/logger.service';
 import { DynamicStructuredTool } from '@langchain/core/tools';
-import Fastify, { FastifyInstance } from 'fastify';
-import cors from '@fastify/cors';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { DebugHttpService } from '../services/debugHttp.service';
 
 export const DebugToolTriggerStaticConfigSchema = z
   .object({
@@ -14,7 +14,7 @@ export const DebugToolTriggerStaticConfigSchema = z
   .strict();
 
 export class DebugToolTrigger extends BaseTrigger {
-  private server: FastifyInstance | null = null;
+  private unregisterRoute: (() => void) | null = null;
   private tool: DynamicStructuredTool | null = null;
   private cfg: z.infer<typeof DebugToolTriggerStaticConfigSchema> = { path: '/debug/tool', method: 'POST' } as any;
 
@@ -29,42 +29,32 @@ export class DebugToolTrigger extends BaseTrigger {
     if (!parsed.success) throw new Error('Invalid DebugToolTrigger config');
     this.cfg = parsed.data;
     // If running, rebind route
-    if (this.server) await this.rebindRoute();
+    if (this.unregisterRoute) await this.rebindRoute();
   }
 
   protected async doProvision(): Promise<void> {
-    if (this.server) return;
-    const srv = Fastify({ logger: false });
-    await srv.register(cors, { origin: true });
-    this.server = srv;
+    if (this.unregisterRoute) return; // already provisioned
     await this.rebindRoute();
-    const port = await this.listenOnEphemeral();
-    this.logger.info(`[DebugToolTrigger] HTTP listening on :${port} ${this.cfg.method} ${this.cfg.path}`);
   }
   protected async doDeprovision(): Promise<void> {
-    if (!this.server) return;
-    try { await this.server.close(); } catch {}
-    this.server = null;
-  }
-
-  private async listenOnEphemeral(): Promise<number> {
-    if (!this.server) throw new Error('server not initialized');
-    const port = 0; // ephemeral
-    await this.server.listen({ port, host: '127.0.0.1' });
-    const addr = this.server.server.address();
-    if (typeof addr === 'object' && addr && 'port' in addr) return addr.port as number;
-    return 0;
+    if (this.unregisterRoute) {
+      try { this.unregisterRoute(); } catch {}
+      this.unregisterRoute = null;
+    }
   }
 
   private async rebindRoute(): Promise<void> {
-    if (!this.server) return;
-    // Remove all routes and re-register minimal ones
-    this.server.removeAllListeners('request');
     const path = this.normalizePath(this.cfg.path);
-    this.server.post(path, async (request, reply) => {
+    // Remove existing binding if present
+    if (this.unregisterRoute) {
+      try { this.unregisterRoute(); } catch {}
+      this.unregisterRoute = null;
+    }
+    const method = this.cfg.method;
+    const handler = async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (this.cfg.authToken) {
-          const token = request.headers['x-debug-token'];
+          const token = (request.headers as any)['x-debug-token'];
           if (token !== this.cfg.authToken) {
             reply.code(401);
             return { error: 'unauthorized' };
@@ -74,7 +64,7 @@ export class DebugToolTrigger extends BaseTrigger {
           reply.code(400);
           return { error: 'tool_not_connected' };
         }
-        const body = request.body as any;
+        const body = (request as any).body as any;
         const input = body?.input;
         if (input === undefined) {
           reply.code(400);
@@ -87,7 +77,10 @@ export class DebugToolTrigger extends BaseTrigger {
         reply.code(500);
         return { error: 'internal_error', message: err?.message || String(err) };
       }
-    });
+    };
+    const service = DebugHttpService(this.logger);
+    this.unregisterRoute = await service.register({ method, path, handler });
+    this.logger.info(`[DebugToolTrigger] bound ${method} ${path}`);
   }
 
   private normalizePath(p: string): string {
