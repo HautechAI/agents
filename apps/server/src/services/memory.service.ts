@@ -108,13 +108,21 @@ export class MemoryService {
   }
 
   private async getDocOrCreate(): Promise<WithId<MemoryDoc>> {
-    const res = await this.collection.findOneAndUpdate(
+    const existing = await this.collection.findOne(this.filter as any);
+    if (existing) {
+      const doc = existing as WithId<MemoryDoc>;
+      (doc as any).data = (doc as any).data ?? {};
+      (doc as any).dirs = (doc as any).dirs ?? {};
+      return doc;
+    }
+    // create lazily
+    await this.collection.updateOne(
       this.filter,
       { $setOnInsert: { nodeId: this.nodeId, scope: this.scope, threadId: this.threadId, data: {}, dirs: {} } },
-      { upsert: true, returnDocument: 'after' },
+      { upsert: true },
     );
-    // findOneAndUpdate with upsert always returns a value with after + upserted id
-    const doc = (res.value as WithId<MemoryDoc>) || ({} as any);
+    const created = (await this.collection.findOne(this.filter as any)) as WithId<MemoryDoc>;
+    const doc = created || ({} as any);
     // Coalesce legacy docs missing fields to safe shapes to avoid runtime TypeErrors
     (doc as any).data = (doc as any).data ?? {};
     (doc as any).dirs = (doc as any).dirs ?? {};
