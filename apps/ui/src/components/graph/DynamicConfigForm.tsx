@@ -15,13 +15,12 @@ export default function DynamicConfigForm({
   onConfigChange,
 }: {
   nodeId: string;
-  initialConfig: Record<string, unknown>;
+  initialConfig?: Record<string, unknown>;
   onConfigChange?: (cfg: Record<string, unknown>) => void;
 }) {
   const { data: status } = useNodeStatus(nodeId);
   const ready = !!status?.dynamicConfigReady;
-  const { schema, set } = useDynamicConfig(nodeId);
-  const isPending = (set as { isPending?: boolean }).isPending === true;
+  const { schema } = useDynamicConfig(nodeId);
 
   const [formData, setFormData] = useState<Record<string, unknown> | undefined>(initialConfig);
 
@@ -60,9 +59,9 @@ export default function DynamicConfigForm({
         formData={formData}
         disableSubmit={true}
         hideSubmitButton
-        submitDisabled={isPending}
         onChange={(next) => {
           setFormData(next as Record<string, unknown>);
+          // Upstream autosave persists changes; keep this component passive
           onConfigChange?.(next as Record<string, unknown>);
         }}
       />

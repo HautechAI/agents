@@ -1,24 +1,9 @@
-import { BaseTrigger, BaseTriggerOptions, TriggerHumanMessage } from './base.trigger';
+import { BaseTrigger, TriggerHumanMessage } from './base.trigger';
 import { LoggerService } from '../services/logger.service';
 import { SlackService } from '../services/slack.service';
 import { z } from 'zod';
 
-export const SlackTriggerStaticConfigSchema = z
-  .object({
-    debounceMs: z
-      .number()
-      .int()
-      .min(0)
-      .default(0)
-      .describe('Debounce window in milliseconds for coalescing rapid messages per thread.'),
-    waitForBusy: z
-      .boolean()
-      .default(false)
-      .describe('If true, buffers new messages while a previous batch is still being processed.'),
-  })
-  .strict();
-
-// (Previously had SlackTriggerOptions with filter; removed for simplified constructor.)
+export const SlackTriggerStaticConfigSchema = z.object({}).strict();
 
 /**
  * SlackTrigger
@@ -29,9 +14,8 @@ export class SlackTrigger extends BaseTrigger {
   constructor(
     private slack: SlackService,
     private logger: LoggerService,
-    options?: BaseTriggerOptions,
   ) {
-    super(options);
+    super();
     this.slack.onMessage(async (event) => {
       try {
         if (!event.text) return;
