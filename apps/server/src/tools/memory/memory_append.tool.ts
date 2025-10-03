@@ -2,7 +2,6 @@ import { tool, type DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { MemoryToolBase, PathSchemaUI, normalizePathRuntime } from './memory_tool_base';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { LoggerService } from '../../services/logger.service';
 
 export const MemoryAppendToolStaticConfigSchema = z.object({ path: PathSchemaUI, data: z.string() }).strict();
 

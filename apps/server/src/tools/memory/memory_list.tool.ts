@@ -2,7 +2,6 @@ import { tool, type DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { MemoryToolBase, OptionalPathSchemaUI, normalizePathRuntime, isMemoryDebugEnabled } from './memory_tool_base';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { LoggerService } from '../../services/logger.service';
 
 // Expose optional path in static config for UI; normalized at runtime
 export const MemoryListToolStaticConfigSchema = z.object({ path: OptionalPathSchemaUI }).strict();
