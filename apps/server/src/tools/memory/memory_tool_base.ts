@@ -3,10 +3,15 @@ import { z } from 'zod';
 import { BaseTool } from '../base.tool';
 import { MemoryService } from '../../services/memory.service';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
+import { LoggerService } from '../../services/logger.service';
 
 // Common base to inject a memory service factory into individual memory tools
 export abstract class MemoryToolBase extends BaseTool {
   protected serviceFactory: ((opts: { threadId?: string }) => MemoryService) | undefined;
+
+  constructor(protected loggerService: LoggerService) {
+    super();
+  }
 
   // Back-compat: previous port wired setMemoryFactory; continue to support.
   setMemoryFactory(factory: (opts: { threadId?: string }) => MemoryService): void {
@@ -14,7 +19,11 @@ export abstract class MemoryToolBase extends BaseTool {
   }
 
   // Preferred: accept MemoryNode-like or factory directly.
-  setMemorySource(source: ((opts: { threadId?: string }) => MemoryService) | { getMemoryService: (opts: { threadId?: string }) => MemoryService }): void {
+  setMemorySource(
+    source:
+      | ((opts: { threadId?: string }) => MemoryService)
+      | { getMemoryService: (opts: { threadId?: string }) => MemoryService },
+  ): void {
     if (typeof source === 'function') {
       this.serviceFactory = source as (opts: { threadId?: string }) => MemoryService;
     } else if (source && typeof (source as any).getMemoryService === 'function') {
