@@ -96,6 +96,17 @@ export class MemoryService {
     return base;
   }
 
+  // Expose minimal debug context without leaking data
+  getDebugInfo(): { nodeId: string; scope: MemoryScope; threadId?: string } {
+    return { nodeId: this.nodeId, scope: this.scope, threadId: this.threadId };
+  }
+
+  // Check whether a document exists for this {nodeId, scope[, threadId]}
+  async checkDocExists(): Promise<boolean> {
+    const found = await this.collection.findOne(this.filter, { projection: { _id: 1 } });
+    return !!found;
+  }
+
   private async getDocOrCreate(): Promise<WithId<MemoryDoc>> {
     const res = await this.collection.findOneAndUpdate(
       this.filter,

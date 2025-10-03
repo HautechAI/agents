@@ -9,7 +9,7 @@ import { LoggerService } from '../../services/logger.service';
 export abstract class MemoryToolBase extends BaseTool {
   protected serviceFactory: ((opts: { threadId?: string }) => MemoryService) | undefined;
 
-  constructor(protected loggerService: LoggerService) {
+  constructor(protected loggerService?: LoggerService) {
     super();
   }
 
@@ -67,4 +67,10 @@ export function normalizePathRuntime(input: string): string {
   if (p.includes('..')) throw new Error('invalid path: ".." not allowed');
   if (p.includes('$')) throw new Error('invalid path: "$" not allowed');
   return p;
+}
+
+// Feature flag for verbose memory debug logging. Intentionally minimal to avoid PII leakage.
+export function isMemoryDebugEnabled(): boolean {
+  const v = String(process.env.DEBUG_MEMORY || '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }

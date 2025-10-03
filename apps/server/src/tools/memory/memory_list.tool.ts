@@ -1,6 +1,6 @@
 import { tool, type DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { MemoryToolBase, OptionalPathSchemaUI, normalizePathRuntime } from './memory_tool_base';
+import { MemoryToolBase, OptionalPathSchemaUI, normalizePathRuntime, isMemoryDebugEnabled } from './memory_tool_base';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { LoggerService } from '../../services/logger.service';
 
@@ -13,11 +13,34 @@ export class MemoryListTool extends MemoryToolBase {
     return tool(
       async (raw, runtimeCfg) => {
         const args = schema.parse(raw);
-        this.loggerService.info('Tool called', 'memory_list', { args: args });
+        this.loggerService?.info('Tool called', 'memory_list', { args });
         const factory = this.requireFactory();
-        const service = factory({ threadId: runtimeCfg?.configurable?.thread_id });
+        const threadId = runtimeCfg?.configurable?.thread_id;
+        const service = factory({ threadId });
         const path = args.path ? normalizePathRuntime(args.path) : '/';
+
+        if (isMemoryDebugEnabled()) {
+          const dbg = service.getDebugInfo();
+          const exists = await service.checkDocExists();
+          const st = await service.stat(path);
+          this.loggerService?.debug('memory_list debug', {
+            normalizedPath: path,
+            nodeId: dbg.nodeId,
+            scope: dbg.scope,
+            threadId: dbg.threadId,
+            docExists: exists,
+            statKind: st.kind,
+          });
+        }
+
         const items = await service.list(path);
+        if (isMemoryDebugEnabled()) {
+          const names = items.map((i) => i.name);
+          this.loggerService?.debug('memory_list result', {
+            size: items.length,
+            names,
+          });
+        }
         return JSON.stringify(items);
       },
       { name: 'memory_list', description: 'List memory directory', schema },

@@ -24,6 +24,7 @@ import { MemoryListTool, MemoryListToolStaticConfigSchema } from './tools/memory
 import { MemoryAppendTool, MemoryAppendToolStaticConfigSchema } from './tools/memory/memory_append.tool';
 import { MemoryUpdateTool, MemoryUpdateToolStaticConfigSchema } from './tools/memory/memory_update.tool';
 import { MemoryDeleteTool, MemoryDeleteToolStaticConfigSchema } from './tools/memory/memory_delete.tool';
+import { MemoryDumpTool, MemoryDumpToolStaticConfigSchema } from './tools/memory/memory_dump.tool';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
@@ -224,6 +225,18 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           kind: 'tool',
           capabilities: {},
           staticConfigSchema: toJSONSchema(MemoryDeleteToolStaticConfigSchema),
+        },
+      )
+      // TEMPORARY diagnostic tool to introspect memory structure without content.
+      .register(
+        'memory_dump',
+        () => new MemoryDumpTool(logger),
+        { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
+        {
+          title: 'Memory Dump (TEMP)',
+          kind: 'tool',
+          capabilities: {},
+          staticConfigSchema: toJSONSchema(MemoryDumpToolStaticConfigSchema),
         },
       )
       .register(

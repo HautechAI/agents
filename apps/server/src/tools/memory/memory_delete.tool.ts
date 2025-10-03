@@ -11,7 +11,7 @@ export class MemoryDeleteTool extends MemoryToolBase {
     return tool(
       async (raw, runtimeCfg) => {
         const args = schema.parse(raw);
-        this.loggerService.info('Tool called', 'memory_args', { args: args });
+        this.loggerService?.info('Tool called', 'memory_args', { args: args });
         const factory = this.requireFactory();
         const service = factory({ threadId: runtimeCfg?.configurable?.thread_id });
         const path = normalizePathRuntime(args.path);
