@@ -1,13 +1,10 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
+import { LoggerService } from "../services/logger.service";
 
 export abstract class BaseTool {
-  // Optional logger; default to no-op for tests and bare usage without DI
-  protected loggerService: { info: (...args: any[]) => void; debug: (...args: any[]) => void; error: (...args: any[]) => void } = {
-    info: () => {},
-    debug: () => {},
-    error: () => {},
-  };
+  // Require explicit logger injection for tools
+  constructor(protected readonly logger: LoggerService) {}
   abstract init(config?: LangGraphRunnableConfig): DynamicStructuredTool;
   async destroy(): Promise<void> { /* default no-op */ }
 }

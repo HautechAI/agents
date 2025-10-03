@@ -25,6 +25,7 @@ import { MemoryAppendTool, MemoryAppendToolStaticConfigSchema } from './tools/me
 import { MemoryUpdateTool, MemoryUpdateToolStaticConfigSchema } from './tools/memory/memory_update.tool';
 import { MemoryDeleteTool, MemoryDeleteToolStaticConfigSchema } from './tools/memory/memory_delete.tool';
 import { MemoryDumpTool, MemoryDumpToolStaticConfigSchema } from './tools/memory/memory_dump.tool';
+import { DebugToolTrigger, DebugToolTriggerStaticConfigSchema } from './triggers/debugTool.trigger';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
@@ -108,7 +109,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'finishTool',
-        () => new FinishTool(),
+        () => new FinishTool(logger),
         {
           targetPorts: { $self: { kind: 'instance' } },
         },
@@ -148,6 +149,17 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           kind: 'trigger',
           capabilities: { provisionable: true, pausable: true, staticConfigurable: true },
           staticConfigSchema: toJSONSchema(SlackTriggerStaticConfigSchema),
+        },
+      )
+      .register(
+        'debugTool',
+        () => new DebugToolTrigger(logger),
+        { targetPorts: { $tool: { kind: 'method', create: 'setTool' } } },
+        {
+          title: 'HTTP Debug Tool',
+          kind: 'trigger',
+          capabilities: { provisionable: true, staticConfigurable: true },
+          staticConfigSchema: toJSONSchema(DebugToolTriggerStaticConfigSchema),
         },
       )
       .register(

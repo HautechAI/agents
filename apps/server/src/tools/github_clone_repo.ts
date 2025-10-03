@@ -22,9 +22,9 @@ export class GithubCloneRepoTool extends BaseTool {
 
   constructor(
     private config: ConfigService,
-    private logger: LoggerService,
+    logger: LoggerService,
   ) {
-    super();
+    super(logger);
   }
 
   setContainerProvider(provider: ContainerProviderEntity | undefined): void {

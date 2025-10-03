@@ -3,6 +3,7 @@ import type { Db } from 'mongodb';
 import { MemoryService, type MemoryDoc } from '../../src/services/memory.service';
 import { MemoryAppendTool } from '../../src/tools/memory/memory_append.tool';
 import { MemoryReadTool } from '../../src/tools/memory/memory_read.tool';
+import { LoggerService } from '../../src/services/logger.service';
 
 // In-memory fake Db compatible with MemoryService for deterministic tests
 class FakeCollection<T extends MemoryDoc> {
@@ -58,9 +59,10 @@ describe('memory_append tool: path normalization and validation', () => {
   const mkTools = () => {
     const db = new FakeDb() as unknown as Db;
     const factory = (opts: { threadId?: string }) => new MemoryService(db, 'nodeT', opts.threadId ? 'perThread' : 'global', opts.threadId);
-    const append = new MemoryAppendTool();
+    const logger = new LoggerService();
+    const append = new MemoryAppendTool(logger);
     append.setMemorySource(factory);
-    const read = new MemoryReadTool();
+    const read = new MemoryReadTool(logger);
     read.setMemorySource(factory);
     const cfg = { configurable: { thread_id: 'T1' } } as any;
     return { append: append.init(), read: read.init(), cfg };

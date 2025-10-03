@@ -2,11 +2,13 @@ import { tool, type DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { MemoryToolBase, OptionalPathSchemaUI, normalizePathRuntime, isMemoryDebugEnabled } from './memory_tool_base';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
+import { LoggerService } from '../../services/logger.service';
 
 // Temporary diagnostic tool: report shallow keys and counts at a path.
 export const MemoryDumpToolStaticConfigSchema = z.object({ path: OptionalPathSchemaUI }).strict();
 
 export class MemoryDumpTool extends MemoryToolBase {
+  constructor(logger: LoggerService) { super(logger); }
   init(_config?: LangGraphRunnableConfig): DynamicStructuredTool {
     const schema = MemoryDumpToolStaticConfigSchema;
     return tool(
@@ -25,8 +27,8 @@ export class MemoryDumpTool extends MemoryToolBase {
         const files = list.filter((e) => e.kind === 'file').length;
         const dirs = list.filter((e) => e.kind === 'dir').length;
 
-        if (isMemoryDebugEnabled() && this.loggerService) {
-          this.loggerService.debug('memory_dump', {
+        if (isMemoryDebugEnabled() && this.logger) {
+          this.logger.debug('memory_dump', {
             normalizedPath: path,
             nodeId: dbg.nodeId,
             scope: dbg.scope,

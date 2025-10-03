@@ -8,10 +8,7 @@ import { LoggerService } from '../../services/logger.service';
 // Common base to inject a memory service factory into individual memory tools
 export abstract class MemoryToolBase extends BaseTool {
   protected serviceFactory: ((opts: { threadId?: string }) => MemoryService) | undefined;
-
-  constructor(protected loggerService?: LoggerService) {
-    super();
-  }
+  constructor(protected loggerService: LoggerService) { super(loggerService); }
 
   // Back-compat: previous port wired setMemoryFactory; continue to support.
   setMemoryFactory(factory: (opts: { threadId?: string }) => MemoryService): void {
@@ -60,7 +57,7 @@ export function normalizePathRuntime(input: string): string {
   if (!input) throw new Error('path is required');
   // convert backslashes and collapse multiple slashes
   let p = input.replace(/\\+/g, '/');
-  p = p.replace(/\/+/g, '/');
+  p = p.replace(/\/+?/g, '/');
   if (!p.startsWith('/')) p = '/' + p;
   // trim trailing slash except for root
   if (p.length > 1 && p.endsWith('/')) p = p.replace(/\/+$/g, '');

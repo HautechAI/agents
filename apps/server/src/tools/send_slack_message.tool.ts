@@ -26,9 +26,9 @@ export const SendSlackMessageToolStaticConfigSchema = z.object({}).strict();
 export class SendSlackMessageTool extends BaseTool {
   constructor(
     private slack: SlackService,
-    private logger: LoggerService,
+    logger: LoggerService,
   ) {
-    super();
+    super(logger);
   }
 
   init(): DynamicStructuredTool {
