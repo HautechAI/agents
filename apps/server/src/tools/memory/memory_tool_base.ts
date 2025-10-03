@@ -31,3 +31,14 @@ export abstract class MemoryToolBase extends BaseTool {
 
   abstract init(config?: LangGraphRunnableConfig): DynamicStructuredTool;
 }
+
+// Shared path schema for memory tools:
+// - require non-empty string
+// - normalize to have a leading slash
+// - forbid ".." and "$" to avoid traversal and Mongo operator conflicts
+export const NormalizedPathSchema = z
+  .string()
+  .min(1, 'path is required')
+  .transform((p) => (p.startsWith('/') ? p : '/' + p))
+  .refine((p) => !p.includes('..'), 'invalid path: ".." not allowed')
+  .refine((p) => !p.includes('$'), 'invalid path: "$" not allowed');

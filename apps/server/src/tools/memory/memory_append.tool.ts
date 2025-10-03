@@ -1,13 +1,14 @@
 import { tool, type DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { MemoryToolBase } from './memory_tool_base';
+import { MemoryToolBase, NormalizedPathSchema } from './memory_tool_base';
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 
 export const MemoryAppendToolStaticConfigSchema = z.object({}).strict();
 
 export class MemoryAppendTool extends MemoryToolBase {
   init(_config?: LangGraphRunnableConfig): DynamicStructuredTool {
-    const schema = z.object({ path: z.string(), data: z.string() });
+    // Normalize path (prepend leading slash when missing) and validate early via zod
+    const schema = z.object({ path: NormalizedPathSchema, data: z.string() });
     return tool(
       async (raw, runtimeCfg) => {
         const args = schema.parse(raw);
