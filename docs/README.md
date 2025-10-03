@@ -13,8 +13,8 @@
 ## Invoke Resolution Semantics
 
 Agent-side buffering and scheduling determines when `agent.invoke()` resolves:
-- whenBusy=`wait` + processBuffer=`oneByOne`: each invocation resolves after the run that processes its single message completes. If that run errors, only that invocation rejects.
-- whenBusy=`wait` + processBuffer=`allTogether`: all invocations drained into a batch resolve together when that batch's run completes (or reject together on error).
-- whenBusy=`injectAfterTools`: invocations arriving while a run is in-flight are injected into that run after tools and resolve when that run completes. Calls arriving too late to be injected remain queued for the next run and resolve then.
+- whenBusy=`wait` + processBuffer=`oneByOne`: resolves per message/run; if a run fails, only that message's awaiter rejects. Tokens split across runs resolve independently.
+- whenBusy=`wait` + processBuffer=`allTogether`: resolves all included together when the batch's run completes; rejects together on error.
+- whenBusy=`injectAfterTools`: messages arriving during an in-flight run are injected after tools and resolve when that run completes; arrivals too late to inject remain queued for the next run.
 
-On errors thrown by the graph runtime, only awaiters associated with the failed run are rejected; buffered invocations not yet included remain pending for the next run. Each run is tagged with a per-run identifier in logs for easier tracing.
+On errors thrown by the graph runtime, only tokens included in the failed run are rejected; others remain pending. `dropTokens()` cleans up any remaining buffered items for those tokens. Each run is tagged with a per-run identifier in logs for easier tracing.

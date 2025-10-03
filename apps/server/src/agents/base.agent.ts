@@ -1,8 +1,8 @@
-import { BaseMessage, HumanMessage } from '@langchain/core/messages';
+import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, AnnotationRoot, CompiledStateGraph } from '@langchain/langgraph';
 import { LoggerService } from '../services/logger.service';
-import { TriggerListener, TriggerMessage } from '../triggers/base.trigger';
+import { TriggerListener, TriggerMessage, isSystemTrigger } from '../triggers/base.trigger';
 import { NodeOutput } from '../types';
 import { withAgent } from '@traceloop/node-server-sdk';
 import type { StaticConfigurable } from '../graph/capabilities';
@@ -127,7 +127,17 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
   async invoke(thread: string, messages: TriggerMessage[] | TriggerMessage): Promise<BaseMessage | undefined> {
     return await withAgent({ name: 'agent.invoke', inputParameters: [{ thread }, { messages }] }, async () => {
       const batch = Array.isArray(messages) ? messages : [messages];
-      this.logger.info(`New trigger event in thread ${thread} with messages: ${JSON.stringify(batch)}`);
+      // Log minimal, non-sensitive metadata about the batch
+      const kinds = batch.reduce(
+        (acc, m) => {
+          if (isSystemTrigger(m)) acc.system += 1; else acc.human += 1;
+          return acc;
+        },
+        { human: 0, system: 0 },
+      );
+      this.logger.info(
+        `New trigger event in thread ${thread} (messages=${batch.length}, human=${kinds.human}, system=${kinds.system})`,
+      );
       const s = this.ensureThread(thread);
 
       // Edge case: If OneByOne mode and caller enqueued multiple messages, split into per-message tokens.
@@ -252,10 +262,12 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
     batch: TriggerMessage[],
     runId: string,
   ): Promise<BaseMessage | undefined> {
+    // Preserve system vs human message kind when serializing for the model
+    const items = batch.map((msg) =>
+      isSystemTrigger(msg) ? new SystemMessage(JSON.stringify(msg)) : new HumanMessage(JSON.stringify(msg)),
+    );
     const response = (await this.graph.invoke(
-      {
-        messages: { method: 'append', items: batch.map((msg) => new HumanMessage(JSON.stringify(msg))) },
-      },
+      { messages: { method: 'append', items } },
       {
         ...this.config,
         configurable: {
@@ -282,7 +294,10 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
       const prev = s.inFlight.includedCounts.get(part.tokenId) || 0;
       s.inFlight.includedCounts.set(part.tokenId, prev + part.count);
     }
-    return drained.messages.map((m) => new HumanMessage(JSON.stringify(m)));
+    // Preserve message kind when injecting
+    return drained.messages.map((m) =>
+      isSystemTrigger(m) ? new SystemMessage(JSON.stringify(m)) : new HumanMessage(JSON.stringify(m)),
+    );
   }
 
   // New universal teardown hook for graph runtime
