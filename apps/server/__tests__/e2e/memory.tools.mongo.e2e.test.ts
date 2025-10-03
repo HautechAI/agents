@@ -10,7 +10,6 @@ describe('E2E: memory tools with real MongoDB (mongodb-memory-server)', () => {
   const logger = new LoggerService();
   let mongod: MongoMemoryServer;
   let client: MongoClient;
-  let skipSuite = false;
 
   beforeAll(async () => {
     try {
@@ -20,20 +19,21 @@ describe('E2E: memory tools with real MongoDB (mongodb-memory-server)', () => {
       client = new MongoClient(uri);
       await client.connect();
     } catch (e: any) {
-      skipSuite = true;
       // eslint-disable-next-line no-console
       console.warn('[memory.tools.mongo.e2e] Skipping test due to Mongo startup error:', e?.message || e);
     }
   });
 
   afterAll(async () => {
-    if (skipSuite) return;
-    try { await client?.close(true); } catch {}
-    try { await mongod?.stop(); } catch {}
+    try {
+      await client?.close(true);
+    } catch {}
+    try {
+      await mongod?.stop();
+    } catch {}
   });
 
   it('append then read using direct tool.invoke', async () => {
-    if (skipSuite) { expect(true).toBe(true); return; }
     const db = client.db('test');
     const memNode = new MemoryNode(db as any, 'node-1', { scope: 'global' });
 
