@@ -128,7 +128,7 @@ async function simulateAgentWorkflow() {
       }
     );
   } catch (error) {
-    console.log('  ⚠️  Error handled gracefully:', error.message);
+    console.log('  ⚠️  Error handled gracefully:', error instanceof Error ? error.message : String(error));
   }
 
   // Flush any pending data

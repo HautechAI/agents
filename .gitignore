@@ -5,3 +5,7 @@ node_modules
 agent_instances
 # Ignore npm lockfiles (we use pnpm)
 **/package-lock.json
+# Build outputs
+**/dist/
+# Temporary files
+/tmp/
