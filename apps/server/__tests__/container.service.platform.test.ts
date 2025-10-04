@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Docker from 'dockerode';
 import { ContainerService } from '../src/services/container.service';
 import { LoggerService } from '../src/services/logger.service';
+import { PLATFORM_LABEL } from '../src/constants';
 
 vi.mock('dockerode', () => {
   class MockContainer {
@@ -9,20 +10,20 @@ vi.mock('dockerode', () => {
     inspect = vi.fn(async () => ({ Id: 'deadbeefcafebabe', State: { Status: 'running' } }));
   }
   class MockDocker {
-    modem: any;
+    modem: { followProgress: (stream: NodeJS.ReadableStream, onFinished: (err?: Error) => void) => void; demuxStream: (...args: any[]) => void };
     constructor() {
       this.modem = {
-        followProgress: vi.fn((stream: any, cb: any) => {
+        followProgress: vi.fn((stream: NodeJS.ReadableStream, cb: (err?: Error) => void) => {
           setTimeout(() => cb(undefined), 0);
         }),
         demuxStream: vi.fn(),
       };
     }
     getImage = vi.fn(() => ({ inspect: vi.fn(async () => { throw new Error('not found'); }) }))
-    pull = vi.fn((image: string, optsOrCb: any, maybeCb?: any) => {
-      const cb = typeof optsOrCb === 'function' ? optsOrCb : maybeCb;
+    pull = vi.fn((image: string, optsOrCb?: object | ((err?: Error, stream?: NodeJS.ReadableStream) => void), maybeCb?: (err?: Error, stream?: NodeJS.ReadableStream) => void) => {
+      const cb = (typeof optsOrCb === 'function' ? optsOrCb : maybeCb) as (err?: Error, stream?: NodeJS.ReadableStream) => void;
       // Return a dummy stream object
-      setTimeout(() => cb(undefined, {} as any), 0);
+      setTimeout(() => cb(undefined, {} as unknown as NodeJS.ReadableStream), 0);
     });
     createContainer = vi.fn(async (_opts: any) => new MockContainer());
     listContainers = vi.fn(async () => []);
@@ -45,7 +46,7 @@ describe('ContainerService platform support', () => {
     const pullSpy = vi.spyOn(docker, 'pull');
     const createSpy = vi.spyOn(docker, 'createContainer');
 
-    const container = await svc.start({ image: 'alpine:3', cmd: ['sleep', '1'], platform: 'linux/arm64' });
+    const container = await svc.start({ image: 'alpine:3', cmd: ['sleep', '1'], platform: 'linux/arm64', labels: { foo: 'bar' } });
     expect(container.id).toBeDefined();
 
     // pull should be called with platform option
@@ -56,11 +57,12 @@ describe('ContainerService platform support', () => {
     expect(typeof pullArgs[1]).toBe('object');
     expect(pullArgs[1].platform).toBe('linux/arm64');
 
-    // createContainer should include platform and labels with hautech.ai/platform
+    // createContainer should include platform and labels with hautech.ai/platform and preserve existing
     expect(createSpy).toHaveBeenCalled();
     const createOpts = createSpy.mock.calls[0][0];
     expect(createOpts.platform).toBe('linux/arm64');
-    expect(createOpts.Labels['hautech.ai/platform']).toBe('linux/arm64');
+    expect(createOpts.Labels[PLATFORM_LABEL]).toBe('linux/arm64');
+    expect(createOpts.Labels.foo).toBe('bar');
   });
 
   it('omits platform from pull and createContainer when undefined', async () => {
@@ -75,15 +77,16 @@ describe('ContainerService platform support', () => {
 
     // pull without platform
     const pullArgs = pullSpy.mock.calls[0];
-    // args: image, cb
     expect(pullArgs[0]).toBe('alpine:3');
-    if (typeof pullArgs[1] === 'object') {
-      expect(pullArgs[1].platform).toBeUndefined();
+    if (typeof pullArgs[1] === 'function') {
+      // ok: (image, cb)
+    } else if (typeof pullArgs[1] === 'object') {
+      expect(pullArgs[1]?.platform).toBeUndefined();
     }
 
     // createContainer should not include platform and no platform label
     const createOpts = createSpy.mock.calls[0][0];
     expect(createOpts.platform).toBeUndefined();
-    expect(createOpts.Labels?.['hautech.ai/platform']).toBeUndefined();
+    expect(createOpts.Labels?.[PLATFORM_LABEL]).toBeUndefined();
   });
 });

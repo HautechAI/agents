@@ -1,6 +1,7 @@
 import { ContainerOpts, ContainerService } from '../services/container.service';
 import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
+import { PLATFORM_LABEL } from '../constants';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
@@ -19,7 +20,8 @@ export const ContainerProviderStaticConfigSchema = z
     platform: z
       .enum(['linux/amd64', 'linux/arm64'])
       .optional()
-      .describe('Docker platform selector for the workspace container'),
+      .describe('Docker platform selector for the workspace container')
+      .meta({ 'ui:widget': 'select' }),
   })
   .strict();
 
@@ -54,15 +56,19 @@ export class ContainerProviderEntity {
     if (container && requestedPlatform) {
       try {
         const containerLabels = await this.containerService.getContainerLabels(container.id);
-        const existingPlatform = containerLabels?.['hautech.ai/platform'];
+        const existingPlatform = containerLabels?.[PLATFORM_LABEL];
         if (!existingPlatform || existingPlatform !== requestedPlatform) {
-          // Stop and remove old container, then recreate
+          // Stop and remove old container, then recreate (handle benign errors)
           try {
             await container.stop();
-          } catch {
-            // ignore stop errors (already stopped / not running)
+          } catch (e: any) {
+            if (e?.statusCode !== 304 && e?.statusCode !== 404) throw e;
           }
-          await container.remove(true);
+          try {
+            await container.remove(true);
+          } catch (e: any) {
+            if (e?.statusCode !== 404) throw e;
+          }
           container = undefined;
         }
       } catch {

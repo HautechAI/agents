@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContainerProviderEntity, ContainerProviderStaticConfigSchema } from '../src/entities/containerProvider.entity';
 import { ContainerService } from '../src/services/container.service';
 import { ContainerEntity } from '../src/entities/container.entity';
+import { PLATFORM_LABEL } from '../src/constants';
 
 class MockContainer extends ContainerEntity {
   constructor(id: string, private svc: Partial<ContainerService>) {
@@ -19,20 +20,23 @@ describe('ContainerProviderEntity platform reuse logic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     svc = {
-      findContainerByLabels: vi.fn(async (_labels: Record<string, string>) => undefined) as any,
-      start: vi.fn(async (_opts: any) => new MockContainer('cid123', svc as any)) as any,
-      getContainerLabels: vi.fn(async (_id: string) => ({})) as any,
+      findContainerByLabels: vi.fn(async (_labels: Record<string, string>) => undefined) as unknown as ContainerService['findContainerByLabels'],
+      start: vi.fn(async (_opts: any) => new MockContainer('cid123', svc as any)) as unknown as ContainerService['start'],
+      getContainerLabels: vi.fn(async (_id: string) => ({})) as unknown as ContainerService['getContainerLabels'],
     };
   });
 
   it('recreates when existing platform mismatches requested', async () => {
     const existing = new MockContainer('abc', svc as any);
     (svc.findContainerByLabels as any).mockResolvedValue(existing);
-    (svc.getContainerLabels as any).mockResolvedValue({ 'hautech.ai/platform': 'linux/amd64' });
+    (svc.getContainerLabels as any).mockResolvedValue({ [PLATFORM_LABEL]: 'linux/amd64' });
 
     const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
     provider.setConfig({ platform: 'linux/arm64' });
     const c = await provider.provide('t1');
+
+    // ensure lookup used the thread-scoped label
+    expect((svc.findContainerByLabels as any).mock.calls[0][0]).toMatchObject(idLabels('t1'));
 
     expect(existing.stop).toHaveBeenCalled();
     expect(existing.remove).toHaveBeenCalled();
