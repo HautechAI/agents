@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { Collection, Db } from 'mongodb';
 import { z } from 'zod';
+import { Server as SocketIOServer } from 'socket.io';
 
 export type SpanDoc = {
   _id?: string;
@@ -173,6 +174,8 @@ export async function createServer(db: Db, opts: { logger?: boolean } = {}): Pro
       return reply.code(500).send({ error: 'upsert_failed', details: err?.message });
     }
     const final = await spans.findOne(filter);
+    // Emit realtime event (best-effort; ignore failures)
+    try { if (final && spanIo) spanIo.emit('span_upsert', final); } catch {}
     return { ok: true, id: final?._id };
   });
 
@@ -217,6 +220,7 @@ export async function createServer(db: Db, opts: { logger?: boolean } = {}): Pro
     const body = (req as any).body as any;
     const now = new Date().toISOString();
     const spansIn = Array.isArray(body?.spans) ? body.spans : [];
+    const emitted: any[] = [];
     await Promise.all(
       spansIn.map(async (s: any) => {
         const filter = { traceId: s.traceId, spanId: s.spanId };
@@ -238,10 +242,34 @@ export async function createServer(db: Db, opts: { logger?: boolean } = {}): Pro
           updatedAt: now,
         };
         await spans.updateOne(filter, { $set: doc }, { upsert: true });
+        const final = await spans.findOne(filter);
+        if (final) emitted.push(final);
       }),
     );
+    if (spanIo) {
+      for (const e of emitted) {
+        try { spanIo.emit('span_upsert', e); } catch {}
+      }
+    }
     return { ok: true, count: spansIn.length };
   });
 
   return fastify;
+}
+
+// --- Realtime (socket.io) integration attachment point ---
+// We keep socket instance out-of-band so route handlers can emit without
+// circular dependency on index.ts. Stage 1: global broadcast (no rooms).
+let spanIo: SocketIOServer | undefined;
+export function attachSpanSocket(io: SocketIOServer) {
+  spanIo = io;
+  io.on('connection', (socket) => {
+    // Emit initial connected event with server timestamp
+    try { socket.emit('connected', { ts: Date.now() }); } catch {}
+    // Support client ping (ack form or event form)
+    socket.on('ping', (data: any, cb: ((resp: any) => void) | undefined) => {
+      const resp = { ts: Date.now() };
+      if (typeof cb === 'function') cb(resp); else socket.emit('pong', resp);
+    });
+  });
 }

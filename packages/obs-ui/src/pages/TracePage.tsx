@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchTrace } from '../services/api';
+import { spanRealtime } from '../services/socket';
 import { SpanDoc } from '../types';
 import { SpanDetails } from '../components/SpanDetails';
 
@@ -138,6 +139,20 @@ export function TracePage() {
     if (!traceId) return;
     let cancelled = false;
     fetchTrace(traceId).then(d => { if (!cancelled) { setSpans(d); } }).catch(e => { if (!cancelled) setError(e.message); }).finally(() => { if (!cancelled) setLoading(false); });
+    // Realtime subscription (global broadcast; filter locally)
+    const off = spanRealtime.onSpanUpsert(span => {
+      if (span.traceId !== traceId) return;
+      setSpans(prev => {
+        const idx = prev.findIndex(s => s.spanId === span.spanId);
+        if (idx === -1) return [...prev, span];
+        // Replace if newer (compare rev or lastUpdate)
+        const existing = prev[idx];
+        if (span.rev <= existing.rev && Date.parse(span.lastUpdate) <= Date.parse(existing.lastUpdate)) return prev;
+        const copy = [...prev];
+        copy[idx] = span;
+        return copy;
+      });
+    });
     return () => { cancelled = true; };
   }, [traceId]);
 
