@@ -55,6 +55,7 @@ Workspace container platform
 - containerProvider.staticConfig.platform: Optional; enum of `linux/amd64` or `linux/arm64`.
 - Behavior: When set, `docker pull` includes the platform selector and `docker.createContainer` receives `platform` as a query parameter. New containers are labeled with `hautech.ai/platform`.
 - Reuse rules: If a platform is requested and an existing container found by labels has a different or missing `hautech.ai/platform` label, it is not reused; the old container is stopped and removed, and a new one is created.
+- Source of truth: We do not infer platform from image architecture or variant, and we do not normalize values. The requested enum (`linux/amd64` or `linux/arm64`) and the `hautech.ai/platform` label are the only source of truth for reuse decisions.
 - Error handling: On stop/remove during mismatch cleanup, benign 304/404 errors are swallowed; only unexpected status codes bubble up.
 - Example:
   - platform: linux/amd64
