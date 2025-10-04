@@ -1,7 +1,7 @@
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { ContainerEntity } from '../entities/container.entity';
 import { LoggerService } from './logger.service';
-import { PLATFORM_LABEL } from '../constants.js';
+import { PLATFORM_LABEL, type Platform } from '../constants.js';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
 
@@ -17,7 +17,7 @@ export type ContainerOpts = {
   networkMode?: string;
   tty?: boolean;
   labels?: Record<string, string>;
-  platform?: 'linux/amd64' | 'linux/arm64';
+  platform?: Platform;
 };
 
 /**
@@ -44,19 +44,21 @@ export class ContainerService {
     this.docker = new Docker();
   }
 
-  /** Pull an image if it's not already present locally. */
-  async ensureImage(image: string, platform?: 'linux/amd64' | 'linux/arm64'): Promise<void> {
+  /** Pull an image; if platform is specified, pull even when image exists to ensure correct arch. */
+  async ensureImage(image: string, platform?: Platform): Promise<void> {
     this.logger.info(`Ensuring image '${image}' is available locally`);
     // Check if image exists
     try {
       await this.docker.getImage(image).inspect();
       this.logger.debug(`Image '${image}' already present`);
-      return;
+      // When platform is provided, still pull to ensure the desired arch variant is present.
+      if (!platform) return;
     } catch {
       this.logger.info(`Image '${image}' not found locally. Pulling...`);
     }
 
     await new Promise<void>((resolve, reject) => {
+      type PullOpts = { platform?: string };
       const cb = (err: Error | undefined, stream?: NodeJS.ReadableStream) => {
         if (err) return reject(err);
         if (!stream) return reject(new Error('No pull stream returned'));
@@ -77,7 +79,7 @@ export class ContainerService {
         );
       };
       // Use overload that accepts optional opts. Undefined maps to (image, cb).
-      this.docker.pull(image, platform ? ({ platform } as { platform?: string }) : undefined, cb);
+      this.docker.pull(image, platform ? ({ platform } as PullOpts) : undefined, cb);
     });
   }
 
@@ -95,6 +97,7 @@ export class ContainerService {
         ? Object.entries(optsWithDefaults.env).map(([k, v]) => `${k}=${v}`)
         : undefined;
 
+    // dockerode forwards unknown top-level options (e.g., name, platform) as query params
     type CreateOptsWithPlatform = ContainerCreateOptions & { name?: string; platform?: string };
     const createOptions: CreateOptsWithPlatform = {
       Image: optsWithDefaults.image,
@@ -117,12 +120,10 @@ export class ContainerService {
       },
     };
 
-    const query = optsWithDefaults.platform ? { platform: optsWithDefaults.platform } : undefined;
-
     this.logger.info(
       `Creating container from '${optsWithDefaults.image}'${optsWithDefaults.name ? ` name=${optsWithDefaults.name}` : ''}`,
     );
-    const container = await this.docker.createContainer(createOptions as unknown as ContainerCreateOptions);
+    const container = await this.docker.createContainer(createOptions);
     await container.start();
     const inspect = await container.inspect();
     this.logger.info(`Container started cid=${inspect.Id.substring(0, 12)} status=${inspect.State?.Status}`);

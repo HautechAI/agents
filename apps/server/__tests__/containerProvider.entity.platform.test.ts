@@ -19,9 +19,10 @@ describe('ContainerProviderEntity platform reuse logic', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('cid123', svc as any);
     svc = {
       findContainerByLabels: vi.fn(async (_labels: Record<string, string>) => undefined) as unknown as ContainerService['findContainerByLabels'],
-      start: vi.fn(async (_opts: any) => new MockContainer('cid123', svc as any)) as unknown as ContainerService['start'],
+      start: vi.fn(startImpl) as unknown as ContainerService['start'],
       getContainerLabels: vi.fn(async (_id: string) => ({})) as unknown as ContainerService['getContainerLabels'],
     };
   });
@@ -74,6 +75,18 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     expect(existing.stop).not.toHaveBeenCalled();
     expect(existing.remove).not.toHaveBeenCalled();
     expect(svc.start).not.toHaveBeenCalled();
+    expect(c).toBe(existing);
+  });
+
+  it('does not call remove() when platform undefined and container reused', async () => {
+    const existing = new MockContainer('abc', svc as any);
+    (svc.findContainerByLabels as any).mockResolvedValue(existing);
+
+    const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
+    const c = await provider.provide('t4');
+
+    expect(existing.stop).not.toHaveBeenCalled();
+    expect(existing.remove).not.toHaveBeenCalled();
     expect(c).toBe(existing);
   });
 

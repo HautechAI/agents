@@ -21,3 +21,4 @@ Agent-side buffering and scheduling determines when `agent.invoke()` resolves:
 On errors thrown by the graph runtime, only tokens included in the failed run are rejected; others remain pending. `dropTokens()` cleans up any remaining buffered items for those tokens. Each run is tagged with a per-run identifier in logs for easier tracing.
 
 Notes: Running a non-native platform may be slower depending on Docker Engine/Desktop emulation (qemu/binfmt); your Docker Engine must support the requested platform; and not all registries publish multi-arch images for the same tag.
+When platform is undefined, we do not set the `hautech.ai/platform` label and reuse behavior remains unchanged.

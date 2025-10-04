@@ -1,7 +1,7 @@
 import { ContainerOpts, ContainerService } from '../services/container.service';
 import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
-import { PLATFORM_LABEL } from '../constants.js';
+import { PLATFORM_LABEL, SUPPORTED_PLATFORMS, type Platform } from '../constants.js';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
@@ -18,7 +18,7 @@ export const ContainerProviderStaticConfigSchema = z
       .describe('Shell script (executed with /bin/sh -lc) to run immediately after creating the container.')
       .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
     platform: z
-      .enum(['linux/amd64', 'linux/arm64'])
+      .enum(SUPPORTED_PLATFORMS as [Platform, ...Platform[]])
       .optional()
       .describe('Docker platform selector for the workspace container')
       .meta({ 'ui:widget': 'select' }),
@@ -41,9 +41,10 @@ export class ContainerProviderEntity {
     try {
       const parsed = ContainerProviderStaticConfigSchema.parse(cfg);
       this.cfg = parsed;
-    } catch (e) {
+    } catch (e: unknown) {
       // If validation fails, surface a clearer error (caller can decide how to handle)
-      throw new Error(`Invalid ContainerProvider configuration: ${(e as Error).message}`);
+      const err = e as Error;
+      throw new Error(`Invalid ContainerProvider configuration: ${err.message}`);
     }
   }
 
@@ -61,13 +62,15 @@ export class ContainerProviderEntity {
           // Stop and remove old container, then recreate (handle benign errors)
           try {
             await container.stop();
-          } catch (e: any) {
-            if (e?.statusCode !== 304 && e?.statusCode !== 404) throw e;
+          } catch (e: unknown) {
+            const sc = getStatusCode(e);
+            if (sc !== 304 && sc !== 404) throw e;
           }
           try {
             await container.remove(true);
-          } catch (e: any) {
-            if (e?.statusCode !== 404) throw e;
+          } catch (e: unknown) {
+            const sc = getStatusCode(e);
+            if (sc !== 404) throw e;
           }
           container = undefined;
         }
@@ -108,4 +111,13 @@ export class ContainerProviderEntity {
     }
     return container;
   }
+}
+
+// Helper: safely read statusCode from unknown error values
+function getStatusCode(e: unknown): number | undefined {
+  if (typeof e === 'object' && e !== null && 'statusCode' in e) {
+    const v = (e as { statusCode?: unknown }).statusCode;
+    if (typeof v === 'number') return v;
+  }
+  return undefined;
 }
