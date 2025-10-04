@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "build": "rimraf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.cjs && esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.mjs",
     "clean": "rimraf dist",
     "test": "vitest run"
   },
@@ -22,7 +22,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "tsup": "^8.3.0",
+    "esbuild": "^0.23.1",
     "typescript": "^5.6.3",
     "vitest": "^3.2.4",
     "@types/node": "^20.12.12",
