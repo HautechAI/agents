@@ -1,6 +1,7 @@
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { ContainerEntity } from '../entities/container.entity';
 import { LoggerService } from './logger.service';
+import { PLATFORM_LABEL, type Platform } from '../constants.js';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
 
@@ -16,6 +17,7 @@ export type ContainerOpts = {
   networkMode?: string;
   tty?: boolean;
   labels?: Record<string, string>;
+  platform?: Platform;
 };
 
 /**
@@ -42,30 +44,32 @@ export class ContainerService {
     this.docker = new Docker();
   }
 
-  /** Pull an image if it's not already present locally. */
-  async ensureImage(image: string): Promise<void> {
+  /** Pull an image; if platform is specified, pull even when image exists to ensure correct arch. */
+  async ensureImage(image: string, platform?: Platform): Promise<void> {
     this.logger.info(`Ensuring image '${image}' is available locally`);
     // Check if image exists
     try {
       await this.docker.getImage(image).inspect();
       this.logger.debug(`Image '${image}' already present`);
-      return;
+      // When platform is provided, still pull to ensure the desired arch variant is present.
+      if (!platform) return;
     } catch {
       this.logger.info(`Image '${image}' not found locally. Pulling...`);
     }
 
     await new Promise<void>((resolve, reject) => {
-      this.docker.pull(image, (err: Error | undefined, stream: NodeJS.ReadableStream | undefined) => {
+      type PullOpts = { platform?: string };
+      const cb = (err: Error | undefined, stream?: NodeJS.ReadableStream) => {
         if (err) return reject(err);
         if (!stream) return reject(new Error('No pull stream returned'));
         this.docker.modem.followProgress(
-          stream as NodeJS.ReadableStream,
-          (doneErr: any) => {
+          stream,
+          (doneErr?: unknown) => {
             if (doneErr) return reject(doneErr);
             this.logger.info(`Finished pulling image '${image}'`);
             resolve();
           },
-          (event: any) => {
+          (event: { status?: string; id?: string }) => {
             if (event?.status && event?.id) {
               this.logger.debug(`${event.id}: ${event.status}`);
             } else if (event?.status) {
@@ -73,7 +77,9 @@ export class ContainerService {
             }
           },
         );
-      });
+      };
+      // Use overload that accepts optional opts. Undefined maps to (image, cb).
+      this.docker.pull(image, platform ? ({ platform } as PullOpts) : undefined, cb);
     });
   }
 
@@ -83,7 +89,7 @@ export class ContainerService {
   async start(opts?: ContainerOpts): Promise<ContainerEntity> {
     const { image, autoRemove, ...rest } = opts || {};
     const optsWithDefaults = { image: image ?? DEFAULT_IMAGE, autoRemove: autoRemove ?? true, ...rest };
-    await this.ensureImage(optsWithDefaults.image!);
+    await this.ensureImage(optsWithDefaults.image!, optsWithDefaults.platform);
 
     const Env: string[] | undefined = Array.isArray(optsWithDefaults.env)
       ? optsWithDefaults.env
@@ -91,9 +97,12 @@ export class ContainerService {
         ? Object.entries(optsWithDefaults.env).map(([k, v]) => `${k}=${v}`)
         : undefined;
 
-    const createOptions: ContainerCreateOptions = {
+    // dockerode forwards unknown top-level options (e.g., name, platform) as query params
+    type CreateOptsWithPlatform = ContainerCreateOptions & { name?: string; platform?: string };
+    const createOptions: CreateOptsWithPlatform = {
       Image: optsWithDefaults.image,
       name: optsWithDefaults.name,
+      platform: optsWithDefaults.platform,
       Cmd: optsWithDefaults.cmd,
       Env,
       WorkingDir: optsWithDefaults.workingDir,
@@ -105,7 +114,10 @@ export class ContainerService {
       Tty: optsWithDefaults.tty ?? false,
       AttachStdout: true,
       AttachStderr: true,
-      Labels: optsWithDefaults.labels,
+      Labels: {
+        ...(optsWithDefaults.labels || {}),
+        ...(optsWithDefaults.platform ? { [PLATFORM_LABEL]: optsWithDefaults.platform } : {}),
+      },
     };
 
     this.logger.info(
@@ -339,6 +351,13 @@ export class ContainerService {
     this.logger.info(`Removing container cid=${containerId.substring(0, 12)} force=${force}`);
     const container = this.docker.getContainer(containerId);
     await container.remove({ force });
+  }
+
+  /** Inspect and return container labels */
+  async getContainerLabels(containerId: string): Promise<Record<string, string> | undefined> {
+    const container = this.docker.getContainer(containerId);
+    const details = await container.inspect();
+    return details.Config?.Labels ?? undefined;
   }
 
   /**

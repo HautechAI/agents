@@ -1,6 +1,7 @@
 import { ContainerOpts, ContainerService } from '../services/container.service';
 import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
+import { PLATFORM_LABEL, SUPPORTED_PLATFORMS, type Platform } from '../constants.js';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
@@ -16,13 +17,18 @@ export const ContainerProviderStaticConfigSchema = z
       .optional()
       .describe('Shell script (executed with /bin/sh -lc) to run immediately after creating the container.')
       .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
+    platform: z
+      .enum(SUPPORTED_PLATFORMS as [Platform, ...Platform[]])
+      .optional()
+      .describe('Docker platform selector for the workspace container')
+      .meta({ 'ui:widget': 'select' }),
   })
   .strict();
 
 export type ContainerProviderStaticConfig = z.infer<typeof ContainerProviderStaticConfigSchema>;
 
 export class ContainerProviderEntity {
-  private cfg?: Pick<ContainerOpts, 'image' | 'env'> & { initialScript?: string };
+  private cfg?: Pick<ContainerOpts, 'image' | 'env' | 'platform'> & { initialScript?: string };
 
   constructor(
     private containerService: ContainerService,
@@ -35,15 +41,51 @@ export class ContainerProviderEntity {
     try {
       const parsed = ContainerProviderStaticConfigSchema.parse(cfg);
       this.cfg = parsed;
-    } catch (e) {
+    } catch (e: unknown) {
       // If validation fails, surface a clearer error (caller can decide how to handle)
-      throw new Error(`Invalid ContainerProvider configuration: ${(e as Error).message}`);
+      const err = e as Error;
+      throw new Error(`Invalid ContainerProvider configuration: ${err.message}`);
     }
   }
 
   async provide(threadId: string) {
     const labels = this.idLabels(threadId);
     let container: ContainerEntity | undefined = await this.containerService.findContainerByLabels(labels);
+
+    // Enforce non-reuse on platform mismatch if a platform is requested now
+    const requestedPlatform = this.cfg?.platform ?? this.opts.platform;
+    if (container && requestedPlatform) {
+      try {
+        const containerLabels = await this.containerService.getContainerLabels(container.id);
+        const existingPlatform = containerLabels?.[PLATFORM_LABEL];
+        if (!existingPlatform || existingPlatform !== requestedPlatform) {
+          // Stop and remove old container, then recreate (handle benign errors)
+          try {
+            await container.stop();
+          } catch (e: unknown) {
+            const sc = getStatusCode(e);
+            if (sc !== 304 && sc !== 404) throw e;
+          }
+          try {
+            await container.remove(true);
+          } catch (e: unknown) {
+            const sc = getStatusCode(e);
+            if (sc !== 404) throw e;
+          }
+          container = undefined;
+        }
+      } catch {
+        // If inspect fails, do not reuse to be safe; still attempt cleanup
+        try {
+          await container.stop();
+        } catch {}
+        try {
+          await container.remove(true);
+        } catch {}
+        container = undefined;
+      }
+    }
+
     if (!container) {
       container = await this.containerService.start({
         ...this.opts,
@@ -51,6 +93,7 @@ export class ContainerProviderEntity {
         image: this.cfg?.image ?? this.opts.image,
         env: { ...(this.opts.env || {}), ...(this.cfg?.env || {}) },
         labels: { ...(this.opts.labels || {}), ...labels },
+        platform: requestedPlatform,
       });
 
       // Run initial script if provided. Treat non-zero exit code as failure.
@@ -68,4 +111,13 @@ export class ContainerProviderEntity {
     }
     return container;
   }
+}
+
+// Helper: safely read statusCode from unknown error values
+function getStatusCode(e: unknown): number | undefined {
+  if (typeof e === 'object' && e !== null && 'statusCode' in e) {
+    const v = (e as { statusCode?: unknown }).statusCode;
+    if (typeof v === 'number') return v;
+  }
+  return undefined;
 }
