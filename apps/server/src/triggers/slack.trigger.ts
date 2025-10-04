@@ -3,12 +3,13 @@ import { LoggerService } from '../services/logger.service';
 import { SlackService } from '../services/slack.service';
 import { z } from 'zod';
 
+// Minimal static config schema (backward-compatible, no fields)
 export const SlackTriggerStaticConfigSchema = z.object({}).strict();
 
 /**
  * SlackTrigger
  * Starts a Socket Mode connection to Slack and relays inbound user messages
- * (non-bot, non-thread broadcast) to subscribers via `notify([text])`.
+ * (non-bot, non-thread broadcast) to subscribers via notify().
  */
 export class SlackTrigger extends BaseTrigger {
   constructor(
@@ -16,10 +17,11 @@ export class SlackTrigger extends BaseTrigger {
     private logger: LoggerService,
   ) {
     super();
+    // Subscribe to Slack message events; minimal behavior only (no additional filtering)
     this.slack.onMessage(async (event) => {
       try {
         if (!event.text) return;
-        const thread = `${event.user}_${event.thread_ts ?? event.ts}`;
+        const thread = `${event.user}_${(event as any).thread_ts ?? event.ts}`;
         const ch = (event as Record<string, unknown>).channel_type;
         const msg: TriggerHumanMessage = {
           kind: 'human',
@@ -28,7 +30,7 @@ export class SlackTrigger extends BaseTrigger {
             user: event.user,
             channel: event.channel,
             channel_type: typeof ch === 'string' ? ch : undefined,
-            thread_ts: event.thread_ts ?? event.ts,
+            thread_ts: (event as any).thread_ts ?? event.ts,
           },
         };
         await this.notify(thread, [msg]);
@@ -47,6 +49,6 @@ export class SlackTrigger extends BaseTrigger {
   async stop(): Promise<void> { await this.deprovision(); }
 
   async setConfig(_cfg: Record<string, unknown>): Promise<void> {
-    /* trigger has no dynamic config yet */
+    /* trigger has no dynamic config */
   }
 }

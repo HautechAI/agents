@@ -158,6 +158,22 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         },
       )
       .register(
+        'slackTrigger',
+        () => new SlackTrigger(slackService, logger),
+        {
+          sourcePorts: {
+            // Preserve prior port naming: 'subscribe' handle to call instance.subscribe/unsubscribe
+            subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' },
+          },
+        },
+        {
+          title: 'Slack (Socket Mode)',
+          kind: 'trigger',
+          capabilities: { provisionable: true, pausable: true, staticConfigurable: true },
+          staticConfigSchema: toJSONSchema(SlackTriggerStaticConfigSchema),
+        },
+      )
+      .register(
         'simpleAgent',
         (ctx) => new SimpleAgent(configService, logger, checkpointerService, ctx.nodeId),
         {
