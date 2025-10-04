@@ -4,7 +4,9 @@
   "description": "",
   "private": true,
   "scripts": {
-    "test": "vitest run"
+    "build": "pnpm -r --filter ./packages/* run build",
+    "test": "vitest run",
+    "poc": "tsx examples/obs-sdk-poc.ts"
   },
   "keywords": [],
   "author": "",
@@ -14,7 +16,9 @@
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
+    "@types/node": "^20.12.12",
     "@types/socket.io": "^3.0.2",
+    "tsx": "^4.19.2",
     "vitest": "^3.2.4"
   }
 }
