@@ -5,11 +5,15 @@ async function main() {
   init({
     mode: 'extended',
     endpoints: { extended: endpoint },
-    defaultAttributes: { service: 'poc-app' }
+    defaultAttributes: { service: 'poc-app' },
   });
   await withSpan({ label: 'poc-root' }, async () => {
+    await new Promise((r) => setTimeout(r, 2000));
     await withSpan({ label: 'child-1' }, async () => {
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 2000));
+    });
+    await withSpan({ label: 'child-1' }, async () => {
+      await new Promise((r) => setTimeout(r, 2000));
     });
   });
 }
