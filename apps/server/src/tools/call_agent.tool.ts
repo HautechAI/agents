@@ -41,9 +41,7 @@ export class CallAgentTool extends BaseTool {
   private targetAgent: BaseAgent | undefined;
   private responseMode: 'sync' | 'async' | 'ignore' = 'sync';
 
-  constructor(private logger: LoggerService) {
-    super();
-  }
+  constructor(logger: LoggerService) { super(logger); }
 
   setAgent(agent: BaseAgent | undefined): void {
     this.targetAgent = agent;
@@ -69,7 +67,7 @@ export class CallAgentTool extends BaseTool {
         if (!this.targetAgent) return 'Target agent is not connected';
 
         const parentThreadId =
-          (runtimeCfg as WithRuntime | undefined)?.configurable?.thread_id ??
+          (runtimeCfg as WithRuntime | undefined)?.configurable?.thread_id ||
           (config as WithRuntime | undefined)?.configurable?.thread_id;
         if (!parentThreadId) {
           throw new Error('thread_id is required');
@@ -99,7 +97,7 @@ export class CallAgentTool extends BaseTool {
             .then(async (res) => {
               if (this.responseMode !== 'async') return; // ignore mode: no callback
               try {
-                const caller = (runtimeCfg as WithRuntime | undefined)?.configurable?.caller_agent ??
+                const caller = (runtimeCfg as WithRuntime | undefined)?.configurable?.caller_agent ||
                   (config as WithRuntime | undefined)?.configurable?.caller_agent;
                 if (!caller) {
                   this.logger.error('call_agent async callback skipped: caller_agent missing');

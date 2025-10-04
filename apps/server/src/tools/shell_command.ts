@@ -25,9 +25,7 @@ export const ShellToolStaticConfigSchema = z.object({}).strict();
 export class ShellTool extends BaseTool {
   private containerProvider?: ContainerProviderEntity;
 
-  constructor(private logger: LoggerService) {
-    super();
-  }
+  constructor(logger: LoggerService) { super(logger); }
 
   setContainerProvider(provider: ContainerProviderEntity | undefined): void {
     this.containerProvider = provider;

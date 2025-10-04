@@ -7,18 +7,18 @@ import { last } from 'lodash-es';
 import { McpServer, McpTool } from '../mcp';
 import { isDynamicConfigurable } from '../graph/capabilities';
 import { inferArgsSchema } from '../mcp/jsonSchemaToZod';
-import { CallModelNode } from '../nodes/callModel.node';
-import { ToolsNode } from '../nodes/tools.node';
+import { CallModelNode, type MemoryConnector } from '../lgnodes/callModel.lgnode';
+import { ToolsNode } from '../lgnodes/tools.lgnode';
 import { CheckpointerService } from '../services/checkpointer.service';
 import { ConfigService } from '../services/config.service';
 import { LoggerService } from '../services/logger.service';
 import { BaseAgent } from './base.agent';
 import { BaseTool } from '../tools/base.tool';
 import { LangChainToolAdapter } from '../tools/langchainTool.adapter';
-import { SummarizationNode } from '../nodes/summarization.node';
+import { SummarizationNode } from '../lgnodes/summarization.lgnode';
 import { NodeOutput } from '../types';
 import { z } from 'zod';
-import { EnforceRestrictionNode } from '../nodes/enforceRestriction.node';
+import { EnforceRestrictionNode } from '../lgnodes/enforceRestriction.lgnode';
 
 /**
  * Zod schema describing static configuration for SimpleAgent.
@@ -190,6 +190,27 @@ export class SimpleAgent extends BaseAgent {
 
     // Apply runtime scheduling defaults (debounce=0, whenBusy=wait) already set in BaseAgent; allow overrides from agentId namespace if needed later
     return this;
+  }
+
+  // Attach/detach a memory connector into the underlying CallModel
+  attachMemoryConnector(mem?: MemoryConnector | { getConnector?: () => MemoryConnector | undefined; createConnector?: () => MemoryConnector }) {
+    // Accept either a connector-like object or a provider exposing getConnector/createConnector
+    let connector: MemoryConnector | undefined = undefined;
+    if (mem && typeof (mem as MemoryConnector).renderMessage === 'function') {
+      connector = mem as MemoryConnector;
+    } else if (mem && 'getConnector' in mem && typeof mem.getConnector === 'function') {
+      const prov = mem;
+      connector = prov.getConnector?.();
+      if (!connector && 'createConnector' in prov && typeof prov.createConnector === 'function') {
+        connector = prov.createConnector();
+      }
+    }
+    this.callModelNode.setMemoryConnector(connector);
+    this.loggerService.info('SimpleAgent memory connector attached');
+  }
+  detachMemoryConnector() {
+    this.callModelNode.setMemoryConnector(undefined);
+    this.loggerService.info('SimpleAgent memory connector detached');
   }
 
   addTool(tool: BaseTool) {

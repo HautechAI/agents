@@ -6,7 +6,7 @@ import { TriggerListener, TriggerMessage, isSystemTrigger } from '../triggers/ba
 import { NodeOutput } from '../types';
 import { withAgent } from '@traceloop/node-server-sdk';
 import type { StaticConfigurable } from '../graph/capabilities';
-import * as z from 'zod';
+import { z } from 'zod';
 import { JSONSchema } from 'zod/v4/core';
 import { MessagesBuffer, ProcessBuffer } from './messagesBuffer';
 

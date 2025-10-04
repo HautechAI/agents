@@ -1,0 +1,2 @@
+# Ensure no .removed artifacts remain
+*.removed
