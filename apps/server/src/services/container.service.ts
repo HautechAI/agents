@@ -16,6 +16,7 @@ export type ContainerOpts = {
   networkMode?: string;
   tty?: boolean;
   labels?: Record<string, string>;
+  platform?: 'linux/amd64' | 'linux/arm64';
 };
 
 /**
@@ -43,7 +44,7 @@ export class ContainerService {
   }
 
   /** Pull an image if it's not already present locally. */
-  async ensureImage(image: string): Promise<void> {
+  async ensureImage(image: string, platform?: 'linux/amd64' | 'linux/arm64'): Promise<void> {
     this.logger.info(`Ensuring image '${image}' is available locally`);
     // Check if image exists
     try {
@@ -55,7 +56,7 @@ export class ContainerService {
     }
 
     await new Promise<void>((resolve, reject) => {
-      this.docker.pull(image, (err: Error | undefined, stream: NodeJS.ReadableStream | undefined) => {
+      const cb = (err: Error | undefined, stream: NodeJS.ReadableStream | undefined) => {
         if (err) return reject(err);
         if (!stream) return reject(new Error('No pull stream returned'));
         this.docker.modem.followProgress(
@@ -73,7 +74,12 @@ export class ContainerService {
             }
           },
         );
-      });
+      };
+      if (platform) {
+        (this.docker as any).pull(image, { platform }, cb as any);
+      } else {
+        this.docker.pull(image, cb as any);
+      }
     });
   }
 
@@ -83,7 +89,7 @@ export class ContainerService {
   async start(opts?: ContainerOpts): Promise<ContainerEntity> {
     const { image, autoRemove, ...rest } = opts || {};
     const optsWithDefaults = { image: image ?? DEFAULT_IMAGE, autoRemove: autoRemove ?? true, ...rest };
-    await this.ensureImage(optsWithDefaults.image!);
+    await this.ensureImage(optsWithDefaults.image!, optsWithDefaults.platform);
 
     const Env: string[] | undefined = Array.isArray(optsWithDefaults.env)
       ? optsWithDefaults.env
@@ -91,9 +97,10 @@ export class ContainerService {
         ? Object.entries(optsWithDefaults.env).map(([k, v]) => `${k}=${v}`)
         : undefined;
 
-    const createOptions: ContainerCreateOptions = {
+    const createOptions: ContainerCreateOptions & { name?: string; platform?: string } = {
       Image: optsWithDefaults.image,
       name: optsWithDefaults.name,
+      platform: optsWithDefaults.platform,
       Cmd: optsWithDefaults.cmd,
       Env,
       WorkingDir: optsWithDefaults.workingDir,
@@ -105,13 +112,16 @@ export class ContainerService {
       Tty: optsWithDefaults.tty ?? false,
       AttachStdout: true,
       AttachStderr: true,
-      Labels: optsWithDefaults.labels,
+      Labels: {
+        ...(optsWithDefaults.labels || {}),
+        ...(optsWithDefaults.platform ? { 'hautech.ai/platform': optsWithDefaults.platform } : {}),
+      },
     };
 
     this.logger.info(
       `Creating container from '${optsWithDefaults.image}'${optsWithDefaults.name ? ` name=${optsWithDefaults.name}` : ''}`,
     );
-    const container = await this.docker.createContainer(createOptions);
+    const container = await (this.docker as any).createContainer(createOptions as any);
     await container.start();
     const inspect = await container.inspect();
     this.logger.info(`Container started cid=${inspect.Id.substring(0, 12)} status=${inspect.State?.Status}`);
@@ -336,9 +346,16 @@ export class ContainerService {
 
   /** Remove a container by docker id. */
   async removeContainer(containerId: string, force = false): Promise<void> {
-    this.logger.info(`Removing container cid=${containerId.substring(0, 12)} force=${force}`);
+  this.logger.info(`Removing container cid=${containerId.substring(0, 12)} force=${force}`);
+  const container = this.docker.getContainer(containerId);
+  await container.remove({ force });
+  }
+
+  /** Inspect and return container labels */
+  async getContainerLabels(containerId: string): Promise<Record<string, string> | undefined> {
     const container = this.docker.getContainer(containerId);
-    await container.remove({ force });
+    const details = await container.inspect();
+    return (details?.Config as any)?.Labels as Record<string, string> | undefined;
   }
 
   /**

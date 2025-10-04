@@ -16,13 +16,17 @@ export const ContainerProviderStaticConfigSchema = z
       .optional()
       .describe('Shell script (executed with /bin/sh -lc) to run immediately after creating the container.')
       .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
+    platform: z
+      .enum(['linux/amd64', 'linux/arm64'])
+      .optional()
+      .describe('Docker platform selector for the workspace container'),
   })
   .strict();
 
 export type ContainerProviderStaticConfig = z.infer<typeof ContainerProviderStaticConfigSchema>;
 
 export class ContainerProviderEntity {
-  private cfg?: Pick<ContainerOpts, 'image' | 'env'> & { initialScript?: string };
+  private cfg?: Pick<ContainerOpts, 'image' | 'env' | 'platform'> & { initialScript?: string };
 
   constructor(
     private containerService: ContainerService,
@@ -44,6 +48,25 @@ export class ContainerProviderEntity {
   async provide(threadId: string) {
     const labels = this.idLabels(threadId);
     let container: ContainerEntity | undefined = await this.containerService.findContainerByLabels(labels);
+
+    // Enforce non-reuse on platform mismatch if a platform is requested now
+    const requestedPlatform = this.cfg?.platform ?? (this.opts as any)?.platform;
+    if (container && requestedPlatform) {
+      try {
+        const containerLabels = await this.containerService.getContainerLabels(container.id);
+        const existingPlatform = containerLabels?.['hautech.ai/platform'];
+        if (!existingPlatform || existingPlatform !== requestedPlatform) {
+          // Stop and remove old container, then recreate
+          await container.stop();
+          await container.remove(true);
+          container = undefined;
+        }
+      } catch {
+        // If inspect fails, do not reuse to be safe
+        container = undefined;
+      }
+    }
+
     if (!container) {
       container = await this.containerService.start({
         ...this.opts,
@@ -51,6 +74,7 @@ export class ContainerProviderEntity {
         image: this.cfg?.image ?? this.opts.image,
         env: { ...(this.opts.env || {}), ...(this.cfg?.env || {}) },
         labels: { ...(this.opts.labels || {}), ...labels },
+        platform: requestedPlatform,
       });
 
       // Run initial script if provided. Treat non-zero exit code as failure.

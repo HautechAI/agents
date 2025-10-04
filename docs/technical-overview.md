@@ -213,6 +213,16 @@ Important config files
 - apps/server/src/services/config.service.ts: config schema and env mapping.
 - docker-compose.yml: local Mongo replica set bootstrap.
 
+Workspace container platform
+- containerProvider.staticConfig.platform: Optional; enum of `linux/amd64` or `linux/arm64`.
+- Behavior: When set, `docker pull` includes the platform selector and `docker.createContainer` receives `platform` as a query parameter. New containers are labeled with `hautech.ai/platform`.
+- Reuse rules: If a platform is requested and an existing container found by labels has a different or missing `hautech.ai/platform` label, it is not reused; the old container is stopped and removed, and a new one is created.
+- Example:
+  - platform: linux/amd64
+  - image: node:20
+  - env: { FOO: "bar" }
+- Note: Docker Desktop generally supports both platforms; non-native emulation may be slower.
+
 Defaults and toggles
 - LiveGraphRuntime serializes apply operations by default.
 - PRTrigger intervalMs default 60000; includeAuthored default false.
