@@ -1,27 +1,54 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { SpanDoc, LogDoc } from '../types';
 import { fetchLogs } from '../services/api';
 import { spanRealtime } from '../services/socket';
 
-export function SpanDetails({ span, onClose }: { span: SpanDoc; onClose(): void }) {
-  const [logs, setLogs] = useState<LogDoc[]>([]);
+export function SpanDetails({ span, spans, onSelectSpan, onClose }: { span: SpanDoc; spans: SpanDoc[]; onSelectSpan(s: SpanDoc): void; onClose(): void }) {
+  const [allLogs, setAllLogs] = useState<LogDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchLogs({ spanId: span.spanId, traceId: span.traceId, limit: 200 })
-      .then(items => { if (!cancelled) setLogs(items.reverse()); }) // show oldest first
+    // Fetch all logs for trace; filtering done client-side for subtree view
+    fetchLogs({ traceId: span.traceId, limit: 500 })
+      .then(items => { if (!cancelled) setAllLogs(items.reverse()); }) // oldest first
       .catch(e => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     const off = spanRealtime.onLog(l => {
-      if (l.spanId === span.spanId) {
-        setLogs(prev => [...prev, l]);
+      if (l.traceId === span.traceId) {
+        setAllLogs(prev => [...prev, l]);
       }
     });
     return () => { cancelled = true; off(); };
   }, [span.spanId, span.traceId]);
+
+  // Build quick index for parent-child relationships
+  const childrenMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    spans.forEach(s => { if (s.parentSpanId) (map[s.parentSpanId] ||= []).push(s.spanId); });
+    return map;
+  }, [spans]);
+
+  const subtreeSpanIds = useMemo(() => {
+    const ids = new Set<string>();
+    function dfs(id: string) {
+      if (ids.has(id)) return;
+      ids.add(id);
+      const kids = childrenMap[id];
+      if (kids) kids.forEach(dfs);
+    }
+    dfs(span.spanId);
+    return ids;
+  }, [span.spanId, childrenMap]);
+
+  const filteredLogs = useMemo(() => {
+    return allLogs.filter(l => !l.spanId || subtreeSpanIds.has(l.spanId));
+  }, [allLogs, subtreeSpanIds]);
+
+  // Span lookup for name in table
+  const spanById = useMemo(() => Object.fromEntries(spans.map(s => [s.spanId, s])), [spans]);
 
   return (
     <div style={{ padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -46,29 +73,43 @@ export function SpanDetails({ span, onClose }: { span: SpanDoc; onClose(): void 
           <code>{new Date(e.ts).toLocaleTimeString()} - {e.name}</code>
         </div>
       ))}
-      <h3>Logs</h3>
+      <h3>Logs (subtree)</h3>
       {loading && <div style={{ color: '#666' }}>Loading logs...</div>}
       {error && <div style={{ color: 'red' }}>Error loading logs: {error}</div>}
-      {!loading && !error && logs.length === 0 && <div style={{ color: '#666' }}>No logs</div>}
-      {!loading && logs.length > 0 && (
-        <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid #ddd', borderRadius: 4, background: '#fafafa' }}>
-          {logs.map(l => (
-            <div key={l.ts + l.message + Math.random()} style={{
-              display: 'flex',
-              gap: 8,
-              padding: '4px 8px',
-              borderBottom: '1px solid #eee',
-              fontFamily: 'monospace',
-              fontSize: 12,
-              background: l.level === 'error' ? '#ffecec' : l.level === 'debug' ? '#f2f8ff' : 'transparent'
-            }}>
-              <span style={{ width: 90, color: '#555' }}>{new Date(l.ts).toLocaleTimeString()}</span>
-              <span style={{ textTransform: 'uppercase', fontWeight: 600, color: l.level === 'error' ? '#d00' : l.level === 'debug' ? '#0366d6' : '#222', width: 50 }}>{l.level}</span>
-              <span style={{ flex: 1 }}>{l.message}</span>
-            </div>
-          ))}
+      {!loading && !error && filteredLogs.length === 0 && <div style={{ color: '#666' }}>No logs in subtree</div>}
+      {!loading && filteredLogs.length > 0 && (
+        <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #ddd', borderRadius: 4 }}>          
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'monospace' }}>
+            <thead style={{ position: 'sticky', top: 0, background: '#f8f9fa' }}>
+              <tr>
+                <th style={thStyle}>Time</th>
+                <th style={thStyle}>Span</th>
+                <th style={thStyle}>Level</th>
+                <th style={thStyle}>Log</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLogs.map((l, idx) => {
+                const s = l.spanId ? spanById[l.spanId] : undefined;
+                const isCurrent = l.spanId === span.spanId;
+                return (
+                  <tr key={l.ts + idx} style={{ background: isCurrent ? '#fffadd' : 'transparent' }}>
+                    <td style={tdStyle}>{new Date(l.ts).toLocaleTimeString()}</td>
+                    <td style={{ ...tdStyle, cursor: s ? 'pointer' : 'default', color: s ? '#0366d6' : '#555' }} onClick={() => s && onSelectSpan(s)}>
+                      {s ? s.label : '(root)'}
+                    </td>
+                    <td style={{ ...tdStyle, fontWeight: 600, color: l.level === 'error' ? '#d00' : l.level === 'debug' ? '#0366d6' : '#222' }}>{l.level.toUpperCase()}</td>
+                    <td style={{ ...tdStyle, whiteSpace: 'pre-wrap' }}>{l.message}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
+
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '4px 6px', borderBottom: '1px solid #ccc', position: 'sticky', top: 0 };
+const tdStyle: React.CSSProperties = { padding: '4px 6px', borderBottom: '1px solid #eee', verticalAlign: 'top' };

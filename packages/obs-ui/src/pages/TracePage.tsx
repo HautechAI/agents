@@ -201,7 +201,14 @@ export function TracePage() {
                   <TimelinePane rows={rows} ruler={ruler} onSelect={s => setSelected(s)} />
                 </div>
               )}
-              {selected && <SpanDetails span={selected} onClose={() => setSelected(null)} />}
+              {selected && (
+                <SpanDetails
+                  span={selected}
+                  spans={spans}
+                  onSelectSpan={(s: SpanDoc) => setSelected(s)}
+                  onClose={() => setSelected(null)}
+                />
+              )}
             </div>
           </div>
         </>
