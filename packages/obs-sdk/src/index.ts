@@ -31,6 +31,9 @@ export interface SpanContext {
   parentSpanId?: string;
 }
 
+// Unified status enum used across spans and tool/LLM responses
+export type SpanStatus = 'success' | 'error';
+
 // Log document shape (Stage 1)
 export interface LogInput {
   level: 'debug' | 'info' | 'error';
@@ -166,7 +169,7 @@ export async function withSpan<T>(
   computeEndAttrs?: (
     result: T | undefined,
     error: unknown | undefined,
-  ) => { attributes?: Record<string, unknown>; status?: 'ok' | 'error' } | void,
+  ) => { attributes?: Record<string, unknown>; status?: SpanStatus } | void,
 ): Promise<T> {
   // If SDK not initialized, execute user function without instrumentation (silent no-op)
   if (!config) {
@@ -205,7 +208,7 @@ export async function withSpan<T>(
       try {
         const result = await fn();
         const endExtra = computeEndAttrs?.(result, undefined) || {};
-        const statusFinal = endExtra.status || 'ok';
+        const statusFinal: SpanStatus = endExtra.status || 'success';
         if (cfg.mode === 'extended') {
           const completed = {
             state: 'completed',
@@ -240,7 +243,7 @@ export async function withSpan<T>(
         resolve(result);
       } catch (err) {
         const endExtra = computeEndAttrs?.(undefined, err) || {};
-        const statusFinal = endExtra.status || 'error';
+        const statusFinal: SpanStatus = endExtra.status || 'error';
         if (cfg.mode === 'extended') {
           const completed = {
             state: 'completed',
@@ -326,22 +329,23 @@ export function withLLM<T>(
   }).then((res) => (res as LLMResponse<T>).raw);
 }
 
-export function withToolCall<T>(
+export function withToolCall<TOutput = unknown, TRaw = any>(
   attributes: { toolCallId: string; name: string; input: unknown; [k: string]: unknown },
-  fn: () => Promise<ToolCallResponse<T> | T> | ToolCallResponse<T> | T,
-) {
+  fn: () => Promise<ToolCallResponse<TRaw, TOutput>> | ToolCallResponse<TRaw, TOutput>,
+): Promise<TRaw> {
   const { toolCallId, name, input, ...rest } = attributes;
   return withSpan(
-  { label: `tool:${name}`, kind: 'tool_call', attributes: { kind: 'tool_call', toolCallId, name, input, ...rest } },
+    { label: `tool:${name}`, kind: 'tool_call', attributes: { kind: 'tool_call', toolCallId, name, input, ...rest } },
     fn,
     (result, err) => {
       if (err) return { attributes: { status: 'error' }, status: 'error' };
-      if (result instanceof ToolCallResponse) {
-        return { attributes: { output: result.output, status: 'success' }, status: 'ok' };
+      if (!(result instanceof ToolCallResponse)) {
+        return { attributes: { status: 'error', error: 'tool.response.missingWrapper' }, status: 'error' };
       }
-      return { attributes: { output: result, status: 'success' }, status: 'ok' };
+      const statusAttr: SpanStatus = (result.status as SpanStatus) || 'success';
+      return { attributes: { output: result.output, status: statusAttr }, status: statusAttr };
     },
-  ).then((res) => (res instanceof ToolCallResponse ? (res as ToolCallResponse<T>).raw : (res as T)));
+  ).then((res) => (res as ToolCallResponse<TRaw, TOutput>).raw);
 }
 
 export function withSummarize<TRaw = any>(
@@ -487,9 +491,11 @@ export class LLMResponse<TRaw = any> {
 export class ToolCallResponse<TRaw = any, TOutput = unknown> {
   readonly raw: TRaw;
   readonly output?: TOutput;
-  constructor(params: { raw: TRaw; output?: TOutput }) {
+  readonly status: SpanStatus;
+  constructor(params: { raw: TRaw; output?: TOutput; status: SpanStatus }) {
     this.raw = params.raw;
     this.output = params.output;
+    this.status = params.status;
   }
 }
 

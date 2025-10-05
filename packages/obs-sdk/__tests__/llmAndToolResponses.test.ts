@@ -39,14 +39,9 @@ describe('ToolCallResponse & withToolCall', () => {
   it('unwraps ToolCallResponse returning raw value', async () => {
     const raw = { internal: true };
     const output = { value: 42 };
-  const r = await withToolCall({ toolCallId: 'tc1', name: 'demo', input: { a: 1 } }, async () => {
-      return new ToolCallResponse({ raw, output });
+    const r = await withToolCall({ toolCallId: 'tc1', name: 'demo', input: { a: 1 } }, async () => {
+      return new ToolCallResponse({ raw, output, status: 'success' });
     });
     expect(r).toBe(raw);
-  });
-
-  it('handles plain return value', async () => {
-  const r = await withToolCall({ toolCallId: 'tc2', name: 'plain', input: {} }, async () => ({ ok: true }));
-    expect(r).toEqual({ ok: true });
   });
 });

@@ -1,6 +1,6 @@
 import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { withToolCall } from '@hautech/obs-sdk';
+import { ToolCallResponse, withToolCall } from '@hautech/obs-sdk';
 import { BaseTool } from '../tools/base.tool';
 import { NodeOutput } from '../types';
 import { BaseNode } from './base.lgnode';
@@ -46,12 +46,18 @@ export class ToolsNode extends BaseNode {
         const callId = tc.id ?? `missing_id_${Math.random().toString(36).slice(2)}`;
         return await withToolCall({ toolCallId: callId, name: tc.name, input: tc.args }, async () => {
           const tool = tools.find((t) => t.name === tc.name);
-          const createMessage = (content: string) =>
-            new ToolMessage({
+          const createMessage = (content: string, success = true) => {
+            const toolMessage = new ToolMessage({
               tool_call_id: callId,
               name: tc.name,
               content,
             });
+            return new ToolCallResponse({
+              raw: toolMessage,
+              output: content,
+              status: success ? 'success' : 'error',
+            });
+          };
 
           if (!tool) {
             return createMessage(`Tool '${tc.name}' not found.`);
