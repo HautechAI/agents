@@ -16,6 +16,7 @@ async function ensureMonaco() {
 }
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ContextView, { ContextMessageLike } from './ContextView';
 import { SpanDoc, LogDoc } from '../types';
 import { fetchLogs } from '../services/api';
 import { spanRealtime } from '../services/socket';
@@ -103,6 +104,7 @@ export function SpanDetails({
       : undefined;
   const isLLMSpan = rawKind === 'llm';
   const isToolSpan = rawKind === 'tool_call';
+  const isSummarizeSpan = rawKind === 'summarize';
 
   // Extract LLM context messages (array) safely. withLLM stored under attributes.context
   interface ContextMsg {
@@ -175,10 +177,11 @@ export function SpanDetails({
 
   // Tabs: show IO first if LLM or Tool span: io | attributes | logs (else attributes | logs)
   type TabKey = 'attributes' | 'logs' | 'io';
-  const [activeTab, setActiveTab] = useState<TabKey>(isLLMSpan || isToolSpan ? 'io' : 'attributes');
+  const [activeTab, setActiveTab] = useState<TabKey>(isLLMSpan || isToolSpan || isSummarizeSpan ? 'io' : 'attributes');
   // We keep the user's selected tab (even if it's 'io') so when they navigate back to an LLM span
   // the IO tab restores automatically. For rendering we derive an effective tab.
-  const effectiveTab: TabKey = activeTab === 'io' && !(isLLMSpan || isToolSpan) ? 'attributes' : activeTab;
+  const effectiveTab: TabKey =
+    activeTab === 'io' && !(isLLMSpan || isToolSpan || isSummarizeSpan) ? 'attributes' : activeTab;
 
   // Left/Right arrow keyboard navigation between tabs (scoped to this panel when focused)
   // We attach a keydown listener on mount; simple since component unmounts when span deselected.
@@ -194,7 +197,7 @@ export function SpanDetails({
 
       // Build ordered list of visible tabs
       const tabs: TabKey[] = [];
-      if (isLLMSpan || isToolSpan) tabs.push('io');
+      if (isLLMSpan || isToolSpan || isSummarizeSpan) tabs.push('io');
       tabs.push('attributes', 'logs');
       const current = effectiveTab; // effective to handle case activeTab==='io' but LLM vanished
       const idx = tabs.indexOf(current);
@@ -337,7 +340,7 @@ export function SpanDetails({
           }}
         >
           <div style={{ display: 'flex', borderBottom: '1px solid #ddd', background: '#f8f9fa' }}>
-            {(isLLMSpan || isToolSpan) && (
+            {(isLLMSpan || isToolSpan || isSummarizeSpan) && (
               <TabButton active={activeTab === 'io'} onClick={() => setActiveTab('io')}>
                 IO
               </TabButton>
@@ -440,7 +443,8 @@ export function SpanDetails({
                 )}
               </div>
             )}
-            {effectiveTab === 'io' && (isLLMSpan || isToolSpan) && (
+            {effectiveTab === 'io' && isSummarizeSpan && <SummarizeIO span={span} />}
+            {effectiveTab === 'io' && (isLLMSpan || isToolSpan) && !isSummarizeSpan && (
               <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', height: '100%', minHeight: 0 }}>
                 {/* Left Column: Input / Context */}
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -469,7 +473,9 @@ export function SpanDetails({
                         </button>
                       </div>
                     )}
-                    {!isToolSpan && collapseAvailable && historyCollapsed && (
+                    {!isToolSpan &&
+                      collapseAvailable &&
+                      historyCollapsed &&
                       // Tail only (after cut)
                       visibleMessageIndices.map((i) => {
                         const m = contextMessages[i];
@@ -487,19 +493,20 @@ export function SpanDetails({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                               <RoleBadge role={m.role} />
                               <span style={{ fontSize: 10, color: '#555' }}>#{i + 1}</span>
-                              {Array.isArray((m as ContextMsg).toolCalls) && (m as ContextMsg).toolCalls!.length > 0 && (
-                                <span
-                                  style={{
-                                    fontSize: 10,
-                                    background: '#0366d6',
-                                    color: '#fff',
-                                    padding: '2px 6px',
-                                    borderRadius: 10,
-                                  }}
-                                >
-                                  {((m as ContextMsg).toolCalls || []).length} tool calls
-                                </span>
-                              )}
+                              {Array.isArray((m as ContextMsg).toolCalls) &&
+                                (m as ContextMsg).toolCalls!.length > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      background: '#0366d6',
+                                      color: '#fff',
+                                      padding: '2px 6px',
+                                      borderRadius: 10,
+                                    }}
+                                  >
+                                    {((m as ContextMsg).toolCalls || []).length} tool calls
+                                  </span>
+                                )}
                             </div>
                             <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
                               <ReactMarkdown
@@ -539,8 +546,7 @@ export function SpanDetails({
                             </div>
                           </div>
                         );
-                      })
-                    )}
+                      })}
                     {!isToolSpan && collapseAvailable && !historyCollapsed && (
                       // Full history with inline hide button at the cut
                       <>
@@ -561,19 +567,20 @@ export function SpanDetails({
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                   <RoleBadge role={m.role} />
                                   <span style={{ fontSize: 10, color: '#555' }}>#{i + 1}</span>
-                                  {Array.isArray((m as ContextMsg).toolCalls) && (m as ContextMsg).toolCalls!.length > 0 && (
-                                    <span
-                                      style={{
-                                        fontSize: 10,
-                                        background: '#0366d6',
-                                        color: '#fff',
-                                        padding: '2px 6px',
-                                        borderRadius: 10,
-                                      }}
-                                    >
-                                      {((m as ContextMsg).toolCalls || []).length} tool calls
-                                    </span>
-                                  )}
+                                  {Array.isArray((m as ContextMsg).toolCalls) &&
+                                    (m as ContextMsg).toolCalls!.length > 0 && (
+                                      <span
+                                        style={{
+                                          fontSize: 10,
+                                          background: '#0366d6',
+                                          color: '#fff',
+                                          padding: '2px 6px',
+                                          borderRadius: 10,
+                                        }}
+                                      >
+                                        {((m as ContextMsg).toolCalls || []).length} tool calls
+                                      </span>
+                                    )}
                                 </div>
                                 <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
                                   <ReactMarkdown
@@ -581,7 +588,8 @@ export function SpanDetails({
                                     components={{
                                       code({ className, children, ...props }) {
                                         const isBlock =
-                                          String(className || '').includes('language-') || String(children).includes('\n');
+                                          String(className || '').includes('language-') ||
+                                          String(children).includes('\n');
                                         return (
                                           <code
                                             style={{
@@ -601,7 +609,9 @@ export function SpanDetails({
                                       },
                                       pre({ children }) {
                                         return (
-                                          <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>
+                                          <pre
+                                            style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}
+                                          >
                                             {children}
                                           </pre>
                                         );
@@ -635,7 +645,8 @@ export function SpanDetails({
                         })}
                       </>
                     )}
-                    {!isToolSpan && !collapseAvailable &&
+                    {!isToolSpan &&
+                      !collapseAvailable &&
                       contextMessages.map((m, i) => (
                         <div
                           key={i}
@@ -801,6 +812,76 @@ export function SpanDetails({
               </div>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// SummarizeIO component using ContextView for old/new context and markdown for summary
+function SummarizeIO({ span }: { span: SpanDoc }) {
+  const attrs = (span.attributes || {}) as Record<string, unknown>;
+  const oldContext = (attrs['oldContext'] as ContextMessageLike[]) || [];
+  const newContext = (attrs['newContext'] as ContextMessageLike[]) || [];
+  const summary = typeof attrs['summary'] === 'string' ? (attrs['summary'] as string) : undefined;
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', height: '100%', minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <ContextView title="Old Context" messages={oldContext} />
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <h3 style={{ margin: '0 0 4px 0', fontSize: 13 }}>Summary</h3>
+          <div
+            style={{
+              background: '#f6f8fa',
+              border: '1px solid #e1e4e8',
+              borderRadius: 4,
+              padding: 8,
+              fontSize: 12,
+              fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {summary ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({ className, children, ...props }) {
+                    const isBlock = String(className || '').includes('language-') || String(children).includes('\n');
+                    return (
+                      <code
+                        style={{
+                          background: '#eaeef2',
+                          padding: isBlock ? 8 : '2px 4px',
+                          display: isBlock ? 'block' : 'inline',
+                          borderRadius: 4,
+                          fontSize: 11,
+                          whiteSpace: 'pre-wrap',
+                        }}
+                        className={className}
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
+                  pre({ children }) {
+                    return (
+                      <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>{children}</pre>
+                    );
+                  },
+                }}
+              >
+                {summary}
+              </ReactMarkdown>
+            ) : (
+              <span style={{ color: '#666' }}>(no summary)</span>
+            )}
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <ContextView title="New Context" messages={newContext} />
         </div>
       </div>
     </div>
