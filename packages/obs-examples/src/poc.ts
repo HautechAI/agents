@@ -8,6 +8,7 @@ import {
   withToolCall,
   withSummarize,
   logger,
+  LLMResponse,
 } from '@hautech/obs-sdk';
 
 async function main() {
@@ -25,18 +26,27 @@ async function main() {
   await withThread({ threadId: 'demo-thread' }, async () => {
     await withAgent({ agentName: 'demo-agent' }, async () => {
       // Simulate an LLM call
-      const llmResult = await withLLM(
-        { newMessages: [{ role: 'user', content: 'Hello' }], context: { topic: 'greeting' } },
-        async () => {
-          await new Promise((r) => setTimeout(r, 1500));
-          return { text: 'Hi there!', toolCalls: [] };
-        },
-      );
+      const toolCallId = 'tc_weather_1';
+      const llmResult = await withLLM({ context: [{ role: 'human', content: 'Hello' }] as any }, async () => {
+        await new Promise((r) => setTimeout(r, 1500));
+        const raw = { text: 'Hi there!' };
+        return new LLMResponse({
+          raw,
+          content: 'Hi there! I will look up the weather.',
+          toolCalls: [
+            {
+              id: toolCallId,
+              name: 'weather',
+              arguments: { city: 'NYC' },
+            },
+          ],
+        });
+      });
 
       // Simulate tool call with logging demo (5 logs, 500ms gaps)
-      const weather = await withToolCall({ name: 'weather', input: { city: 'NYC' } }, async () => {
+  const weather = await withToolCall({ toolCallId, name: 'weather', input: { city: 'NYC' } }, async () => {
         const log = logger();
-        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
         log.info('Starting weather lookup sequence');
         await sleep(500);
         log.debug('Fetching upstream provider data', { provider: 'demo-weather', attempt: 1 });
