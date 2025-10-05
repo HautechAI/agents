@@ -172,14 +172,14 @@ export function TracePage() {
             Trace {traceId}
             <span style={{ fontWeight: 400, marginLeft: 12, fontSize: 11, color: '#666' }}>{rows.length} spans</span>
           </div>
-          <div ref={containerRef} style={{ display: 'flex', flex: 1 }}>
+          <div ref={containerRef} style={{ display: 'flex', flex: 1, minHeight: 0 }}>
             {/* Left (tree) */}
             <div ref={leftRef} onScroll={onScroll} style={{ width: 300, borderRight: '1px solid #ddd', overflow: 'auto' }}>
               <div style={{ position: 'sticky', top: 0, height: HEADER_HEIGHT, background: '#fff', zIndex: 10, borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', fontWeight: 600, padding: '0 8px' }}>Span</div>
               <TreePane rows={rows} selectedId={selected?.spanId} onSelect={s => setSelected(s)} />
             </div>
             {/* Right (timeline or details) */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
               {!selected && (
                 <div ref={rightRef} onScroll={onScroll} style={{ overflow: 'auto', height: '100%' }}>
                   <div style={{ position: 'sticky', top: 0, height: HEADER_HEIGHT, background: '#fff', zIndex: 10, borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
