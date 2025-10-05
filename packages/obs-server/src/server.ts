@@ -63,7 +63,8 @@ const QuerySchema = z.object({
   label: z.string().optional(),
   sort: z.enum(['lastUpdate', 'startTime']).default('lastUpdate'),
   cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  // Increased max limit from 100 -> 5000 (large traces / development convenience). Default remains 50 to avoid accidental huge payloads.
+  limit: z.coerce.number().int().min(1).max(5000).default(50),
 });
 
 export async function createServer(db: Db, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {

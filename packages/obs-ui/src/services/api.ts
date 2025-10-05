@@ -19,8 +19,12 @@ export async function fetchTrace(traceId: string): Promise<SpanDoc[]> {
   return spans.filter(s => s.traceId === traceId);
 }
 
-export async function fetchSpans(): Promise<SpanDoc[]> {
-  const r = await fetch(BASE_URL + '/v1/spans');
+export async function fetchSpans(opts: { limit?: number; cursor?: string } = {}): Promise<SpanDoc[]> {
+  const usp = new URLSearchParams();
+  // Default to large limit (5000) now that server supports it, unless caller overrides
+  usp.set('limit', String(opts.limit ?? 5000));
+  if (opts.cursor) usp.set('cursor', opts.cursor);
+  const r = await fetch(BASE_URL + '/v1/spans' + (usp.toString() ? `?${usp.toString()}` : ''));
   if (!r.ok) throw new Error('Failed to fetch spans');
   const data = await r.json();
   return data.items || [];

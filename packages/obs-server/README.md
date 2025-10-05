@@ -14,3 +14,7 @@ Endpoints:
 - GET /v1/spans/:id
 - POST /v1/traces (Stage 1 JSON placeholder)
 - /healthz, /readyz
+
+Spans query limits:
+- Default limit: 50
+- Max limit: 5000 (increased from 100 for large traces / development). Use responsibly: large payloads can impact UI performance and network time. Prefer pagination for extremely large datasets.
