@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { SpanDoc, LogDoc } from '../types';
 import { fetchLogs } from '../services/api';
 import { spanRealtime } from '../services/socket';
@@ -76,70 +78,171 @@ export function SpanDetails({
   const attrsJson = useMemo(() => JSON.stringify(span.attributes, null, 2), [span.attributes]);
   const ATTRS_COLLAPSE_THRESHOLD = 1200;
   const showCollapseToggle = attrsJson.length > ATTRS_COLLAPSE_THRESHOLD;
-  const displayedAttrs = attrsExpanded || !showCollapseToggle
-    ? attrsJson
-    : attrsJson.slice(0, ATTRS_COLLAPSE_THRESHOLD) + '\n… (truncated)';
+  const displayedAttrs =
+    attrsExpanded || !showCollapseToggle ? attrsJson : attrsJson.slice(0, ATTRS_COLLAPSE_THRESHOLD) + '\n… (truncated)';
 
-  // Tabs: attributes | logs
-  type TabKey = 'attributes' | 'logs';
-  const [activeTab, setActiveTab] = useState<TabKey>('attributes');
+  // Detect if this is an LLM span (kind recorded as label 'llm' in current backend)
+  const isLLMSpan = span.label === 'llm' || (span.attributes && (span.attributes as any).kind === 'llm');
+
+  // Extract LLM context messages (array) safely. withLLM stored under attributes.context
+  type ContextMsg = {
+    role: 'system' | 'human' | 'ai' | 'tool';
+    content?: any;
+    toolCalls?: any[];
+    tool_calls?: any;
+    toolCallId?: string;
+    tool_call_id?: string;
+  } & Record<string, any>;
+  const contextMessages: ContextMsg[] = useMemo(() => {
+    const raw = (span.attributes as any)?.context;
+    if (!Array.isArray(raw)) return [];
+    return raw as ContextMsg[];
+  }, [span.attributes]);
+
+  // Extract output content + toolCalls (normalized to attributes.output.toolCalls or llm.toolCalls keys)
+  const llmContent: string | undefined = useMemo(() => {
+    const attrs: any = span.attributes || {};
+    // Prefer consolidated output.content then fallback to llm.content or output?.content
+    if (attrs.output && typeof (attrs.output as any).content === 'string') return (attrs.output as any).content;
+    if (typeof attrs['llm.content'] === 'string') return attrs['llm.content'];
+    if (attrs.output && typeof (attrs.output as any) === 'object' && typeof (attrs.output as any).text === 'string')
+      return (attrs.output as any).text;
+    return undefined;
+  }, [span.attributes]);
+
+  interface ToolCall {
+    id?: string;
+    name?: string;
+    arguments?: any;
+  }
+  const toolCalls: ToolCall[] = useMemo(() => {
+    const attrs: any = span.attributes || {};
+    const arr = attrs.output?.toolCalls || attrs['llm.toolCalls'] || [];
+    if (Array.isArray(arr)) return arr as ToolCall[];
+    return [];
+  }, [span.attributes]);
+
+  // Tabs: show IO first if LLM span: io | attributes | logs (else attributes | logs)
+  type TabKey = 'attributes' | 'logs' | 'io';
+  const [activeTab, setActiveTab] = useState<TabKey>(isLLMSpan ? 'io' : 'attributes');
+  // We keep the user's selected tab (even if it's 'io') so when they navigate back to an LLM span
+  // the IO tab restores automatically. For rendering we derive an effective tab.
+  const effectiveTab: TabKey = activeTab === 'io' && !isLLMSpan ? 'attributes' : activeTab;
 
   // Log severity counts (only in logs tab header badges)
   const severityCounts = useMemo(() => {
     const counts = { debug: 0, info: 0, error: 0 };
-    filteredLogs.forEach(l => {
+    filteredLogs.forEach((l) => {
       if (l.level in counts) (counts as any)[l.level]++;
     });
     return counts;
   }, [filteredLogs]);
 
   return (
-    <div style={{
-      padding: 16,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 12,
-      height: '100%',
-      flex: 1,
-      minHeight: 0,
-      boxSizing: 'border-box'
-    }}>
+    <div
+      style={{
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        height: '100%',
+        flex: 1,
+        minHeight: 0,
+        boxSizing: 'border-box',
+      }}
+    >
       {/* Top area now minimal; back button moved inside details panel */}
       {/* Layout: Details panel (without attributes/events) + tabbed section */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', gap: 8 }}>
         {/* Back button now outside details panel */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={onClose} style={{ fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}>← Back</button>
+          <button onClick={onClose} style={{ fontSize: 11, padding: '4px 8px', cursor: 'pointer' }}>
+            ← Back
+          </button>
         </div>
         {/* Details panel */}
-        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid #eee', borderRadius: 6 }}>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid #eee', background: '#fafbfc', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          style={{
+            flex: '0 0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            border: '1px solid #eee',
+            borderRadius: 6,
+          }}
+        >
+          <div
+            style={{
+              padding: '8px 10px',
+              borderBottom: '1px solid #eee',
+              background: '#fafbfc',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
             <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>Details</span>
           </div>
-          <div style={{ overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, fontFamily: 'monospace', color: '#222' }}>
+          <div
+            style={{
+              overflowY: 'auto',
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              fontSize: 12,
+              fontFamily: 'monospace',
+              color: '#222',
+            }}
+          >
             {/* 5-line concise layout: title, id, parent, status, time */}
-            <div style={{ lineHeight: 1.35 }}><strong style={{ minWidth: 60, display: 'inline-block' }}>Title:</strong> {span.label || '(no title)'}</div>
-            <div style={{ lineHeight: 1.35 }}><strong style={{ minWidth: 60, display: 'inline-block' }}>ID:</strong> {span.spanId}</div>
-            <div style={{ lineHeight: 1.35 }}><strong style={{ minWidth: 60, display: 'inline-block' }}>Parent:</strong> {span.parentSpanId || '(root)'}</div>
-            <div style={{ lineHeight: 1.35 }}><strong style={{ minWidth: 60, display: 'inline-block' }}>Status:</strong> {span.status}</div>
+            <div style={{ lineHeight: 1.35 }}>
+              <strong style={{ minWidth: 60, display: 'inline-block' }}>Title:</strong> {span.label || '(no title)'}
+            </div>
+            <div style={{ lineHeight: 1.35 }}>
+              <strong style={{ minWidth: 60, display: 'inline-block' }}>ID:</strong> {span.spanId}
+            </div>
+            <div style={{ lineHeight: 1.35 }}>
+              <strong style={{ minWidth: 60, display: 'inline-block' }}>Parent:</strong> {span.parentSpanId || '(root)'}
+            </div>
+            <div style={{ lineHeight: 1.35 }}>
+              <strong style={{ minWidth: 60, display: 'inline-block' }}>Status:</strong> {span.status}
+            </div>
             <div style={{ lineHeight: 1.35 }}>
               <strong style={{ minWidth: 60, display: 'inline-block' }}>Time:</strong>
               <span style={{ color: '#555' }}>Start {new Date(span.startTime).toLocaleString()}</span>
               {' | '}
               <span style={{ color: '#555' }}>End {span.endTime ? new Date(span.endTime).toLocaleString() : '—'}</span>
               {' | '}
-              <span style={{ color: '#555' }}>Duration {span.endTime ? (Date.parse(span.endTime) - Date.parse(span.startTime)) + ' ms' : 'running'}</span>
+              <span style={{ color: '#555' }}>
+                Duration {span.endTime ? Date.parse(span.endTime) - Date.parse(span.startTime) + ' ms' : 'running'}
+              </span>
             </div>
           </div>
         </div>
 
         {/* Tabs container */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden' }}>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            border: '1px solid #ddd',
+            borderRadius: 6,
+            overflow: 'hidden',
+          }}
+        >
           <div style={{ display: 'flex', borderBottom: '1px solid #ddd', background: '#f8f9fa' }}>
-            <TabButton active={activeTab === 'attributes'} onClick={() => setActiveTab('attributes')}>Attributes</TabButton>
-            <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')}>
+            {isLLMSpan && (
+              <TabButton active={activeTab === 'io'} onClick={() => setActiveTab('io')}>IO</TabButton>
+            )}
+            <TabButton active={effectiveTab === 'attributes'} onClick={() => setActiveTab('attributes')}>
+              Attributes
+            </TabButton>
+            <TabButton active={effectiveTab === 'logs'} onClick={() => setActiveTab('logs')}>
               Logs
-              {(severityCounts.debug + severityCounts.info + severityCounts.error) > 0 && (
+              {severityCounts.debug + severityCounts.info + severityCounts.error > 0 && (
                 <span style={{ display: 'inline-flex', gap: 6, marginLeft: 8 }}>
                   {severityCounts.debug > 0 && <Badge color="#0366d6">D:{severityCounts.debug}</Badge>}
                   {severityCounts.info > 0 && <Badge color="#444">I:{severityCounts.info}</Badge>}
@@ -148,44 +251,48 @@ export function SpanDetails({
               )}
             </TabButton>
             <div style={{ marginLeft: 'auto', padding: '6px 10px', fontSize: 11, color: '#666' }}>
-              {activeTab === 'logs' && (
+              {effectiveTab === 'logs' && (
                 <>{loading ? 'loading…' : error ? 'error loading logs' : filteredLogs.length + ' entries'}</>
               )}
             </div>
           </div>
           {/* Tab content */}
           <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12 }}>
-            {activeTab === 'attributes' && (
+            {effectiveTab === 'attributes' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <h3 style={{ margin: 0 }}>Attributes</h3>
                   {showCollapseToggle && (
                     <button
-                      onClick={() => setAttrsExpanded(v => !v)}
+                      onClick={() => setAttrsExpanded((v) => !v)}
                       style={{ fontSize: 11, padding: '2px 6px', cursor: 'pointer' }}
                     >
                       {attrsExpanded ? 'Collapse' : 'Expand'}
                     </button>
                   )}
                 </div>
-                <pre style={{
-                  background: '#f1f3f5',
-                  padding: 8,
-                  borderRadius: 4,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  fontSize: 11,
-                  maxHeight: attrsExpanded ? 400 : 240,
-                  overflow: 'auto'
-                }}>{displayedAttrs}</pre>
+                <pre
+                  style={{
+                    background: '#f1f3f5',
+                    padding: 8,
+                    borderRadius: 4,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontSize: 11,
+                    maxHeight: attrsExpanded ? 400 : 240,
+                    overflow: 'auto',
+                  }}
+                >
+                  {displayedAttrs}
+                </pre>
               </div>
             )}
-            {activeTab === 'logs' && (
+            {effectiveTab === 'logs' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, height: '100%' }}>
-                {(!loading && !error && filteredLogs.length === 0) && (
+                {!loading && !error && filteredLogs.length === 0 && (
                   <div style={{ fontSize: 12, color: '#666' }}>No logs in subtree</div>
                 )}
-                {(!loading && filteredLogs.length > 0) && (
+                {!loading && filteredLogs.length > 0 && (
                   <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'monospace' }}>
                       <thead style={{ position: 'sticky', top: 0, background: '#f8f9fa' }}>
@@ -209,11 +316,15 @@ export function SpanDetails({
                               >
                                 {s ? s.label : '(root)'}
                               </td>
-                              <td style={{
-                                ...tdStyle,
-                                fontWeight: 600,
-                                color: l.level === 'error' ? '#d00' : l.level === 'debug' ? '#0366d6' : '#222'
-                              }}>{l.level.toUpperCase()}</td>
+                              <td
+                                style={{
+                                  ...tdStyle,
+                                  fontWeight: 600,
+                                  color: l.level === 'error' ? '#d00' : l.level === 'debug' ? '#0366d6' : '#222',
+                                }}
+                              >
+                                {l.level.toUpperCase()}
+                              </td>
                               <td style={{ ...tdStyle, whiteSpace: 'pre-wrap' }}>{l.message}</td>
                             </tr>
                           );
@@ -222,6 +333,136 @@ export function SpanDetails({
                     </table>
                   </div>
                 )}
+              </div>
+            )}
+            {effectiveTab === 'io' && isLLMSpan && (
+              <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', height: '100%', minHeight: 0 }}>
+                {/* Context (Input) */}
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: 13 }}>Context</h3>
+                  <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {contextMessages.length === 0 && (
+                      <div style={{ fontSize: 12, color: '#666' }}>No context messages</div>
+                    )}
+                    {contextMessages.map((m, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          background: '#f6f8fa',
+                          border: '1px solid #e1e4e8',
+                          borderRadius: 4,
+                          padding: 8,
+                          fontSize: 12,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <RoleBadge role={m.role} />
+                          <span style={{ fontSize: 10, color: '#555' }}>#{i + 1}</span>
+                          {Array.isArray((m as any).toolCalls) && (m as any).toolCalls.length > 0 && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                background: '#0366d6',
+                                color: '#fff',
+                                padding: '2px 6px',
+                                borderRadius: 10,
+                              }}
+                            >
+                              {((m as any).toolCalls || []).length} tool calls
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({ className, children, ...props }) {
+                                const isBlock = String(className || '').includes('language-') || String(children).includes('\n');
+                                return (
+                                  <code
+                                    style={{
+                                      background: '#eaeef2',
+                                      padding: isBlock ? 8 : '2px 4px',
+                                      display: isBlock ? 'block' : 'inline',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      whiteSpace: 'pre-wrap'
+                                    }}
+                                    className={className}
+                                    {...props}
+                                  >{children}</code>
+                                );
+                              },
+                              pre({ children }) {
+                                return <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>{children}</pre>;
+                              }
+                            }}
+                          >
+                            {String(m.content ?? '')}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Output */}
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: 13 }}>Output</h3>
+                  <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Content</div>
+                      <div style={{
+                        background: '#f6f8fa',
+                        border: '1px solid #e1e4e8',
+                        borderRadius: 4,
+                        padding: 8,
+                        fontSize: 12,
+                        fontFamily: 'monospace'
+                      }}>
+                        {llmContent ? (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({ className, children, ...props }) {
+                                const isBlock = String(className || '').includes('language-') || String(children).includes('\n');
+                                return (
+                                  <code
+                                    style={{
+                                      background: '#eaeef2',
+                                      padding: isBlock ? 8 : '2px 4px',
+                                      display: isBlock ? 'block' : 'inline',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      whiteSpace: 'pre-wrap'
+                                    }}
+                                    className={className}
+                                    {...props}
+                                  >{children}</code>
+                                );
+                              },
+                              pre({ children }) {
+                                return <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>{children}</pre>;
+                              }
+                            }}
+                          >
+                            {llmContent}
+                          </ReactMarkdown>
+                        ) : (
+                          <span style={{ color: '#666' }}>(no content)</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Tool Calls</div>
+                      {toolCalls.length === 0 && <div style={{ fontSize: 12, color: '#666' }}>(none)</div>}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {toolCalls.map((tc, idx) => (
+                          <CollapsibleToolCall key={idx} toolCall={tc} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -245,24 +486,30 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick(): 
         cursor: 'pointer',
         fontWeight: 600,
         fontSize: 13,
-        color: active ? '#0366d6' : '#333'
+        color: active ? '#0366d6' : '#333',
       }}
-    >{children}</button>
+    >
+      {children}
+    </button>
   );
 }
 
 function Badge({ children, color }: { children: React.ReactNode; color: string }) {
   return (
-    <span style={{
-      background: color,
-      color: '#fff',
-      padding: '2px 6px',
-      borderRadius: 10,
-      fontSize: 10,
-      lineHeight: 1,
-      fontWeight: 600,
-      display: 'inline-block'
-    }}>{children}</span>
+    <span
+      style={{
+        background: color,
+        color: '#fff',
+        padding: '2px 6px',
+        borderRadius: 10,
+        fontSize: 10,
+        lineHeight: 1,
+        fontWeight: 600,
+        display: 'inline-block',
+      }}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -274,3 +521,78 @@ const thStyle: React.CSSProperties = {
   top: 0,
 };
 const tdStyle: React.CSSProperties = { padding: '4px 6px', borderBottom: '1px solid #eee', verticalAlign: 'top' };
+
+// Role badge for context messages
+function RoleBadge({ role }: { role: string }) {
+  const colors: Record<string, string> = {
+    system: '#6a737d',
+    human: '#22863a',
+    ai: '#0366d6',
+    tool: '#8250df',
+  };
+  return (
+    <span
+      style={{
+        background: colors[role] || '#444',
+        color: '#fff',
+        padding: '2px 6px',
+        borderRadius: 12,
+        fontSize: 10,
+        fontWeight: 600,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+      }}
+    >
+      {role}
+    </span>
+  );
+}
+
+function CollapsibleToolCall({ toolCall }: { toolCall: { id?: string; name?: string; arguments?: any } }) {
+  const [open, setOpen] = useState(false);
+  const argsStr = useMemo(() => {
+    if (toolCall && toolCall.arguments !== undefined) {
+      try {
+        return JSON.stringify(toolCall.arguments, null, 2);
+      } catch {
+        return String(toolCall.arguments);
+      }
+    }
+    return '{}';
+  }, [toolCall]);
+  return (
+    <div style={{ border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden', fontSize: 12 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#f6f8fa',
+          padding: '6px 8px',
+          cursor: 'pointer',
+        }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontWeight: 600 }}>{toolCall.name || '(tool)'}</span>
+          {toolCall.id && <span style={{ fontSize: 10, color: '#555' }}>{toolCall.id}</span>}
+        </div>
+        <span style={{ fontSize: 10, color: '#0366d6', fontWeight: 600 }}>{open ? 'Hide' : 'Show'}</span>
+      </div>
+      {open && (
+        <pre
+          style={{
+            margin: 0,
+            background: '#fff',
+            padding: 8,
+            fontSize: 11,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          {argsStr}
+        </pre>
+      )}
+    </div>
+  );
+}
