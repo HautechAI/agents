@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
-import { init, withThread, withAgent, withLLM, withToolCall, LLMResponse } from '../src';
+import { init, withThread, withAgent, withLLM, withToolCall, LLMResponse, ToolCallResponse } from '../src';
 
 let server: http.Server;
 let port: number;
@@ -12,7 +12,9 @@ beforeAll(async () => {
       let body = '';
       req.on('data', (c) => (body += c));
       req.on('end', () => {
-        try { spanEvents.push(JSON.parse(body)); } catch {}
+        try {
+          spanEvents.push(JSON.parse(body));
+        } catch {}
         res.statusCode = 200;
         res.end('ok');
       });
@@ -52,7 +54,10 @@ describe('obs-sdk LLM span attributes (e2e)', () => {
             toolCalls: [{ id: toolCallId, name: 'weather', arguments: { city: 'LA' } }],
           });
         });
-        await withToolCall({ toolCallId, name: 'weather', input: { city: 'LA' } }, async () => ({ tempC: 25 }));
+        await withToolCall(
+          { toolCallId, name: 'weather', input: { city: 'LA' } },
+          async () => new ToolCallResponse({ raw: { tempC: 25 }, output: { tempC: 25 }, status: 'success' }),
+        );
       });
     });
 
@@ -62,7 +67,11 @@ describe('obs-sdk LLM span attributes (e2e)', () => {
       await new Promise((r) => setTimeout(r, 20));
     }
     // eslint-disable-next-line no-console
-    console.log('Captured events count', spanEvents.length, spanEvents.map(e => e.state+':'+e.label));
+    console.log(
+      'Captured events count',
+      spanEvents.length,
+      spanEvents.map((e) => e.state + ':' + e.label),
+    );
 
     const completed = spanEvents.find((e) => e.label === 'llm' && e.state === 'completed');
     expect(completed).toBeTruthy();
