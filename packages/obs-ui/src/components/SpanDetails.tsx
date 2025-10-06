@@ -1,19 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-// Monaco heavy library; import when tool input viewer actually renders to reduce initial bundle
-type MonacoEditorComponent = React.ComponentType<{
-  height: string;
-  defaultLanguage: string;
-  value: string;
-  theme?: string;
-  options?: Record<string, unknown>;
-}>;
-let MonacoEditor: MonacoEditorComponent | null = null;
-async function ensureMonaco() {
-  if (MonacoEditor) return MonacoEditor;
-  const mod = await import('@monaco-editor/react');
-  MonacoEditor = (mod as { default: MonacoEditorComponent }).default;
-  return MonacoEditor;
-}
+import MonacoEditor from '@monaco-editor/react';
+
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ContextView, { ContextMessageLike } from './ContextView';
@@ -984,8 +971,6 @@ function CollapsibleToolCall({ toolCall }: { toolCall: LocalToolCall }) {
 
 // Renders tool input JSON using monaco editor (read-only)
 function ToolInputViewer({ span }: { span: SpanDoc }) {
-  const [_editorReady, setEditorReady] = useState(false); // reserved if we want to show state later
-  const [EditorComp, setEditorComp] = useState<MonacoEditorComponent | null>(null);
   const inputValue = useMemo(() => {
     const attrs = (span.attributes || {}) as Record<string, unknown>;
     const toolObj = attrs['tool'] as Record<string, unknown> | undefined;
@@ -1011,33 +996,22 @@ function ToolInputViewer({ span }: { span: SpanDoc }) {
     }
   }, [span.attributes]);
 
-  useEffect(() => {
-    let cancelled = false;
-    ensureMonaco().then((Monaco) => {
-      if (!cancelled) {
-        setEditorComp(() => Monaco);
-        setEditorReady(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, minHeight: 200, border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden' }}>
-        {EditorComp ? (
-          <EditorComp
-            height="100%"
-            defaultLanguage="json"
-            value={inputValue}
-            theme="vs-light"
-            options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false }}
-          />
-        ) : (
-          <pre style={{ margin: 0, padding: 8, fontSize: 12, background: '#f6f8fa' }}>Loading editor…</pre>
-        )}
+        <MonacoEditor
+          height="100%"
+          defaultLanguage="json"
+          value={inputValue}
+          theme="vs-light"
+          options={{
+            readOnly: true,
+            minimap: { enabled: false },
+            fontSize: 12,
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+          }}
+        />
       </div>
     </div>
   );
