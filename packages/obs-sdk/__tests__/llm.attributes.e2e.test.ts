@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
-import { init, withThread, withAgent, withLLM, withToolCall, LLMResponse, ToolCallResponse } from '../src';
+import { init, withAgent, withLLM, withToolCall, LLMResponse, ToolCallResponse } from '../src';
 
 let server: http.Server;
 let port: number;
@@ -44,8 +44,7 @@ describe('obs-sdk LLM span attributes (e2e)', () => {
       defaultAttributes: { service: 'obs-sdk' },
     });
     const toolCallId = 'tc_obs_sdk_1';
-    await withThread({ threadId: 'obs-thread' }, async () => {
-      await withAgent({ agentName: 'obs-agent' }, async () => {
+    await withAgent({ threadId: 'obs-thread', agentName: 'obs-agent' }, async () => {
         await withLLM({ context: [{ role: 'human', content: 'Ping' }] as any }, async () => {
           const raw = { text: 'Pong!' };
           return new LLMResponse({
@@ -58,7 +57,6 @@ describe('obs-sdk LLM span attributes (e2e)', () => {
           { toolCallId, name: 'weather', input: { city: 'LA' } },
           async () => new ToolCallResponse({ raw: { tempC: 25 }, output: { tempC: 25 }, status: 'success' }),
         );
-      });
     });
 
     // Allow async HTTP posts (await inside withSpan already awaited, but network scheduling might lag)

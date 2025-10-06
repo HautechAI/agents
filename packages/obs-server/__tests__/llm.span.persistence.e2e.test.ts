@@ -3,7 +3,7 @@ import { startMemoryMongo } from './helpers/mongoMemory';
 import { createServer } from '../src/server';
 
 import * as sdk from '../../obs-sdk';
-const { init, withThread, withAgent, withLLM, withToolCall, LLMResponse } = sdk;
+const { init, withAgent, withLLM, withToolCall, LLMResponse } = sdk;
 import type { FastifyInstance } from 'fastify';
 
 let mm: Awaited<ReturnType<typeof startMemoryMongo>>;
@@ -33,8 +33,7 @@ describe('LLM span persistence end-to-end (real server + memory mongo)', () => {
   it('persists completed LLM span with output content and toolCalls', async () => {
     init({ mode: 'extended', endpoints: { extended: baseUrl }, defaultAttributes: { service: 'e2e-app' } });
     const toolCallId = 'tc_e2e_1';
-    await withThread({ threadId: 't1' }, async () => {
-      await withAgent({ agentName: 'agent1' }, async () => {
+    await withAgent({ threadId: 't1', agentName: 'agent1' }, async () => {
         await withLLM({ context: [{ role: 'human', content: 'Hello' }] as any }, async () => {
           return new LLMResponse({
             raw: { text: 'Hi!' },
@@ -46,7 +45,6 @@ describe('LLM span persistence end-to-end (real server + memory mongo)', () => {
           const result = { tempC: 21 };
           return new sdk.ToolCallResponse({ raw: result, output: result, status: 'success' });
         });
-      });
     });
 
     // Query DB directly

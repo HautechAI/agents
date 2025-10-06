@@ -125,12 +125,13 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
   }
 
   async invoke(thread: string, messages: TriggerMessage[] | TriggerMessage): Promise<BaseMessage | undefined> {
-    return await withAgent({ name: 'agent.invoke', inputParameters: [{ thread }, { messages }] }, async () => {
+    return await withAgent({ threadId: thread, inputParameters: [{ thread }, { messages }] }, async () => {
       const batch = Array.isArray(messages) ? messages : [messages];
       // Log minimal, non-sensitive metadata about the batch
       const kinds = batch.reduce(
         (acc, m) => {
-          if (isSystemTrigger(m)) acc.system += 1; else acc.human += 1;
+          if (isSystemTrigger(m)) acc.system += 1;
+          else acc.human += 1;
           return acc;
         },
         { human: 0, system: 0 },
@@ -257,11 +258,7 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
     }
   }
 
-  private async runGraph(
-    thread: string,
-    batch: TriggerMessage[],
-    runId: string,
-  ): Promise<BaseMessage | undefined> {
+  private async runGraph(thread: string, batch: TriggerMessage[], runId: string): Promise<BaseMessage | undefined> {
     // Preserve system vs human message kind when serializing for the model
     const items = batch.map((msg) =>
       isSystemTrigger(msg) ? new SystemMessage(JSON.stringify(msg)) : new HumanMessage(JSON.stringify(msg)),

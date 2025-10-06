@@ -5,17 +5,7 @@ Stage 1 observability SDK for Node 18+. See docs in repo root for full scope.
 Quick start:
 
 ```ts
-import {
-  init,
-  withSpan,
-  withThread,
-  withAgent,
-  withLLM,
-  withToolCall,
-  withSummarize,
-  withSystem,
-  SummarizeResponse,
-} from '@hautech/obs-sdk';
+import { init, withSpan, withAgent, withLLM, withToolCall, withSummarize, withSystem, SummarizeResponse } from '@hautech/obs-sdk';
 
 init({
   mode: 'extended',
@@ -27,9 +17,8 @@ await withSpan({ label: 'demo' }, async () => {
   // generic span
 });
 
-// Thread span (records kind=thread, threadId attribute)
-await withThread({ threadId: 'thread-123' }, async () => {
-  await withAgent({}, async () => {
+// Agent span (can include a threadId attribute to associate all nested work)
+await withAgent({ threadId: 'thread-123' }, async () => {
     const llmResult = await withLLM(
       { newMessages: [{ role: 'user', content: 'Hi' }], context: { contextKey: 'value' } },
       async () => {
@@ -48,7 +37,6 @@ await withThread({ threadId: 'thread-123' }, async () => {
           newContext: [ { role: 'system', content: 'short+more' } ] as any,
         }),
       );
-  });
 });
 
 // System level operation
@@ -63,8 +51,7 @@ All helpers wrap `withSpan` and set a `kind` plus required attributes only.
 
 | Helper        | Signature                           | Kind      | Attributes (start)              | End attributes (if any)                        |
 | ------------- | ----------------------------------- | --------- | ------------------------------- | ---------------------------------------------- |
-| withThread    | ({ threadId, ... }, fn)             | thread    | threadId + extras               | -                                              |
-| withAgent     | (attributes, fn)                    | agent     | attributes                      | -                                              |
+| withAgent     | ({ threadId?, ... }, fn)            | agent     | threadId (if provided) + extras | -                                              |
 | withLLM       | ({ newMessages, context, ... }, fn) | llm       | newMessages, context (+ extras) | End: `output` object with `text` / `toolCalls` |
 | withToolCall  | ({ name, input, ... }, fn)          | tool_call | name, input (+ extras)          | `output`, `status`                             |
 | withSummarize | ({ oldContext: ChatMessageInput[] }, fn returning SummarizeResponse) | summarize | oldContext (normalized messages) (+ extras) | `summary`, `newContext` if present             |

@@ -289,13 +289,9 @@ export async function flush() {
 
 // Helper creators (per spec) - only the specified parameters and mandatory mapping to attributes/kind.
 
-export function withThread<T>(attributes: { threadId: string; [k: string]: unknown }, fn: () => Promise<T> | T) {
+export function withAgent<T>(attributes: { threadId?: string; [k: string]: unknown }, fn: () => Promise<T> | T) {
   const { threadId, ...rest } = attributes;
-  return withSpan({ label: 'thread', threadId, kind: 'thread', attributes: { kind: 'thread', threadId, ...rest } }, fn);
-}
-
-export function withAgent<T>(attributes: Record<string, unknown>, fn: () => Promise<T> | T) {
-  return withSpan({ label: 'agent', kind: 'agent', attributes: { kind: 'agent', ...attributes } }, fn);
+  return withSpan({ label: 'agent', kind: 'agent', threadId, attributes: { kind: 'agent', ...(threadId ? { threadId } : {}), ...rest } }, fn);
 }
 
 export function withLLM<T>(

@@ -3,7 +3,7 @@ import { startMemoryMongo } from './helpers/mongoMemory';
 import { createServer } from '../src/server';
 
 import * as sdk from '../../obs-sdk';
-const { init, withThread, withAgent, withToolCall, ToolCallResponse } = sdk as any;
+const { init, withAgent, withToolCall, ToolCallResponse } = sdk as any;
 import type { FastifyInstance } from 'fastify';
 
 let mm: Awaited<ReturnType<typeof startMemoryMongo>>;
@@ -36,12 +36,10 @@ describe('ToolCall span persistence end-to-end (real server + memory mongo)', ()
     const input = { value: 42 };
     const toolOutput = { answer: 84, meta: { doubled: true } };
 
-    await withThread({ threadId: 't_tool' }, async () => {
-      await withAgent({ agentName: 'agentTool' }, async () => {
+    await withAgent({ threadId: 't_tool', agentName: 'agentTool' }, async () => {
         await withToolCall({ toolCallId, name: toolName, input }, async () => {
           return new ToolCallResponse({ raw: toolOutput, output: toolOutput, status: 'success' });
         });
-      });
     });
 
     // Query DB directly for the tool_call span (label pattern: tool:<name>)

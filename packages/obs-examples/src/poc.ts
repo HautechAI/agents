@@ -8,7 +8,6 @@ import {
   withLLM,
   withSummarize,
   withSystem,
-  withThread,
   withToolCall,
 } from '@hautech/obs-sdk';
 
@@ -24,8 +23,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 1000));
   });
 
-  await withThread({ threadId: 'demo-thread' }, async () => {
-    await withAgent({ agentName: 'demo-agent' }, async () => {
+  await withAgent({ threadId: 'demo-thread', agentName: 'demo-agent' }, async () => {
       // Loop 1: existing rich context -> tool
       const weatherToolCallId1 = 'tc_weather_1';
       const richContext: any[] = [
@@ -283,7 +281,6 @@ async function main() {
           });
         },
       );
-    });
   });
 }
 
