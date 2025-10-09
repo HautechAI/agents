@@ -188,21 +188,21 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         }
       }
     } catch (err) {
-      this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Tool discovery failed: ${err}`);
+      this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Tool discovery failed`, err);
     } finally {
       // Clean up temporary resources
       if (tempClient) {
         try {
           await tempClient.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing temp client: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing temp client`, e);
         }
       }
       if (tempTransport) {
         try {
           await tempTransport.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing temp transport: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing temp transport`, e);
         }
       }
       // Stop the temporary container
@@ -214,7 +214,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
           `[MCP:${this.namespace}] [disc:${discoveryId}] Temporary discovery container stopped and removed (duration=${ms}ms)`,
         );
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Error cleaning up temp container: ${e}`);
+        this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Error cleaning up temp container`, e);
       }
     }
 
@@ -318,40 +318,44 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         timeout: options?.timeoutMs ?? cfg.requestTimeoutMs ?? 30000,
       });
 
-      const rawContent = (result as any).content;
+      const rawResult: unknown = result as unknown;
+      const rawContent = (rawResult as any)?.content;
       const contentArr = Array.isArray(rawContent) ? rawContent : [];
       const flattened = contentArr
-        .map((c: any) => {
+        .map((c: unknown) => {
           if (typeof c === 'string') return c;
           if (c && typeof c === 'object') {
-            if ('text' in c && typeof c.text === 'string') return c.text;
-            if ('data' in c) return JSON.stringify(c.data);
+            const obj = c as Record<string, unknown>;
+            if ('text' in obj && typeof (obj as any).text === 'string') return (obj as any).text as string;
+            if ('data' in obj) return JSON.stringify((obj as any).data);
           }
-          return JSON.stringify(c);
+          try { return JSON.stringify(c); } catch { return String(c); }
         })
         .join('\n');
       return {
-        isError: (result as any).isError,
+        isError: (rawResult as any)?.isError,
         content: flattened,
-        structuredContent: (result as any).structuredContent,
+        structuredContent: (rawResult as any)?.structuredContent,
         raw: result,
       };
     } catch (e: any) {
-      throw new McpError(`Tool '${name}' failed: ${e.message}`, e.code || 'TOOL_CALL_ERROR');
+      const emsg = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e);
+      const ename = e && typeof e === 'object' && 'name' in e ? String(e.name) : 'Error';
+      throw new McpError(`Tool '${name}' failed: ${ename}: ${emsg}`.trim(), e?.code || 'TOOL_CALL_ERROR');
     } finally {
       // Clean up after tool call
       if (client) {
         try {
           await client.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing client after tool call: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing client after tool call`, e);
         }
       }
       if (transport) {
         try {
           await transport.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing transport after tool call: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing transport after tool call`, e);
         }
       }
     }
@@ -481,7 +485,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         // New flat shape: tool names are top-level boolean properties
         normalized = this._dynamicConfigZodSchema.parse(cfg) as Record<string, boolean>;
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed: ${(e as Error).message}`);
+        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed`, e as any);
       }
     }
     const enabled = new Set<string>();
@@ -544,7 +548,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       try {
         l(cfg);
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] dynamic config listener error: ${e}`);
+        this.logger.error(`[MCP:${this.namespace}] dynamic config listener error`, e);
       }
     }
   }
@@ -577,7 +581,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     if (err) {
       // Only emit 'error' if there are registered listeners to avoid unhandled error events
       if (this.emitter.listenerCount('error') > 0) this.emitter.emit('error', err);
-      else this.logger.error(`[MCP:${this.namespace}] Unhandled start error: ${err?.message || err}`);
+      else this.logger.error(`[MCP:${this.namespace}] Unhandled start error`, err);
     } else this.emitter.emit('ready');
   }
 
@@ -651,7 +655,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         this.logger.info(`[MCP:${this.namespace}] Started successfully with ${this.toolsCache?.length || 0} tools`);
         this.flushStartWaiters();
       } catch (e: any) {
-        this.logger.error(`[MCP:${this.namespace}] Start attempt failed: ${e.message}`);
+        this.logger.error(`[MCP:${this.namespace}] Start attempt failed`, e);
         this.restartAttempts++;
         // Immediately reject any pending starters so callers of provision() can observe the error
         this.flushStartWaiters(e);

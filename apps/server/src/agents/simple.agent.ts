@@ -20,6 +20,7 @@ import { NodeOutput } from '../types';
 import { z } from 'zod';
 import { EnforceRestrictionNode } from '../lgnodes/enforceRestriction.lgnode';
 import { stringify as toYaml } from 'yaml';
+import { buildMcpToolError } from '../mcp/errorUtils';
 
 /**
  * Zod schema describing static configuration for SimpleAgent.
@@ -150,7 +151,7 @@ export class SimpleAgent extends BaseAgent {
       },
       this.configuration(),
     )
-      .addNode('summarize', async (state: any) => {
+      .addNode('summarize', async (state: { messages: BaseMessage[]; summary?: string }) => {
         const res = await this.summarizeNode.action(state);
         // Reset restriction counters per new turn
         return { ...res, restrictionInjectionCount: 0, restrictionInjected: false };
@@ -245,7 +246,7 @@ export class SimpleAgent extends BaseAgent {
     // duplicate discovery flows (removes eager listTools() call which previously raced with start()).
     const registerTools = async () => {
       try {
-        const tools: McpTool[] = await server.listTools();
+        const tools = await server.listTools();
         if (!tools.length) {
           this.loggerService.info(`No MCP tools discovered for namespace ${namespace}`);
         }
@@ -260,9 +261,8 @@ export class SimpleAgent extends BaseAgent {
               const threadId = config?.configurable?.thread_id;
               const res = await server.callTool(t.name, raw, { threadId });
               if (res.isError) {
-                throw new Error(
-                  res.structuredContent ?? res.content ?? res.raw ?? 'MCP tool call failed with unknown error',
-                );
+                const { message, cause } = buildMcpToolError(res);
+                throw new Error(message, { cause });
               }
               if (res.structuredContent) return toYaml(res.structuredContent);
               return res.content || '';
@@ -291,14 +291,16 @@ export class SimpleAgent extends BaseAgent {
         const existing = this.mcpServerTools.get(server) || [];
         this.mcpServerTools.set(server, existing.concat(registered));
         initialRegistrationDone = true;
-      } catch (e: any) {
-        this.loggerService.error(`Failed to register MCP tools for ${namespace}: ${e.message}`);
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        this.loggerService.error(`Failed to register MCP tools for ${namespace}: ${err.message}`);
       }
     };
 
     server.on('ready', () => registerTools());
-    server.on('error', (err: any) => {
-      this.loggerService.error(`MCP server ${namespace} error before tool registration: ${err?.message || err}`);
+    server.on('error', (err: unknown) => {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      this.loggerService.error(`MCP server ${namespace} error before tool registration: ${msg}`);
     });
 
     // Dynamic config synchronization: if server supports DynamicConfigurable, re-sync tool list
@@ -353,6 +355,10 @@ export class SimpleAgent extends BaseAgent {
                   );
                   const threadId = config?.configurable?.thread_id;
                   const res = await server.callTool(t.name, raw, { threadId });
+                  if ((res as any).isError) {
+                    const { message, cause } = buildMcpToolError(res as any);
+                    throw new Error(message, { cause });
+                  }
                   if (res.structuredContent) return JSON.stringify(res.structuredContent);
                   return res.content || '';
                 },
@@ -370,7 +376,7 @@ export class SimpleAgent extends BaseAgent {
             }
           }
         } catch (e) {
-          const err = e as Error;
+          const err = e instanceof Error ? e : new Error(String(e));
           this.loggerService.error(`Failed dynamic MCP tool sync for ${namespace}: ${err.message}`);
         }
       });
@@ -414,11 +420,10 @@ export class SimpleAgent extends BaseAgent {
 
     // Extend to accept summarization options
     // Accept both new (summarizationKeepTokens) and legacy (summarizationKeepLast) keys.
+    const cfgObj = config as Record<string, unknown>;
     const keepTokensRaw =
-      (config as any).summarizationKeepTokens !== undefined
-        ? (config as any).summarizationKeepTokens
-        : (config as any).summarizationKeepLast; // legacy fallback
-    const maxTokensRaw = (config as any).summarizationMaxTokens;
+      cfgObj.summarizationKeepTokens !== undefined ? cfgObj.summarizationKeepTokens : cfgObj.summarizationKeepLast; // legacy fallback
+    const maxTokensRaw = cfgObj.summarizationMaxTokens;
     const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
 
     const updates: { keepTokens?: number; maxTokens?: number } = {};
@@ -468,7 +473,8 @@ export class SimpleAgent extends BaseAgent {
       if (typeof anyServer.destroy === 'function') await anyServer.destroy();
       else if (typeof anyServer.stop === 'function') await anyServer.stop();
     } catch (e) {
-      this.loggerService.error(`Error destroying MCP server ${server.namespace}: ${(e as any)?.message || e}`);
+      const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      this.loggerService.error(`Error destroying MCP server ${server.namespace}: ${msg}`);
     }
   }
 }

@@ -16,7 +16,7 @@ export const DebugToolTriggerStaticConfigSchema = z
 export class DebugToolTrigger extends BaseTrigger {
   private unregisterRoute: (() => void) | null = null;
   private tool: DynamicStructuredTool | null = null;
-  private cfg: z.infer<typeof DebugToolTriggerStaticConfigSchema> = { path: '/debug/tool', method: 'POST' } as any;
+  private cfg: z.infer<typeof DebugToolTriggerStaticConfigSchema> = { path: '/debug/tool', method: 'POST' } as z.infer<typeof DebugToolTriggerStaticConfigSchema>;
 
   constructor(private logger: LoggerService) { super(); }
 
@@ -54,7 +54,7 @@ export class DebugToolTrigger extends BaseTrigger {
     const handler = async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (this.cfg.authToken) {
-          const token = (request.headers as any)['x-debug-token'];
+          const token = (request.headers as Record<string, unknown>)['x-debug-token' as keyof typeof request.headers] as string | undefined;
           if (token !== this.cfg.authToken) {
             reply.code(401);
             return { error: 'unauthorized' };
@@ -64,13 +64,13 @@ export class DebugToolTrigger extends BaseTrigger {
           reply.code(400);
           return { error: 'tool_not_connected' };
         }
-        const body = (request as any).body as any;
+        const body = (request as { body?: unknown }).body as unknown;
         const input = body?.input;
         if (input === undefined) {
           reply.code(400);
           return { error: 'invalid_body', message: 'expected { input: <args> }' };
         }
-        const result = await this.tool.invoke(input, { configurable: { thread_id: 'debug' } } as any);
+        const result = await this.tool.invoke(input, { configurable: { thread_id: 'debug' } } as { configurable: { thread_id: string } });
         return { ok: true, result };
       } catch (err: unknown) {
         const msg = (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : String(err);
