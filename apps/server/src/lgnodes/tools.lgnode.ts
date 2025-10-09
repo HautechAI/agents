@@ -82,8 +82,18 @@ export class ToolsNode extends BaseNode {
               return createMessage(content);
             }
           } catch (e: unknown) {
-            const err = e instanceof Error ? e?.message : JSON.stringify(e);
-            return createMessage(`Error executing tool '${tc.name}': ${err}`, false);
+            // Prefer readable error strings to avoid "[object Object]"
+            let errStr = 'Unknown error';
+            if (e instanceof Error) {
+              errStr = `${e.name}: ${e.message}`;
+            } else {
+              try {
+                errStr = JSON.stringify(e);
+              } catch {
+                errStr = String(e);
+              }
+            }
+            return createMessage(`Error executing tool '${tc.name}': ${errStr}`, false);
           }
         });
       }),
