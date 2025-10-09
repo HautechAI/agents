@@ -29,6 +29,36 @@ export class LoggerService {
   }
 
   private serialize(params: any[]) {
-    return JSON.stringify(params);
+    const redactKeys = /token|api[_-]?key|authorization|password|secret/i;
+    const seen = new WeakSet();
+    const toSafe = (v: any): any => {
+      if (v instanceof Error) {
+        const cause = (v as any).cause;
+        return {
+          name: v.name,
+          message: v.message,
+          stack: v.stack,
+          cause: cause instanceof Error
+            ? { name: cause.name, message: cause.message, stack: cause.stack }
+            : cause,
+        };
+      }
+      if (v && typeof v === 'object') {
+        if (seen.has(v)) return '[Circular]';
+        seen.add(v);
+        if (Array.isArray(v)) return v.map(toSafe);
+        const out: Record<string, any> = {} as any;
+        for (const [k, val] of Object.entries(v as any)) {
+          out[k] = redactKeys.test(k) ? '[REDACTED]' : toSafe(val);
+        }
+        return out;
+      }
+      return v;
+    };
+    try {
+      return JSON.stringify(params.map(toSafe));
+    } catch (err) {
+      try { return String(params); } catch { return '[unserializable]'; }
+    }
   }
 }
