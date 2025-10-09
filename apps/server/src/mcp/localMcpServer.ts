@@ -188,21 +188,21 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         }
       }
     } catch (err) {
-      this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Tool discovery failed: ${err}`);
+      this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Tool discovery failed`, err);
     } finally {
       // Clean up temporary resources
       if (tempClient) {
         try {
           await tempClient.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing temp client: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing temp client`, e);
         }
       }
       if (tempTransport) {
         try {
           await tempTransport.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing temp transport: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing temp transport`, e);
         }
       }
       // Stop the temporary container
@@ -544,7 +544,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       try {
         l(cfg);
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] dynamic config listener error: ${e}`);
+        this.logger.error(`[MCP:${this.namespace}] dynamic config listener error`, e);
       }
     }
   }
@@ -577,7 +577,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     if (err) {
       // Only emit 'error' if there are registered listeners to avoid unhandled error events
       if (this.emitter.listenerCount('error') > 0) this.emitter.emit('error', err);
-      else this.logger.error(`[MCP:${this.namespace}] Unhandled start error: ${err?.message || err}`);
+      else this.logger.error(`[MCP:${this.namespace}] Unhandled start error`, err);
     } else this.emitter.emit('ready');
   }
 
