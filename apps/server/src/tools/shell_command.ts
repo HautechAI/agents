@@ -59,7 +59,7 @@ export class ShellTool extends BaseTool {
       },
       {
         name: 'shell_command',
-        description: 'Execute a shell command and return the output.',
+        description: 'Execute a shell command and return the output. There is no TTY/stdin, so avoid commands requiring user inputs or running in watch mode.',
         schema: bashCommandSchema,
       },
     );
