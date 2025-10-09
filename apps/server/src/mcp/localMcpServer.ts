@@ -318,22 +318,24 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         timeout: options?.timeoutMs ?? cfg.requestTimeoutMs ?? 30000,
       });
 
-      const rawContent = (result as any).content;
+      const rawResult: unknown = result as unknown;
+      const rawContent = (rawResult as any)?.content;
       const contentArr = Array.isArray(rawContent) ? rawContent : [];
       const flattened = contentArr
-        .map((c: any) => {
+        .map((c: unknown) => {
           if (typeof c === 'string') return c;
           if (c && typeof c === 'object') {
-            if ('text' in c && typeof c.text === 'string') return c.text;
-            if ('data' in c) return JSON.stringify(c.data);
+            const obj = c as Record<string, unknown>;
+            if ('text' in obj && typeof (obj as any).text === 'string') return (obj as any).text as string;
+            if ('data' in obj) return JSON.stringify((obj as any).data);
           }
-          return JSON.stringify(c);
+          try { return JSON.stringify(c); } catch { return String(c); }
         })
         .join('\n');
       return {
-        isError: (result as any).isError,
+        isError: (rawResult as any)?.isError,
         content: flattened,
-        structuredContent: (result as any).structuredContent,
+        structuredContent: (rawResult as any)?.structuredContent,
         raw: result,
       };
     } catch (e: any) {

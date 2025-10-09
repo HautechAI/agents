@@ -36,6 +36,8 @@ export class LoggerService {
       /(github_pat_[A-Za-z0-9_]{20,})/g,
       /(Bearer)\s+[A-Za-z0-9\-\._~\+\/]+=*/gi,
     ];
+    // Query param redaction (e.g., ?token=..., &access_token=..., &api_key=...)
+    const redactQueryParamRe = /([?&])(access_token|token|api[_-]?key|authorization|auth|password|secret)=([^&#]*)/gi;
     const MAX_STRING = 2000; // cap long strings
     const MAX_JSON = 20000; // cap overall payload
     const MAX_DEPTH = 3; // limit nested depth
@@ -46,12 +48,14 @@ export class LoggerService {
     const redactString = (s: string): string => {
       let out = s;
       for (const re of redactValuePatterns) {
-        out = out.replace(re, (_m, g1, _g2, _g3) => {
+        out = out.replace(re, (_m: string, g1: string) => {
           // If first group is 'Bearer', preserve it; otherwise replace token match
           if (typeof g1 === 'string' && /^Bearer$/i.test(g1)) return 'Bearer [REDACTED]';
           return '[REDACTED]';
         });
       }
+      // Scrub common sensitive query parameters
+      out = out.replace(redactQueryParamRe, (_m: string, pfx: string, key: string) => `${pfx}${key}=[REDACTED]`);
       if (out.length > MAX_STRING) {
         const extra = out.length - MAX_STRING;
         out = out.slice(0, MAX_STRING) + `…(+${extra} chars)`;
@@ -91,6 +95,7 @@ export class LoggerService {
         }
         return out;
       }
+      if (typeof v === 'bigint') return v.toString();
       if (typeof v === 'string') return redactString(v);
       return v;
     };

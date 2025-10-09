@@ -106,13 +106,13 @@ export function jsonSchemaToZod(schema: JSONSchema | undefined): ZodTypeAny {
   }
 
   if (schema.default !== undefined) {
-    try { base = (base as any).default(schema.default); } catch { /* ignore */ }
+  try { (base as any).default?.(schema.default); } catch { /* ignore */ }
   }
 
   return base;
 }
 
-export function inferArgsSchema(inputSchema: any): ZodTypeAny {
+export function inferArgsSchema(inputSchema: unknown): ZodTypeAny {
   try {
     return jsonSchemaToZod(inputSchema);
   } catch {
