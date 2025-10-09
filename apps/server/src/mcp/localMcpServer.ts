@@ -214,7 +214,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
           `[MCP:${this.namespace}] [disc:${discoveryId}] Temporary discovery container stopped and removed (duration=${ms}ms)`,
         );
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Error cleaning up temp container: ${e}`);
+        this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Error cleaning up temp container`, e);
       }
     }
 
