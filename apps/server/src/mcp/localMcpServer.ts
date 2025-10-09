@@ -344,14 +344,14 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         try {
           await client.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing client after tool call: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing client after tool call`, e);
         }
       }
       if (transport) {
         try {
           await transport.close();
         } catch (e) {
-          this.logger.error(`[MCP:${this.namespace}] Error closing transport after tool call: ${e}`);
+          this.logger.error(`[MCP:${this.namespace}] Error closing transport after tool call`, e);
         }
       }
     }
