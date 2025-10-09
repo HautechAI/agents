@@ -87,8 +87,9 @@ export class ContainerService {
    * Start a new container and return a ContainerEntity representing it.
    */
   async start(opts?: ContainerOpts): Promise<ContainerEntity> {
-    const { image, autoRemove, ...rest } = opts || {};
-    const optsWithDefaults = { image: image ?? DEFAULT_IMAGE, autoRemove: autoRemove ?? true, ...rest };
+    const defaults: Partial<ContainerOpts> = { image: DEFAULT_IMAGE, autoRemove: true, tty: false };
+    const optsWithDefaults = { ...defaults, ...opts };
+
     await this.ensureImage(optsWithDefaults.image!, optsWithDefaults.platform);
 
     const Env: string[] | undefined = Array.isArray(optsWithDefaults.env)
@@ -156,7 +157,8 @@ export class ContainerService {
       AttachStderr: true,
       WorkingDir: options?.workdir,
       Env,
-      Tty: options?.tty ?? false,
+      Tty: false,
+      AttachStdin: false,
     });
 
     const { stdout, stderr, exitCode } = await this.startAndCollectExec(exec, options?.timeoutMs);
@@ -284,19 +286,25 @@ export class ContainerService {
             const tty = details.ProcessConfig?.tty;
             if (tty) {
               stream.on('data', (chunk: Buffer | string) => {
-                stdout += chunk.toString();
+                const text = chunk.toString();
+                this.logger.debug(`[Exec stdout chunk]`, text.trim());
+                stdout += text;
               });
             } else {
               this.docker.modem.demuxStream(
                 stream,
                 {
                   write: (chunk: any) => {
-                    stdout += Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+                    const text = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+                    this.logger.debug(`[Exec stdout chunk]`, text.trim());
+                    stdout += text;
                   },
                 } as any,
                 {
                   write: (chunk: any) => {
-                    stderr += Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+                    const text = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+                    this.logger.debug(`[Exec stderr chunk]`, text.trim());
+                    stderr += text;
                   },
                 } as any,
               );
