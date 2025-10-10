@@ -23,6 +23,7 @@
     "@types/json-schema": "^7.0.15",
     "dockerode": "^4.0.8",
     "dotenv": "^17.2.2",
+    "node-fetch": "^3.3.2",
     "fastify": "^5.6.1",
     "lodash-es": "^4.17.21",
     "md5": "^2.3.0",

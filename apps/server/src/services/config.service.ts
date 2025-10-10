@@ -17,6 +17,13 @@ export const configSchema = z.object({
   graphBranch: z.string().default('graph-state'),
   graphAuthorName: z.string().optional(),
   graphAuthorEmail: z.string().optional(),
+  // Optional Vault flags (disabled by default)
+  vaultEnabled: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
+  vaultAddr: z.string().optional(),
+  vaultToken: z.string().optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -71,6 +78,17 @@ export class ConfigService implements Config {
     return this.params.graphAuthorEmail;
   }
 
+  // Vault getters (optional)
+  get vaultEnabled(): boolean {
+    return !!this.params.vaultEnabled;
+  }
+  get vaultAddr(): string | undefined {
+    return this.params.vaultAddr;
+  }
+  get vaultToken(): string | undefined {
+    return this.params.vaultToken;
+  }
+
   static fromEnv(): ConfigService {
     const parsed = configSchema.parse({
       githubAppId: process.env.GITHUB_APP_ID,
@@ -86,6 +104,9 @@ export class ConfigService implements Config {
       graphBranch: process.env.GRAPH_BRANCH || 'graph-state',
       graphAuthorName: process.env.GRAPH_AUTHOR_NAME,
       graphAuthorEmail: process.env.GRAPH_AUTHOR_EMAIL,
+      vaultEnabled: process.env.VAULT_ENABLED,
+      vaultAddr: process.env.VAULT_ADDR,
+      vaultToken: process.env.VAULT_TOKEN,
     });
     return new ConfigService(parsed);
   }

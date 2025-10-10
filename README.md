@@ -12,6 +12,12 @@ Getting started
 - Architecture and setup: [docs/technical-overview.md](docs/technical-overview.md)
 - Contribution workflow & style guides: [docs/contributing/index.md](docs/contributing/index.md)
 
+Development services
+- docker compose up -d mongo1 mongo-setup mongo-express jaeger
+- Optional: start Vault for dev secret flows: `docker compose up -d vault vault-init`
+  - Set VAULT_ENABLED=true, VAULT_ADDR, VAULT_TOKEN in apps/server/.env
+  - See docs/security/vault.md
+
 Server graph store configuration
 - GRAPH_STORE: `mongo` | `git` (default `mongo`)
 - GRAPH_REPO_PATH: path to local git repo (default `./data/graph`)
