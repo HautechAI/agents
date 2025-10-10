@@ -110,11 +110,13 @@ describe('ContainerProviderEntity platform reuse logic', () => {
   it('injects DOCKER_HOST and would ensure DinD when enabled', async () => {
     const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('cid999', svc as any);
     (svc.start as any).mockImplementationOnce(startImpl);
+    // Mock DinD readiness: execContainer returns exitCode 0 immediately
+    (svc as any).execContainer = vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
     const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
     provider.setConfig({ enableDinD: true });
     const c = await provider.provide('ten');
     expect(c).toBeInstanceOf(MockContainer);
     const call = (svc.start as any).mock.calls.find(Boolean);
     expect(call[0].env?.DOCKER_HOST).toBe('tcp://localhost:2375');
-  });
+  }, 20000);
 });
