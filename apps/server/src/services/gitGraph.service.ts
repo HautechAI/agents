@@ -94,7 +94,16 @@ export class GitGraphService {
         await this.atomicWriteGraph(name, created);
         await this.runGit(['add', this.relGraphPathPOSIX(name)], this.cfg.repoPath);
         const deltaMsg = this.deltaSummary({ nodes: [], edges: [] }, created);
-        await this.commit(`chore(graph): ${name} v${created.version} ${deltaMsg}`, author ?? this.cfg.defaultAuthor);
+        try {
+          await this.commit(`chore(graph): ${name} v${created.version} ${deltaMsg}`, author ?? this.cfg.defaultAuthor);
+        } catch (e: any) {
+          // Rollback: unstage and remove the newly created file
+          await this.safeUnstage(this.relGraphPathPOSIX(name));
+          await this.rollbackFile(name, /*hadExisting*/ false);
+          const err: any = e instanceof Error ? e : new Error(String(e));
+          err.code = 'COMMIT_FAILED';
+          throw err;
+        }
         return created;
       }
 
@@ -115,7 +124,16 @@ export class GitGraphService {
       await this.atomicWriteGraph(name, updated);
       await this.runGit(['add', this.relGraphPathPOSIX(name)], this.cfg.repoPath);
       const deltaMsg = this.deltaSummary(existing, updated);
-      await this.commit(`chore(graph): ${name} v${updated.version} ${deltaMsg}`, author ?? this.cfg.defaultAuthor);
+      try {
+        await this.commit(`chore(graph): ${name} v${updated.version} ${deltaMsg}`, author ?? this.cfg.defaultAuthor);
+      } catch (e: any) {
+        // Rollback: unstage and restore last committed version
+        await this.safeUnstage(this.relGraphPathPOSIX(name));
+        await this.rollbackFile(name, /*hadExisting*/ true);
+        const err: any = e instanceof Error ? e : new Error(String(e));
+        err.code = 'COMMIT_FAILED';
+        throw err;
+      }
       return updated;
     } finally {
       await this.releaseLock(name, lock);
@@ -224,6 +242,27 @@ export class GitGraphService {
     const de = after.edges.length - (before.edges?.length || 0);
     const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
     return `(${sign(dn)} nodes, ${sign(de)} edges)`;
+  }
+
+  private async safeUnstage(relPosix: string) {
+    try { await this.runGit(['restore', '--staged', relPosix], this.cfg.repoPath); } catch {}
+  }
+
+  private async rollbackFile(name: string, hadExisting: boolean) {
+    const rel = this.relGraphPathPOSIX(name);
+    const abs = this.graphJsonPath(name);
+    if (hadExisting) {
+      // Restore worktree from HEAD
+      try {
+        await this.runGit(['restore', '--worktree', '--source', 'HEAD', rel], this.cfg.repoPath);
+      } catch {
+        // Fallback to checkout if restore unsupported
+        try { await this.runGit(['checkout', '--', rel], this.cfg.repoPath); } catch {}
+      }
+    } else {
+      // Remove the new file created before commit
+      try { await fs.unlink(abs); } catch {}
+    }
   }
 
   // Advisory lock implementation via graphs/<name>/.lock
