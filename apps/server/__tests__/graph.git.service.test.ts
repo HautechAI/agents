@@ -21,7 +21,13 @@ describe('GitGraphService', () => {
     tmp = mkdtempSync(path.join(os.tmpdir(), 'graph-git-'));
     registry = new TemplateRegistry();
     // register minimal template referenced by tests
-    registry.register('noop', async () => ({ setConfig: ()=>{} } as any), { sourcePorts: {}, targetPorts: {} }, { title: 'Noop', kind: 'tool' });
+    // Provide explicit ports so edges using sourceHandle 'out' and targetHandle 'in' validate
+    registry.register(
+      'noop',
+      async () => ({ setConfig: () => {} } as any),
+      { sourcePorts: { out: { kind: 'instance' } }, targetPorts: { in: { kind: 'instance' } } },
+      { title: 'Noop', kind: 'tool' },
+    );
     svc = new GitGraphService({ repoPath: tmp, branch: 'graph-state', defaultAuthor: { name: 'Test', email: 't@example.com' } }, new NoopLogger(), registry as any);
     await svc.initIfNeeded();
   });
