@@ -3,6 +3,7 @@ import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS, type Platform } from '../constants.js';
 import { VaultService, type VaultRef } from '../services/vault.service';
+import { ConfigService } from '../services/config.service';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
@@ -41,16 +42,22 @@ export const ContainerProviderStaticConfigSchema = z
       .optional()
       .describe('Docker platform selector for the workspace container')
       .meta({ 'ui:widget': 'select' }),
+    enableDinD: z
+      .boolean()
+      .default(false)
+      .describe('Enable per-workspace Docker-in-Docker sidecar; defaults to disabled for tests/CI.'),
   })
   .strict();
 
 export type ContainerProviderStaticConfig = z.infer<typeof ContainerProviderStaticConfigSchema>;
 
 export class ContainerProviderEntity {
-  private cfg?: Pick<ContainerOpts, 'image' | 'env' | 'platform'> & {
-    initialScript?: string;
-    envRefs?: Record<string, { source: 'vault'; mount?: string; path: string; key?: string; optional?: boolean }>;
-  };
+  private cfg?:
+    | (Pick<ContainerOpts, 'image' | 'env' | 'platform'> & {
+        initialScript?: string;
+        envRefs?: Record<string, { source: 'vault'; mount?: string; path: string; key?: string; optional?: boolean }>;
+        enableDinD?: boolean;
+      });
 
   private vaultService: VaultService | undefined;
   private opts: ContainerOpts;
@@ -64,14 +71,15 @@ export class ContainerProviderEntity {
     vaultOrOpts: VaultService | ContainerOpts | undefined,
     optsOrId: ContainerOpts | ((id: string) => Record<string, string>),
     maybeId?: (id: string) => Record<string, string>,
+    private configService?: ConfigService,
   ) {
     if (typeof optsOrId === 'function') {
-      // Old signature
+      // Old signature: (containerService, opts, idLabels)
       this.vaultService = undefined;
       this.opts = (vaultOrOpts as ContainerOpts) || {};
       this.idLabels = optsOrId;
     } else {
-      // New signature
+      // New signature: (containerService, vaultService, opts, idLabels, configService?)
       this.vaultService = (vaultOrOpts as VaultService) || undefined;
       this.opts = (optsOrId as ContainerOpts) || {};
       this.idLabels = maybeId || ((id: string) => ({ 'hautech.ai/thread_id': id }));
@@ -93,6 +101,9 @@ export class ContainerProviderEntity {
   async provide(threadId: string) {
     const labels = this.idLabels(threadId);
     let container: ContainerEntity | undefined = await this.containerService.findContainerByLabels(labels);
+    const DOCKER_HOST_ENV = 'tcp://localhost:2375';
+    const DOCKER_MIRROR_URL = this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
+    const enableDinD = this.cfg?.enableDinD ?? false;
 
     // Enforce non-reuse on platform mismatch if a platform is requested now
     const requestedPlatform = this.cfg?.platform ?? this.opts.platform;
@@ -101,6 +112,27 @@ export class ContainerProviderEntity {
         const containerLabels = await this.containerService.getContainerLabels(container.id);
         const existingPlatform = containerLabels?.[PLATFORM_LABEL];
         if (!existingPlatform || existingPlatform !== requestedPlatform) {
+          // If DinD is enabled, remove associated DinD sidecar(s) first
+          if (enableDinD) {
+            try {
+              const dinds = await this.containerService.findContainersByLabels({
+                ...labels,
+                'hautech.ai/role': 'dind',
+                'hautech.ai/parent_cid': container.id,
+              });
+              // Stop/remove DinD sidecars concurrently
+              await Promise.all(
+                dinds.map(async (d) => {
+                  try {
+                    await d.stop(5);
+                  } catch {}
+                  try {
+                    await d.remove(true);
+                  } catch {}
+                }),
+              );
+            } catch {}
+          }
           // Stop and remove old container, then recreate (handle benign errors)
           try {
             await container.stop();
@@ -161,12 +193,17 @@ export class ContainerProviderEntity {
         ...this.opts,
         // Only merge image/env from cfg (initialScript is provider-level behavior, not a start option)
         image: this.cfg?.image ?? this.opts.image,
-        env: envMerged,
+        env: enableDinD ? { ...(envMerged || {}), DOCKER_HOST: DOCKER_HOST_ENV } : envMerged,
         labels: { ...(this.opts.labels || {}), ...labels },
         platform: requestedPlatform,
       });
 
-      // Run initial script if provided. Treat non-zero exit code as failure.
+      // Create per-workspace DinD sidecar attached to the workspace network namespace (only when enabled)
+      if (enableDinD) {
+        await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
+      }
+
+      // Run initial script after DinD readiness. Treat non-zero exit code as failure.
       if (this.cfg?.initialScript) {
         const script = this.cfg.initialScript;
         const { exitCode, stderr } = await container.exec(script, { tty: false });
@@ -178,8 +215,73 @@ export class ContainerProviderEntity {
           );
         }
       }
+    } else {
+      // Reuse path: ensure DinD exists and is healthy (only when enabled)
+      if (enableDinD) {
+        await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
+      }
     }
     return container;
+  }
+
+  private async ensureDinD(workspace: ContainerEntity, baseLabels: Record<string, string>, mirrorUrl: string) {
+    // Check existing
+    let dind = await this.containerService.findContainerByLabels({
+      ...baseLabels,
+      'hautech.ai/role': 'dind',
+      'hautech.ai/parent_cid': workspace.id,
+    });
+
+    if (!dind) {
+      // Start DinD with shared network namespace
+      const dindLabels = { ...baseLabels, 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': workspace.id };
+      dind = await this.containerService.start({
+        image: 'docker:27-dind',
+        env: { DOCKER_TLS_CERTDIR: '' },
+        cmd: ['-H', 'tcp://0.0.0.0:2375', '--registry-mirror', mirrorUrl],
+        labels: dindLabels,
+        autoRemove: true,
+        privileged: true,
+        networkMode: `container:${workspace.id}`,
+        anonymousVolumes: ['/var/lib/docker'],
+      });
+    }
+
+    // Readiness: poll docker info within dind container
+    await this.waitForDinDReady(dind);
+  }
+
+  private async waitForDinDReady(dind: ContainerEntity) {
+    const deadline = Date.now() + 60_000; // 60s timeout
+    // Helper sleep
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    while (Date.now() < deadline) {
+      try {
+        const { exitCode } = await this.containerService.execContainer(dind.id, ['sh', '-lc', 'docker -H tcp://0.0.0.0:2375 info >/dev/null 2>&1']);
+        if (exitCode === 0) return;
+      } catch {}
+      // Early fail if DinD exited unexpectedly (best-effort; skip if low-level client not available)
+      try {
+        const maybeSvc: unknown = this.containerService;
+        // Narrow to objects that expose getDocker(): Docker
+        const hasGetDocker =
+          typeof maybeSvc === 'object' && maybeSvc !== null && 'getDocker' in maybeSvc &&
+          typeof (maybeSvc as { getDocker?: unknown }).getDocker === 'function';
+        if (hasGetDocker) {
+          const docker = (maybeSvc as { getDocker: () => import('dockerode').default }).getDocker();
+          const inspect = await docker.getContainer(dind.id).inspect();
+          const state = inspect?.State as { Running?: boolean; Status?: string } | undefined;
+          if (state && state.Running === false) {
+            throw new Error(`DinD sidecar exited unexpectedly: status=${state.Status}`);
+          }
+        }
+      } catch (e) {
+        // If inspect reports not running or other error, fail fast
+        throw e instanceof Error ? e : new Error('DinD sidecar exited unexpectedly');
+      }
+      await sleep(1000);
+    }
+    throw new Error('DinD sidecar did not become ready within timeout');
   }
 }
 

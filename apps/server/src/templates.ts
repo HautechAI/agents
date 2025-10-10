@@ -63,8 +63,19 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             {
               cmd: ['sleep', 'infinity'],
               workingDir: '/workspace',
+              // Attach workspace containers to the shared user-defined bridge so they can
+              // resolve registry-mirror by name and share network with DinD sidecar
+              createExtras: {
+                HostConfig: { NetworkMode: 'agents_net' },
+                NetworkingConfig: {
+                  // dockerode expects a map of network name to EndpointSettings; all fields are optional
+                  // Using an empty object is valid and avoids any casts.
+                  EndpointsConfig: { agents_net: {} },
+                },
+              },
             },
             (threadId) => ({ 'hautech.ai/thread_id': `${ctx.nodeId}__${threadId}` }),
+            configService,
           ),
         {
           sourcePorts: { $self: { kind: 'instance' } },
