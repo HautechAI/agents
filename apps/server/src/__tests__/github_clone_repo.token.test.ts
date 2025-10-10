@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GithubCloneRepoTool } from '../tools/github_clone_repo';
 import { LoggerService } from '../services/logger.service';
@@ -8,19 +9,31 @@ import { describe, it, expect } from 'vitest';
 import { GithubCloneRepoTool } from '../tools/github_clone_repo';
 import { LoggerService } from '../services/logger.service';
 >>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
+=======
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { GithubCloneRepoTool } from '../tools/github_clone_repo';
+import { LoggerService } from '../services/logger.service';
+import type { VaultService } from '../services/vault.service';
+>>>>>>> 532949b (refactor(#113): batch Vault lookups; share parseVaultRef; tighten types; UI fixes\n\n- Batch env and envRefs vault resolutions with Promise.all.\n- Extract shared parseVaultRef in server utils and reuse.\n- Tighten Zod types and remove any casts where feasible.\n- UI: fix duplicate key detection and unique datalist ids.\n- Extend tests for token fallbacks, legacy compatibility, and error paths.)
 
 const logger = new LoggerService();
 
 describe('GithubCloneRepoTool token resolution', () => {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 532949b (refactor(#113): batch Vault lookups; share parseVaultRef; tighten types; UI fixes\n\n- Batch env and envRefs vault resolutions with Promise.all.\n- Extract shared parseVaultRef in server utils and reuse.\n- Tighten Zod types and remove any casts where feasible.\n- UI: fix duplicate key detection and unique datalist ids.\n- Extend tests for token fallbacks, legacy compatibility, and error paths.)
   const env = process.env;
   beforeEach(() => {
     vi.resetAllMocks();
     process.env = { ...env };
     delete process.env.GH_TOKEN;
   });
+<<<<<<< HEAD
 =======
 >>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
+=======
+>>>>>>> 532949b (refactor(#113): batch Vault lookups; share parseVaultRef; tighten types; UI fixes\n\n- Batch env and envRefs vault resolutions with Promise.all.\n- Extract shared parseVaultRef in server utils and reuse.\n- Tighten Zod types and remove any casts where feasible.\n- UI: fix duplicate key detection and unique datalist ids.\n- Extend tests for token fallbacks, legacy compatibility, and error paths.)
   it('prefers static token value', async () => {
     const tool = new GithubCloneRepoTool({ githubToken: 'FALLBACK' } as any, undefined, logger);
     await tool.setConfig({ token: { value: 'DIRECT', source: 'static' } });
@@ -29,6 +42,9 @@ describe('GithubCloneRepoTool token resolution', () => {
     expect(t).toBe('DIRECT');
   });
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 532949b (refactor(#113): batch Vault lookups; share parseVaultRef; tighten types; UI fixes\n\n- Batch env and envRefs vault resolutions with Promise.all.\n- Extract shared parseVaultRef in server utils and reuse.\n- Tighten Zod types and remove any casts where feasible.\n- UI: fix duplicate key detection and unique datalist ids.\n- Extend tests for token fallbacks, legacy compatibility, and error paths.)
   it('falls back to env GH_TOKEN via legacy authRef', async () => {
     process.env.GH_TOKEN = 'FROM_ENV';
     const tool = new GithubCloneRepoTool({ githubToken: 'FALLBACK' } as any, undefined, logger);
@@ -52,8 +68,12 @@ describe('GithubCloneRepoTool token resolution', () => {
     const t = await (tool as any).resolveToken();
     expect(t).toBe('FROM_VAULT');
   });
+<<<<<<< HEAD
 });
 =======
 });
 
 >>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
+=======
+});
+>>>>>>> 532949b (refactor(#113): batch Vault lookups; share parseVaultRef; tighten types; UI fixes\n\n- Batch env and envRefs vault resolutions with Promise.all.\n- Extract shared parseVaultRef in server utils and reuse.\n- Tighten Zod types and remove any casts where feasible.\n- UI: fix duplicate key detection and unique datalist ids.\n- Extend tests for token fallbacks, legacy compatibility, and error paths.)

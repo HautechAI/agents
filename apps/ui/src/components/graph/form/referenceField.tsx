@@ -41,7 +41,13 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
   }, [mode, ref.mount, ref.path]);
 
   const invalidVault = mode === 'vault' && val && !isValidVaultRef(val);
+<<<<<<< HEAD
   const uniqueId = useMemo(() => `rf-${Math.random().toString(36).slice(2)}`, []);
+=======
+
+  const uniqueId = useMemo(() => `rf-${Math.random().toString(36).slice(2)}`, []);
+
+>>>>>>> 532949b (refactor(#113): batch Vault lookups; share parseVaultRef; tighten types; UI fixes\n\n- Batch env and envRefs vault resolutions with Promise.all.\n- Extract shared parseVaultRef in server utils and reuse.\n- Tighten Zod types and remove any casts where feasible.\n- UI: fix duplicate key detection and unique datalist ids.\n- Extend tests for token fallbacks, legacy compatibility, and error paths.)
   return (
     <div className="flex items-center gap-2">
       <input
