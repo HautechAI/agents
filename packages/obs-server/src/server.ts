@@ -258,6 +258,40 @@ export async function createServer(db: Db, opts: { logger?: boolean } = {}): Pro
     return { items: docs, nextCursor };
   });
 
+  // Metrics: errors grouped by tool label
+  const MetricsErrorsByToolQuery = z.object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(1000).default(50),
+    field: z.enum(['lastUpdate', 'startTime']).default('lastUpdate'),
+  });
+
+  fastify.get('/v1/metrics/errors-by-tool', async (req, reply) => {
+    const parsed = MetricsErrorsByToolQuery.safeParse((req as any).query);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
+    const from = parsed.data.from ?? defaultFrom;
+    const to = parsed.data.to ?? now.toISOString();
+    const field = parsed.data.field;
+    const limit = parsed.data.limit;
+    // Build aggregation pipeline
+    const match: any = {
+      status: 'error',
+      label: { $regex: /^tool:/ },
+    };
+    match[field] = { $gte: from, $lte: to };
+    const pipeline = [
+      { $match: match },
+      { $group: { _id: '$label', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: limit },
+      { $project: { _id: 0, label: '$_id', count: 1 } },
+    ];
+    const items = await spans.aggregate(pipeline as any).toArray();
+    return { items, from, to };
+  });
+
   fastify.get('/v1/spans/:id', async (req, reply) => {
     const id = (req.params as any).id;
     const { ObjectId } = await import('mongodb');

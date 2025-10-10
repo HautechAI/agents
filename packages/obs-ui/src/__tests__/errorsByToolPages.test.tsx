@@ -1,0 +1,51 @@
+import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { ErrorsByToolPage } from '../pages/ErrorsByToolPage';
+import { ToolErrorsPage } from '../pages/ToolErrorsPage';
+
+vi.mock('../services/api', async () => {
+  const actual = await vi.importActual<any>('../services/api');
+  return {
+    ...actual,
+    fetchErrorsByTool: vi.fn().mockResolvedValue({ items: [ { label: 'tool:weather', count: 3 }, { label: 'tool:search', count: 1 } ], from: new Date(Date.now()-6*3600*1000).toISOString(), to: new Date().toISOString() }),
+    fetchSpansInRange: vi.fn().mockResolvedValue({ items: [
+      { traceId: 't1', spanId: 's1', label: 'tool:weather', status: 'error', startTime: new Date().toISOString(), endTime: new Date().toISOString(), completed: true, lastUpdate: new Date().toISOString(), attributes: {}, events: [], rev: 0, idempotencyKeys: [], createdAt: '', updatedAt: '' }
+    ] })
+  };
+});
+
+describe('Errors by Tool pages', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders counts and navigates to detail', async () => {
+    render(
+      <MemoryRouter initialEntries={[`/errors/tools`]}>
+        <Routes>
+          <Route path="/errors/tools" element={<ErrorsByToolPage />} />
+          <Route path="/errors/tools/:label" element={<ToolErrorsPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByText('Errors by Tool')).toBeTruthy();
+    const row = await screen.findByText('tool:weather');
+    fireEvent.click(row);
+    await waitFor(async () => {
+      expect(await screen.findByText(/Tool Errors — tool:weather/)).toBeTruthy();
+    });
+  });
+
+  it('detail page lists spans and shows details', async () => {
+    render(
+      <MemoryRouter initialEntries={[`/errors/tools/tool%3Aweather`]}>
+        <Routes>
+          <Route path="/errors/tools/:label" element={<ToolErrorsPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByText(/Tool Errors — tool:weather/)).toBeTruthy();
+    expect(await screen.findByText('s1')).toBeTruthy();
+  });
+});
+

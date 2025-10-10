@@ -1,4 +1,5 @@
 import { SpanDoc, LogDoc } from '../types';
+import type { TimeRange } from '../components/TimeRangeSelector';
 
 const BASE_URL = (import.meta as any).env?.VITE_OBS_SERVER_URL || 'http://localhost:4319';
 
@@ -65,4 +66,44 @@ export async function fetchLogs(params: { traceId?: string; spanId?: string; lim
   if (!r.ok) throw new Error('Failed to fetch logs');
   const data = await r.json();
   return data.items || [];
+}
+
+// New: metrics errors-by-tool
+export interface ErrorsByToolItem { label: string; count: number }
+export async function fetchErrorsByTool(range: TimeRange, opts: { field?: 'lastUpdate'|'startTime'; limit?: number } = {}): Promise<{ items: ErrorsByToolItem[]; from: string; to: string }> {
+  const usp = new URLSearchParams();
+  usp.set('from', range.from);
+  usp.set('to', range.to);
+  if (opts.field) usp.set('field', opts.field);
+  if (opts.limit) usp.set('limit', String(opts.limit));
+  const url = BASE_URL + '/v1/metrics/errors-by-tool' + (usp.toString() ? `?${usp}` : '');
+  const r = await fetch(url);
+  if (r.status === 404) {
+    // Fallback: client-side aggregation using /v1/spans
+    const spans = await fetchSpansInRange(range, { status: 'error', limit: 5000 });
+    const counts: Record<string, number> = {};
+    for (const s of spans) {
+      if (s.label && s.label.startsWith('tool:')) counts[s.label] = (counts[s.label] || 0) + 1;
+    }
+    const items = Object.entries(counts).map(([label, count]) => ({ label, count })).sort((a,b) => b.count - a.count).slice(0, opts.limit ?? 50);
+    return { items, from: range.from, to: range.to };
+  }
+  if (!r.ok) throw new Error('Failed to fetch metrics');
+  const data = await r.json();
+  return data;
+}
+
+export async function fetchSpansInRange(range: TimeRange, params: { status?: 'running'|'ok'|'error'|'cancelled'; label?: string; limit?: number; cursor?: string; sort?: 'lastUpdate'|'startTime' } = {}): Promise<{ items: SpanDoc[]; nextCursor?: string }> {
+  const usp = new URLSearchParams();
+  usp.set('from', range.from);
+  usp.set('to', range.to);
+  usp.set('limit', String(params.limit ?? 50));
+  if (params.status) usp.set('status', params.status);
+  if (params.label) usp.set('label', params.label);
+  if (params.cursor) usp.set('cursor', params.cursor);
+  if (params.sort) usp.set('sort', params.sort);
+  const r = await fetch(BASE_URL + '/v1/spans' + (usp.toString() ? `?${usp.toString()}` : ''));
+  if (!r.ok) throw new Error('Failed to fetch spans');
+  const data = await r.json();
+  return data;
 }
