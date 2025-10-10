@@ -83,6 +83,18 @@ services:
       vault kv put secret/github GH_TOKEN=ghp_example_token
       echo 'vault init done'
       "
+  # Lightweight Docker registry mirror (proxy cache)
+  # - Uses official registry:2 with proxy enabled via env var
+  # - Exposed only on the user-defined bridge network 'agents_net' (no host ports)
+  # - DinD sidecars in workspaces will use http://registry-mirror:5000 as --registry-mirror
+  registry-mirror:
+    image: registry:2
+    restart: unless-stopped
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:5000
+      REGISTRY_PROXY_REMOTEURL: https://registry-1.docker.io
+    networks:
+      - agents_net
 
   
 volumes:
@@ -90,3 +102,9 @@ volumes:
     driver: local
   jaeger-data:
     driver: local
+
+networks:
+  # Shared user-defined bridge with deterministic name so non-compose containers
+  # can attach to it (e.g., workspace containers launched via Docker API).
+  agents_net:
+    name: agents_net

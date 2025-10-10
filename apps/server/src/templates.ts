@@ -63,6 +63,12 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             {
               cmd: ['sleep', 'infinity'],
               workingDir: '/workspace',
+              // Attach workspace containers to the shared user-defined bridge so they can
+              // resolve registry-mirror by name and share network with DinD sidecar
+              createExtras: {
+                HostConfig: { NetworkMode: 'agents_net' },
+                NetworkingConfig: { EndpointsConfig: { agents_net: {} as any } },
+              },
             },
             (threadId) => ({ 'hautech.ai/thread_id': `${ctx.nodeId}__${threadId}` }),
           ),

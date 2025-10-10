@@ -24,6 +24,8 @@ export const configSchema = z.object({
     .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
   vaultAddr: z.string().optional(),
   vaultToken: z.string().optional(),
+  // Docker registry mirror URL (used by DinD sidecar)
+  dockerMirrorUrl: z.string().min(1).default('http://registry-mirror:5000'),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -89,6 +91,10 @@ export class ConfigService implements Config {
     return this.params.vaultToken;
   }
 
+  get dockerMirrorUrl(): string {
+    return this.params.dockerMirrorUrl || 'http://registry-mirror:5000';
+  }
+
   static fromEnv(): ConfigService {
     const parsed = configSchema.parse({
       githubAppId: process.env.GITHUB_APP_ID,
@@ -107,6 +113,7 @@ export class ConfigService implements Config {
       vaultEnabled: process.env.VAULT_ENABLED,
       vaultAddr: process.env.VAULT_ADDR,
       vaultToken: process.env.VAULT_TOKEN,
+      dockerMirrorUrl: process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000',
     });
     return new ConfigService(parsed);
   }

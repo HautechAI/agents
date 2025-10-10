@@ -93,6 +93,8 @@ export class ContainerProviderEntity {
   async provide(threadId: string) {
     const labels = this.idLabels(threadId);
     let container: ContainerEntity | undefined = await this.containerService.findContainerByLabels(labels);
+    const DOCKER_HOST_ENV = 'tcp://localhost:2375';
+    const DOCKER_MIRROR_URL = process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
 
     // Enforce non-reuse on platform mismatch if a platform is requested now
     const requestedPlatform = this.cfg?.platform ?? this.opts.platform;
@@ -101,6 +103,22 @@ export class ContainerProviderEntity {
         const containerLabels = await this.containerService.getContainerLabels(container.id);
         const existingPlatform = containerLabels?.[PLATFORM_LABEL];
         if (!existingPlatform || existingPlatform !== requestedPlatform) {
+          // Remove associated DinD sidecar(s) first
+          try {
+            const dinds = await this.containerService.findContainersByLabels({
+              ...labels,
+              'hautech.ai/role': 'dind',
+              'hautech.ai/parent_cid': container.id,
+            });
+            for (const d of dinds) {
+              try {
+                await d.stop(5);
+              } catch {}
+              try {
+                await d.remove(true);
+              } catch {}
+            }
+          } catch {}
           // Stop and remove old container, then recreate (handle benign errors)
           try {
             await container.stop();
@@ -161,12 +179,16 @@ export class ContainerProviderEntity {
         ...this.opts,
         // Only merge image/env from cfg (initialScript is provider-level behavior, not a start option)
         image: this.cfg?.image ?? this.opts.image,
-        env: envMerged,
+        // Inject DOCKER_HOST for DinD usage alongside resolved env
+        env: { ...(envMerged || {}), DOCKER_HOST: DOCKER_HOST_ENV },
         labels: { ...(this.opts.labels || {}), ...labels },
         platform: requestedPlatform,
       });
 
-      // Run initial script if provided. Treat non-zero exit code as failure.
+      // Create per-workspace DinD sidecar attached to the workspace network namespace
+      await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
+
+      // Run initial script after DinD readiness. Treat non-zero exit code as failure.
       if (this.cfg?.initialScript) {
         const script = this.cfg.initialScript;
         const { exitCode, stderr } = await container.exec(script, { tty: false });
@@ -178,8 +200,52 @@ export class ContainerProviderEntity {
           );
         }
       }
+    } else {
+      // Reuse path: ensure DinD exists and is healthy
+      await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
     }
     return container;
+  }
+
+  private async ensureDinD(workspace: ContainerEntity, baseLabels: Record<string, string>, mirrorUrl: string) {
+    // Check existing
+    let dind = await this.containerService.findContainerByLabels({
+      ...baseLabels,
+      'hautech.ai/role': 'dind',
+      'hautech.ai/parent_cid': workspace.id,
+    });
+
+    if (!dind) {
+      // Start DinD with shared network namespace
+      const dindLabels = { ...baseLabels, 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': workspace.id };
+      dind = await this.containerService.start({
+        image: 'docker:27-dind',
+        env: { DOCKER_TLS_CERTDIR: '' },
+        cmd: ['-H', 'tcp://0.0.0.0:2375', '--registry-mirror', mirrorUrl],
+        labels: dindLabels,
+        autoRemove: true,
+        privileged: true,
+        networkMode: `container:${workspace.id}`,
+        anonymousVolumes: ['/var/lib/docker'],
+      });
+    }
+
+    // Readiness: poll docker info within dind container
+    await this.waitForDinDReady(dind);
+  }
+
+  private async waitForDinDReady(dind: ContainerEntity) {
+    const deadline = Date.now() + 60_000; // 60s timeout
+    // Helper sleep
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    while (Date.now() < deadline) {
+      try {
+        const { exitCode } = await this.containerService.execContainer(dind.id, ['sh', '-lc', 'docker -H tcp://0.0.0.0:2375 info >/dev/null 2>&1']);
+        if (exitCode === 0) return;
+      } catch {}
+      await sleep(1000);
+    }
+    throw new Error('DinD sidecar did not become ready within timeout');
   }
 }
 

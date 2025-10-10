@@ -18,6 +18,11 @@ export type ContainerOpts = {
   tty?: boolean;
   labels?: Record<string, string>;
   platform?: Platform;
+  privileged?: boolean;
+  /** Container paths to create as anonymous volumes (top-level Volumes mapping) */
+  anonymousVolumes?: string[];
+  /** Advanced: raw dockerode create options merged last (escape hatch) */
+  createExtras?: Partial<ContainerCreateOptions>;
 };
 
 /**
@@ -111,7 +116,12 @@ export class ContainerService {
         AutoRemove: optsWithDefaults.autoRemove ?? false,
         Binds: optsWithDefaults.binds,
         NetworkMode: optsWithDefaults.networkMode,
+        Privileged: optsWithDefaults.privileged ?? false,
       },
+      Volumes:
+        optsWithDefaults.anonymousVolumes && optsWithDefaults.anonymousVolumes.length > 0
+          ? Object.fromEntries(optsWithDefaults.anonymousVolumes.map((p) => [p, {} as any]))
+          : undefined,
       Tty: optsWithDefaults.tty ?? false,
       AttachStdout: true,
       AttachStderr: true,
@@ -120,6 +130,16 @@ export class ContainerService {
         ...(optsWithDefaults.platform ? { [PLATFORM_LABEL]: optsWithDefaults.platform } : {}),
       },
     };
+
+    // Merge createExtras last (shallow, with nested HostConfig merged shallowly as well)
+    if (optsWithDefaults.createExtras) {
+      const extras = optsWithDefaults.createExtras;
+      if (extras.HostConfig) {
+        createOptions.HostConfig = { ...(createOptions.HostConfig || {}), ...extras.HostConfig } as any;
+      }
+      const { HostConfig: _hc, ...rest } = extras as any;
+      Object.assign(createOptions, rest);
+    }
 
     this.logger.info(
       `Creating container from '${optsWithDefaults.image}'${optsWithDefaults.name ? ` name=${optsWithDefaults.name}` : ''}`,

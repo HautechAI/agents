@@ -63,6 +63,14 @@ Workspace container platform
   - env: { FOO: "bar" }
 - Note: Docker Desktop generally supports both platforms; non-native emulation may be slower (qemu/binfmt). Not all tags are multi-arch; prefer multi-arch images when specifying platform.
 
+Per-workspace Docker-in-Docker and registry mirror
+- Each workspace container is created with DOCKER_HOST=tcp://localhost:2375 and a co-located Docker-in-Docker sidecar (docker:27-dind) running in the same network namespace (HostConfig.NetworkMode=container:<workspaceId>), with privileged=true and an anonymous volume for /var/lib/docker.
+- The sidecar exposes its Docker API only inside the workspace namespace (port 2375 is NOT published to the host).
+- A lightweight pull-through cache is provided via a compose service `registry-mirror` (registry:2 in proxy mode) on a shared bridge network `agents_net`.
+- DinD is started with `--registry-mirror` pointing at DOCKER_MIRROR_URL (default http://registry-mirror:5000), so image pulls inside workspaces use the proxy cache.
+- Readiness: the server waits for the DinD engine to be ready before executing any initial scripts.
+- To override the mirror, set environment variable DOCKER_MIRROR_URL to an alternate URL.
+
 Defaults and toggles
 - LiveGraphRuntime serializes apply operations by default.
 - PRTrigger intervalMs default 60000; includeAuthored default false.
