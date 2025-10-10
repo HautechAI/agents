@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { describe, it, expect } from 'vitest';
 import { parseVaultRef } from '../utils/refs';
 import { describe, it, expect, vi } from 'vitest';
@@ -9,6 +10,10 @@ class FakeContainerService {
   async start(opts: any) { return { id: 'c', exec: async () => ({ exitCode: 0 }), ...opts }; }
 }
 class FakeVault { isEnabled() { return true; } async getSecret() { return 'VAL'; } }
+=======
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ContainerProviderEntity, parseVaultRef } from '../entities/containerProvider.entity';
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
 
 describe('ContainerProviderEntity parseVaultRef', () => {
   it('parses valid refs', () => {
@@ -20,6 +25,7 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     expect(() => parseVaultRef('/a/b')).toThrow();
     expect(() => parseVaultRef('a/b')).toThrow();
   });
+<<<<<<< HEAD
 
   it('merges env array and resolves vault entries', async () => {
     const svc = new FakeContainerService() as any;
@@ -31,3 +37,7 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     expect(container.env.B).toBe('VAL');
   });
 });
+=======
+});
+
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)

@@ -4,7 +4,7 @@ import { api } from '../../../lib/graph/api';
 export type ReferenceValue = { value?: string; source?: 'static' | 'vault' };
 
 export function ReferenceField({ formData, onChange }: { formData?: ReferenceValue; onChange?: (next: ReferenceValue) => void }) {
-  const [mode, setMode] = useState<'static' | 'vault'>((formData?.source as any) || 'static');
+  const [mode, setMode] = useState<'static' | 'vault'>((formData?.source as 'static' | 'vault') || 'static');
   const [val, setVal] = useState<string>(typeof formData?.value === 'string' ? formData?.value : '');
 
   // Vault metadata for suggestions
@@ -41,9 +41,7 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
   }, [mode, ref.mount, ref.path]);
 
   const invalidVault = mode === 'vault' && val && !isValidVaultRef(val);
-
   const uniqueId = useMemo(() => `rf-${Math.random().toString(36).slice(2)}`, []);
-
   return (
     <div className="flex items-center gap-2">
       <input

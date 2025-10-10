@@ -1,17 +1,26 @@
+<<<<<<< HEAD
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GithubCloneRepoTool } from '../tools/github_clone_repo';
 import { LoggerService } from '../services/logger.service';
 import type { VaultService } from '../services/vault.service';
+=======
+import { describe, it, expect } from 'vitest';
+import { GithubCloneRepoTool } from '../tools/github_clone_repo';
+import { LoggerService } from '../services/logger.service';
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
 
 const logger = new LoggerService();
 
 describe('GithubCloneRepoTool token resolution', () => {
+<<<<<<< HEAD
   const env = process.env;
   beforeEach(() => {
     vi.resetAllMocks();
     process.env = { ...env };
     delete process.env.GH_TOKEN;
   });
+=======
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
   it('prefers static token value', async () => {
     const tool = new GithubCloneRepoTool({ githubToken: 'FALLBACK' } as any, undefined, logger);
     await tool.setConfig({ token: { value: 'DIRECT', source: 'static' } });
@@ -19,6 +28,7 @@ describe('GithubCloneRepoTool token resolution', () => {
     const t = await (tool as any).resolveToken();
     expect(t).toBe('DIRECT');
   });
+<<<<<<< HEAD
   it('falls back to env GH_TOKEN via legacy authRef', async () => {
     process.env.GH_TOKEN = 'FROM_ENV';
     const tool = new GithubCloneRepoTool({ githubToken: 'FALLBACK' } as any, undefined, logger);
@@ -43,3 +53,7 @@ describe('GithubCloneRepoTool token resolution', () => {
     expect(t).toBe('FROM_VAULT');
   });
 });
+=======
+});
+
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)

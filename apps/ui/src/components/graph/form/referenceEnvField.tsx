@@ -1,12 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ReferenceField, type ReferenceValue } from './referenceField';
 
 type EnvItem = { key: string; value: string; source?: 'static' | 'vault' };
 
 export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]; onChange?: (next: EnvItem[]) => void }) {
-  const items = useMemo(() => Array.isArray(formData) ? [...formData] : [], [formData]);
+  const items = useMemo(() => (Array.isArray(formData) ? [...formData] : []), [formData]);
   const [newKey, setNewKey] = useState('');
   const [newVal, setNewVal] = useState<ReferenceValue>({ value: '', source: 'static' });
+
+  // Reset new row state when list resets from outside
+  useEffect(() => {
+    setNewKey('');
+    setNewVal({ value: '', source: 'static' });
+  }, [formData]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -39,6 +45,7 @@ export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]
       {items.map((it, idx) => (
         <div key={`${it.key}-${idx}`} className="flex items-center gap-2">
           <input className={`w-40 rounded border px-2 py-1 text-xs ${isDup(it.key) ? 'border-red-500' : ''}`} value={it.key} readOnly />
+          <input className={`w-40 rounded border px-2 py-1 text-xs ${isDup(it.key) ? 'border-red-500' : ''}`} value={it.key} readOnly />
           <div className="flex-1">
             <ReferenceField
               formData={{ value: it.value, source: it.source || 'static' }}
@@ -57,6 +64,7 @@ export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]
       ))}
       <div className="flex items-center gap-2">
         <input
+          className={`w-40 rounded border px-2 py-1 text-xs ${isDup(newKey) ? 'border-red-500' : ''}`}
           className={`w-40 rounded border px-2 py-1 text-xs ${isDup(newKey) ? 'border-red-500' : ''}`}
           placeholder="key"
           value={newKey}
@@ -79,3 +87,7 @@ function isValidVaultRef(v?: string): boolean {
   const parts = v.split('/').filter(Boolean);
   return parts.length >= 3;
 }
+<<<<<<< HEAD
+=======
+
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)

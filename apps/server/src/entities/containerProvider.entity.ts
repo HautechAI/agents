@@ -203,23 +203,73 @@ export class ContainerProviderEntity {
       const cfgEnv = this.cfg?.env as unknown;
       if (Array.isArray(cfgEnv)) {
         const seen = new Set<string>();
+<<<<<<< HEAD
         const vaultLookups: Array<{ k: string; ref: VaultRef }> = [];
         const staticPairs: Array<{ k: string; v: string }> = [];
         for (const item of cfgEnv as Array<{ key?: string; value?: string; source?: 'static'|'vault' }>) {
           const key = item?.key?.trim();
           const value = item?.value ?? '';
           const source = (item?.source || 'static');
+=======
+        for (const item of cfgEnv) {
+          const { key, value } = (item || {}) as { key?: string; value?: string; source?: 'static' | 'vault' };
+          const source = ((item as any)?.source || 'static') as 'static' | 'vault';
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
           if (!key) throw new Error('env entries require non-empty key');
           if (seen.has(key)) throw new Error(`Duplicate env key: ${key}`);
           seen.add(key);
           if (source === 'vault') {
             if (!this.vaultService || !this.vaultService.isEnabled()) {
               throw new Error('Vault is not enabled but env contains vault-sourced entries');
+<<<<<<< HEAD
             }
             const vr = parseVaultRef(value);
             vaultLookups.push({ k: key, ref: vr });
           } else {
             staticPairs.push({ k: key, v: value });
+=======
+            }
+            const vr = parseVaultRef(value || '');
+            try {
+              const v = await this.vaultService.getSecret(vr);
+              if (v == null) throw new Error(`Missing Vault secret at ${vr.mount}/${vr.path}#${vr.key}`);
+              envMerged[key] = String(v);
+            } catch (e: unknown) {
+              throw new Error(`Vault resolution failed for ${key} at ${vr.mount}/${vr.path}#${vr.key}: ${(e as Error).message}`);
+            }
+          } else {
+            envMerged[key] = value ?? '';
+          }
+        }
+      } else {
+        // Legacy: plain env map
+        if (this.cfg?.env && typeof this.cfg.env === 'object') {
+          envMerged = { ...envMerged, ...(this.cfg.env as Record<string, string>) };
+        }
+        // Legacy: envRefs
+        const refs = this.cfg?.envRefs || {};
+        if (refs && Object.keys(refs).length > 0) {
+          if (!this.vaultService || !this.vaultService.isEnabled()) {
+            throw new Error('Vault is not enabled but envRefs are configured');
+          }
+          for (const [varName, ref] of Object.entries(refs)) {
+            const vr: VaultRef = {
+              mount: (ref.mount || 'secret').replace(/\/$/, ''),
+              path: ref.path,
+              key: ref.key || 'value',
+            };
+            try {
+              const value = await this.vaultService.getSecret(vr);
+              if (value == null) {
+                if (ref.optional) continue;
+                throw new Error(`Missing Vault secret for ${varName} at ${vr.mount}/${vr.path}#${vr.key}`);
+              }
+              envMerged[varName] = String(value);
+            } catch (e: unknown) {
+              // Do not include secret values; only reference context
+              throw new Error(`Vault resolution failed for ${varName} at ${vr.mount}/${vr.path}#${vr.key}: ${(e as Error).message}`);
+            }
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
           }
         }
         // Apply static pairs immediately
@@ -379,4 +429,18 @@ function getStatusCode(e: unknown): number | undefined {
 
 // Parse Vault reference string in format "mount/path/key" with path supporting nested segments.
 // Returns VaultRef and throws on invalid inputs.
+<<<<<<< HEAD
 // parseVaultRef now imported from ../utils/refs
+=======
+export function parseVaultRef(ref: string): VaultRef {
+  if (!ref || typeof ref !== 'string') throw new Error('Vault ref must be a non-empty string');
+  if (ref.startsWith('/')) throw new Error('Vault ref must not start with /');
+  const parts = ref.split('/').filter((p) => p.length > 0);
+  if (parts.length < 3) throw new Error('Vault ref must be in format mount/path/key');
+  const mount = parts[0].replace(/\/$/, '');
+  const key = parts[parts.length - 1];
+  const path = parts.slice(1, parts.length - 1).join('/');
+  if (!mount || !path || !key) throw new Error('Vault ref must include mount, path and key');
+  return { mount, path, key };
+}
+>>>>>>> 42b54f2 (feat(config,#113): unify env and token references with source-aware fields)
