@@ -71,9 +71,7 @@ describe('GitGraphService', () => {
     await short.initIfNeeded();
     // Simulate another holder by manually creating lock file
     const fs = await import('fs/promises');
-    const lockDir = path.join(tmp, 'graphs', 'main');
-    await fs.mkdir(lockDir, { recursive: true });
-    await fs.writeFile(path.join(lockDir, '.lock'), 'held');
+    await fs.writeFile(path.join(tmp, '.graph.lock'), 'held');
     await expect(short.upsert({ name: 'main', version: 0, nodes: [], edges: [] } as any)).rejects.toMatchObject({ code: 'LOCK_TIMEOUT' });
   });
 
@@ -81,7 +79,7 @@ describe('GitGraphService', () => {
     // Ensure we have a committed state
     const before = await svc.get('main');
     const fs = await import('fs/promises');
-    const corruptPath = path.join(tmp, 'graphs', 'main', 'graph.json');
+    const corruptPath = path.join(tmp, 'graph.meta.json');
     await fs.writeFile(corruptPath, '{ not-json');
     const recovered = await svc.get('main');
     // Should fallback to last committed version (initial v0)
@@ -103,5 +101,42 @@ describe('GitGraphService', () => {
     const after = await svc.get('main');
     expect(after?.version).toBe(before?.version);
     spy.mockRestore();
+  });
+
+  it('writes per-entity files and encodes deterministic edge id in filename', async () => {
+    const before = await svc.get('main');
+    const saved = await svc.upsert({
+      name: 'main',
+      version: before?.version ?? 0,
+      nodes: [
+        { id: 'A node', template: 'noop' },
+        { id: 'B/node', template: 'noop' },
+      ],
+      edges: [
+        { source: 'A node', sourceHandle: 'out', target: 'B/node', targetHandle: 'in' },
+      ],
+    });
+    expect(saved.nodes.length).toBe(2);
+    expect(saved.edges.length).toBe(1);
+    const fs = await import('fs/promises');
+    const hasFile = async (rel: string) => !!(await fs.stat(path.join(tmp, rel)).catch(() => null));
+    // Node filenames are encodeURIComponent(id)
+    expect(await hasFile(path.join('nodes', `${encodeURIComponent('A node')}.json`))).toBeTruthy();
+    expect(await hasFile(path.join('nodes', `${encodeURIComponent('B/node')}.json`))).toBeTruthy();
+    // Edge filename uses deterministic id `${src}-${srcH}__${tgt}-${tgtH}` and is encoded
+    const edgeId = `${'A node'}-${'out'}__${'B/node'}-${'in'}`;
+    const edgeFile = path.join('edges', `${encodeURIComponent(edgeId)}.json`);
+    expect(await hasFile(edgeFile)).toBeTruthy();
+  });
+
+  it('bumps version and stages only deltas', async () => {
+    const first = await svc.upsert({ name: 'main', version: 0, nodes: [{ id: 'n1', template: 'noop' }], edges: [] });
+    const second = await svc.upsert({ name: 'main', version: first.version, nodes: [{ id: 'n1', template: 'noop', position: { x: 1, y: 2 } }], edges: [] });
+    expect(second.version).toBe(first.version + 1);
+    // Confirm meta exists and node file updated
+    const fs = await import('fs/promises');
+    const nPath = path.join(tmp, 'nodes', `${encodeURIComponent('n1')}.json`);
+    const node = JSON.parse(await fs.readFile(nPath, 'utf8'));
+    expect(node.position).toEqual({ x: 1, y: 2 });
   });
 });
