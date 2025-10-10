@@ -1,5 +1,4 @@
 import { toJSONSchema } from 'zod';
-import type { EndpointSettings } from 'dockerode';
 import { SimpleAgent, SimpleAgentStaticConfigSchema } from './agents/simple.agent';
 import { ContainerProviderEntity, ContainerProviderStaticConfigSchema } from './entities/containerProvider.entity';
 import { TemplateRegistry } from './graph';
@@ -69,7 +68,9 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
               createExtras: {
                 HostConfig: { NetworkMode: 'agents_net' },
                 NetworkingConfig: {
-                  EndpointsConfig: { agents_net: {} as EndpointSettings },
+                  // dockerode expects a map of network name to EndpointSettings; all fields are optional
+                  // Using an empty object is valid and avoids any casts.
+                  EndpointsConfig: { agents_net: {} },
                 },
               },
             },

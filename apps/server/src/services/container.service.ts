@@ -120,7 +120,7 @@ export class ContainerService {
       },
       Volumes:
         optsWithDefaults.anonymousVolumes && optsWithDefaults.anonymousVolumes.length > 0
-          ? (Object.fromEntries(optsWithDefaults.anonymousVolumes.map((p) => [p, {}])) as Record<string, {}>)
+          ? Object.fromEntries(optsWithDefaults.anonymousVolumes.map((p) => [p, {} as Record<string, never>]))
           : undefined,
       Tty: optsWithDefaults.tty ?? false,
       AttachStdout: true,
@@ -133,7 +133,7 @@ export class ContainerService {
 
     // Merge createExtras last (shallow, with nested HostConfig merged shallowly as well)
     if (optsWithDefaults.createExtras) {
-      const extras = optsWithDefaults.createExtras as Partial<ContainerCreateOptions>;
+      const extras: Partial<ContainerCreateOptions> = optsWithDefaults.createExtras;
       if (extras.HostConfig) {
         createOptions.HostConfig = { ...(createOptions.HostConfig || {}), ...extras.HostConfig };
       }
