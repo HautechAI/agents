@@ -30,20 +30,37 @@ export function buildUiSchema(schema: JsonSchemaObject | null): UiSchema {
     const widget = (val as Record<string, unknown>)['ui:widget'];
     const options = (val as Record<string, unknown>)['ui:options'];
     const uiField = (val as Record<string, unknown>)['ui:field'];
-    if (valObj.type === 'object' && 'additionalProperties' in valObj) {
-      ui[key] = { 'ui:field': 'KeyValueField' } as UiSchemaFieldOptions;
-      continue;
-    }
-    // Merge ref-derived first then property-level to honor precedence
+
+    // Build merged ui:* with $ref-derived first, then property-level overrides
+    let mergedUi: Partial<UiSchemaFieldOptions> = {};
     if (Object.keys(refUi).length || typeof widget === 'string' || options || typeof uiField === 'string') {
-      ui[key] = {
+      mergedUi = {
         ...(refUi['ui:widget'] ? { 'ui:widget': refUi['ui:widget'] } : {}),
         ...(refUi['ui:options'] ? { 'ui:options': refUi['ui:options'] } : {}),
         ...(refUi['ui:field'] ? { 'ui:field': refUi['ui:field'] } : {}),
         ...(typeof widget === 'string' ? { 'ui:widget': widget } : {}),
         ...(options && typeof options === 'object' ? { 'ui:options': options as Record<string, unknown> } : {}),
       } as UiSchemaFieldOptions;
-      if (typeof uiField === 'string') (ui[key] as UiSchemaFieldOptions)['ui:field'] = uiField;
+      if (typeof uiField === 'string') (mergedUi as UiSchemaFieldOptions)['ui:field'] = uiField;
+    }
+
+    // Decide KeyValueField only for free-form maps with no declared properties
+    // - additionalProperties === true OR is a schema object
+    // - AND there are no 'properties'
+    // - DO NOT override if a ui:field is already present via inheritance or property-level
+    const isObjectType = valObj.type === 'object';
+    const hasDeclaredProps = !!(valObj as any).properties && Object.keys(((valObj as any).properties as Record<string, unknown>) || {}).length > 0;
+    const ap = (valObj as any).additionalProperties as unknown;
+    const isFreeFormMap = isObjectType && (ap === true || (ap && typeof ap === 'object')) && !hasDeclaredProps;
+    const hasAnyUiField = typeof (mergedUi as UiSchemaFieldOptions)['ui:field'] === 'string';
+
+    if (isFreeFormMap && !hasAnyUiField) {
+      ui[key] = { 'ui:field': 'KeyValueField' } as UiSchemaFieldOptions;
+      continue;
+    }
+
+    if (Object.keys(mergedUi).length) {
+      ui[key] = mergedUi as UiSchemaFieldOptions;
     }
   }
   return ui;
