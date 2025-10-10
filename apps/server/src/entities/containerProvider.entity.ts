@@ -202,17 +202,13 @@ export class ContainerProviderEntity {
 
       const cfgEnv = this.cfg?.env as unknown;
       if (Array.isArray(cfgEnv)) {
-        const seen = new Set<string>();)
+        const seen = new Set<string>();
         const vaultLookups: Array<{ k: string; ref: VaultRef }> = [];
         const staticPairs: Array<{ k: string; v: string }> = [];
         for (const item of cfgEnv as Array<{ key?: string; value?: string; source?: 'static'|'vault' }>) {
           const key = item?.key?.trim();
           const value = item?.value ?? '';
           const source = (item?.source || 'static');
-        for (const item of cfgEnv) {
-          const { key, value } = (item || {}) as { key?: string; value?: string; source?: 'static' | 'vault' };
-          const source = ((item as any)?.source || 'static') as 'static' | 'vault';)
-=======)
           if (!key) throw new Error('env entries require non-empty key');
           if (seen.has(key)) throw new Error(`Duplicate env key: ${key}`);
           seen.add(key);
@@ -225,54 +221,6 @@ export class ContainerProviderEntity {
           } else {
             staticPairs.push({ k: key, v: value });
           }
-        }
-        // Apply static pairs immediately
-        for (const { k, v } of staticPairs) envMerged[k] = v;
-        // Resolve all vault refs concurrently
-        const resolved = await Promise.all(
-          vaultLookups.map(async ({ k, ref }) => {
-            try {
-              const v = await this.vaultService!.getSecret(ref);
-              if (v == null) throw new Error(`Missing Vault secret at ${ref.mount}/${ref.path}#${ref.key}`);
-              return { k, v: String(v) };
-            } catch (e) {
-              throw new Error(`Vault resolution failed for ${k} at ${ref.mount}/${ref.path}#${ref.key}: ${(e as Error).message}`);
-            }
-          }),
-        );
-        for (const { k, v } of resolved) envMerged[k] = v;
-      } else {
-        // Legacy: plain env map
-        if (this.cfg?.env && typeof this.cfg.env === 'object') {
-          envMerged = { ...envMerged, ...(this.cfg.env as Record<string, string>) };
-        }
-        // Legacy: envRefs
-        const refs = this.cfg?.envRefs || {};
-        if (refs && Object.keys(refs).length > 0) {
-          if (!this.vaultService || !this.vaultService.isEnabled()) {
-            throw new Error('Vault is not enabled but envRefs are configured');
-          }
-          const entries = Object.entries(refs);
-          const results = await Promise.all(
-            entries.map(async ([varName, ref]) => {
-              const vr: VaultRef = {
-                mount: (ref.mount || 'secret').replace(/\/$/, ''),
-                path: ref.path,
-                key: ref.key || 'value',
-              };
-              try {
-                const value = await this.vaultService!.getSecret(vr);
-                if (value == null) {
-                  if (ref.optional) return { varName, skip: true as const };
-                  throw new Error(`Missing Vault secret for ${varName} at ${vr.mount}/${vr.path}#${vr.key}`);
-                }
-                return { varName, value: String(value) };
-              } catch (e) {
-                throw new Error(`Vault resolution failed for ${varName} at ${vr.mount}/${vr.path}#${vr.key}: ${(e as Error).message}`);
-              }
-            }),
-          );
-          for (const r of results) if ('value' in r) envMerged[r.varName] = r.value;)
         }
         // Apply static pairs immediately
         for (const { k, v } of staticPairs) envMerged[k] = v;
@@ -441,6 +389,3 @@ export function parseVaultRef(ref: string): VaultRef {
   const path = parts.slice(1, parts.length - 1).join('/');
   if (!mount || !path || !key) throw new Error('Vault ref must include mount, path and key');
   return { mount, path, key };
-})
-=======
-// parseVaultRef now imported from ../utils/refs)
