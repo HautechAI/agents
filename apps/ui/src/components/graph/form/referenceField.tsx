@@ -12,9 +12,20 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
   const [paths, setPaths] = useState<string[]>([]);
   const [keys, setKeys] = useState<string[]>([]);
 
+  // Emit changes upstream
   useEffect(() => {
     onChange?.({ value: val, source: mode });
   }, [val, mode]);
+
+  // Sync local state when formData prop changes externally
+  useEffect(() => {
+    const nextMode = (formData?.source as 'static' | 'vault') || 'static';
+    const nextVal = typeof formData?.value === 'string' ? formData.value : '';
+    // Avoid redundant setState to prevent loops
+    if (nextMode !== mode) setMode(nextMode);
+    if (nextVal !== val) setVal(nextVal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData?.source, formData?.value]);
 
   useEffect(() => {
     if (mode !== 'vault') return;
@@ -56,6 +67,9 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
         value={val}
         onChange={(e) => setVal(e.target.value)}
         list={mode === 'vault' ? `${uniqueId}-vault-suggestions` : undefined}
+        aria-label={mode === 'vault' ? 'Vault reference value' : 'Static value'}
+        aria-invalid={invalidVault || undefined}
+        title={mode === 'vault' ? 'Enter vault reference as mount/path/key' : 'Enter value'}
       />
       <div className="relative">
         <select
@@ -63,6 +77,7 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
           className="rounded border px-2 py-1 text-xs"
           value={mode}
           onChange={(e) => setMode((e.target.value as 'static' | 'vault') || 'static')}
+          title="Reference source"
         >
           <option value="static">static</option>
           <option value="vault">vault</option>
@@ -71,7 +86,7 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
       {/* datalists for simple suggestions */}
       {mode === 'vault' && (
         <>
-          <datalist id={`${uniqueId}-vault-suggestions`}>
+          <datalist id={`${uniqueId}-vault-suggestions`} aria-label="Vault suggestions">
             {mounts.map((m) => (
               <option key={`m-${m}`} value={`${m}/`} />
             ))}

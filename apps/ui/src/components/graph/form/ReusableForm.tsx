@@ -41,7 +41,7 @@ export function ReusableForm({
       fields={fieldsRegistry}
       widgets={widgets}
       onChange={({ formData: next }) => onChange?.(stripLegacy(next as Record<string, unknown>))}
-      onSubmit={({ formData: submitData }) => onSubmit?.(submitData as Record<string, unknown>)}
+      onSubmit={({ formData: submitData }) => onSubmit?.(stripLegacy(submitData as Record<string, unknown>))}
     >
       {!disableSubmit && !hideSubmitButton && (
         <button
@@ -120,3 +120,6 @@ function stripLegacy(data?: Record<string, unknown>): Record<string, unknown> {
   delete (out as Record<string, unknown>)['authRef'];
   return out;
 }
+
+// Re-export helpers for unit tests only (not part of public API)
+export const __test_only__ = { mapLegacyToUnified, stripLegacy } as const;
