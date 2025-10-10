@@ -3,6 +3,7 @@ HashiCorp Vault integration (dev)
 Overview
 - Dev-only Vault integration to source container env vars and GitHub Clone token via Vault KV v2.
 - Secrets are resolved server-side only; values are never returned to the browser and are redacted in logs.
+- New config shapes unify static and secret-backed references via a `source` selector.
 
 Dev setup
 1) Start Vault and seed example secrets:
@@ -15,15 +16,19 @@ Dev setup
    - VAULT_TOKEN=dev-root
 
 Workspace env vars
-- In the Workspace node (containerProvider) static config, add plain env under `env`.
-- For Vault-backed vars, add entries under `envRefs` with fields: mount (default secret), path, key, optional.
-- On provision, the server resolves envRefs and injects values into the container environment.
+- In the Workspace node (containerProvider) static config, use the unified env array:
+  - env: Array<{ key: string; value: string; source?: 'static' | 'vault' }>
+  - When source='static' (default), `value` is used as-is.
+  - When source='vault', `value` must be a Vault reference string: `mount/path/key`.
+- On provision, the server resolves vault-backed entries and injects values into the container environment.
+- Backward compatibility: legacy `env` (map) and `envRefs` are still accepted at runtime, but are no longer advertised via templates or UI.
 
 GitHub Clone Repo auth
-- The GitHub Clone tool static config accepts `authRef` to override the token source:
-  - source=env -> read from a process env var name (default GH_TOKEN)
-  - source=vault -> resolve from Vault using mount/path/key (defaults secret/github/GH_TOKEN)
-- If not set or resolution fails, the server falls back to ConfigService.githubToken.
+- New: `token?: { value: string; source?: 'static' | 'vault' }`
+  - source='static' -> `value` is the token string.
+  - source='vault' -> `value` is `mount/path/key` and is resolved from Vault.
+- Fallbacks: if not provided or resolution fails, server falls back to `ConfigService.githubToken`.
+- Backward compatibility: legacy `authRef` remains supported at runtime but is not shown in templates.
 
 Autocomplete endpoints
 - When VAULT_ENABLED=true, the server exposes:

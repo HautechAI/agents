@@ -1,6 +1,6 @@
 import { toJSONSchema } from 'zod';
 import { SimpleAgent, SimpleAgentStaticConfigSchema } from './agents/simple.agent';
-import { ContainerProviderEntity, ContainerProviderStaticConfigSchema } from './entities/containerProvider.entity';
+import { ContainerProviderEntity, ContainerProviderExposedStaticConfigSchema } from './entities/containerProvider.entity';
 import { TemplateRegistry } from './graph';
 import { LocalMCPServer } from './mcp';
 import { CheckpointerService } from './services/checkpointer.service';
@@ -10,7 +10,7 @@ import { LoggerService } from './services/logger.service';
 import { VaultService, VaultConfigSchema } from './services/vault.service';
 import { SlackService } from './services/slack.service';
 import { CallAgentTool, CallAgentToolStaticConfigSchema } from './tools/call_agent.tool';
-import { GithubCloneRepoTool, GithubCloneRepoToolStaticConfigSchema } from './tools/github_clone_repo';
+import { GithubCloneRepoTool, GithubCloneRepoToolExposedStaticConfigSchema } from './tools/github_clone_repo';
 import { SendSlackMessageTool, SendSlackMessageToolStaticConfigSchema } from './tools/send_slack_message.tool';
 import { ShellTool, ShellToolStaticConfigSchema } from './tools/shell_command';
 import { SlackTrigger } from './triggers';
@@ -84,7 +84,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           title: 'Workspace',
           kind: 'service',
           capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(ContainerProviderStaticConfigSchema),
+          staticConfigSchema: toJSONSchema(ContainerProviderExposedStaticConfigSchema),
         },
       )
       .register(
@@ -116,7 +116,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           title: 'Github clone',
           kind: 'tool',
           capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(GithubCloneRepoToolStaticConfigSchema),
+          staticConfigSchema: toJSONSchema(GithubCloneRepoToolExposedStaticConfigSchema),
         },
       )
       .register(
