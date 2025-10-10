@@ -1,6 +1,8 @@
 import { exec } from 'child_process';
 import { z } from 'zod';
 import { LoggerService } from '../services/logger.service';
+import { VaultService } from '../services/vault.service';
+import { parseVaultRef } from '../utils/refs';
 import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { BaseTool } from './base.tool';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
@@ -19,18 +21,18 @@ const bashCommandSchema = z.object({
     ),
 });
 
-// Static config schema for ShellTool: per-node env overlay, unset list, and optional workdir
-const ShellEnvSchema = z
-  .record(z.string().min(1), z.string())
-  .describe('Environment variables to overlay for this Shell node. Applied per exec only.');
-const VarNameRe = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// Static config schema for ShellTool: per-node env overlay (supports Vault refs) and optional workdir
+const EnvItemSchema = z
+  .object({
+    key: z.string().min(1),
+    value: z.string(),
+    source: z.enum(['static', 'vault']).optional().default('static'),
+  })
+  .strict()
+  .describe('Environment variable entry. When source=vault, value is "<MOUNT>/<PATH>/<KEY>".');
 export const ShellToolStaticConfigSchema = z
   .object({
-    env: ShellEnvSchema.optional(),
-    unset: z
-      .array(z.string().min(1).regex(VarNameRe))
-      .optional()
-      .describe('List of variable names to unset in the shell before executing the command.'),
+    env: z.array(EnvItemSchema).optional().describe('Environment overlay (static or Vault-backed refs).'),
     workdir: z.string().optional().describe('Working directory to use for each exec.'),
   })
   .strict();
@@ -39,7 +41,7 @@ export class ShellTool extends BaseTool {
   private containerProvider?: ContainerProviderEntity;
   private cfg?: z.infer<typeof ShellToolStaticConfigSchema>;
 
-  constructor(logger: LoggerService) { super(logger); }
+  constructor(private vault: VaultService | undefined, logger: LoggerService) { super(logger); }
 
   setContainerProvider(provider: ContainerProviderEntity | undefined): void {
     this.containerProvider = provider;
@@ -61,9 +63,8 @@ export class ShellTool extends BaseTool {
         const container = await this.containerProvider.provide(thread_id!);
         const { command } = bashCommandSchema.parse(input);
         this.logger.info('Tool called', 'shell_command', { command });
-        const unsetClause = this.cfg?.unset && this.cfg.unset.length > 0 ? `unset ${this.cfg.unset.join(' ')}; ` : '';
-        const cmdToRun = `${unsetClause}${command}`;
-        const response = await container.exec(cmdToRun, { env: this.cfg?.env, workdir: this.cfg?.workdir });
+        const envOverlay = await this.resolveEnv();
+        const response = await container.exec(command, { env: envOverlay, workdir: this.cfg?.workdir });
 
         const cleanedStdout = this.stripAnsi(response.stdout);
         const cleanedStderr = this.stripAnsi(response.stderr);
@@ -85,5 +86,29 @@ export class ShellTool extends BaseTool {
     const parsed = ShellToolStaticConfigSchema.safeParse(_cfg);
     if (!parsed.success) throw new Error(`Invalid Shell tool config: ${parsed.error.message}`);
     this.cfg = parsed.data;
+  }
+
+  private async resolveEnv(): Promise<Record<string, string> | undefined> {
+    const items = this.cfg?.env || [];
+    if (!items.length) return undefined;
+    const out: Record<string, string> = {};
+    for (const it of items) {
+      if (!it || !it.key) continue;
+      if (it.source === 'vault') {
+        try {
+          const vlt = this.vault;
+          if (vlt?.isEnabled()) {
+            const ref = parseVaultRef(it.value);
+            const val = await vlt.getSecret(ref);
+            if (val != null) out[it.key] = val;
+          }
+        } catch {
+          // ignore missing/failed secrets
+        }
+      } else {
+        out[it.key] = it.value ?? '';
+      }
+    }
+    return Object.keys(out).length ? out : undefined;
   }
 }

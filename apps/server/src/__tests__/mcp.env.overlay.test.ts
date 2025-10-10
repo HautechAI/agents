@@ -3,7 +3,7 @@ import { LocalMCPServer } from '../mcp/localMcpServer';
 
 class MockLogger { info=vi.fn(); debug=vi.fn(); error=vi.fn(); }
 
-describe('LocalMCPServer env/unset isolation and workdir', () => {
+describe('LocalMCPServer env overlay and workdir', () => {
   let server: LocalMCPServer;
   let logger: any;
   let captured: any[] = [];
@@ -33,8 +33,10 @@ describe('LocalMCPServer env/unset isolation and workdir', () => {
     (server as any).setContainerProvider({ provide: async (id: string) => ({ id }) });
   });
 
-  it('passes Env, prefixes unset for discovery and per-call, without persistence', async () => {
-    await server.setConfig({ namespace: 'x', command: 'mcp start --stdio', env: { A: '1', B: '2' }, unset: ['Z'], workdir: '/w' } as any);
+  it('passes resolved Env (incl. vault refs) for discovery and per-call, without persistence', async () => {
+    // Inject a fake vault into server instance
+    (server as any).vault = { isEnabled: () => true, getSecret: vi.fn(async () => 'VAULTED') };
+    await server.setConfig({ namespace: 'x', command: 'mcp start --stdio', env: [ { key: 'A', value: '1' }, { key: 'B', value: 'mount/path/key', source: 'vault' } ], workdir: '/w' } as any);
     // Discovery
     try { await server.discoverTools(); } catch {}
     // Simulate discovered tool for call
@@ -46,11 +48,9 @@ describe('LocalMCPServer env/unset isolation and workdir', () => {
     for (const o of captured) {
       const cmd = (o.Cmd || []).join(' ');
       expect(cmd).toContain('sh -lc');
-      expect(cmd).toContain('unset Z;');
       const env: string[] = o.Env || [];
-      expect(env).toEqual(expect.arrayContaining(['A=1','B=2']));
+      expect(env).toEqual(expect.arrayContaining(['A=1','B=VAULTED']));
       expect(o.WorkingDir).toBe('/w');
     }
   });
 });
-

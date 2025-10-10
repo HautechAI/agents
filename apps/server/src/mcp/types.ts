@@ -31,8 +31,7 @@ export interface McpServerConfig {
   namespace: string;
   command?: string; // default: 'mcp start --stdio'
   workdir?: string;
-  env?: Record<string, string>;
-  unset?: string[];
+  env?: Array<{ key: string; value: string; source?: 'static' | 'vault' }>;
   requestTimeoutMs?: number;
   startupTimeoutMs?: number;
   heartbeatIntervalMs?: number; // ping interval
