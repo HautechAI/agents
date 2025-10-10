@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -39,10 +39,25 @@ describe('GitGraphService', () => {
 
   it('upserts with optimistic locking and commits', async () => {
     const before = await svc.get('main');
-    const saved = await svc.upsert({ name: 'main', version: before?.version ?? 0, nodes: [{ id: 'n1', template: 'noop' }], edges: [] });
+    const saved = await svc.upsert(
+      { name: 'main', version: before?.version ?? 0, nodes: [{ id: 'n1', template: 'noop' }], edges: [] },
+      { name: 'Tester', email: 'tester@example.com' },
+    );
     expect(saved.version).toBe((before?.version ?? 0) + 1);
     const again = await svc.get('main');
     expect(again?.nodes.length).toBe(1);
+    // Verify commit author and branch reflect configuration
+    const { spawn } = await import('child_process');
+    const exec = (args: string[]) => new Promise<string>((resolve, reject) => {
+      const child = spawn('git', args, { cwd: tmp });
+      let out = '';
+      child.stdout?.on('data', (d) => (out += d.toString()));
+      child.on('exit', (c) => (c === 0 ? resolve(out) : reject(new Error('git failed'))));
+    });
+    const branch = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
+    expect(branch).toBe('graph-state');
+    const lastAuthor = (await exec(['log', '-1', '--pretty=%an <%ae>'])).trim();
+    expect(lastAuthor).toBe('Tester <tester@example.com>');
   });
 
   it('returns conflict on mismatched version', async () => {
@@ -71,5 +86,22 @@ describe('GitGraphService', () => {
     const recovered = await svc.get('main');
     // Should fallback to last committed version (initial v0)
     expect(recovered?.version).toBe(before?.version);
+  });
+
+  it('rolls back working tree when commit fails', async () => {
+    // Spy on commit to simulate failure
+    const spy = vi.spyOn<any, any>(svc as any, 'commit').mockImplementation(() => {
+      const err: any = new Error('simulated commit failure');
+      err.code = 'COMMIT_FAILED';
+      return Promise.reject(err);
+    });
+    const before = await svc.get('main');
+    await expect(
+      svc.upsert({ name: 'main', version: before?.version ?? 0, nodes: [{ id: 'x', template: 'noop' }], edges: [] }),
+    ).rejects.toMatchObject({ code: 'COMMIT_FAILED' });
+    // File should still reflect last committed state
+    const after = await svc.get('main');
+    expect(after?.version).toBe(before?.version);
+    spy.mockRestore();
   });
 });

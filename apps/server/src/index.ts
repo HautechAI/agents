@@ -121,13 +121,16 @@ async function bootstrap() {
     try {
       const parsed = request.body as PersistedGraphUpsertRequest;
       parsed.name = parsed.name || 'main';
-      // Attach author if available in headers
-      const headers = request.headers as any;
-      (parsed as any).authorName = headers['x-graph-author-name'] || headers['x-author-name'];
-      (parsed as any).authorEmail = headers['x-graph-author-email'] || headers['x-author-email'];
+      // Resolve author from headers
+      const headers = request.headers as Record<string, string | string[] | undefined>;
+      const author = {
+        name: (headers['x-graph-author-name'] || headers['x-author-name']) as string | undefined,
+        email: (headers['x-graph-author-email'] || headers['x-author-email']) as string | undefined,
+      };
       // Capture previous graph (for change detection / events)
       const before = await graphService.get(parsed.name);
-      const saved = await graphService.upsert(parsed);
+      // Support both GraphService and GitGraphService signatures
+      const saved = graphService instanceof GitGraphService ? await graphService.upsert(parsed, author) : await (graphService as GraphService).upsert(parsed);
       try {
         await runtime.apply(toRuntimeGraph(saved));
       } catch {
@@ -154,7 +157,6 @@ async function bootstrap() {
       }
       return saved;
     } catch (e: any) {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
       if (e.code === 'VERSION_CONFLICT') {
         reply.code(409);
         return { error: 'VERSION_CONFLICT', current: e.current };
@@ -162,6 +164,10 @@ async function bootstrap() {
       if (e.code === 'LOCK_TIMEOUT') {
         reply.code(409);
         return { error: 'LOCK_TIMEOUT' };
+      }
+      if (e.code === 'COMMIT_FAILED') {
+        reply.code(500);
+        return { error: 'COMMIT_FAILED' };
       }
       reply.code(400);
       return { error: e.message || 'Bad Request' };

@@ -3,14 +3,8 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { LoggerService } from './logger.service';
 import { TemplateRegistry } from '../graph/templateRegistry';
-import {
-  PersistedGraph,
-  PersistedGraphEdge,
-  PersistedGraphNode,
-  PersistedGraphUpsertRequest,
-  PersistedGraphUpsertResponse,
-  TemplateNodeSchema,
-} from '../graph/types';
+import { PersistedGraph, PersistedGraphEdge, PersistedGraphNode, PersistedGraphUpsertRequest, PersistedGraphUpsertResponse } from '../graph/types';
+import { validatePersistedGraph } from './graph.validation';
 
 export interface GitGraphConfig {
   repoPath: string;
@@ -57,30 +51,20 @@ export class GitGraphService {
   }
 
   async get(name: string): Promise<PersistedGraph | null> {
-    const p = this.graphJsonPath(name);
-    if (!(await this.pathExists(p))) return null;
+    const rel = this.relGraphPathPOSIX(name);
     try {
-      const txt = await fs.readFile(p, 'utf8');
-      const parsed = JSON.parse(txt) as PersistedGraph;
-      return parsed;
-    } catch (e) {
-      this.logger.error('Failed reading graph json: %s', (e as Error).message);
-      // Attempt last committed version via git checkout -- <file>
-      try {
-        await this.runGit(['checkout', '--', this.relGraphPath(name)], this.cfg.repoPath);
-        const txt2 = await fs.readFile(p, 'utf8');
-        const parsed2 = JSON.parse(txt2) as PersistedGraph;
-        return parsed2;
-      } catch (e2) {
-        this.logger.error('Fallback to committed graph failed: %s', (e2 as Error).message);
-        return null;
-      }
+      const out = await this.runGitCapture(['show', `HEAD:${rel}`], this.cfg.repoPath);
+      return JSON.parse(out) as PersistedGraph;
+    } catch {
+      return null;
     }
   }
 
-  async upsert(req: PersistedGraphUpsertRequest & { authorName?: string; authorEmail?: string }): Promise<PersistedGraphUpsertResponse> {
-    const schema = this.templateRegistry.toSchema();
-    this.validate(req, schema);
+  async upsert(
+    req: PersistedGraphUpsertRequest,
+    author?: { name?: string; email?: string },
+  ): Promise<PersistedGraphUpsertResponse> {
+    validatePersistedGraph(req, this.templateRegistry.toSchema());
 
     const name = req.name;
     const lock = await this.acquireLock(name);
@@ -108,9 +92,9 @@ export class GitGraphService {
           edges: req.edges.map(this.stripInternalEdge),
         };
         await this.atomicWriteGraph(name, created);
-        await this.runGit(['add', this.relGraphPath(name)], this.cfg.repoPath);
+        await this.runGit(['add', this.relGraphPathPOSIX(name)], this.cfg.repoPath);
         const deltaMsg = this.deltaSummary({ nodes: [], edges: [] }, created);
-        await this.commit(`chore(graph): ${name} v${created.version} ${deltaMsg}`, this.authorFrom(req));
+        await this.commit(`chore(graph): ${name} v${created.version} ${deltaMsg}`, author ?? this.cfg.defaultAuthor);
         return created;
       }
 
@@ -129,9 +113,9 @@ export class GitGraphService {
         edges: req.edges.map(this.stripInternalEdge),
       };
       await this.atomicWriteGraph(name, updated);
-      await this.runGit(['add', this.relGraphPath(name)], this.cfg.repoPath);
+      await this.runGit(['add', this.relGraphPathPOSIX(name)], this.cfg.repoPath);
       const deltaMsg = this.deltaSummary(existing, updated);
-      await this.commit(`chore(graph): ${name} v${updated.version} ${deltaMsg}`, this.authorFrom(req));
+      await this.commit(`chore(graph): ${name} v${updated.version} ${deltaMsg}`, author ?? this.cfg.defaultAuthor);
       return updated;
     } finally {
       await this.releaseLock(name, lock);
@@ -139,31 +123,7 @@ export class GitGraphService {
   }
 
   // Internal helpers
-  private validate(req: PersistedGraphUpsertRequest, schema: TemplateNodeSchema[]) {
-    const templateSet = new Set(schema.map((s) => s.name));
-    const schemaMap = new Map(schema.map((s) => [s.name, s] as const));
-    const nodeIds = new Set<string>();
-    for (const n of req.nodes) {
-      if (!n.id) throw new Error(`Node missing id`);
-      if (nodeIds.has(n.id)) throw new Error(`Duplicate node id ${n.id}`);
-      nodeIds.add(n.id);
-      if (!templateSet.has(n.template)) throw new Error(`Unknown template ${n.template}`);
-    }
-    for (const e of req.edges) {
-      if (!nodeIds.has(e.source)) throw new Error(`Edge source missing node ${e.source}`);
-      if (!nodeIds.has(e.target)) throw new Error(`Edge target missing node ${e.target}`);
-      const sourceNode = req.nodes.find((n) => n.id === e.source)!;
-      const targetNode = req.nodes.find((n) => n.id === e.target)!;
-      const sourceSchema = schemaMap.get(sourceNode.template)!;
-      const targetSchema = schemaMap.get(targetNode.template)!;
-      if (!sourceSchema.sourcePorts.includes(e.sourceHandle)) {
-        throw new Error(`Invalid source handle ${e.sourceHandle} on template ${sourceNode.template}`);
-      }
-      if (!targetSchema.targetPorts.includes(e.targetHandle)) {
-        throw new Error(`Invalid target handle ${e.targetHandle} on template ${targetNode.template}`);
-      }
-    }
-  }
+  // Validation is shared via validatePersistedGraph
 
   private stripInternalNode(n: PersistedGraphNode): PersistedGraphNode {
     return { id: n.id, template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, position: n.position };
@@ -172,11 +132,11 @@ export class GitGraphService {
     return { source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle, id: e.id };
   }
 
-  private relGraphPath(name: string) {
-    return path.join('graphs', name, 'graph.json');
+  private relGraphPathPOSIX(name: string) {
+    return path.posix.join('graphs', name, 'graph.json');
   }
   private graphJsonPath(name: string) {
-    return path.join(this.cfg.repoPath, this.relGraphPath(name));
+    return path.join(this.cfg.repoPath, 'graphs', name, 'graph.json');
   }
 
   private async atomicWriteGraph(name: string, data: PersistedGraph) {
@@ -216,6 +176,21 @@ export class GitGraphService {
     });
   }
 
+  private runGitCapture(args: string[], cwd: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const child = spawn('git', args, { cwd });
+      let stderr = '';
+      let stdout = '';
+      child.stdout.on('data', (d) => (stdout += d.toString()));
+      child.stderr.on('data', (d) => (stderr += d.toString()));
+      child.on('error', reject);
+      child.on('exit', (code) => {
+        if (code === 0) resolve(stdout);
+        else reject(new Error(`git ${args.join(' ')} failed: ${stderr}`));
+      });
+    });
+  }
+
   private async ensureBranch(branch: string) {
     // Try to checkout branch; if missing, create
     try {
@@ -242,13 +217,6 @@ export class GitGraphService {
         else reject(new Error(`git commit failed: ${stderr}`));
       });
     });
-  }
-
-  private authorFrom(req: { authorName?: string; authorEmail?: string }): { name?: string; email?: string } {
-    return {
-      name: req.authorName || this.cfg.defaultAuthor?.name,
-      email: req.authorEmail || this.cfg.defaultAuthor?.email,
-    };
   }
 
   private deltaSummary(before: Pick<PersistedGraph, 'nodes' | 'edges'>, after: Pick<PersistedGraph, 'nodes' | 'edges'>) {
