@@ -65,8 +65,16 @@ export class GitGraphService {
       return parsed;
     } catch (e) {
       this.logger.error('Failed reading graph json: %s', (e as Error).message);
-      // Attempt last committed version via git checkout -- or simply surface null
-      return null;
+      // Attempt last committed version via git checkout -- <file>
+      try {
+        await this.runGit(['checkout', '--', this.relGraphPath(name)], this.cfg.repoPath);
+        const txt2 = await fs.readFile(p, 'utf8');
+        const parsed2 = JSON.parse(txt2) as PersistedGraph;
+        return parsed2;
+      } catch (e2) {
+        this.logger.error('Fallback to committed graph failed: %s', (e2 as Error).message);
+        return null;
+      }
     }
   }
 
@@ -286,4 +294,3 @@ export class GitGraphService {
     } catch {}
   }
 }
-

@@ -31,6 +31,15 @@ async function ensureRepo(repoPath: string, branch: string) {
   await runGit(['checkout', branch], repoPath);
 }
 
+async function hasStagedChanges(repoPath: string): Promise<boolean> {
+  try {
+    await runGit(['diff', '--cached', '--quiet'], repoPath);
+    return false; // exit 0 => no changes
+  } catch {
+    return true; // non-zero => changes present
+  }
+}
+
 async function main() {
   const mongoUrl = process.env.MONGODB_URL || 'mongodb://localhost:27017/agents';
   const repoPath = process.env.GRAPH_REPO_PATH || './data/graph';
@@ -65,7 +74,9 @@ async function main() {
     await fs.writeFile(tmp, JSON.stringify(out, null, 2));
     await fs.rename(tmp, dest);
     await runGit(['add', path.join('graphs', name, 'graph.json')], repoPath);
-    await runGit(['commit', '-m', `chore(graph): migrate ${name} v${out.version}`], repoPath, env);
+    if (await hasStagedChanges(repoPath)) {
+      await runGit(['commit', '-m', `chore(graph): migrate ${name} v${out.version}`], repoPath, env);
+    }
   }
 
   await client.close();
@@ -76,4 +87,3 @@ main().catch((e) => {
   console.error('Migration failed:', e);
   process.exit(1);
 });
-
