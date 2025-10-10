@@ -29,7 +29,8 @@ export const ContainerProviderStaticConfigSchema = z
           .strict(),
       )
       .optional()
-      .describe('Vault-backed environment variable references (server resolves at runtime).'),
+      .describe('Vault-backed environment variable references (server resolves at runtime).')
+      .meta({ 'ui:field': 'VaultEnvRefs' }),
     initialScript: z
       .string()
       .optional()
