@@ -376,3 +376,7 @@ function getStatusCode(e: unknown): number | undefined {
   }
   return undefined;
 }
+
+// Parse Vault reference string in format "mount/path/key" with path supporting nested segments.
+// Returns VaultRef and throws on invalid inputs.
+// parseVaultRef now imported from ../utils/refs

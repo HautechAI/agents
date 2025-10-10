@@ -1,18 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ReferenceField, type ReferenceValue } from './referenceField';
 
 type EnvItem = { key: string; value: string; source?: 'static' | 'vault' };
 
 export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]; onChange?: (next: EnvItem[]) => void }) {
-  const items = useMemo(() => (Array.isArray(formData) ? [...formData] : []), [formData]);
+  const items = useMemo(() => Array.isArray(formData) ? [...formData] : [], [formData]);
   const [newKey, setNewKey] = useState('');
   const [newVal, setNewVal] = useState<ReferenceValue>({ value: '', source: 'static' });
-
-  // Ensure local newVal resets when the entire formData resets (e.g., switching nodes)
-  useEffect(() => {
-    setNewKey('');
-    setNewVal({ value: '', source: 'static' });
-  }, [formData]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -44,13 +38,7 @@ export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]
       {items.length === 0 && <div className="text-[10px] text-muted-foreground">No environment variables</div>}
       {items.map((it, idx) => (
         <div key={`${it.key}-${idx}`} className="flex items-center gap-2">
-          <input
-            className={`w-40 rounded border px-2 py-1 text-xs ${isDup(it.key) ? 'border-red-500' : ''}`}
-            value={it.key}
-            readOnly
-            aria-label={`Env key ${it.key}`}
-            title={`Environment variable key: ${it.key}`}
-          />
+          <input className={`w-40 rounded border px-2 py-1 text-xs ${isDup(it.key) ? 'border-red-500' : ''}`} value={it.key} readOnly />
           <div className="flex-1">
             <ReferenceField
               formData={{ value: it.value, source: it.source || 'static' }}
@@ -61,7 +49,6 @@ export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]
             type="button"
             className="text-xs px-2 py-1 rounded border hover:bg-destructive/10 text-destructive"
             onClick={() => removeAt(idx)}
-            aria-label={`Remove ${it.key}`}
           >
             ×
           </button>
@@ -74,7 +61,6 @@ export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]
           placeholder="key"
           value={newKey}
           onChange={(e) => setNewKey(e.target.value)}
-          aria-label="New env key"
         />
         <div className="flex-1">
           <ReferenceField formData={newVal} onChange={(r) => setNewVal(r)} />
