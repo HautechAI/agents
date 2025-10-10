@@ -5,6 +5,7 @@ import { ConfigService } from '../services/config.service';
 import { LoggerService } from '../services/logger.service';
 import { VaultService, type VaultRef } from '../services/vault.service';
 import { BaseTool } from './base.tool';
+import { parseVaultRef } from '../utils/refs';
 
 // Schema for cloning a GitHub repository inside a running container
 const githubCloneSchema = z.object({
@@ -15,9 +16,16 @@ const githubCloneSchema = z.object({
   depth: z.number().int().positive().optional().describe('Shallow clone depth (omit for full clone).'),
 });
 
-// Static config schema with optional authRef override
+// Internal static config schema: supports new token shape and legacy authRef
+const TokenRefSchema = z
+  .object({ value: z.string(), source: z.enum(['static', 'vault']).optional().default('static') })
+  .strict()
+  .describe("GitHub token reference. When source=vault, value is '<MOUNT>/<PATH>/<KEY>'.");
+
 export const GithubCloneRepoToolStaticConfigSchema = z
   .object({
+    token: TokenRefSchema.optional(),
+    // legacy
     authRef: z
       .object({
         source: z.enum(['env', 'vault']).describe('Token source override'),
@@ -30,9 +38,15 @@ export const GithubCloneRepoToolStaticConfigSchema = z
   })
   .strict();
 
+// Exposed schema for UI/templates: advertise only the new token field
+export const GithubCloneRepoToolExposedStaticConfigSchema = z
+  .object({ token: TokenRefSchema.optional().meta({ 'ui:field': 'ReferenceField' }) })
+  .strict();
+
 export class GithubCloneRepoTool extends BaseTool {
   private containerProvider?: ContainerProviderEntity;
-  private authRef?: { source: 'env' | 'vault'; envVar?: string; mount?: string; path?: string; key?: string };
+  private authRef?: z.infer<typeof GithubCloneRepoToolStaticConfigSchema>['authRef'];
+  private token?: z.infer<typeof TokenRefSchema>;
 
   constructor(
     private config: ConfigService,
@@ -118,31 +132,55 @@ export class GithubCloneRepoTool extends BaseTool {
 
   async setConfig(_cfg: Record<string, unknown>): Promise<void> {
     const parsed = GithubCloneRepoToolStaticConfigSchema.parse(_cfg || {});
-    this.authRef = parsed.authRef as any;
+    this.authRef = parsed.authRef;
+    this.token = parsed.token;
   }
 
   private async resolveToken(): Promise<string> {
-    // If authRef provided, resolve per source; otherwise fallback to ConfigService token
+    // Preferred: token field
+    if (this.token) {
+      if (this.token.source === 'vault') {
+        const vlt = this.vault;
+        if (vlt && vlt.isEnabled()) {
+          try {
+            const vr = parseVaultRef(this.token.value);
+            const token = await vlt.getSecret(vr);
+            if (token) return token;
+          } catch {
+            // ignore and continue fallbacks
+          }
+        }
+      } else if (typeof this.token.value === 'string' && this.token.value) {
+        return this.token.value;
+      }
+    }
+
+    // Legacy: authRef
     const ref = this.authRef;
-    if (!ref) return this.config.githubToken;
-    if (ref.source === 'env') {
-      const name = ref.envVar || 'GH_TOKEN';
-      const v = process.env[name] || '';
-      return v || this.config.githubToken;
+    if (ref) {
+      if (ref.source === 'env') {
+        const name = ref.envVar || 'GH_TOKEN';
+        const v = process.env[name] || '';
+        if (v) return v;
+      } else {
+        const vlt = this.vault;
+        if (vlt && vlt.isEnabled()) {
+          const vr: VaultRef = {
+            mount: (ref.mount || 'secret').replace(/\/$/, ''),
+            path: ref.path || 'github',
+            key: ref.key || 'GH_TOKEN',
+          };
+          try {
+            const token = await vlt.getSecret(vr);
+            if (token) return token;
+          } catch {
+            // ignore and continue fallbacks
+          }
+        }
+      }
     }
-    // Vault source
-    const vlt = this.vault;
-    if (!vlt || !vlt.isEnabled()) return this.config.githubToken;
-    const vr: VaultRef = {
-      mount: (ref.mount || 'secret').replace(/\/$/, ''),
-      path: ref.path || 'github',
-      key: ref.key || 'GH_TOKEN',
-    };
-    try {
-      const token = await vlt.getSecret(vr);
-      return token || this.config.githubToken;
-    } catch {
-      return this.config.githubToken;
-    }
+
+    // Fallback to ConfigService
+    return this.config.githubToken;
   }
 }

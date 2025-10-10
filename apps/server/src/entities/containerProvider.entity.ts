@@ -4,18 +4,26 @@ import { z } from 'zod';
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS, type Platform } from '../constants.js';
 import { VaultService, type VaultRef } from '../services/vault.service';
 import { ConfigService } from '../services/config.service';
+import { parseVaultRef } from '../utils/refs';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
+// New env item type with source-aware reference
+const EnvItemSchema = z
+  .object({
+    key: z.string().min(1),
+    value: z.string(),
+    source: z.enum(['static', 'vault']).optional().default('static'),
+  })
+  .strict()
+  .describe('Environment variable entry. When source=vault, value is "<MOUNT>/<PATH>/<KEY>".');
+
+// Internal schema: accepts both legacy and new shapes for compatibility
 export const ContainerProviderStaticConfigSchema = z
   .object({
     image: z.string().min(1).optional().describe('Optional container image override.'),
-    env: z
-      .record(z.string().min(1), z.string())
-      .optional()
-      .describe('Environment variables to inject into started containers.'),
-    // UI hint: render env as key/value map and envRefs as a separate section.
-    // Future iteration may unify with per-row source selector.
+    env: z.union([z.record(z.string().min(1), z.string()), z.array(EnvItemSchema)]).optional(),
+    // Legacy envRefs kept for compatibility only
     envRefs: z
       .record(
         z.string().min(1),
@@ -30,8 +38,33 @@ export const ContainerProviderStaticConfigSchema = z
           .strict(),
       )
       .optional()
-      .describe('Vault-backed environment variable references (server resolves at runtime).')
-      .meta({ 'ui:field': 'VaultEnvRefs' }),
+      .describe('Vault-backed environment variable references (server resolves at runtime).'),
+    initialScript: z
+      .string()
+      .optional()
+      .describe('Shell script (executed with /bin/sh -lc) to run immediately after creating the container.')
+      .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
+    platform: z
+      .enum(SUPPORTED_PLATFORMS as [Platform, ...Platform[]])
+      .optional()
+      .describe('Docker platform selector for the workspace container')
+      .meta({ 'ui:widget': 'select' }),
+    enableDinD: z
+      .boolean()
+      .default(false)
+      .describe('Enable per-workspace Docker-in-Docker sidecar; defaults to disabled for tests/CI.'),
+  })
+  .strict();
+
+// Exposed schema for UI/templates: advertise only the new env array
+export const ContainerProviderExposedStaticConfigSchema = z
+  .object({
+    image: z.string().min(1).optional().describe('Optional container image override.'),
+    env: z
+      .array(EnvItemSchema)
+      .optional()
+      .describe('Environment variables (static or vault references).')
+      .meta({ 'ui:field': 'ReferenceEnvField' }),
     initialScript: z
       .string()
       .optional()
@@ -51,13 +84,16 @@ export const ContainerProviderStaticConfigSchema = z
 
 export type ContainerProviderStaticConfig = z.infer<typeof ContainerProviderStaticConfigSchema>;
 
+type NewEnvItem = { key: string; value: string; source?: 'static' | 'vault' };
+type LegacyEnvRefs = Record<string, { source: 'vault'; mount?: string; path: string; key?: string; optional?: boolean }>;
+
 export class ContainerProviderEntity {
-  private cfg?:
-    | (Pick<ContainerOpts, 'image' | 'env' | 'platform'> & {
-        initialScript?: string;
-        envRefs?: Record<string, { source: 'vault'; mount?: string; path: string; key?: string; optional?: boolean }>;
-        enableDinD?: boolean;
-      });
+  private cfg?: Pick<ContainerOpts, 'image' | 'env' | 'platform'> & {
+    env?: Record<string, string> | Array<NewEnvItem>;
+    initialScript?: string;
+    envRefs?: LegacyEnvRefs;
+    enableDinD?: boolean;
+  };
 
   private vaultService: VaultService | undefined;
   private opts: ContainerOpts;
@@ -161,31 +197,78 @@ export class ContainerProviderEntity {
     }
 
     if (!container) {
-      // Resolve env from envRefs via Vault (server-side only)
+      // Resolve env with preference to new array form; fallback to legacy env + envRefs
       let envMerged: Record<string, string> | undefined = { ...(this.opts.env || {}) } as Record<string, string>;
-      if (this.cfg?.env) envMerged = { ...envMerged, ...this.cfg.env };
-      const refs = this.cfg?.envRefs || {};
-      if (refs && Object.keys(refs).length > 0) {
-        if (!this.vaultService || !this.vaultService.isEnabled()) {
-          throw new Error('Vault is not enabled but envRefs are configured');
-        }
-        for (const [varName, ref] of Object.entries(refs)) {
-          const vr: VaultRef = {
-            mount: (ref.mount || 'secret').replace(/\/$/, ''),
-            path: ref.path,
-            key: ref.key || 'value',
-          };
-          try {
-            const value = await this.vaultService.getSecret(vr);
-            if (value == null) {
-              if (ref.optional) continue;
-              throw new Error(`Missing Vault secret for ${varName} at ${vr.mount}/${vr.path}#${vr.key}`);
+
+      const cfgEnv = this.cfg?.env as unknown;
+      if (Array.isArray(cfgEnv)) {
+        const seen = new Set<string>();
+        const vaultLookups: Array<{ k: string; ref: VaultRef }> = [];
+        const staticPairs: Array<{ k: string; v: string }> = [];
+        for (const item of cfgEnv as Array<{ key?: string; value?: string; source?: 'static'|'vault' }>) {
+          const key = item?.key?.trim();
+          const value = item?.value ?? '';
+          const source = (item?.source || 'static');
+          if (!key) throw new Error('env entries require non-empty key');
+          if (seen.has(key)) throw new Error(`Duplicate env key: ${key}`);
+          seen.add(key);
+          if (source === 'vault') {
+            if (!this.vaultService || !this.vaultService.isEnabled()) {
+              throw new Error('Vault is not enabled but env contains vault-sourced entries');
             }
-            envMerged[varName] = String(value);
-          } catch (e: unknown) {
-            // Do not include secret values; only reference context
-            throw new Error(`Vault resolution failed for ${varName} at ${vr.mount}/${vr.path}#${vr.key}: ${(e as Error).message}`);
+            const vr = parseVaultRef(value);
+            vaultLookups.push({ k: key, ref: vr });
+          } else {
+            staticPairs.push({ k: key, v: value });
           }
+        }
+        // Apply static pairs immediately
+        for (const { k, v } of staticPairs) envMerged[k] = v;
+        // Resolve all vault refs concurrently
+        const resolved = await Promise.all(
+          vaultLookups.map(async ({ k, ref }) => {
+            try {
+              const v = await this.vaultService!.getSecret(ref);
+              if (v == null) throw new Error(`Missing Vault secret at ${ref.mount}/${ref.path}#${ref.key}`);
+              return { k, v: String(v) };
+            } catch (e) {
+              throw new Error(`Vault resolution failed for ${k} at ${ref.mount}/${ref.path}#${ref.key}: ${(e as Error).message}`);
+            }
+          }),
+        );
+        for (const { k, v } of resolved) envMerged[k] = v;
+      } else {
+        // Legacy: plain env map
+        if (this.cfg?.env && typeof this.cfg.env === 'object') {
+          envMerged = { ...envMerged, ...(this.cfg.env as Record<string, string>) };
+        }
+        // Legacy: envRefs
+        const refs = this.cfg?.envRefs || {};
+        if (refs && Object.keys(refs).length > 0) {
+          if (!this.vaultService || !this.vaultService.isEnabled()) {
+            throw new Error('Vault is not enabled but envRefs are configured');
+          }
+          const entries = Object.entries(refs);
+          const results = await Promise.all(
+            entries.map(async ([varName, ref]) => {
+              const vr: VaultRef = {
+                mount: (ref.mount || 'secret').replace(/\/$/, ''),
+                path: ref.path,
+                key: ref.key || 'value',
+              };
+              try {
+                const value = await this.vaultService!.getSecret(vr);
+                if (value == null) {
+                  if (ref.optional) return { varName, skip: true as const };
+                  throw new Error(`Missing Vault secret for ${varName} at ${vr.mount}/${vr.path}#${vr.key}`);
+                }
+                return { varName, value: String(value) };
+              } catch (e) {
+                throw new Error(`Vault resolution failed for ${varName} at ${vr.mount}/${vr.path}#${vr.key}: ${(e as Error).message}`);
+              }
+            }),
+          );
+          for (const r of results) if ('value' in r) envMerged[r.varName] = r.value;
         }
       }
 
@@ -293,3 +376,7 @@ function getStatusCode(e: unknown): number | undefined {
   }
   return undefined;
 }
+
+// Parse Vault reference string in format "mount/path/key" with path supporting nested segments.
+// Returns VaultRef and throws on invalid inputs.
+// parseVaultRef now imported from ../utils/refs
