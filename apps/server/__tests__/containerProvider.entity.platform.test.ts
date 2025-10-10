@@ -14,17 +14,18 @@ class MockContainer extends ContainerEntity {
 }
 
 describe('ContainerProviderEntity platform reuse logic', () => {
-  let svc: Partial<ContainerService>;
+  let svc: vi.Mocked<Partial<ContainerService>>;
   const idLabels = (id: string) => ({ 'hautech.ai/thread_id': `node__${id}` });
 
   beforeEach(() => {
     vi.clearAllMocks();
     const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('cid123', svc as any);
     svc = {
-      findContainerByLabels: vi.fn(async (_labels: Record<string, string>) => undefined) as unknown as ContainerService['findContainerByLabels'],
-      start: vi.fn(startImpl) as unknown as ContainerService['start'],
-      getContainerLabels: vi.fn(async (_id: string) => ({})) as unknown as ContainerService['getContainerLabels'],
-    };
+      findContainerByLabels: vi.fn(async (_labels: Record<string, string>) => undefined) as any,
+      start: vi.fn(startImpl) as any,
+      getContainerLabels: vi.fn(async (_id: string) => ({})) as any,
+      execContainer: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })) as any,
+    } as unknown as vi.Mocked<Partial<ContainerService>>;
   });
 
   it('recreates when existing platform mismatches requested', async () => {
@@ -32,7 +33,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     (svc.findContainerByLabels as any).mockResolvedValue(existing);
     (svc.getContainerLabels as any).mockResolvedValue({ [PLATFORM_LABEL]: 'linux/amd64' });
 
-    const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as any, {}, idLabels, { dockerMirrorUrl: 'http://registry-mirror:5000' } as any);
     provider.setConfig({ platform: 'linux/arm64' }); // DinD disabled by default
     const c = await provider.provide('t1');
 
@@ -52,7 +53,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     (svc.findContainerByLabels as any).mockResolvedValue(existing);
     (svc.getContainerLabels as any).mockResolvedValue({});
 
-    const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as any, {}, idLabels, { dockerMirrorUrl: 'http://registry-mirror:5000' } as any);
     provider.setConfig({ platform: 'linux/arm64' }); // DinD disabled by default
     const c = await provider.provide('t2');
 
@@ -68,7 +69,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     const existing = new MockContainer('abc', svc as any);
     (svc.findContainerByLabels as any).mockResolvedValue(existing);
 
-    const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as any, {}, idLabels, { dockerMirrorUrl: 'http://registry-mirror:5000' } as any);
     // no platform in config
     const c = await provider.provide('t3');
 
@@ -82,7 +83,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     const existing = new MockContainer('abc', svc as any);
     (svc.findContainerByLabels as any).mockResolvedValue(existing);
 
-    const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as any, {}, idLabels, { dockerMirrorUrl: 'http://registry-mirror:5000' } as any);
     const c = await provider.provide('t4');
 
     expect(existing.stop).not.toHaveBeenCalled();
@@ -98,7 +99,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
   it('does not attempt DinD when flag disabled (default)', async () => {
     const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('cid123', svc as any);
     (svc.start as any).mockImplementationOnce(startImpl);
-    const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as any, {}, idLabels, { dockerMirrorUrl: 'http://registry-mirror:5000' } as any);
     provider.setConfig({});
     const c = await provider.provide('tdis');
     expect(c).toBeInstanceOf(MockContainer);
@@ -112,7 +113,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     (svc.start as any).mockImplementationOnce(startImpl);
     // Mock DinD readiness: execContainer returns exitCode 0 immediately
     (svc as any).execContainer = vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
-    const provider = new ContainerProviderEntity(svc as any, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as any, {}, idLabels, { dockerMirrorUrl: 'http://registry-mirror:5000' } as any);
     provider.setConfig({ enableDinD: true });
     const c = await provider.provide('ten');
     expect(c).toBeInstanceOf(MockContainer);

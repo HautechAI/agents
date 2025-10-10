@@ -1,4 +1,5 @@
 import { toJSONSchema } from 'zod';
+import type { EndpointSettings } from 'dockerode';
 import { SimpleAgent, SimpleAgentStaticConfigSchema } from './agents/simple.agent';
 import { ContainerProviderEntity, ContainerProviderStaticConfigSchema } from './entities/containerProvider.entity';
 import { TemplateRegistry } from './graph';
@@ -67,10 +68,13 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
               // resolve registry-mirror by name and share network with DinD sidecar
               createExtras: {
                 HostConfig: { NetworkMode: 'agents_net' },
-                NetworkingConfig: { EndpointsConfig: { agents_net: {} as any } },
+                NetworkingConfig: {
+                  EndpointsConfig: { agents_net: {} as EndpointSettings },
+                },
               },
             },
             (threadId) => ({ 'hautech.ai/thread_id': `${ctx.nodeId}__${threadId}` }),
+            configService,
           ),
         {
           sourcePorts: { $self: { kind: 'instance' } },

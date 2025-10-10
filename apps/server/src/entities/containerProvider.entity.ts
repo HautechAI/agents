@@ -3,6 +3,7 @@ import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS, type Platform } from '../constants.js';
 import { VaultService, type VaultRef } from '../services/vault.service';
+import { ConfigService } from '../services/config.service';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
@@ -70,14 +71,15 @@ export class ContainerProviderEntity {
     vaultOrOpts: VaultService | ContainerOpts | undefined,
     optsOrId: ContainerOpts | ((id: string) => Record<string, string>),
     maybeId?: (id: string) => Record<string, string>,
+    private configService?: ConfigService,
   ) {
     if (typeof optsOrId === 'function') {
-      // Old signature
+      // Old signature: (containerService, opts, idLabels)
       this.vaultService = undefined;
       this.opts = (vaultOrOpts as ContainerOpts) || {};
       this.idLabels = optsOrId;
     } else {
-      // New signature
+      // New signature: (containerService, vaultService, opts, idLabels, configService?)
       this.vaultService = (vaultOrOpts as VaultService) || undefined;
       this.opts = (optsOrId as ContainerOpts) || {};
       this.idLabels = maybeId || ((id: string) => ({ 'hautech.ai/thread_id': id }));
@@ -100,7 +102,7 @@ export class ContainerProviderEntity {
     const labels = this.idLabels(threadId);
     let container: ContainerEntity | undefined = await this.containerService.findContainerByLabels(labels);
     const DOCKER_HOST_ENV = 'tcp://localhost:2375';
-    const DOCKER_MIRROR_URL = process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
+    const DOCKER_MIRROR_URL = this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
     const enableDinD = this.cfg?.enableDinD ?? false;
 
     // Enforce non-reuse on platform mismatch if a platform is requested now
@@ -118,14 +120,17 @@ export class ContainerProviderEntity {
                 'hautech.ai/role': 'dind',
                 'hautech.ai/parent_cid': container.id,
               });
-              for (const d of dinds) {
-                try {
-                  await d.stop(5);
-                } catch {}
-                try {
-                  await d.remove(true);
-                } catch {}
-              }
+              // Stop/remove DinD sidecars concurrently
+              await Promise.all(
+                dinds.map(async (d) => {
+                  try {
+                    await d.stop(5);
+                  } catch {}
+                  try {
+                    await d.remove(true);
+                  } catch {}
+                }),
+              );
             } catch {}
           }
           // Stop and remove old container, then recreate (handle benign errors)
@@ -255,6 +260,19 @@ export class ContainerProviderEntity {
         const { exitCode } = await this.containerService.execContainer(dind.id, ['sh', '-lc', 'docker -H tcp://0.0.0.0:2375 info >/dev/null 2>&1']);
         if (exitCode === 0) return;
       } catch {}
+      // Early fail if DinD exited unexpectedly (best-effort; skip if low-level client not available)
+      try {
+        const getDocker = (this.containerService as unknown as { getDocker?: () => any }).getDocker;
+        if (typeof getDocker === 'function') {
+          const inspect = await getDocker().getContainer(dind.id).inspect();
+          if (inspect.State && inspect.State.Running === false) {
+            throw new Error(`DinD sidecar exited unexpectedly: status=${inspect.State.Status}`);
+          }
+        }
+      } catch (e) {
+        // If inspect reports not running or other error, fail fast
+        throw e instanceof Error ? e : new Error('DinD sidecar exited unexpectedly');
+      }
       await sleep(1000);
     }
     throw new Error('DinD sidecar did not become ready within timeout');
