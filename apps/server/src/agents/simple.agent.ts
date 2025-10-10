@@ -264,6 +264,7 @@ export class SimpleAgent extends BaseAgent {
                 const { message, cause } = buildMcpToolError(res);
                 throw new Error(message, { cause });
               }
+              // Normalize structured content formatting across call sites (YAML)
               if (res.structuredContent) return toYaml(res.structuredContent);
               return res.content || '';
             },
@@ -355,11 +356,12 @@ export class SimpleAgent extends BaseAgent {
                   );
                   const threadId = config?.configurable?.thread_id;
                   const res = await server.callTool(t.name, raw, { threadId });
-                  if ((res as any).isError) {
-                    const { message, cause } = buildMcpToolError(res as any);
+                  if (res.isError) {
+                    const { message, cause } = buildMcpToolError(res);
                     throw new Error(message, { cause });
                   }
-                  if (res.structuredContent) return JSON.stringify(res.structuredContent);
+                  // Normalize structured content formatting across call sites (YAML)
+                  if (res.structuredContent) return toYaml(res.structuredContent);
                   return res.content || '';
                 },
                 {

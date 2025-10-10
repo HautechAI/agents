@@ -35,6 +35,12 @@ We integrate a Model Context Protocol (MCP) server that runs *inside a Docker co
 - No streaming tool output segmentation implemented (tool results assumed to fit in memory). Future enhancement: progressive `notifications/progress` handling.
 - No multiple-session multiplex; one MCP session per server instance.
 
+## Error surfacing and formatting
+- Structured errors: When an MCP tool call fails, we prefer messages from `structuredContent` in this order: `message` > string `error` > nested `error.message` > `detail`. We also surface common code fields (`code|errorCode|statusCode`) and boolean-like retriable flags (`retriable|retryable`, including string/number forms) in a compact suffix, e.g. "(code=E_TIMEOUT retriable=false)".
+- Cause: The thrown `Error` uses the full `structuredContent` (when present) as its `cause` for richer diagnostics.
+- Raw fallback: If neither `structuredContent` nor textual `content` is present, we include a truncated JSON string of `raw` (capped at 2000 characters) to avoid excessive logs/token bloat.
+- Consistent success formatting: On successful tool calls, `structuredContent` is formatted uniformly as YAML across SimpleAgent call sites to keep downstream output stable.
+
 ## Security Considerations
 - Environment variable pass-through is controlled by config; we do not inherit host env automatically (except what Docker container already has at runtime).
 - All tool schemas are treated as untrusted; validation uses server-provided schemas but can be wrapped with local allow-lists if needed later.
