@@ -2,6 +2,7 @@ import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { ContainerEntity } from '../entities/container.entity';
 import { LoggerService } from './logger.service';
 import { PLATFORM_LABEL, type Platform } from '../constants.js';
+import { isExecTimeoutError } from '../utils/execTimeout';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
 
@@ -187,11 +188,15 @@ export class ContainerService {
         `Exec finished cid=${inspectData.Id.substring(0, 12)} exitCode=${exitCode} stdoutBytes=${stdout.length} stderrBytes=${stderr.length}`,
       );
       return { stdout, stderr, exitCode };
-    } catch (err: any) {
-      const isTimeout = err instanceof Error && typeof err.message === 'string' && /^Exec timed out after \d+ms/.test(err.message);
+    } catch (err: unknown) {
+      const isTimeout = isExecTimeoutError(err);
       if (isTimeout && options?.killOnTimeout) {
         // Gracefully stop the container to ensure process-tree cleanup.
         try {
+          this.logger.info('Exec timeout detected; stopping container', {
+            containerId,
+            timeoutMs: options?.timeoutMs,
+          });
           await this.stopContainer(containerId, 10);
         } catch (stopErr) {
           // Log but do not swallow original timeout error

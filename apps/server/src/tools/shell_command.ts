@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { LoggerService } from '../services/logger.service';
 import { VaultService } from '../services/vault.service';
 import { parseVaultRef } from '../utils/refs';
+import { isExecTimeoutError } from '../utils/execTimeout';
 import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { BaseTool } from './base.tool';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
@@ -69,9 +70,8 @@ export class ShellTool extends BaseTool {
         let response;
         try {
           response = await container.exec(command, { env: envOverlay, workdir: this.cfg?.workdir, timeoutMs, killOnTimeout: true });
-        } catch (err: any) {
-          const isTimeout = err instanceof Error && typeof err.message === 'string' && /^Exec timed out after \d+ms/.test(err.message);
-          if (isTimeout) {
+        } catch (err: unknown) {
+          if (isExecTimeoutError(err)) {
             return `Error (timeout after 1h): command exceeded ${timeoutMs}ms and was terminated.`;
           }
           throw err;
