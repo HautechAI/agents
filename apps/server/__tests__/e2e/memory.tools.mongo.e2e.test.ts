@@ -3,11 +3,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 import { MemoryNode } from '../../src/nodes/memory.node';
 import { LoggerService } from '../../src/services/logger.service';
-import { MemoryAppendTool } from '../../src/tools/memory/memory_append.tool';
-import { MemoryReadTool } from '../../src/tools/memory/memory_read.tool';
-import { MemoryListTool } from '../../src/tools/memory/memory_list.tool';
-import { MemoryUpdateTool } from '../../src/tools/memory/memory_update.tool';
-import { MemoryDeleteTool } from '../../src/tools/memory/memory_delete.tool';
+import { UnifiedMemoryTool } from '../../src/tools/memory/memory.tool';
 
 describe('E2E: memory tools with real MongoDB (mongodb-memory-server)', () => {
   const logger = new LoggerService();
@@ -36,44 +32,36 @@ describe('E2E: memory tools with real MongoDB (mongodb-memory-server)', () => {
       const db = client.db('test');
       const memNode = new MemoryNode(db as any, 'node-1', { scope: 'global' });
 
-      const appendInst = new MemoryAppendTool(logger);
-      appendInst.setMemorySource(memNode);
-      const append = appendInst.init();
-
-      const readInst = new MemoryReadTool(logger);
-      readInst.setMemorySource(memNode);
-      const read = readInst.init();
+      const unifiedInst = new UnifiedMemoryTool(logger);
+      unifiedInst.setMemorySource(memNode);
+      const unified = unifiedInst.init();
 
       const cfg = { configurable: { thread_id: 'debug' } } as any;
 
-      const appendRes = await append.invoke({ path: 'user/1', data: '{"username":"Test"}' }, cfg);
-      expect(appendRes).toBe('ok');
-      const content = await read.invoke({ path: 'user/1' }, cfg);
-      expect(typeof content).toBe('string');
-      expect(String(content)).toContain('"username":"Test"');
+      const appendRes = JSON.parse(await unified.invoke({ path: 'user/1', command: 'append', content: '{"username":"Test"}' }, cfg) as any);
+      expect(appendRes.ok).toBe(true);
+      const content = JSON.parse(await unified.invoke({ path: 'user/1', command: 'read' }, cfg) as any);
+      expect(content.ok).toBe(true);
+      expect(String(content.result.content)).toContain('"username":"Test"');
     });
 
     it('should append and not overwrite existing data', async () => {
       const db = client.db('test');
       const memNode = new MemoryNode(db as any, 'node-1', { scope: 'global' });
 
-      const appendInst = new MemoryAppendTool(logger);
-      appendInst.setMemorySource(memNode);
-      const append = appendInst.init();
-
-      const readInst = new MemoryReadTool(logger);
-      readInst.setMemorySource(memNode);
-      const read = readInst.init();
+      const unifiedInst = new UnifiedMemoryTool(logger);
+      unifiedInst.setMemorySource(memNode);
+      const unified = unifiedInst.init();
 
       const cfg = { configurable: { thread_id: 'debug' } } as any;
 
-      await append.invoke({ path: 'user/2', data: '{"username":"Test"}' }, cfg);
-      await append.invoke({ path: 'user/2', data: '{"interests":"Sub1,Sub2"}' }, cfg);
+      await unified.invoke({ path: 'user/2', command: 'append', content: '{"username":"Test"}' }, cfg);
+      await unified.invoke({ path: 'user/2', command: 'append', content: '{"interests":"Sub1,Sub2"}' }, cfg);
 
-      const content = await read.invoke({ path: 'user/2' }, cfg);
-      expect(typeof content).toBe('string');
-      expect(String(content)).toContain('"username":"Test"');
-      expect(String(content)).toContain('"interests":"Sub1,Sub2"');
+      const content = JSON.parse(await unified.invoke({ path: 'user/2', command: 'read' }, cfg) as any);
+      expect(typeof content.result.content).toBe('string');
+      expect(String(content.result.content)).toContain('"username":"Test"');
+      expect(String(content.result.content)).toContain('"interests":"Sub1,Sub2"');
     });
   });
 
@@ -82,55 +70,44 @@ describe('E2E: memory tools with real MongoDB (mongodb-memory-server)', () => {
       const db = client.db('test');
       const memNode = new MemoryNode(db as any, 'node-lrud-1', { scope: 'global' });
 
-      const appendInst = new MemoryAppendTool(logger); appendInst.setMemorySource(memNode); const append = appendInst.init();
-      const listInst = new MemoryListTool(logger); listInst.setMemorySource(memNode); const list = listInst.init();
+      const unifiedInst = new UnifiedMemoryTool(logger); unifiedInst.setMemorySource(memNode); const unified = unifiedInst.init();
       const cfg = { configurable: { thread_id: 'debug' } } as any;
 
-      await append.invoke({ path: 'projects/p1', data: '{"name":"Alpha"}' }, cfg);
-      await append.invoke({ path: 'projects/p2', data: '{"name":"Beta"}' }, cfg);
+      await unified.invoke({ path: 'projects/p1', command: 'append', content: '{"name":"Alpha"}' }, cfg);
+      await unified.invoke({ path: 'projects/p2', command: 'append', content: '{"name":"Beta"}' }, cfg);
 
-      const listingRaw = await list.invoke({ path: 'projects' }, cfg);
-      expect(typeof listingRaw).toBe('string');
-      const listing = JSON.parse(String(listingRaw));
-      const names = listing.map((i: any) => i.name).sort();
+      const listingRaw = JSON.parse(await unified.invoke({ path: 'projects', command: 'list' }, cfg) as any);
+      expect(typeof listingRaw).toBe('object');
+      const names = listingRaw.result.entries.map((i: any) => i.name).sort();
       expect(names).toEqual(['p1', 'p2']);
     });
 
     it('should read, update occurrences, and then delete a file', async () => {
       const db = client.db('test');
       const memNode = new MemoryNode(db as any, 'node-lrud-2', { scope: 'global' });
-      const appendInst = new MemoryAppendTool(logger); appendInst.setMemorySource(memNode); const append = appendInst.init();
-      const readInst = new MemoryReadTool(logger); readInst.setMemorySource(memNode); const read = readInst.init();
-      const updateInst = new MemoryUpdateTool(logger); updateInst.setMemorySource(memNode); const update = updateInst.init();
-      const deleteInst = new MemoryDeleteTool(logger); deleteInst.setMemorySource(memNode); const del = deleteInst.init();
-      const listInst = new MemoryListTool(logger); listInst.setMemorySource(memNode); const list = listInst.init();
+      const unifiedInst = new UnifiedMemoryTool(logger); unifiedInst.setMemorySource(memNode); const unified = unifiedInst.init();
 
       const cfg = { configurable: { thread_id: 'debug' } } as any;
       const targetPath = 'notes/today';
 
-      await append.invoke({ path: targetPath, data: 'Weather is sunny. Mood: good.' }, cfg);
-      let content = await read.invoke({ path: targetPath }, cfg);
-      expect(String(content)).toContain('sunny');
+      await unified.invoke({ path: targetPath, command: 'append', content: 'Weather is sunny. Mood: good.' }, cfg);
+      let content = JSON.parse(await unified.invoke({ path: targetPath, command: 'read' }, cfg) as any);
+      expect(String(content.result.content)).toContain('sunny');
 
       // Update: replace 'sunny' with 'rainy'
-      const updateCount = await update.invoke({ path: targetPath, old_data: 'sunny', new_data: 'rainy' }, cfg);
-      expect(Number(updateCount)).toBeGreaterThanOrEqual(1);
-      content = await read.invoke({ path: targetPath }, cfg);
-      expect(String(content)).toContain('rainy');
-      expect(String(content)).not.toContain('sunny');
+      const updateCount = JSON.parse(await unified.invoke({ path: targetPath, command: 'update', oldContent: 'sunny', content: 'rainy' }, cfg) as any);
+      expect(Number(updateCount.result.replaced)).toBeGreaterThanOrEqual(1);
+      content = JSON.parse(await unified.invoke({ path: targetPath, command: 'read' }, cfg) as any);
+      expect(String(content.result.content)).toContain('rainy');
+      expect(String(content.result.content)).not.toContain('sunny');
 
       // Delete the file
-      const delResultRaw = await del.invoke({ path: targetPath }, cfg);
-      expect(typeof delResultRaw).toBe('string');
-      // Result is JSON object; parse and check basic shape
-      let delResult: any;
-      try { delResult = JSON.parse(String(delResultRaw)); } catch { delResult = {}; }
-      expect(delResult).toBeTypeOf ? expect(delResult).toBeTypeOf('object') : expect(typeof delResult).toBe('object');
+      const delResultRaw = JSON.parse(await unified.invoke({ path: targetPath, command: 'delete' }, cfg) as any);
+      expect(typeof delResultRaw).toBe('object');
 
       // Listing the directory should now not include the deleted file
-      const listingRaw = await list.invoke({ path: 'notes' }, cfg);
-      const listing = JSON.parse(String(listingRaw));
-      const names = listing.map((i: any) => i.name);
+      const listingRaw = JSON.parse(await unified.invoke({ path: 'notes', command: 'list' }, cfg) as any);
+      const names = listingRaw.result.entries.map((i: any) => i.name);
       expect(names).not.toContain('today');
     });
   });

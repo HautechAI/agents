@@ -1,11 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Db } from 'mongodb';
 import { MemoryService, type MemoryDoc } from '../src/services/memory.service';
-import { MemoryReadTool } from '../src/tools/memory/memory_read.tool';
-import { MemoryListTool } from '../src/tools/memory/memory_list.tool';
-import { MemoryAppendTool } from '../src/tools/memory/memory_append.tool';
-import { MemoryUpdateTool } from '../src/tools/memory/memory_update.tool';
-import { MemoryDeleteTool } from '../src/tools/memory/memory_delete.tool';
+import { UnifiedMemoryTool } from '../src/tools/memory/memory.tool';
 import { LoggerService } from '../src/services/logger.service';
 
 // In-memory fake Db compatible with MemoryService for deterministic tests
@@ -68,33 +64,25 @@ describe('Memory tool adapters', () => {
     const serviceFactory = (opts: { threadId?: string }) => new MemoryService(db, 'nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId);
     const logger = new LoggerService();
     const mk = (t: any) => { t.setMemorySource(serviceFactory); return t; };
-    const adapters = [
-      mk(new MemoryAppendTool(logger)),
-      mk(new MemoryDeleteTool(logger)),
-      mk(new MemoryListTool(logger)),
-      mk(new MemoryReadTool(logger)),
-      mk(new MemoryUpdateTool(logger)),
-    ];
-    const names = adapters.map((a) => a.init().name).sort();
-    expect(names).toEqual(['memory_append','memory_delete','memory_list','memory_read','memory_update']);
+    const adapter = mk(new UnifiedMemoryTool(logger));
+    const name = adapter.init().name;
+    expect(name).toBe('memory');
 
     const config = { configurable: { thread_id: 'T1' } } as any;
-    const append = adapters.find((a) => a.init().name === 'memory_append')!.init();
-    await append.invoke({ path: '/a/x', data: 'one' }, config);
+    const unified = adapter.init();
+    await unified.invoke({ path: '/a/x', command: 'append', content: 'one' }, config);
 
-    const read = adapters.find((a) => a.init().name === 'memory_read')!.init();
-    expect(await read.invoke({ path: '/a/x' }, config)).toBe('one');
+    const readRes = JSON.parse(await unified.invoke({ path: '/a/x', command: 'read' }, config) as any);
+    expect(readRes.ok).toBe(true);
+    expect(readRes.result.content).toBe('one');
 
-    const update = adapters.find((a) => a.init().name === 'memory_update')!.init();
-    const count = await update.invoke({ path: '/a/x', old_data: 'one', new_data: 'two' }, config);
-    expect(count).toBe(1);
+    const upd = JSON.parse(await unified.invoke({ path: '/a/x', command: 'update', oldContent: 'one', content: 'two' }, config) as any);
+    expect(upd.result.replaced).toBe(1);
 
-    const list = adapters.find((a) => a.init().name === 'memory_list')!.init();
-    const listing = JSON.parse(await list.invoke({ path: '/' }, config));
-    expect(Array.isArray(listing)).toBe(true);
+    const listRes = JSON.parse(await unified.invoke({ path: '/', command: 'list' }, config) as any);
+    expect(Array.isArray(listRes.result.entries)).toBe(true);
 
-    const del = adapters.find((a) => a.init().name === 'memory_delete')!.init();
-    const delRes = JSON.parse(await del.invoke({ path: '/a' }, config));
-    expect(delRes.files).toBe(1);
+    const delRes = JSON.parse(await unified.invoke({ path: '/a', command: 'delete' }, config) as any);
+    expect(delRes.result.files).toBe(1);
   });
 });

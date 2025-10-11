@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Db } from 'mongodb';
 import { MemoryService, type MemoryDoc } from '../../src/services/memory.service';
-import { MemoryAppendTool } from '../../src/tools/memory/memory_append.tool';
-import { MemoryReadTool } from '../../src/tools/memory/memory_read.tool';
+import { UnifiedMemoryTool } from '../../src/tools/memory/memory.tool';
 import { LoggerService } from '../../src/services/logger.service';
 
 // In-memory fake Db compatible with MemoryService for deterministic tests
@@ -65,54 +64,56 @@ describe('memory_append tool: path normalization and validation', () => {
     const db = new FakeDb() as unknown as Db;
     const factory = (opts: { threadId?: string }) => new MemoryService(db, 'nodeT', opts.threadId ? 'perThread' : 'global', opts.threadId);
     const logger = new LoggerService();
-    const append = new MemoryAppendTool(logger);
-    append.setMemorySource(factory);
-    const read = new MemoryReadTool(logger);
-    read.setMemorySource(factory);
+    const unified = new UnifiedMemoryTool(logger);
+    unified.setMemorySource(factory);
     const cfg = { configurable: { thread_id: 'T1' } } as any;
-    return { append: append.init(), read: read.init(), cfg };
+    return { unified: unified.init(), cfg };
   };
 
   it('Case A: path without leading slash is normalized and succeeds', async () => {
-    const { append, read, cfg } = mkTools();
-    await append.invoke({ path: 'U08ES6U5SSF', data: '{"user":"v"}' }, cfg);
-    const content = await read.invoke({ path: '/U08ES6U5SSF' }, cfg);
-    expect(typeof content).toBe('string');
-    expect(String(content)).toContain('user');
+    const { unified, cfg } = mkTools();
+    await unified.invoke({ path: 'U08ES6U5SSF', command: 'append', content: '{"user":"v"}' }, cfg);
+    const content = JSON.parse(await unified.invoke({ path: '/U08ES6U5SSF', command: 'read' }, cfg) as any);
+    expect(typeof content.result.content).toBe('string');
+    expect(String(content.result.content)).toContain('user');
   });
 
   it('Case B: path with leading slash works as control', async () => {
-    const { append, read, cfg } = mkTools();
-    await append.invoke({ path: '/U08ES6U5SSF', data: 'hello' }, cfg);
-    const content = await read.invoke({ path: '/U08ES6U5SSF' }, cfg);
-    expect(content).toBe('hello');
+    const { unified, cfg } = mkTools();
+    await unified.invoke({ path: '/U08ES6U5SSF', command: 'append', content: 'hello' }, cfg);
+    const content = JSON.parse(await unified.invoke({ path: '/U08ES6U5SSF', command: 'read' }, cfg) as any);
+    expect(content.result.content).toBe('hello');
   });
 
   it('Case C: invalid characters in path trigger validation error', async () => {
-    const { append, cfg } = mkTools();
-    await expect(append.invoke({ path: '../hack', data: 'x' }, cfg)).rejects.toThrow();
-    await expect(append.invoke({ path: '/bad$eg', data: 'x' }, cfg)).rejects.toThrow();
+    const { unified, cfg } = mkTools();
+    const res1 = JSON.parse((await unified.invoke({ path: '../hack', command: 'append', content: 'x' }, cfg)) as any);
+    expect(res1.ok).toBe(false);
+    expect(res1.error.code).toBe('EINVAL');
+    const res2 = JSON.parse((await unified.invoke({ path: '/bad$eg', command: 'append', content: 'x' }, cfg)) as any);
+    expect(res2.ok).toBe(false);
+    expect(res2.error.code).toBe('EINVAL');
   });
 
   it('Case D: append to new then existing file succeeds', async () => {
-    const { append, read, cfg } = mkTools();
-    await append.invoke({ path: '/file', data: 'one' }, cfg);
-    await append.invoke({ path: '/file', data: 'two' }, cfg);
-    const content = await read.invoke({ path: '/file' }, cfg);
-    expect(content).toBe('one\ntwo');
+    const { unified, cfg } = mkTools();
+    await unified.invoke({ path: '/file', command: 'append', content: 'one' }, cfg);
+    await unified.invoke({ path: '/file', command: 'append', content: 'two' }, cfg);
+    const content = JSON.parse(await unified.invoke({ path: '/file', command: 'read' }, cfg) as any);
+    expect(content.result.content).toBe('one\ntwo');
   });
 
   it('Case E: nested path without leading slash is normalized and parent dirs ensured', async () => {
-    const { append, read, cfg } = mkTools();
-    await append.invoke({ path: 'users/U08ES6U5SSF', data: '{"user_id":"U08ES6U5SSF","name":"Vitalii"}\n' }, cfg);
-    const content = await read.invoke({ path: '/users/U08ES6U5SSF' }, cfg);
-    expect(String(content)).toContain('Vitalii');
+    const { unified, cfg } = mkTools();
+    await unified.invoke({ path: 'users/U08ES6U5SSF', command: 'append', content: '{"user_id":"U08ES6U5SSF","name":"Vitalii"}\n' }, cfg);
+    const content = JSON.parse(await unified.invoke({ path: '/users/U08ES6U5SSF', command: 'read' }, cfg) as any);
+    expect(String(content.result.content)).toContain('Vitalii');
   });
 
   it('Case F: nested path with leading slash works identically', async () => {
-    const { append, read, cfg } = mkTools();
-    await append.invoke({ path: '/users/U08ES6U5SSF', data: '{"user_id":"U08ES6U5SSF","name":"Vitalii"}\n' }, cfg);
-    const content = await read.invoke({ path: '/users/U08ES6U5SSF' }, cfg);
-    expect(String(content)).toContain('U08ES6U5SSF');
+    const { unified, cfg } = mkTools();
+    await unified.invoke({ path: '/users/U08ES6U5SSF', command: 'append', content: '{"user_id":"U08ES6U5SSF","name":"Vitalii"}\n' }, cfg);
+    const content = JSON.parse(await unified.invoke({ path: '/users/U08ES6U5SSF', command: 'read' }, cfg) as any);
+    expect(String(content.result.content)).toContain('U08ES6U5SSF');
   });
 });

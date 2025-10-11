@@ -49,37 +49,7 @@ export class CallModelNode extends BaseNode {
       tool_choice: 'auto',
     });
 
-    // Diagnostic hook: if the last HumanMessage content is a JSON string with
-    // shape { content: string } and matches "diag memory_dump [path]",
-    // synthesize a tool call and skip LLM invocation.
-    try {
-      const lastHuman = [...state.messages].reverse().find((m) => m instanceof HumanMessage) as
-        | HumanMessage
-        | undefined;
-      const raw = lastHuman?.content;
-      if (typeof raw === 'string') {
-        const parsed = JSON.parse(raw);
-        const text = parsed?.content;
-        if (typeof text === 'string') {
-          const match = text.match(/^diag\s+memory_dump(?:\s+(.+))?$/i);
-          if (match) {
-            const path = match[1]?.trim();
-            const ai = new AIMessage({
-              content: '',
-              tool_calls: [
-                {
-                  name: 'memory_dump',
-                  args: path ? { path } : {},
-                },
-              ],
-            } as any);
-            return { messages: { method: 'append', items: [ai] } };
-          }
-        }
-      }
-    } catch {
-      // ignore parse errors and continue with normal LLM flow
-    }
+    // Removed temporary diagnostic memory_dump path (Issue #125)
 
     const finalMessages: BaseMessage[] = [
       new SystemMessage(this.systemPrompt),

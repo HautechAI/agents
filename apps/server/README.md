@@ -9,7 +9,6 @@ Graph persistence
   - GRAPH_BRANCH: branch name to use (default `graph-state`)
   - GRAPH_AUTHOR_NAME / GRAPH_AUTHOR_EMAIL: default git author (can be overridden per request with headers `x-graph-author-name`/`x-graph-author-email`)
 - On startup with GRAPH_STORE=git, the server initializes `GRAPH_REPO_PATH` as a git repo if missing, ensures branch checkout, seeds root-level per-entity layout (format: 2) with empty `nodes/` and `edges/`, writes `graph.meta.json` for the active graph name (default `main`), and commits the initial state.
-- The existing API `/api/graph` supports GET and POST. POST maintains optimistic locking via the `version` field. Each successful write creates one commit with message `chore(graph): <name> v<version> (+/- nodes, +/- edges)` on the configured branch.
  - Error responses:
    - 409 VERSION_CONFLICT with `{ error, current }` body when version mismatch.
    - 409 LOCK_TIMEOUT when advisory lock not acquired within timeout.
@@ -24,7 +23,7 @@ Storage layout (format: 2)
 Enabling Memory
 - Default connector config: placement=after_system, content=tree, maxChars=4000.
 - To wire memory into an agent's CallModel at runtime, add a `memoryNode` and connect its `$self` source port to the agent's `callModel`/`setMemoryConnector` target port (or use template API to create a connector).
-- Tool usage: attach `memoryNode.memoryTools` to the `simpleAgent` via the `memory` source port; tools include `memory_read`, `memory_list`, `memory_append`, `memory_update`, `memory_delete`.
+- Tool usage: attach the unified `memory` tool to the `simpleAgent` via the `memory` target port on the tool; commands: `read|list|append|update|delete`.
 - Scope: `global` per node by default; use `perThread` to isolate by thread id. No external Mongo needed in tests; the service works with a real `Db` in prod.
 - Environment: requires MongoDB URL for server runtime; tests use in-memory fakes.
 
