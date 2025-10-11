@@ -21,7 +21,7 @@ Consequences
 - Tree fallback prevents overlong context when `full` exceeds `maxChars`.
 
 Migration Notes (v1 -> v2)
-- Tools: use a single unified `memory` tool with commands (`read|list|append|update|delete`) wired to the agent; `memory_dump` was removed later (Issue #125).
+- Tools: use a single unified `memory` tool with commands (`read|list|append|update|delete`) wired to the agent; `memory_dump` was removed later (Issue #125). The builder key for the tool is currently `memoryTool` to avoid collision with the `memory` service template.
 - `memory_update` returns a number (replacement count) instead of a string; update consumers/tests to expect numeric output.
 - Tests: integration/E2E use `mongodb-memory-server` exclusively; FakeDb is restricted to unit tests only.
 - Zod import style standardized to `import { z } from 'zod'` across server code.

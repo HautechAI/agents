@@ -106,6 +106,11 @@ describe('Memory tool adapters', () => {
     expect(enoentRead.ok).toBe(false);
     expect(enoentRead.error.code).toBe('ENOENT');
 
+    // ENOENT on update when file does not exist
+    const enoentUpdate = JSON.parse((await tool.invoke({ path: '/missing', command: 'update', oldContent: 'x', content: 'y' }, cfg)) as any);
+    expect(enoentUpdate.ok).toBe(false);
+    expect(enoentUpdate.error.code).toBe('ENOENT');
+
     // Prepare a dir and file
     await tool.invoke({ path: 'dir/file', command: 'append', content: 'v' }, cfg);
 
