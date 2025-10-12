@@ -10,6 +10,7 @@ import { NodeStatusBadges } from '@/components/graph/NodeStatusBadges';
 import { NodeActionButtons } from '@/components/graph/NodeActionButtons';
 import { useNodeAction, useNodeStatus } from '@/lib/graph/hooks';
 import { canPause, canProvision } from '@/lib/graph/capabilities';
+import { NodeObsSidebar } from '@/components/graph/NodeObsSidebar';
 
 interface BuilderPanelNodeData {
   template: string;
@@ -112,6 +113,10 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
           />
         </div>
       )}
+      {/* Observability: related spans panel */}
+      <div className="space-y-2">
+        <NodeObsSidebar node={node} />
+      </div>
       <hr className="border-border" />
       <div className="text-[10px] uppercase text-muted-foreground">
         Template: {data.template}

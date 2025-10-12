@@ -1,0 +1,43 @@
+// Minimal OBS API client for apps/ui
+// Defaults: VITE_OBS_SERVER_URL=http://localhost:4319
+
+export interface SpanDoc {
+  _id?: string;
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  label: string;
+  status: 'running' | 'ok' | 'error' | 'cancelled';
+  startTime: string;
+  endTime?: string;
+  completed: boolean;
+  lastUpdate: string;
+  attributes: Record<string, unknown>;
+  events: Array<{ ts: string; name: string; attrs?: Record<string, unknown> }>;
+  rev: number;
+  idempotencyKeys: string[];
+  createdAt: string;
+  updatedAt: string;
+  nodeId?: string;
+  threadId?: string;
+}
+
+const OBS_BASE: string = (import.meta as any).env?.VITE_OBS_SERVER_URL || 'http://localhost:4319';
+
+export function getObsBaseUrl(): string {
+  return OBS_BASE;
+}
+
+export async function fetchSpansInRange(params: { from: string; to: string; label?: string; limit?: number; cursor?: string; sort?: 'lastUpdate' | 'startTime' } ): Promise<{ items: SpanDoc[]; nextCursor?: string }> {
+  const usp = new URLSearchParams();
+  usp.set('from', params.from);
+  usp.set('to', params.to);
+  if (params.label) usp.set('label', params.label);
+  usp.set('limit', String(params.limit ?? 500));
+  if (params.cursor) usp.set('cursor', params.cursor);
+  if (params.sort) usp.set('sort', params.sort);
+  const res = await fetch(`${OBS_BASE}/v1/spans?${usp.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch OBS spans');
+  return res.json();
+}
+
