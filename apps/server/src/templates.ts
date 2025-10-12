@@ -15,19 +15,15 @@ import { SendSlackMessageTool, SendSlackMessageToolStaticConfigSchema } from './
 import { ShellTool, ShellToolStaticConfigSchema } from './tools/shell_command';
 import { SlackTrigger } from './triggers';
 import { SlackTriggerStaticConfigSchema } from './triggers/slack.trigger';
+import { RemindMeTool, RemindMeToolStaticConfigSchema } from './tools/remind_me.tool';
+import { DebugToolTrigger, DebugToolTriggerStaticConfigSchema } from './triggers/debugTool.trigger';
 import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
 import { MongoService } from './services/mongo.service';
 import { MemoryNode, MemoryNodeStaticConfigSchema } from './nodes/memory.node';
 import { MemoryConnectorNode, MemoryConnectorStaticConfigSchema } from './nodes/memory.connector.node';
-import { MemoryReadTool, MemoryReadToolStaticConfigSchema } from './tools/memory/memory_read.tool';
-import { MemoryListTool, MemoryListToolStaticConfigSchema } from './tools/memory/memory_list.tool';
-import { MemoryAppendTool, MemoryAppendToolStaticConfigSchema } from './tools/memory/memory_append.tool';
-import { MemoryUpdateTool, MemoryUpdateToolStaticConfigSchema } from './tools/memory/memory_update.tool';
-import { MemoryDeleteTool, MemoryDeleteToolStaticConfigSchema } from './tools/memory/memory_delete.tool';
-import { MemoryDumpTool, MemoryDumpToolStaticConfigSchema } from './tools/memory/memory_dump.tool';
-import { DebugToolTrigger, DebugToolTriggerStaticConfigSchema } from './triggers/debugTool.trigger';
-import { RemindMeTool, RemindMeToolStaticConfigSchema } from './tools/remind_me.tool';
+// Unified Memory tool
+import { UnifiedMemoryTool, UnifiedMemoryToolStaticConfigSchema } from './tools/memory/memory.tool';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
@@ -222,72 +218,16 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           staticConfigSchema: toJSONSchema(SimpleAgentStaticConfigSchema),
         },
       )
-      // Register memory tools individually so they appear as Tool nodes and can be wired to agent.tools
+      // Register a single unified Memory tool
       .register(
-        'memory_read',
-        () => new MemoryReadTool(logger),
+        'memoryTool',
+        () => new UnifiedMemoryTool(logger),
         { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
         {
-          title: 'Memory Read',
+          title: 'Memory Tool',
           kind: 'tool',
           capabilities: {},
-          staticConfigSchema: toJSONSchema(MemoryReadToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'memory_list',
-        () => new MemoryListTool(logger),
-        { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
-        {
-          title: 'Memory List',
-          kind: 'tool',
-          capabilities: {},
-          staticConfigSchema: toJSONSchema(MemoryListToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'memory_append',
-        () => new MemoryAppendTool(logger),
-        { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
-        {
-          title: 'Memory Append',
-          kind: 'tool',
-          capabilities: {},
-          staticConfigSchema: toJSONSchema(MemoryAppendToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'memory_update',
-        () => new MemoryUpdateTool(logger),
-        { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
-        {
-          title: 'Memory Update',
-          kind: 'tool',
-          capabilities: {},
-          staticConfigSchema: toJSONSchema(MemoryUpdateToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'memory_delete',
-        () => new MemoryDeleteTool(logger),
-        { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
-        {
-          title: 'Memory Delete',
-          kind: 'tool',
-          capabilities: {},
-          staticConfigSchema: toJSONSchema(MemoryDeleteToolStaticConfigSchema),
-        },
-      )
-      // TEMPORARY diagnostic tool to introspect memory structure without content.
-      .register(
-        'memory_dump',
-        () => new MemoryDumpTool(logger),
-        { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
-        {
-          title: 'Memory Dump (TEMP)',
-          kind: 'tool',
-          capabilities: {},
-          staticConfigSchema: toJSONSchema(MemoryDumpToolStaticConfigSchema),
+          staticConfigSchema: toJSONSchema(UnifiedMemoryToolStaticConfigSchema),
         },
       )
       .register(

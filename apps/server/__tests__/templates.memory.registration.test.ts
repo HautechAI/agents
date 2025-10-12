@@ -54,16 +54,14 @@ describe('templates: memory registration and agent memory port', () => {
     const memConnTargets = ports.memoryConnector.targetPorts!;
     expect(memConnTargets.$memory).toBeTruthy();
 
-    // Individual memory tool nodes exist and can wire to agent.tools
-    const toolNames = ['memory_read','memory_list','memory_append','memory_update','memory_delete'];
-    for (const t of toolNames) {
-      const entry = schema.find((s) => s.name === t);
-      expect(entry?.kind).toBe('tool');
-      const p = (ports as any)[t];
-      expect(p).toBeTruthy();
-      expect(p.targetPorts.$memory).toBeTruthy();
-      expect(p.targetPorts.$self).toBeTruthy();
-    }
+    // Unified memory tool node exists and can wire to agent.tools (template key stays 'memoryTool')
+    const t = 'memoryTool';
+    const entry = schema.find((s) => s.name === t);
+    expect(entry?.kind).toBe('tool');
+    const p = (ports as any)[t];
+    expect(p).toBeTruthy();
+    expect(p.targetPorts.$memory).toBeTruthy();
+    expect(p.targetPorts.$self).toBeTruthy();
 
     const agentTargets = ports.simpleAgent.targetPorts!;
     expect(agentTargets.memory).toBeTruthy();

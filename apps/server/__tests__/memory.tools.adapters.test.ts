@@ -1,11 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Db } from 'mongodb';
 import { MemoryService, type MemoryDoc } from '../src/services/memory.service';
-import { MemoryReadTool } from '../src/tools/memory/memory_read.tool';
-import { MemoryListTool } from '../src/tools/memory/memory_list.tool';
-import { MemoryAppendTool } from '../src/tools/memory/memory_append.tool';
-import { MemoryUpdateTool } from '../src/tools/memory/memory_update.tool';
-import { MemoryDeleteTool } from '../src/tools/memory/memory_delete.tool';
+import { UnifiedMemoryTool } from '../src/tools/memory/memory.tool';
 import { LoggerService } from '../src/services/logger.service';
 
 // In-memory fake Db compatible with MemoryService for deterministic tests
@@ -68,33 +64,79 @@ describe('Memory tool adapters', () => {
     const serviceFactory = (opts: { threadId?: string }) => new MemoryService(db, 'nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId);
     const logger = new LoggerService();
     const mk = (t: any) => { t.setMemorySource(serviceFactory); return t; };
-    const adapters = [
-      mk(new MemoryAppendTool(logger)),
-      mk(new MemoryDeleteTool(logger)),
-      mk(new MemoryListTool(logger)),
-      mk(new MemoryReadTool(logger)),
-      mk(new MemoryUpdateTool(logger)),
-    ];
-    const names = adapters.map((a) => a.init().name).sort();
-    expect(names).toEqual(['memory_append','memory_delete','memory_list','memory_read','memory_update']);
+    const adapter = mk(new UnifiedMemoryTool(logger));
+    const name = adapter.init().name;
+    expect(name).toBe('memory');
 
     const config = { configurable: { thread_id: 'T1' } } as any;
-    const append = adapters.find((a) => a.init().name === 'memory_append')!.init();
-    await append.invoke({ path: '/a/x', data: 'one' }, config);
+    const unified = adapter.init();
+    await unified.invoke({ path: '/a/x', command: 'append', content: 'one' }, config);
 
-    const read = adapters.find((a) => a.init().name === 'memory_read')!.init();
-    expect(await read.invoke({ path: '/a/x' }, config)).toBe('one');
+    const readRes = JSON.parse(await unified.invoke({ path: '/a/x', command: 'read' }, config) as any);
+    expect(readRes.ok).toBe(true);
+    expect(readRes.result.content).toBe('one');
 
-    const update = adapters.find((a) => a.init().name === 'memory_update')!.init();
-    const count = await update.invoke({ path: '/a/x', old_data: 'one', new_data: 'two' }, config);
-    expect(count).toBe(1);
+    const upd = JSON.parse(await unified.invoke({ path: '/a/x', command: 'update', oldContent: 'one', content: 'two' }, config) as any);
+    expect(upd.result.replaced).toBe(1);
 
-    const list = adapters.find((a) => a.init().name === 'memory_list')!.init();
-    const listing = JSON.parse(await list.invoke({ path: '/' }, config));
-    expect(Array.isArray(listing)).toBe(true);
+    const listRes = JSON.parse(await unified.invoke({ path: '/', command: 'list' }, config) as any);
+    expect(Array.isArray(listRes.result.entries)).toBe(true);
 
-    const del = adapters.find((a) => a.init().name === 'memory_delete')!.init();
-    const delRes = JSON.parse(await del.invoke({ path: '/a' }, config));
-    expect(delRes.files).toBe(1);
+    const delRes = JSON.parse(await unified.invoke({ path: '/a', command: 'delete' }, config) as any);
+    expect(delRes.result.files).toBe(1);
+  });
+
+  it('negative cases: ENOENT, EISDIR, EINVAL, ENOTMEM, list empty path', async () => {
+    const db = new FakeDb() as unknown as Db;
+    const serviceFactory = (opts: { threadId?: string }) => new MemoryService(db, 'nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId);
+    const logger = new LoggerService();
+
+    // ENOTMEM: do not wire memory
+    const unconnected = new UnifiedMemoryTool(logger).init();
+    const enotmem = JSON.parse((await unconnected.invoke({ path: '/x', command: 'read' }, { configurable: { thread_id: 'T1' } } as any)) as any);
+    expect(enotmem.ok).toBe(false);
+    expect(enotmem.error.code).toBe('ENOTMEM');
+
+    // Properly wired instance
+    const wired = new UnifiedMemoryTool(logger); wired.setMemorySource(serviceFactory); const tool = wired.init();
+    const cfg = { configurable: { thread_id: 'T1' } } as any;
+
+    // ENOENT on read
+    const enoentRead = JSON.parse((await tool.invoke({ path: '/missing', command: 'read' }, cfg)) as any);
+    expect(enoentRead.ok).toBe(false);
+    expect(enoentRead.error.code).toBe('ENOENT');
+
+    // ENOENT on update when file does not exist
+    const enoentUpdate = JSON.parse((await tool.invoke({ path: '/missing', command: 'update', oldContent: 'x', content: 'y' }, cfg)) as any);
+    expect(enoentUpdate.ok).toBe(false);
+    expect(enoentUpdate.error.code).toBe('ENOENT');
+
+    // Prepare a dir and file
+    await tool.invoke({ path: 'dir/file', command: 'append', content: 'v' }, cfg);
+
+    // EISDIR on append/update at dir
+    const eisdirAppend = JSON.parse((await tool.invoke({ path: '/dir', command: 'append', content: 'x' }, cfg)) as any);
+    expect(eisdirAppend.ok).toBe(false);
+    expect(eisdirAppend.error.code).toBe('EISDIR');
+
+    const eisdirUpdate = JSON.parse((await tool.invoke({ path: '/dir', command: 'update', oldContent: 'a', content: 'b' }, cfg)) as any);
+    expect(eisdirUpdate.ok).toBe(false);
+    expect(eisdirUpdate.error.code).toBe('EISDIR');
+
+    // EINVAL: missing content/oldContent and unknown command
+    const einvalAppend = JSON.parse((await tool.invoke({ path: '/dir/file', command: 'append' } as any, cfg)) as any);
+    expect(einvalAppend.ok).toBe(false);
+    expect(einvalAppend.error.code).toBe('EINVAL');
+    const einvalUpdate = JSON.parse((await tool.invoke({ path: '/dir/file', command: 'update', oldContent: 'x' } as any, cfg)) as any);
+    expect(einvalUpdate.ok).toBe(false);
+    expect(einvalUpdate.error.code).toBe('EINVAL');
+    const unknownCmd = JSON.parse((await tool.invoke({ path: '/dir/file', command: 'unknown' } as any, cfg)) as any);
+    expect(unknownCmd.ok).toBe(false);
+    expect(unknownCmd.error.code).toBe('EINVAL');
+
+    // list with empty path
+    const listRoot = JSON.parse((await tool.invoke({ path: '', command: 'list' } as any, cfg)) as any);
+    expect(listRoot.ok).toBe(true);
+    expect(Array.isArray(listRoot.result.entries)).toBe(true);
   });
 });

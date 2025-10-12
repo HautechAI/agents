@@ -1,38 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { toJSONSchema } from 'zod';
-import { MemoryAppendToolStaticConfigSchema } from '../../src/tools/memory/memory_append.tool';
-import { MemoryDeleteToolStaticConfigSchema } from '../../src/tools/memory/memory_delete.tool';
-import { MemoryListToolStaticConfigSchema } from '../../src/tools/memory/memory_list.tool';
-import { MemoryReadToolStaticConfigSchema } from '../../src/tools/memory/memory_read.tool';
-import { MemoryUpdateToolStaticConfigSchema } from '../../src/tools/memory/memory_update.tool';
+import { UnifiedMemoryToolStaticConfigSchema } from '../../src/tools/memory/memory.tool';
 
 // Ensure that converting tool schemas to JSON Schema does not throw and produces expected keys
 
-describe('memory tool schemas: toJSONSchema', () => {
-  it('memory_append', () => {
-    const js = toJSONSchema(MemoryAppendToolStaticConfigSchema) as any;
+describe('Unified memory tool schema: toJSONSchema', () => {
+  it('memory', () => {
+    const js = toJSONSchema(UnifiedMemoryToolStaticConfigSchema) as any;
     expect(js.type).toBe('object');
-    expect(Object.keys(js.properties)).toEqual(expect.arrayContaining(['path','data']));
+    expect(Object.keys(js.properties)).toEqual(expect.arrayContaining(['path','command']));
+    const enumVals = js.properties.command.enum || js.properties.command.anyOf?.flatMap((x: any) => x.enum ?? []);
+    expect(enumVals).toEqual(expect.arrayContaining(['read','list','append','update','delete']));
   });
-  it('memory_delete', () => {
-    const js = toJSONSchema(MemoryDeleteToolStaticConfigSchema) as any;
-    expect(js.type).toBe('object');
-    expect(Object.keys(js.properties)).toEqual(expect.arrayContaining(['path']));
-  });
-  it('memory_list', () => {
-    const js = toJSONSchema(MemoryListToolStaticConfigSchema) as any;
-    expect(js.type).toBe('object');
-    // path optional
-    expect(js.properties.path.type).toBe('string');
-  });
-  it('memory_read', () => {
-    const js = toJSONSchema(MemoryReadToolStaticConfigSchema) as any;
-    expect(js.type).toBe('object');
-    expect(Object.keys(js.properties)).toEqual(expect.arrayContaining(['path']));
-  });
-  it('memory_update', () => {
-    const js = toJSONSchema(MemoryUpdateToolStaticConfigSchema) as any;
-    expect(js.type).toBe('object');
-    expect(Object.keys(js.properties)).toEqual(expect.arrayContaining(['path','old_data','new_data']));
+  
+  it('runtime parsing: invalid combos return EINVAL envelope upstream (validate via safeParse here)', () => {
+    // JSON Schema cannot express conditional requirements easily; ensure base keys exist
+    const valid = UnifiedMemoryToolStaticConfigSchema.safeParse({ path: '/a', command: 'read' });
+    expect(valid.success).toBe(true);
+    const missingCmd = UnifiedMemoryToolStaticConfigSchema.safeParse({ path: '/a' } as any);
+    expect(missingCmd.success).toBe(false);
+    const missingPath = UnifiedMemoryToolStaticConfigSchema.safeParse({ command: 'read' } as any);
+    expect(missingPath.success).toBe(false);
   });
 });
