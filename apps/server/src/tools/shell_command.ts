@@ -33,7 +33,11 @@ const EnvItemSchema = z
   .describe('Environment variable entry. When source=vault, value is "<MOUNT>/<PATH>/<KEY>".');
 export const ShellToolStaticConfigSchema = z
   .object({
-    env: z.array(EnvItemSchema).optional().describe('Environment overlay (static or Vault-backed refs).'),
+    env: z
+      .array(EnvItemSchema)
+      .optional()
+      .describe('Environment variables (static or vault references).')
+      .meta({ 'ui:field': 'ReferenceEnvField' }),
     workdir: z.string().optional().describe('Working directory to use for each exec.'),
   })
   .strict();

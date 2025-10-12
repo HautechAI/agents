@@ -28,7 +28,8 @@ export const LocalMcpServerStaticConfigSchema = z.object({
   env: z
     .array(EnvItemSchema)
     .optional()
-    .describe('Environment variables overlay for MCP execs (supports Vault).'),
+    .describe('Environment variables (static or vault references).')
+    .meta({ 'ui:field': 'ReferenceEnvField' }),
   requestTimeoutMs: z.number().int().positive().optional().describe('Per-request timeout in ms.'),
   startupTimeoutMs: z.number().int().positive().optional().describe('Startup handshake timeout in ms.'),
   heartbeatIntervalMs: z.number().int().positive().optional().describe('Interval for heartbeat pings in ms.'),
