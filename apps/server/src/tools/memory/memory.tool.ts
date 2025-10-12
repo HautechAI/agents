@@ -7,7 +7,8 @@ import { LoggerService } from '../../services/logger.service';
 export const UnifiedMemoryToolStaticConfigSchema = z
   .object({
     path: z.string().describe('Absolute or relative path; normalized at runtime'),
-    command: z.enum(['read', 'list', 'append', 'update', 'delete']).describe('Memory command to execute'),
+    // Allow unknown commands to pass pre-validation so tool can return EINVAL envelope
+    command: z.union([z.enum(['read', 'list', 'append', 'update', 'delete']), z.string()]).describe('Memory command to execute'),
     content: z.string().optional().describe('Content for append or update (new content)'),
     oldContent: z.string().optional().describe('Old content to replace for update'),
   })

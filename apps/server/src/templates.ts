@@ -15,6 +15,8 @@ import { SendSlackMessageTool, SendSlackMessageToolStaticConfigSchema } from './
 import { ShellTool, ShellToolStaticConfigSchema } from './tools/shell_command';
 import { SlackTrigger } from './triggers';
 import { SlackTriggerStaticConfigSchema } from './triggers/slack.trigger';
+import { RemindMeTool, RemindMeToolStaticConfigSchema } from './tools/remind_me.tool';
+import { DebugToolTrigger, DebugToolTriggerStaticConfigSchema } from './triggers/debugTool.trigger';
 import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
 import { MongoService } from './services/mongo.service';
