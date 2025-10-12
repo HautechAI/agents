@@ -69,4 +69,4 @@ describe('runningStore transitions', () => {
     expect(result.current).toBe(N - 1);
   });
 });
-
+/* @vitest-environment jsdom */
