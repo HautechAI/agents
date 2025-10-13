@@ -91,6 +91,73 @@ export async function createServer(db: Db, opts: { logger?: boolean } = {}): Pro
   await logs.createIndex({ traceId: 1, spanId: 1, ts: -1 });
   await logs.createIndex({ ts: -1 });
 
+  // Heartbeat sweeper configuration (env-driven with defaults)
+  const STALE_TTL_MS = (() => {
+    const v = Number(process.env.OBS_STALE_TTL_MS);
+    return Number.isFinite(v) && v > 0 ? v : 5 * 60 * 1000; // default 5 minutes
+  })();
+  const SWEEP_INTERVAL_MS = (() => {
+    const v = Number(process.env.OBS_SWEEP_INTERVAL_MS);
+    return Number.isFinite(v) && v > 0 ? v : 60 * 1000; // default 60s
+  })();
+  const RECONCILE_ON_START = (() => {
+    const env = (process.env.OBS_RECONCILE_ON_START || 'true').toLowerCase();
+    return env === '1' || env === 'true' || env === 'yes';
+  })();
+
+  // Sweeper function: cancels stale running spans (no heartbeat within TTL)
+  const runSweep = async (reason: 'periodic' | 'startup') => {
+    const cutoff = new Date(Date.now() - STALE_TTL_MS).toISOString();
+    const nowIso = new Date().toISOString();
+    const filter: Filter<SpanDoc> = {
+      completed: false,
+      lastUpdate: { $lt: cutoff },
+    } as any;
+    // Rely on partial index { completed: 1, lastUpdate: -1 } for efficiency
+    const update: UpdateFilter<SpanDoc> = {
+      $set: {
+        completed: true,
+        status: 'cancelled',
+        endTime: nowIso,
+        updatedAt: nowIso,
+        lastUpdate: nowIso,
+      },
+      $push: { events: { ts: nowIso, name: 'terminated', attrs: { reason: 'stale_no_heartbeat', by: reason } } },
+    } as any;
+    try {
+      const res = await spans.updateMany(filter, update);
+      if (res.modifiedCount) {
+        fastify.log.warn({ modified: res.modifiedCount, since: STALE_TTL_MS }, 'sweeper cancelled stale spans');
+        // Emit realtime updates for affected spans (best-effort)
+        if (spanIo) {
+          try {
+            const changed = await spans
+              .find({ status: 'cancelled', endTime: nowIso } as any)
+              .limit(5000)
+              .toArray();
+            for (const d of changed) spanIo.emit('span_upsert', d);
+          } catch {}
+        }
+      }
+    } catch (err) {
+      fastify.log.error({ err }, 'sweeper failed');
+    }
+  };
+
+  // Startup reconciliation (optional)
+  if (RECONCILE_ON_START) {
+    // Do not await to avoid blocking server start; but log outcome
+    runSweep('startup').catch(() => {});
+  }
+
+  // Periodic sweeper
+  const sweepTimer = setInterval(() => {
+    runSweep('periodic').catch(() => {});
+  }, SWEEP_INTERVAL_MS);
+  fastify.addHook('onClose', async () => {
+    clearInterval(sweepTimer);
+  });
+
   fastify.get('/healthz', async () => ({ ok: true }));
   fastify.get('/readyz', async () => {
     await db.command({ ping: 1 });

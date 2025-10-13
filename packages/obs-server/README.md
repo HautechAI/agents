@@ -16,6 +16,21 @@ Endpoints:
 - POST /v1/traces (Stage 1 JSON placeholder)
 - /healthz, /readyz
 
+Heartbeat + Sweeper
+- SDK sends heartbeats by POSTing state='updated' to /v1/spans/upsert periodically per running span.
+- Server maintains a sweeper that marks spans cancelled when no heartbeat is seen for a TTL.
+- On completion/error, SDK sends state='completed' which stops the heartbeat and the sweeper skips it.
+
+Configuration (env)
+- OBS_STALE_TTL_MS: how long a span may go without a heartbeat before being cancelled. Default 5 minutes.
+- OBS_SWEEP_INTERVAL_MS: how often the sweeper runs. Default 60 seconds.
+- OBS_RECONCILE_ON_START: whether to run a one-time sweep at startup. Default true.
+
+Sweeper behavior
+- Predicate: { completed: false, lastUpdate: { $lt: now - OBS_STALE_TTL_MS } }.
+- Update: set completed=true, status='cancelled', endTime=now; push event { name:'terminated', attrs:{ reason:'stale_no_heartbeat' } }.
+- Indexes: { completed: 1, lastUpdate: -1 } (partial on completed=false) ensures efficient query; created on startup.
+
 Spans query limits:
 - Default limit: 50
 - Max limit: 5000 (increased from 100 for large traces / development). Use responsibly: large payloads can impact UI performance and network time. Prefer pagination for extremely large datasets.
