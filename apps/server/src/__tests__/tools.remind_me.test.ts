@@ -52,6 +52,32 @@ describe('RemindMeTool', () => {
     ]);
   });
 
+  it('registry tracks active reminders until fired', async () => {
+    const logger = new LoggerService();
+    const tool = new RemindMeTool(logger);
+    const dyn = tool.init();
+    const invokeSpy = vi.fn(async () => undefined);
+    const caller_agent: CallerAgentStub = { invoke: invokeSpy };
+    const cfg = { configurable: { thread_id: 't-reg', caller_agent } };
+
+    // schedule two timers
+    await dyn.invoke({ delayMs: 1000, note: 'A' }, cfg);
+    await dyn.invoke({ delayMs: 2000, note: 'B' }, cfg);
+
+    // tool exposes getActiveReminders via instance
+    const active1 = (tool as any).getActiveReminders() as any[];
+    expect(active1.length).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const active2 = (tool as any).getActiveReminders() as any[];
+    expect(active2.length).toBe(1);
+    expect(active2[0].note).toBe('B');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const active3 = (tool as any).getActiveReminders() as any[];
+    expect(active3.length).toBe(0);
+  });
+
   it('schedules immediate reminder when delayMs=0', async () => {
     const tool = getToolInstance();
     const invokeSpy = vi.fn(async () => undefined);

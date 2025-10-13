@@ -10,9 +10,19 @@ interface CallerAgentLike {
   invoke(thread: string, messages: Array<{ kind: 'system' | 'human'; content: string; info: Record<string, unknown> }>): Promise<unknown>;
 }
 
+export type ActiveReminder = { id: string; threadId: string; note: string; at: string };
+
 export class RemindMeTool extends BaseTool {
+  // In-memory registry of scheduled (not-yet-fired) reminders
+  private active: Map<string, { timer: ReturnType<typeof setTimeout>; reminder: ActiveReminder }> = new Map();
+
   constructor(private logger: LoggerService) {
     super();
+  }
+
+  // Expose active reminders for UI via HTTP route
+  getActiveReminders(): ActiveReminder[] {
+    return Array.from(this.active.values()).map((v) => v.reminder);
   }
 
   init(): DynamicStructuredTool {
@@ -45,8 +55,10 @@ export class RemindMeTool extends BaseTool {
           return msg;
         }
 
-        // Schedule async reminder; do not await or reject the original call.
-        setTimeout(async () => {
+        // Schedule async reminder; track in in-memory registry until fired.
+        const eta = new Date(Date.now() + delayMs).toISOString();
+        const id = `${threadId}:${Math.random().toString(36).slice(2)}`;
+        const timer = setTimeout(async () => {
           try {
             await callerAgent.invoke(threadId, [
               { kind: 'system', content: note, info: { reason: 'reminded' } },
@@ -55,9 +67,13 @@ export class RemindMeTool extends BaseTool {
             const err = e instanceof Error ? e : new Error(typeof e === 'string' ? e : 'Unknown error');
             this.logger.error('RemindMeTool scheduled invoke error', err);
           }
+          // Remove from registry after firing (success or failure)
+          this.active.delete(id);
         }, delayMs);
 
-        const eta = new Date(Date.now() + delayMs).toISOString();
+        // Add to registry immediately
+        this.active.set(id, { timer, reminder: { id, threadId, note, at: eta } });
+
         return { status: 'scheduled', etaMs: delayMs, at: eta };
       },
       {

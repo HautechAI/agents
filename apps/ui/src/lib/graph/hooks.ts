@@ -14,6 +14,7 @@ export function useTemplates() {
 }
 
 import { notifyError } from '../notify';
+import { useQuery } from '@tanstack/react-query';
 
 export function useNodeStatus(nodeId: string) {
   const qc = useQueryClient();
@@ -45,6 +46,16 @@ export function useNodeStatus(nodeId: string) {
   }, [nodeId, qc]);
 
   return q;
+}
+
+// Reminders polling hook for RemindMe tool nodes
+export function useNodeReminders(nodeId: string) {
+  return useQuery({
+    queryKey: ['graph', 'node', nodeId, 'reminders'],
+    queryFn: () => api.getNodeReminders(nodeId),
+    refetchInterval: 3500,
+    staleTime: 2000,
+  });
 }
 
 export function useNodeAction(nodeId: string) {
