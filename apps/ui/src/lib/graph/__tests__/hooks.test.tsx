@@ -59,4 +59,13 @@ describe('graph hooks', () => {
     expect(result.current.data?.items?.length).toBe(1);
     expect(result.current.data?.items?.[0]?.note).toBe('n');
   });
+
+  it('useNodeReminders disabled when flag false', async () => {
+    const qc = new QueryClient();
+    const wrapper = ({ children }: any) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useNodeReminders('n1', false), { wrapper });
+    // No data fetched since disabled
+    expect(result.current.isPaused).toBeFalsy();
+    expect(result.current.data).toBeUndefined();
+  });
 });

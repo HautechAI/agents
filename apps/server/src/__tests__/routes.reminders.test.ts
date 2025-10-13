@@ -45,5 +45,15 @@ describe('GET /graph/nodes/:nodeId/reminders', () => {
     expect(res.statusCode).toBe(404);
     await fastify.close();
   });
-});
 
+  it('404 when node exists but is not RemindMe', async () => {
+    const fastify = Fastify({ logger: false });
+    const logger = new LoggerService();
+    const runtime = { getNodeInstance: (_: string) => ({}) } as any;
+    registerRemindersRoute(fastify as any, runtime, logger);
+    const res = await fastify.inject({ method: 'GET', url: '/graph/nodes/n/reminders' });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toHaveProperty('error', 'not_remindme_node');
+    await fastify.close();
+  });
+});

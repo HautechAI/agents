@@ -20,7 +20,7 @@ function TemplateNodeComponent({ id, data }: NodeProps<BuilderNodeData>) {
   const displayTitle = getDisplayTitle(templates, data.template, data.config);
   const kind = getKind(templates, data.template);
   const runningCount = useRunningCount(id, kind === 'agent' || kind === 'tool' ? (kind as 'agent' | 'tool') : undefined);
-  const reminders = useNodeReminders(id);
+  const reminders = useNodeReminders(id, data.template === 'remindMeTool');
   const reminderCount = reminders.data?.items?.length || 0;
 
   return (
@@ -37,7 +37,11 @@ function TemplateNodeComponent({ id, data }: NodeProps<BuilderNodeData>) {
         ) : null}
         {/* Reminders badge specific to Remind Me tool */}
         {data.template === 'remindMeTool' && reminderCount > 0 ? (
-          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none bg-amber-100 text-amber-800 border border-amber-200">
+          <span
+            aria-label={`Active reminders: ${reminderCount}`}
+            title={`Active reminders: ${reminderCount}`}
+            className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none bg-amber-100 text-amber-900 border border-amber-300"
+          >
             {reminderCount}
           </span>
         ) : null}

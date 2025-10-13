@@ -2,6 +2,7 @@ import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { BaseTool } from './base.tool';
 import { LoggerService } from '../services/logger.service';
+import { v4 as uuidv4 } from 'uuid';
 
 const remindMeSchema = z.object({ delayMs: z.number().int().min(0), note: z.string().min(1) });
 
@@ -15,6 +16,8 @@ export type ActiveReminder = { id: string; threadId: string; note: string; at: s
 export class RemindMeTool extends BaseTool {
   // In-memory registry of scheduled (not-yet-fired) reminders
   private active: Map<string, { timer: ReturnType<typeof setTimeout>; reminder: ActiveReminder }> = new Map();
+  private destroyed = false;
+  private maxActive = 1000; // soft cap on simultaneously scheduled reminders
 
   constructor(private logger: LoggerService) {
     super();
@@ -23,6 +26,15 @@ export class RemindMeTool extends BaseTool {
   // Expose active reminders for UI via HTTP route
   getActiveReminders(): ActiveReminder[] {
     return Array.from(this.active.values()).map((v) => v.reminder);
+  }
+
+  // Teardown: cancel timers and clear registry
+  async destroy(): Promise<void> {
+    this.destroyed = true;
+    for (const [id, rec] of Array.from(this.active.entries())) {
+      try { clearTimeout(rec.timer); } catch {}
+      this.active.delete(id);
+    }
   }
 
   init(): DynamicStructuredTool {
@@ -55,10 +67,28 @@ export class RemindMeTool extends BaseTool {
           return msg;
         }
 
+        // Enforce lifecycle and capacity
+        if (this.destroyed) {
+          const msg = 'RemindMeTool is destroyed; cannot schedule.';
+          this.logger.error(msg);
+          throw new Error(msg);
+        }
+        if (this.active.size >= this.maxActive) {
+          const msg = `Too many active reminders (max ${this.maxActive}).`;
+          this.logger.error(msg);
+          // Throw to mark tool call as error (ToolsNode maps exceptions to error ToolMessage)
+          throw new Error(msg);
+        }
+
         // Schedule async reminder; track in in-memory registry until fired.
         const eta = new Date(Date.now() + delayMs).toISOString();
-        const id = `${threadId}:${Math.random().toString(36).slice(2)}`;
+        const id = `${threadId}:${uuidv4()}`;
         const timer = setTimeout(async () => {
+          // If removed (e.g., via destroy), do nothing
+          const exists = this.active.has(id);
+          if (!exists) return;
+          // Remove first to avoid double-removal in race scenarios
+          this.active.delete(id);
           try {
             await callerAgent.invoke(threadId, [
               { kind: 'system', content: note, info: { reason: 'reminded' } },
@@ -67,8 +97,6 @@ export class RemindMeTool extends BaseTool {
             const err = e instanceof Error ? e : new Error(typeof e === 'string' ? e : 'Unknown error');
             this.logger.error('RemindMeTool scheduled invoke error', err);
           }
-          // Remove from registry after firing (success or failure)
-          this.active.delete(id);
         }, delayMs);
 
         // Add to registry immediately

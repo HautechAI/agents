@@ -19,4 +19,8 @@ Usage
 
 Notes
 - The registry is in-memory only; reminders disappear if the server restarts.
-- The reminder is removed from the registry when it fires (regardless of success).
+- The reminder is removed from the registry when it fires (regardless of success). On node disposal, all timers are cleared and registry is emptied.
+- Soft cap: a maximum of 1000 active reminders per RemindMe node is enforced. When exceeded, the tool call errors with message "Too many active reminders (max 1000)." and no timer is scheduled.
+- Error shapes for reminders endpoint:
+  - 404 `{ error: 'node_not_found' }` when node does not exist.
+  - 404 `{ error: 'not_remindme_node' }` when the node exists but is not a RemindMe tool.

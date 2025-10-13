@@ -13,9 +13,13 @@ export function registerRemindersRoute(fastify: FastifyInstance, runtime: LiveGr
     const { nodeId } = req.params as { nodeId: string };
     try {
       const inst = (runtime as any).getNodeInstance?.(nodeId) || (runtime as any)['getNodeInstance']?.(nodeId);
-      if (!inst || !isRemindMeTool(inst)) {
+      if (!inst) {
         reply.code(404);
-        return { error: 'node_not_found_or_not_remindme' };
+        return { error: 'node_not_found' };
+      }
+      if (!isRemindMeTool(inst)) {
+        reply.code(404);
+        return { error: 'not_remindme_node' };
       }
       const items: ActiveReminder[] = inst.getActiveReminders();
       return { items };
@@ -25,4 +29,3 @@ export function registerRemindersRoute(fastify: FastifyInstance, runtime: LiveGr
     }
   });
 }
-

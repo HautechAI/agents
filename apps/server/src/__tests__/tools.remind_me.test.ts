@@ -78,6 +78,34 @@ describe('RemindMeTool', () => {
     expect(active3.length).toBe(0);
   });
 
+  it('destroy cancels timers and clears registry', async () => {
+    const logger = new LoggerService();
+    const tool = new RemindMeTool(logger);
+    const dyn = tool.init();
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+    await dyn.invoke({ delayMs: 10_000, note: 'X' }, { configurable: { thread_id: 't', caller_agent } });
+    expect((tool as any).getActiveReminders().length).toBe(1);
+    await (tool as any).destroy();
+    expect((tool as any).getActiveReminders().length).toBe(0);
+    // advancing timers should not call invoke
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(caller_agent.invoke).not.toHaveBeenCalled();
+  });
+
+  it('enforces cap on active reminders', async () => {
+    const logger = new LoggerService();
+    const tool = new RemindMeTool(logger);
+    const dyn = tool.init();
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+
+    // monkey-patch maxActive for test visibility
+    (tool as any).maxActive = 1;
+    await dyn.invoke({ delayMs: 10_000, note: 'ok' }, { configurable: { thread_id: 't', caller_agent } });
+    await expect(
+      dyn.invoke({ delayMs: 10_000, note: 'nope' }, { configurable: { thread_id: 't', caller_agent } })
+    ).rejects.toThrow();
+  });
+
   it('schedules immediate reminder when delayMs=0', async () => {
     const tool = getToolInstance();
     const invokeSpy = vi.fn(async () => undefined);
