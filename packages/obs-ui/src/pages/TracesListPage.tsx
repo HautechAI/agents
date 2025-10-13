@@ -73,7 +73,8 @@ export function TracesListPage() {
               <td><Link to={`/trace/${t.traceId}`}>{t.traceId}</Link></td>
               <td>
                 {(() => {
-                  const threadId = (t.root?.threadId || (t.root?.attributes?.threadId as string | undefined));
+                  const attrThreadId = t.root?.attributes?.threadId;
+                  const threadId = t.root?.threadId ?? (typeof attrThreadId === 'string' ? attrThreadId : undefined);
                   if (!threadId) return '-';
                   const e3 = emojiHash3(threadId);
                   return (
