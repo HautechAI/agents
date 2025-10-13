@@ -11,6 +11,8 @@ init({
   mode: 'extended',
   endpoints: { extended: 'http://localhost:4319' },
   defaultAttributes: { service: 'demo' },
+  // Heartbeat every 60s by default; override here or via OBS_HEARTBEAT_MS
+  heartbeatMs: 60_000,
 });
 
 await withSpan({ label: 'demo' }, async () => {
@@ -87,3 +89,12 @@ await withToolCall({ name: 'work', input: {} }, async () => {
 ```
 
 Configuration: Works in `extended` mode. Ensure `init({ mode: 'extended', endpoints: { extended: 'http://localhost:4319' } })` is called. Logs POST to `/v1/logs` and are streamed as realtime `log` events on the socket.
+
+## Heartbeats
+
+- The SDK emits a per-span heartbeat while a span is running by POSTing `{ state: 'updated' }` to `/v1/spans/upsert`.
+- Interval defaults to 60s and can be configured via:
+  - Env: `OBS_HEARTBEAT_MS`
+  - `init({ heartbeatMs })`
+- Heartbeats stop automatically when the span completes or errors.
+ - Set `OBS_HEARTBEAT_MS=0` or `init({ heartbeatMs: 0 })` to disable heartbeats.

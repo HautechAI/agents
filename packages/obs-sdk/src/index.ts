@@ -10,6 +10,8 @@ export interface InitConfig {
     extended?: string; // base URL for extended server
     otlp?: string; // base URL for OTLP HTTP
   };
+  // Heartbeat interval in ms; set 0 to disable
+  heartbeatMs?: number;
   batching?: { maxBatchSize?: number; flushIntervalMs?: number };
   sampling?: { rate?: number };
   defaultAttributes?: Record<string, unknown>;
@@ -44,6 +46,7 @@ export interface LogInput {
 type InternalConfig = {
   mode: ObsMode;
   endpoints: { extended: string; otlp: string };
+  heartbeatMs: number;
   batching: { maxBatchSize: number; flushIntervalMs: number };
   sampling: { rate: number };
   defaultAttributes: Record<string, unknown>;
@@ -69,8 +72,22 @@ export function init(c: InitConfig) {
   const batching: InternalConfig['batching'] = { maxBatchSize: 50, flushIntervalMs: 1000, ...(c.batching || {}) };
   const sampling: InternalConfig['sampling'] = { rate: 1, ...(c.sampling || {}) };
   const endpoints: InternalConfig['endpoints'] = { extended: c.endpoints.extended || '', otlp: c.endpoints.otlp || '' };
+  const envHbRaw = process.env.OBS_HEARTBEAT_MS;
+  const envHbMs = envHbRaw !== undefined ? Number(envHbRaw) : undefined;
+  let heartbeatMs = envHbMs ?? c.heartbeatMs ?? 60_000; // default 60s
+  if (!Number.isFinite(heartbeatMs)) heartbeatMs = 60_000;
+  heartbeatMs = Math.max(0, heartbeatMs);
   const debug = c.debug ?? !!process.env.OBS_SDK_DEBUG;
-  config = { mode: c.mode, endpoints, batching, sampling, defaultAttributes: c.defaultAttributes || {}, retry, debug };
+  config = {
+    mode: c.mode,
+    endpoints,
+    heartbeatMs,
+    batching,
+    sampling,
+    defaultAttributes: c.defaultAttributes || {},
+    retry,
+    debug,
+  };
   // Initialize logger instance (idempotent); safe to re-init
   loggerInstance = createLogger();
   return config;
@@ -205,6 +222,28 @@ export async function withSpan<T>(
 
   return await new Promise<T>((resolve, reject) => {
     als.run(ctx, async () => {
+      // Per-span heartbeat (extended mode only)
+      let hbTimer: NodeJS.Timeout | undefined;
+      const startHeartbeat = () => {
+        if (cfg.mode !== 'extended') return;
+        const interval = Math.max(0, cfg.heartbeatMs || 0);
+        if (!interval) return;
+        const post = async () => {
+          try {
+            const updated = { state: 'updated', traceId, spanId } as const;
+            await retryingPost(cfg.endpoints.extended + '/v1/spans/upsert', updated, genId(8));
+          } catch {
+            // swallow - best effort
+          }
+        };
+        // Fire first heartbeat after the interval to avoid noisy immediate update
+        hbTimer = setInterval(post, interval);
+      };
+      const stopHeartbeat = () => {
+        if (hbTimer) clearInterval(hbTimer);
+        hbTimer = undefined;
+      };
+      startHeartbeat();
       try {
         const result = await fn();
         const endExtra = computeEndAttrs?.(result, undefined) || {};
@@ -274,6 +313,8 @@ export async function withSpan<T>(
           await retryingPost(cfg.endpoints.otlp + '/v1/traces', { spans: otlpLike }, genId(8)).catch(() => {});
         }
         reject(err);
+      } finally {
+        stopHeartbeat();
       }
     });
   });
