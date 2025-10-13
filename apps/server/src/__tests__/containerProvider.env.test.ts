@@ -1,6 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseVaultRef } from '../utils/refs';
 import { describe, it, expect, vi } from 'vitest';
+import { parseVaultRef } from '../utils/refs';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
 
 // Minimal fakes
