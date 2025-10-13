@@ -17,7 +17,7 @@ export class FinishTool extends BaseTool {
       {
         name: 'finish',
         description:
-          'Signal the current task is complete. Call this before ending when output is restricted.',
+          'finish marks the completion of the tool sequence without ending the conversation. It signals that the agent has completed all necessary actions for now and is waiting for further input (e.g., user message or reminder trigger).',
         schema: finishSchema,
       },
     );
