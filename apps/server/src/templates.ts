@@ -115,7 +115,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'sendSlackMessageTool',
-        () => new SendSlackMessageTool(vault, logger),
+        () => new SendSlackMessageTool(logger, vault),
         {
           targetPorts: { $self: { kind: 'instance' } },
         },

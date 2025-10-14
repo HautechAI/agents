@@ -45,4 +45,13 @@ describe('SlackTrigger events', () => {
     await trig.provision();
     expect((trig as any).client).toBeTruthy();
   });
+
+  it('fails when resolved app token has wrong prefix', async () => {
+    const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn() } as any;
+    const vault = { isEnabled: () => true, getSecret: vi.fn(async () => 'xoxb-wrong') } as any;
+    const trig = new SlackTrigger(logger, vault);
+    await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' } } as any);
+    await trig.provision();
+    expect(trig.getProvisionStatus().state).toBe('error');
+  });
 });

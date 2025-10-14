@@ -3,7 +3,8 @@ import { z } from "zod";
 import { BaseTool } from "./base.tool";
 import { LoggerService } from "../services/logger.service";
 import { VaultService } from '../services/vault.service';
-import { parseVaultRef, ReferenceFieldSchema } from '../utils/refs';
+import { ReferenceFieldSchema, normalizeTokenRef, resolveTokenRef } from '../utils/refs';
+import { parseVaultRef } from '../utils/refs';
 import { WebClient, type ChatPostMessageResponse, type ChatPostEphemeralResponse } from '@slack/web-api';
 
 const sendSlackMessageSchema = z.object({
@@ -54,8 +55,8 @@ export class SendSlackMessageTool extends BaseTool {
   private cfg: { bot_token: TokenRef; default_channel?: string } | null = null;
 
   constructor(
-    private vault: VaultService | undefined,
     logger: LoggerService,
+    private vault?: VaultService,
   ) {
     super(logger);
   }
@@ -105,24 +106,18 @@ export class SendSlackMessageTool extends BaseTool {
   async setConfig(_cfg: Record<string, unknown>): Promise<void> {
     // Validate and apply static config
     const parsed = SendSlackMessageToolStaticConfigSchema.parse(_cfg || {});
-    let bot: TokenRef;
-    if (typeof parsed.bot_token === 'string') {
-      bot = { value: parsed.bot_token, source: 'static' };
-    } else {
-      const src = parsed.bot_token.source || 'static';
-      const value = parsed.bot_token.value;
-      if (src === 'vault') {
-        if (!this.vault || !this.vault.isEnabled()) {
-          throw new Error('Vault is disabled but a vault reference was provided for bot_token');
-        }
-        // Validate reference format early
-        parseVaultRef(value);
-      } else {
-        if (!value?.startsWith('xoxb-')) {
-          throw new Error('Slack bot token must start with xoxb-');
-        }
+    const bot = normalizeTokenRef(parsed.bot_token as any);
+    // Early validation to keep fail-fast semantics
+    if ((bot.source || 'static') === 'vault') {
+      if (!this.vault || !this.vault.isEnabled()) {
+        throw new Error('Vault is disabled but a vault reference was provided for bot_token');
       }
-      bot = { value, source: src };
+      // Validate reference string format
+      parseVaultRef(bot.value);
+    } else {
+      if (!bot.value?.startsWith('xoxb-')) {
+        throw new Error('Slack bot token must start with xoxb-');
+      }
     }
     this.cfg = { bot_token: bot, default_channel: parsed.default_channel };
   }
@@ -132,16 +127,6 @@ export class SendSlackMessageTool extends BaseTool {
     const cfg = this.cfg;
     if (!cfg) throw new Error('SendSlackMessageTool not configured: bot_token is required');
     const t = cfg.bot_token;
-    if (t.source === 'vault') {
-      const vlt = this.vault;
-      if (!vlt || !vlt.isEnabled()) throw new Error('Vault is disabled but a vault reference was provided for bot_token');
-      const vr = parseVaultRef(t.value);
-      const secret = await vlt.getSecret(vr);
-      if (!secret) throw new Error('Vault secret for bot_token not found');
-      if (!secret.startsWith('xoxb-')) throw new Error('Resolved Slack bot token is invalid (must start with xoxb-)');
-      return secret;
-    }
-    if (!t.value.startsWith('xoxb-')) throw new Error('Slack bot token must start with xoxb-');
-    return t.value;
+    return resolveTokenRef(t, { expectedPrefix: 'xoxb-', fieldName: 'bot_token', vault: this.vault });
   }
 }
