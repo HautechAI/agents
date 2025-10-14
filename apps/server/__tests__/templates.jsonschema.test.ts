@@ -15,6 +15,9 @@ describe('template schemas: env ui:field', () => {
     expect(Object.prototype.hasOwnProperty.call(props, 'env')).toBe(true);
     const envSchema = props.env as JsonSchemaWithUi;
     expect(envSchema['ui:field']).toBe('ReferenceEnvField');
+    // Ensure timeouts are exposed
+    expect(Object.prototype.hasOwnProperty.call(props, 'executionTimeoutMs')).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(props, 'idleTimeoutMs')).toBe(true);
   });
 
   it('LocalMcpServerStaticConfigSchema.env includes ui:field ReferenceEnvField', () => {
