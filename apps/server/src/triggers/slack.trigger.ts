@@ -2,10 +2,32 @@ import { BaseTrigger, TriggerHumanMessage } from './base.trigger';
 import { LoggerService } from '../services/logger.service';
 import { z } from 'zod';
 import { SocketModeClient } from '@slack/socket-mode';
+import { VaultService } from '../services/vault.service';
+import { normalizeTokenRef, resolveTokenRef, ReferenceFieldSchema, parseVaultRef } from '../utils/refs';
 
-export const SlackTriggerStaticConfigSchema = z.object({
-  app_token: z.string().min(1).startsWith('xapp-', { message: 'Slack app-level token must start with xapp-' }).describe('Slack App-level token (xapp-...) for Socket Mode.'),
-}).strict();
+// Internal schema: accept either plain string or ReferenceField
+export const SlackTriggerStaticConfigSchema = z
+  .object({
+    app_token: z.union([
+      z
+        .string()
+        .min(1)
+        .startsWith('xapp-', { message: 'Slack app-level token must start with xapp-' })
+        .describe('Slack App-level token (xapp-...) for Socket Mode.'),
+      ReferenceFieldSchema,
+    ]),
+  })
+  .strict();
+
+// Exposed UI schema: always show as ReferenceField with help
+export const SlackTriggerExposedStaticConfigSchema = z
+  .object({
+    app_token: ReferenceFieldSchema.meta({
+      'ui:field': 'ReferenceField',
+      'ui:help': 'Use "vault" to reference a secret as mount/path/key.',
+    }),
+  })
+  .strict();
 
 /**
  * SlackTrigger
@@ -14,24 +36,45 @@ export const SlackTriggerStaticConfigSchema = z.object({
  */
 export class SlackTrigger extends BaseTrigger {
   private logger: LoggerService;
-  private cfg: z.infer<typeof SlackTriggerStaticConfigSchema> | null = null;
+  private cfg: { app_token: { value: string; source?: 'static' | 'vault' } } | null = null;
   private client: SocketModeClient | null = null;
+  private vault?: VaultService;
 
-  constructor(logger: LoggerService) {
+  constructor(logger: LoggerService, vault?: VaultService) {
     super();
     this.logger = logger;
+    this.vault = vault;
   }
 
   async setConfig(cfg: Record<string, unknown>): Promise<void> {
     const parsed = SlackTriggerStaticConfigSchema.parse(cfg || {});
-    this.cfg = parsed;
+    // Normalize to { value, source }
+    const appToken = normalizeTokenRef(parsed.app_token as any);
+    // Early validation: keep fail-fast semantics
+    if ((appToken.source || 'static') === 'vault') {
+      if (!this.vault || !this.vault.isEnabled()) {
+        throw new Error('Vault is disabled but a vault reference was provided for app_token');
+      }
+      parseVaultRef(appToken.value);
+    } else {
+      if (!appToken.value?.startsWith('xapp-')) {
+        throw new Error('Slack app-level token must start with xapp-');
+      }
+    }
+    this.cfg = { app_token: appToken };
   }
 
-  private ensureClient(): SocketModeClient {
-    if (this.client) return this.client;
+  private async resolveAppToken(): Promise<string> {
     const cfg = this.cfg;
     if (!cfg) throw new Error('SlackTrigger not configured: app_token is required');
-    const client = new SocketModeClient({ appToken: cfg.app_token, logLevel: undefined });
+    const t = cfg.app_token;
+    return resolveTokenRef(t, { expectedPrefix: 'xapp-', fieldName: 'app_token', vault: this.vault });
+  }
+
+  private async ensureClient(): Promise<SocketModeClient> {
+    if (this.client) return this.client;
+    const appToken = await this.resolveAppToken();
+    const client = new SocketModeClient({ appToken, logLevel: undefined });
 
     type SlackMessageEvent = {
       type: 'message';
@@ -98,7 +141,7 @@ export class SlackTrigger extends BaseTrigger {
   }
 
   protected async doProvision(): Promise<void> {
-    const client = this.ensureClient();
+    const client = await this.ensureClient();
     this.logger.info('Starting SlackTrigger (socket mode)');
     await client.start();
     this.logger.info('SlackTrigger started');
