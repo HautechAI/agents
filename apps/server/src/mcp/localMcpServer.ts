@@ -311,6 +311,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
 
     // Get thread-specific container
     const container = await this.containerProvider.provide(threadId);
+    // Touch last-used when starting a tool call (defensive; provider already updates on provide)
+    try { await this.containerService.touchLastUsed(container.id); } catch {}
     const containerId = container.id;
 
     const cfg = this.cfg!;
@@ -321,6 +323,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
 
     let transport: DockerExecTransport | undefined;
     let client: Client | undefined;
+    let hbTimer: NodeJS.Timeout | undefined;
 
     try {
       // Create transport and client for this tool call
@@ -359,6 +362,11 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
 
       client = new Client({ name: `local-agent-${threadId}`, version: '0.1.0' });
       await client.connect(transport, { timeout: cfg.startupTimeoutMs ?? 15000 });
+      // Heartbeat: keep last_used_at fresh during the session
+      const hbInterval = Math.max(60_000, (cfg.heartbeatIntervalMs ?? 300_000));
+      hbTimer = setInterval(() => {
+        this.containerService.touchLastUsed(containerId).catch(() => {});
+      }, hbInterval);
 
       // Call the tool
       const result = await client.callTool({ name, arguments: args }, undefined, {
@@ -405,6 +413,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
           this.logger.error(`[MCP:${this.namespace}] Error closing transport after tool call`, e);
         }
       }
+      if (hbTimer) clearInterval(hbTimer);
     }
   }
 

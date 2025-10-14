@@ -53,6 +53,11 @@ export const ContainerProviderStaticConfigSchema = z
       .boolean()
       .default(false)
       .describe('Enable per-workspace Docker-in-Docker sidecar; defaults to disabled for tests/CI.'),
+    ttlSeconds: z
+      .number()
+      .int()
+      .default(86400)
+      .describe('Idle TTL (seconds) before workspace cleanup; <=0 disables cleanup.'),
   })
   .strict();
 
@@ -79,6 +84,11 @@ export const ContainerProviderExposedStaticConfigSchema = z
       .boolean()
       .default(false)
       .describe('Enable per-workspace Docker-in-Docker sidecar; defaults to disabled for tests/CI.'),
+    ttlSeconds: z
+      .number()
+      .int()
+      .default(86400)
+      .describe('Idle TTL (seconds) before workspace cleanup; <=0 disables cleanup.'),
   })
   .strict();
 
@@ -93,6 +103,7 @@ export class ContainerProviderEntity {
     initialScript?: string;
     envRefs?: LegacyEnvRefs;
     enableDinD?: boolean;
+    ttlSeconds?: number;
   };
 
   private vaultService: VaultService | undefined;
@@ -308,6 +319,7 @@ export class ContainerProviderEntity {
         env: enableDinD ? { ...(envMerged || {}), DOCKER_HOST: DOCKER_HOST_ENV } : envMerged,
         labels: { ...(this.opts.labels || {}), ...workspaceLabels },
         platform: requestedPlatform,
+        ttlSeconds: this.cfg?.ttlSeconds ?? 86400,
       });
 
       // Create per-workspace DinD sidecar attached to the workspace network namespace (only when enabled)
@@ -333,6 +345,10 @@ export class ContainerProviderEntity {
         await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
       }
     }
+    // Update last-used on provide reuse or after create
+    try {
+      await this.containerService.touchLastUsed(container.id);
+    } catch {}
     return container;
   }
 

@@ -3,6 +3,7 @@ import { ContainerEntity } from '../entities/container.entity';
 import { LoggerService } from './logger.service';
 import { PLATFORM_LABEL, type Platform } from '../constants.js';
 import { isExecTimeoutError, ExecTimeoutError } from '../utils/execTimeout';
+import type { ContainerRegistryService } from './containerRegistry.service';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
 
@@ -24,6 +25,8 @@ export type ContainerOpts = {
   anonymousVolumes?: string[];
   /** Advanced: raw dockerode create options merged last (escape hatch) */
   createExtras?: Partial<ContainerCreateOptions>;
+  /** Optional TTL for last-used based cleanup (seconds). <=0 disables cleanup */
+  ttlSeconds?: number;
 };
 
 /**
@@ -45,9 +48,25 @@ export type ContainerOpts = {
  */
 export class ContainerService {
   private docker: Docker;
+  private registry?: ContainerRegistryService;
 
   constructor(private logger: LoggerService) {
     this.docker = new Docker();
+  }
+
+  /** Attach registry service for persistence and last-used tracking */
+  setRegistry(registry: ContainerRegistryService) {
+    this.registry = registry;
+  }
+
+  /** Public helper to touch last-used timestamp for a container */
+  async touchLastUsed(containerId: string): Promise<void> {
+    try {
+      await this.registry?.updateLastUsed(containerId, new Date());
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e);
+      this.logger.debug(`touchLastUsed failed for cid=${containerId.substring(0, 12)} ${msg}`);
+    }
   }
 
   /** Pull an image; if platform is specified, pull even when image exists to ensure correct arch. */
@@ -149,6 +168,28 @@ export class ContainerService {
     await container.start();
     const inspect = await container.inspect();
     this.logger.info(`Container started cid=${inspect.Id.substring(0, 12)} status=${inspect.State?.Status}`);
+    // Persist workspace containers in registry
+    if (this.registry) {
+      try {
+        const labels = inspect.Config?.Labels || {};
+        if (labels['hautech.ai/role'] === 'workspace') {
+          const combined = labels['hautech.ai/thread_id'] || '';
+          const [nodeId, threadId] = combined.includes('__') ? combined.split('__', 2) : ['unknown', combined];
+          await this.registry.registerStart({
+            containerId: inspect.Id,
+            nodeId,
+            threadId,
+            image: optsWithDefaults.image!,
+            providerType: 'docker',
+            labels,
+            platform: optsWithDefaults.platform,
+            ttlSeconds: optsWithDefaults.ttlSeconds,
+          });
+        }
+      } catch (e) {
+        this.logger.error('Failed to register container start', e);
+      }
+    }
     return new ContainerEntity(this, inspect.Id);
   }
 
@@ -172,6 +213,8 @@ export class ContainerService {
         : undefined;
 
     this.logger.debug(`Exec in container cid=${inspectData.Id.substring(0, 12)}: ${Cmd.join(' ')}`);
+    // Update last-used before starting exec
+    void this.touchLastUsed(inspectData.Id);
     const exec: Exec = await container.exec({
       Cmd,
       AttachStdout: true,
@@ -240,6 +283,8 @@ export class ContainerService {
     this.logger.debug(
       `Interactive exec in container cid=${inspectData.Id.substring(0, 12)} tty=${tty} demux=${demux}: ${Cmd.join(' ')}`,
     );
+    // Update last-used before starting interactive exec
+    void this.touchLastUsed(inspectData.Id);
 
     const exec: Exec = await container.exec({
       Cmd,
