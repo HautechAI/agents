@@ -1,4 +1,3 @@
-import { exec } from 'child_process';
 import { z } from 'zod';
 import { LoggerService } from '../services/logger.service';
 import { VaultService } from '../services/vault.service';
