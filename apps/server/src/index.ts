@@ -23,6 +23,8 @@ import { GraphDefinition, PersistedGraphUpsertRequest } from './graph/types.js';
 import { ContainerService } from './services/container.service.js';
 import { ReadinessWatcher } from './utils/readinessWatcher.js';
 import { VaultService, VaultConfigSchema } from './services/vault.service.js';
+import { ContainerRegistryService } from './services/containerRegistry.service.js';
+import { ContainerCleanupService } from './services/containerCleanup.service.js';
 import { registerRemindersRoute } from './routes/reminders.route.js';
 
 const logger = new LoggerService();
@@ -44,6 +46,14 @@ async function bootstrap() {
   await mongo.connect();
   checkpointer.attachMongoClient(mongo.getClient());
   checkpointer.bindDb(mongo.getDb());
+
+  // Initialize container registry and cleanup services
+  const registry = new ContainerRegistryService(mongo.getDb(), logger);
+  await registry.ensureIndexes();
+  containerService.setRegistry(registry);
+  await registry.backfillFromDocker(containerService);
+  const cleanup = new ContainerCleanupService(registry, containerService, logger);
+  cleanup.start();
 
   const templateRegistry = buildTemplateRegistry({
     logger,
