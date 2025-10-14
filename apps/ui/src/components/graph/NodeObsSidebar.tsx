@@ -99,7 +99,7 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
             <div className="text-muted-foreground">Loading…</div>
           ) : reminders.error ? (
             <div role="alert" className="text-red-700 border border-red-300 bg-red-50 rounded px-2 py-1 text-[11px]">
-              Failed to load reminders: {(reminders as any).errorMessage || 'Unknown error'}
+              {(() => { const e = reminders.error as unknown; const msg = e instanceof Error ? e.message : String(e); return `Failed to load reminders: ${msg}`; })()}
             </div>
           ) : (reminders.data?.items?.length || 0) === 0 ? (
             <div className="text-muted-foreground">None</div>

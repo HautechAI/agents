@@ -1,31 +1,44 @@
 import type { FastifyInstance } from 'fastify';
-import type { LiveGraphRuntime } from '../graph/liveGraph.manager';
 import type { LoggerService } from '../services/logger.service';
-import type { RemindMeTool, ActiveReminder } from '../tools/remind_me.tool';
+import type { ActiveReminder, RemindMeInspectable } from '../tools/remind_me.tool';
 
-function isRemindMeTool(x: unknown): x is RemindMeTool {
-  return !!x && typeof (x as any).getActiveReminders === 'function';
+// Minimal interface to look up live node instances
+interface HasNodeLookup { getNodeInstance(id: string): unknown }
+
+function isRemindMeInspectable(x: unknown): x is RemindMeInspectable {
+  return !!x && typeof (x as Record<string, unknown>)['getActiveReminders'] === 'function';
 }
 
-export function registerRemindersRoute(fastify: FastifyInstance, runtime: LiveGraphRuntime, _logger: LoggerService) {
+export function registerRemindersRoute(fastify: FastifyInstance, runtime: HasNodeLookup, _logger: LoggerService) {
   // List active reminders for a given nodeId (RemindMe tool)
   fastify.get('/graph/nodes/:nodeId/reminders', async (req, reply) => {
     const { nodeId } = req.params as { nodeId: string };
     try {
-      const inst = (runtime as any).getNodeInstance?.(nodeId) || (runtime as any)['getNodeInstance']?.(nodeId);
+      const inst = runtime.getNodeInstance(nodeId);
       if (!inst) {
         reply.code(404);
         return { error: 'node_not_found' };
       }
-      if (!isRemindMeTool(inst)) {
+      if (!isRemindMeInspectable(inst)) {
         reply.code(404);
         return { error: 'not_remindme_node' };
       }
       const items: ActiveReminder[] = inst.getActiveReminders();
-      return { items };
-    } catch (e: any) {
+      // Optional response size bound via ?limit=
+      const q = req.query as { limit?: string } | undefined;
+      let limit: number | undefined;
+      if (q?.limit) {
+        const parsed = Number.parseInt(q.limit, 10);
+        if (Number.isFinite(parsed)) {
+          limit = Math.min(1000, Math.max(1, parsed));
+        }
+      }
+      return { items: typeof limit === 'number' ? items.slice(0, limit) : items };
+    } catch (e: unknown) {
+      // Log internal error; do not leak details
+      try { _logger.error?.('reminders route', e as unknown); } catch {}
       reply.code(500);
-      return { error: e?.message || 'reminders_error' };
+      return { error: 'server_error' };
     }
   });
 }

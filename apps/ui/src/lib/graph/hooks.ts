@@ -14,7 +14,6 @@ export function useTemplates() {
 }
 
 import { notifyError } from '../notify';
-import { useQuery } from '@tanstack/react-query';
 
 export function useNodeStatus(nodeId: string) {
   const qc = useQueryClient();
@@ -57,10 +56,6 @@ export function useNodeReminders(nodeId: string, enabled: boolean = true) {
     staleTime: 2000,
     enabled: enabled && !!nodeId,
   });
-  if (q.error) {
-    // expose a simple message string for UI
-    (q as any).errorMessage = q.error instanceof Error ? q.error.message : String(q.error);
-  }
   return q;
 }
 

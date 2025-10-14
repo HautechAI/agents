@@ -5,6 +5,7 @@ import { LoggerService } from '../services/logger.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const remindMeSchema = z.object({ delayMs: z.number().int().min(0), note: z.string().min(1) });
+const MAX_DELAY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days safety cap
 
 // Minimal interface for the caller agent used by this tool
 interface CallerAgentLike {
@@ -12,6 +13,10 @@ interface CallerAgentLike {
 }
 
 export type ActiveReminder = { id: string; threadId: string; note: string; at: string };
+// Minimal interface for inspection without importing the class
+export interface RemindMeInspectable {
+  getActiveReminders(): ActiveReminder[];
+}
 
 export class RemindMeTool extends BaseTool {
   // In-memory registry of scheduled (not-yet-fired) reminders
@@ -41,6 +46,8 @@ export class RemindMeTool extends BaseTool {
     return tool(
       async (raw, config) => {
         const { delayMs, note } = remindMeSchema.parse(raw);
+        // Clamp excessive delays to avoid long-lived timers retaining memory
+        const boundedDelay = Math.min(delayMs, MAX_DELAY_MS);
         // Guarded extraction of configurable context
         const cfg = (config && typeof config === 'object'
           ? (config as Record<string, unknown>).configurable
@@ -81,7 +88,7 @@ export class RemindMeTool extends BaseTool {
         }
 
         // Schedule async reminder; track in in-memory registry until fired.
-        const eta = new Date(Date.now() + delayMs).toISOString();
+        const eta = new Date(Date.now() + boundedDelay).toISOString();
         const id = `${threadId}:${uuidv4()}`;
         const timer = setTimeout(async () => {
           // If removed (e.g., via destroy), do nothing
@@ -97,12 +104,12 @@ export class RemindMeTool extends BaseTool {
             const err = e instanceof Error ? e : new Error(typeof e === 'string' ? e : 'Unknown error');
             this.logger.error('RemindMeTool scheduled invoke error', err);
           }
-        }, delayMs);
+        }, boundedDelay);
 
         // Add to registry immediately
         this.active.set(id, { timer, reminder: { id, threadId, note, at: eta } });
 
-        return { status: 'scheduled', etaMs: delayMs, at: eta };
+        return { status: 'scheduled', etaMs: boundedDelay, at: eta };
       },
       {
         name: 'remindMeTool',
