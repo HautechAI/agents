@@ -31,4 +31,12 @@ describe('SendSlackMessageTool', () => {
     const res = await t.invoke({ text: 'hi', channel: 'C1', ephemeral_user: 'U1' } as any);
     expect(String(res)).toContain('ephemeral');
   });
+
+  it('uses default_channel when channel omitted', async () => {
+    const tool = new SendSlackMessageTool(logger);
+    await tool.setConfig({ bot_token: 'xoxb-valid', default_channel: 'CDEF' });
+    const t = tool.init();
+    const res = await t.invoke({ text: 'hello' } as any);
+    expect(String(res)).toContain('ok');
+  });
 });

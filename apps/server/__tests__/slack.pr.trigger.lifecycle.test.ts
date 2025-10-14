@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SlackTrigger } from '../src/triggers/slack.trigger';
-import { vi } from 'vitest';
 
 // Mock @slack/socket-mode to avoid network/real client
 vi.mock('@slack/socket-mode', () => {

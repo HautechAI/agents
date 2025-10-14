@@ -31,12 +31,52 @@ export class SlackTrigger extends BaseTrigger {
     if (this.client) return this.client;
     const cfg = this.cfg;
     if (!cfg) throw new Error('SlackTrigger not configured: app_token is required');
-    const client = new SocketModeClient({ appToken: cfg.app_token, logLevel: undefined as any });
-    client.on('events_api', async ({ envelope_id, payload }) => {
+    const client = new SocketModeClient({ appToken: cfg.app_token, logLevel: undefined });
+
+    type SlackMessageEvent = {
+      type: 'message';
+      text?: string;
+      user?: string;
+      bot_id?: string;
+      subtype?: string;
+      channel?: string;
+      channel_type?: string;
+      ts?: string;
+      thread_ts?: string;
+    };
+    type EventsApiEnvelope = { envelope_id: string; payload: unknown };
+
+    const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+    const asMessageEvent = (p: unknown): SlackMessageEvent | null => {
+      if (!isRecord(p)) return null;
+      const ev = (p as Record<string, unknown>)['event'];
+      if (!isRecord(ev)) return null;
+      const typeVal = ev['type'];
+      if (typeVal !== 'message') return null;
+      const msg: SlackMessageEvent = {
+        type: 'message',
+        text: typeof ev['text'] === 'string' ? (ev['text'] as string) : undefined,
+        user: typeof ev['user'] === 'string' ? (ev['user'] as string) : undefined,
+        bot_id: typeof ev['bot_id'] === 'string' ? (ev['bot_id'] as string) : undefined,
+        subtype: typeof ev['subtype'] === 'string' ? (ev['subtype'] as string) : undefined,
+        channel: typeof ev['channel'] === 'string' ? (ev['channel'] as string) : undefined,
+        channel_type: typeof ev['channel_type'] === 'string' ? (ev['channel_type'] as string) : undefined,
+        ts: typeof ev['ts'] === 'string' ? (ev['ts'] as string) : undefined,
+        thread_ts: typeof ev['thread_ts'] === 'string' ? (ev['thread_ts'] as string) : undefined,
+      };
+      // Filter bot/self and message subtypes (edits, joins, etc.)
+      if (msg.bot_id) return null;
+      if (typeof msg.subtype === 'string') return null;
+      if (!msg.text) return null;
+      return msg;
+    };
+
+    client.on('events_api', async ({ envelope_id, payload }: EventsApiEnvelope) => {
       try {
         await client.ack(envelope_id);
-        const event = (payload as any)?.event;
-        if (!event || event.type !== 'message' || !event.text) return;
+        const event = asMessageEvent(payload);
+        if (!event) return;
         const thread = `${event.user}_${(event.thread_ts || event.ts)}`;
         const msg: TriggerHumanMessage = {
           kind: 'human',

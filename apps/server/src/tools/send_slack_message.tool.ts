@@ -2,10 +2,10 @@ import { tool, DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { BaseTool } from "./base.tool";
 import { LoggerService } from "../services/logger.service";
-import { WebClient } from '@slack/web-api';
+import { WebClient, type ChatPostMessageResponse, type ChatPostEphemeralResponse } from '@slack/web-api';
 
 const sendSlackMessageSchema = z.object({
-  channel: z.string().min(1).describe("Slack channel ID (e.g. C123..., D123... for DM)."),
+  channel: z.string().min(1).optional().describe("Slack channel ID (e.g. C123..., D123... for DM)."),
   thread_ts: z.string().optional().describe("Timestamp of thread root to reply in (if replying)."),
   text: z.string().min(1).describe("Message text to send."),
   broadcast: z
@@ -48,16 +48,19 @@ export class SendSlackMessageTool extends BaseTool {
         try {
           const client = new WebClient(cfg.bot_token, { logLevel: undefined });
           if (ephemeral_user) {
-            const resp = await client.chat.postEphemeral({ channel, user: ephemeral_user, text, thread_ts });
+            const resp: ChatPostEphemeralResponse = await client.chat.postEphemeral({ channel, user: ephemeral_user, text, thread_ts });
             if (!resp.ok) return `Failed to send message: ${resp.error}`;
-            return JSON.stringify({ ok: true, channel, message_ts: (resp as any).message_ts, ephemeral: true });
+            return JSON.stringify({ ok: true, channel, message_ts: resp.message_ts, ephemeral: true });
           }
-          const args: any = { channel, text };
-          if (thread_ts) args.thread_ts = thread_ts;
-          if (thread_ts && broadcast) args.reply_broadcast = true;
-          const resp = await client.chat.postMessage(args);
+          const resp: ChatPostMessageResponse = await client.chat.postMessage({
+            channel,
+            text,
+            ...(thread_ts ? { thread_ts } : {}),
+            ...(thread_ts && broadcast ? { reply_broadcast: true } : {}),
+          });
           if (!resp.ok) return `Failed to send message: ${resp.error}`;
-          return JSON.stringify({ ok: true, channel: resp.channel, ts: resp.ts, thread_ts: (resp as any).message?.thread_ts || thread_ts || resp.ts, broadcast: !!broadcast });
+          const thread = (resp.message && 'thread_ts' in resp.message ? (resp.message as { thread_ts?: string }).thread_ts : undefined) || thread_ts || resp.ts;
+          return JSON.stringify({ ok: true, channel: resp.channel, ts: resp.ts, thread_ts: thread, broadcast: !!broadcast });
         } catch (err: unknown) {
           const msg = (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : String(err);
           this.logger.error("Error sending Slack message", msg);
