@@ -20,8 +20,14 @@ function detectBucket(span: SpanDoc): Bucket | undefined {
 }
 
 function getNodeIdFromSpan(span: SpanDoc): string | undefined {
-  // Strictly require nodeId presence; do not infer
-  const nodeId = span.nodeId || (span.attributes?.nodeId as string | undefined) || undefined;
+  // For tool spans, prefer attributes.toolNodeId (Tool id), fallback to nodeId for legacy
+  const attrs = span.attributes || {};
+  const kind = (attrs.kind as string | undefined) || span.label?.startsWith('tool:') ? 'tool_call' : undefined;
+  if (kind === 'tool_call') {
+    const toolNodeId = (attrs['toolNodeId'] as string | undefined) || undefined;
+    if (toolNodeId) return toolNodeId;
+  }
+  const nodeId = span.nodeId || (attrs['nodeId'] as string | undefined) || undefined;
   if (typeof nodeId === 'string' && nodeId.length > 0) return nodeId;
   return undefined;
 }

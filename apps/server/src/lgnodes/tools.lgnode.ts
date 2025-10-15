@@ -44,10 +44,14 @@ export class ToolsNode extends BaseNode {
     const toolMessages: ToolMessage[] = await Promise.all(
       toolCalls.map(async (tc) => {
         const callId = tc.id ?? `missing_id_${Math.random().toString(36).slice(2)}`;
-        const cfgNodeId = config?.configurable?.nodeId ?? config?.configurable?.node_id;
-        // Prefer nodeId from runtime config (Tool node id) and fall back to agent-level id.
-        // This ensures tool_call spans are attributed to the Tool node in Activity.
-        return await withToolCall({ toolCallId: callId, name: tc.name, input: tc.args, nodeId: cfgNodeId || this.nodeId }, async () => {
+        const cfgToolNodeId = config?.configurable?.nodeId ?? config?.configurable?.node_id;
+        // Attribution model (Issue #167):
+        // - nodeId (top-level) is always the Agent node id (this.nodeId)
+        // - attributes.toolNodeId carries the Tool node id when available (from config.configurable.nodeId/node_id)
+        //   UI uses toolNodeId to filter spans for Tool nodes; legacy spans fallback to nodeId.
+        return await withToolCall(
+          { toolCallId: callId, name: tc.name, input: tc.args, nodeId: this.nodeId, ...(cfgToolNodeId ? { toolNodeId: cfgToolNodeId } : {}) },
+          async () => {
           const tool = tools.find((t) => t.name === tc.name);
           const createMessage = (content: string, success = true) => {
             const toolMessage = new ToolMessage({
@@ -93,7 +97,8 @@ export class ToolsNode extends BaseNode {
             }
             return createMessage(`Error executing tool '${tc.name}': ${errStr}`, false);
           }
-        });
+        },
+        );
       }),
     );
 

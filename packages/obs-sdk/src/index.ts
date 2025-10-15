@@ -385,16 +385,16 @@ export function withLLM<T>(
 }
 
 export function withToolCall<TOutput = unknown, TRaw = unknown>(
-  attributes: { toolCallId: string; name: string; input: unknown; nodeId?: string; [k: string]: unknown },
+  attributes: { toolCallId: string; name: string; input: unknown; nodeId?: string; toolNodeId?: string; [k: string]: unknown },
   fn: () => Promise<ToolCallResponse<TRaw, TOutput>> | ToolCallResponse<TRaw, TOutput>,
 ): Promise<TRaw> {
-  const { toolCallId, name, input, nodeId, ...rest } = attributes;
+  const { toolCallId, name, input, nodeId, toolNodeId, ...rest } = attributes;
   return withSpan(
     {
       label: `tool:${name}`,
       kind: 'tool_call',
       nodeId,
-      attributes: { kind: 'tool_call', toolCallId, name, input, ...(nodeId ? { nodeId } : {}), ...rest },
+      attributes: { kind: 'tool_call', toolCallId, name, input, ...(nodeId ? { nodeId } : {}), ...(toolNodeId ? { toolNodeId } : {}), ...rest },
     },
     fn,
     (result, err) => {

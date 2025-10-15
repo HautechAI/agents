@@ -33,8 +33,8 @@ class EchoTool extends BaseTool {
   }
 }
 
-describe('ToolsNode nodeId precedence for withToolCall', () => {
-  it('uses config.configurable.nodeId when provided (Tool node id)', async () => {
+describe('ToolsNode tool_call span attribution', () => {
+  it('stamps nodeId=agent and toolNodeId=tool when provided', async () => {
     const node = new ToolsNode([new EchoTool()], 'agent-node-id');
     const ai = new AIMessage({ content: '', tool_calls: [{ id: '1', name: 'echo', args: { x: 1 } }] } as any);
     const config = { configurable: { thread_id: 't1', nodeId: 'tool-node-id' } } as any;
@@ -43,10 +43,11 @@ describe('ToolsNode nodeId precedence for withToolCall', () => {
     const obs: any = await import('@hautech/obs-sdk');
     const captured = (obs as any).__test.captured as any[];
     expect(captured.length).toBeGreaterThan(0);
-    expect(captured[0].nodeId).toBe('tool-node-id');
+    expect(captured[0].nodeId).toBe('agent-node-id');
+    expect(captured[0].toolNodeId).toBe('tool-node-id');
   });
 
-  it('falls back to agent node id when config nodeId is absent', async () => {
+  it('stamps nodeId=agent and no toolNodeId when not provided', async () => {
     const obs: any = await import('@hautech/obs-sdk');
     (obs as any).__test.captured.length = 0; // reset captured
 
@@ -57,6 +58,6 @@ describe('ToolsNode nodeId precedence for withToolCall', () => {
     const captured = (obs as any).__test.captured as any[];
     expect(captured.length).toBeGreaterThan(0);
     expect(captured[0].nodeId).toBe('agent-node-id');
+    expect('toolNodeId' in captured[0]).toBe(false);
   });
 });
-

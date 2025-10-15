@@ -54,16 +54,16 @@ describe('runningStore transitions', () => {
     const { result } = renderHook(() => useRunningCount(nodeId, 'tool'));
     expect(result.current).toBe(0);
     act(() => {
-      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
+      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
     });
     expect(result.current).toBe(1);
     act(() => {
-      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'error', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
+      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'error', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
     });
     expect(result.current).toBe(0);
     act(() => {
-      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
-      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'cancelled', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
+      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
+      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'cancelled', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
     });
     expect(result.current).toBe(0);
   });
@@ -84,6 +84,19 @@ describe('runningStore transitions', () => {
       upsert({ traceId: 'te', spanId: 'e0', label: 'agent', status: 'ok', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'agent', nodeId }, nodeId });
     });
     expect(result.current).toBe(N - 1);
+  });
+
+  it('tool bucket falls back to legacy nodeId when toolNodeId missing', async () => {
+    const { result } = renderHook(() => useRunningCount(nodeId, 'tool'));
+    expect(result.current).toBe(0);
+    act(() => {
+      upsert({ traceId: 'tf', spanId: 'sf', label: 'tool:legacy', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call' }, nodeId });
+    });
+    expect(result.current).toBe(1);
+    act(() => {
+      upsert({ traceId: 'tf', spanId: 'sf', label: 'tool:legacy', status: 'ok', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call' }, nodeId });
+    });
+    expect(result.current).toBe(0);
   });
 });
 /* @vitest-environment jsdom */
