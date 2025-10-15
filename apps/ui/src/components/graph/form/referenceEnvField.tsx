@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ReferenceField, type ReferenceValue } from './referenceField';
+import { isValidVaultRef } from '@/lib/vault/parse';
 
 type EnvItem = { key: string; value: string; source?: 'static' | 'vault' };
 
@@ -73,9 +74,4 @@ export function ReferenceEnvField({ formData, onChange }: { formData?: EnvItem[]
   );
 }
 
-function isValidVaultRef(v?: string): boolean {
-  if (!v) return true;
-  if (v.startsWith('/')) return false;
-  const parts = v.split('/').filter(Boolean);
-  return parts.length >= 3;
-}
+// moved to shared helper in lib/vault/parse

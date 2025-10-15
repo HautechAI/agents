@@ -3,7 +3,8 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import { useTemplates } from '../useTemplates';
 import { getDisplayTitle, getKind, kindBadgeClasses, kindLabel } from '../lib/display';
 import { useRunningCount } from '../../lib/obs/runningStore';
-import { useNodeReminders } from '@/lib/graph/hooks';
+import { useNodeReminders, useNodeStatus } from '@/lib/graph/hooks';
+import { useNodeVaultStatus } from '@/lib/vault/useNodeVaultStatus';
 
 interface BuilderNodeData {
   template: string;
@@ -22,10 +23,21 @@ function TemplateNodeComponent({ id, data }: NodeProps<BuilderNodeData>) {
   const runningCount = useRunningCount(id, kind === 'agent' || kind === 'tool' ? (kind as 'agent' | 'tool') : undefined);
   const reminders = useNodeReminders(id, data.template === 'remindMeTool');
   const reminderCount = reminders.data?.items?.length || 0;
+  const nodeStatus = useNodeStatus(id);
+  const vaultAgg = useNodeVaultStatus((data as any)?.config as Record<string, unknown> | undefined);
+
+  const provisionError = nodeStatus.data?.provisionStatus?.state === 'error';
+  const hasVaultError = (vaultAgg?.error || 0) > 0;
+  const hasMissing = (vaultAgg?.missing || 0) > 0;
+  const borderClasses = provisionError || hasVaultError
+    ? 'border-red-500 ring-2 ring-red-500'
+    : hasMissing
+      ? 'border-amber-400 border-dashed ring-2 ring-amber-400'
+      : '';
 
   return (
-    <div className="rounded-md border bg-card text-xs shadow-sm min-w-[220px]">
-      <div className="drag-handle cursor-move select-none rounded-t-md bg-muted px-2 py-1 font-medium flex items-center gap-2">
+    <div className={`rounded-md border bg-card text-xs shadow-sm min-w-[220px] ${borderClasses}`}>
+      <div className="drag-handle cursor-move select-none rounded-t-md bg-muted px-2 py-1 font-medium flex items-center gap-2 relative">
         <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] leading-none ${kindBadgeClasses(kind)}`}>
           {kindLabel(kind)}
         </span>
@@ -45,6 +57,17 @@ function TemplateNodeComponent({ id, data }: NodeProps<BuilderNodeData>) {
             {reminderCount}
           </span>
         ) : null}
+        {(hasVaultError || hasMissing) && (
+          <span
+            className={
+              'absolute right-2 top-1 rounded px-1.5 py-0.5 text-[10px] leading-none border ' +
+              (hasVaultError ? 'bg-red-100 text-red-700 border-red-300' : 'bg-amber-100 text-amber-900 border-amber-300')
+            }
+            title={hasVaultError ? 'vault error' : `${vaultAgg.missing} missing secrets`}
+          >
+            {hasVaultError ? 'error' : vaultAgg.missing}
+          </span>
+        )}
       </div>
       <div className="px-2 py-2">
         <div className="flex items-stretch gap-3">

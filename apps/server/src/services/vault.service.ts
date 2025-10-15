@@ -141,6 +141,34 @@ export class VaultService {
       throw err;
     }
   }
+
+  // Write-only update for a single key in a KV v2 secret object. Returns metadata version.
+  async setSecret(ref: VaultRef, value: string): Promise<{ version: number }> {
+    if (!this.isEnabled()) throw new Error('Vault is not enabled');
+    const m = (ref.mount || 'secret').replace(/\/$/, '');
+    const p = (ref.path || '').replace(/^\//, '');
+    let existing: Record<string, unknown> = {};
+    try {
+      const resp = await this.http<any>(`/v1/${encodeURIComponent(m)}/data/${encodePath(p)}`, { method: 'GET' });
+      existing = (resp?.data?.data as Record<string, unknown>) || {};
+    } catch (e: any) {
+      if ((e as any)?.statusCode !== 404) {
+        const err = new Error('Vault secret read failed');
+        (err as any).statusCode = (e as any)?.statusCode;
+        throw err;
+      }
+      existing = {};
+    }
+
+    // Merge without logging secret value
+    const next = { ...existing, [ref.key]: value } as Record<string, unknown>;
+    const writeResp = await this.http<any>(`/v1/${encodeURIComponent(m)}/data/${encodePath(p)}`, {
+      method: 'POST',
+      body: JSON.stringify({ data: next }),
+    });
+    const version = Number(writeResp?.data?.metadata?.version || 0) || 0;
+    return { version };
+  }
 }
 
 async function safeJson(res: Response): Promise<any> {
@@ -159,4 +187,3 @@ function encodePath(p: string): string {
     .map((s) => encodeURIComponent(s))
     .join('/');
 }
-

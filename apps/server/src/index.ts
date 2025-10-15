@@ -143,6 +143,23 @@ async function bootstrap() {
       const items = await vaultService.listKeys(mount, path || '');
       return { items };
     });
+    fastify.post('/api/vault/kv/:mount/write', async (req, reply) => {
+      const { mount } = req.params as { mount: string };
+      const body = (req.body || {}) as { path?: string; key?: string; value?: string };
+      if (!body.path || !body.key || typeof body.value !== 'string') {
+        reply.code(400);
+        return { error: 'invalid_body' };
+      }
+      try {
+        const { version } = await vaultService.setSecret({ mount, path: body.path, key: body.key }, body.value);
+        reply.code(201);
+        return { mount, path: body.path, key: body.key, version };
+      } catch (e: any) {
+        const status = (e as any)?.statusCode || 500;
+        reply.code(status);
+        return { error: e?.message || 'vault_write_failed' };
+      }
+    });
   }
 
   fastify.get('/api/graph', async () => {

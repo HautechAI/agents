@@ -43,6 +43,11 @@ export const api = {
     http<{ items: string[] }>(`${BASE}/api/vault/kv/${encodeURIComponent(mount)}/paths?prefix=${encodeURIComponent(prefix)}`).catch(() => ({ items: [] })),
   listVaultKeys: (mount: string, path = '') =>
     http<{ items: string[] }>(`${BASE}/api/vault/kv/${encodeURIComponent(mount)}/keys?path=${encodeURIComponent(path)}`).catch(() => ({ items: [] })),
+  writeVaultKey: (mount: string, body: { path: string; key: string; value: string }) =>
+    http<{ mount: string; path: string; key: string; version: number }>(
+      `${BASE}/api/vault/kv/${encodeURIComponent(mount)}/write`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   getNodeStatus: (nodeId: string) => http<NodeStatus>(`${BASE}/graph/nodes/${encodeURIComponent(nodeId)}/status`),
   // Dynamic config schema endpoint: try the newer '/dynamic-config/schema' first, fallback to legacy '/dynamic-config-schema'
   getDynamicConfigSchema: async (nodeId: string): Promise<Record<string, unknown> | null> => {
