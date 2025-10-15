@@ -28,13 +28,15 @@ function getNodeIdFromSpan(span: SpanDoc): string | undefined {
   const isTool = attrs['kind'] === 'tool_call' || (label.startsWith('tool:') === true);
   const isAgent = attrs['kind'] === 'agent' || label === 'agent';
 
-  // For tool spans, prefer attributes.toolNodeId (Tool id), fallback to nodeId for legacy
+  // For tool spans, prefer top-level nodeId (new tool attribution). Fallback to legacy attributes.toolNodeId
   if (isTool) {
-    const toolNodeId = (attrs['toolNodeId'] as string | undefined) || undefined;
-    if (toolNodeId && typeof toolNodeId === 'string' && toolNodeId.length > 0) return toolNodeId;
+    const nodeIdNew = span.nodeId || (attrs['nodeId'] as string | undefined) || undefined;
+    if (nodeIdNew && typeof nodeIdNew === 'string' && nodeIdNew.length > 0) return nodeIdNew;
+    const legacyToolNodeId = (attrs['toolNodeId'] as string | undefined) || undefined;
+    if (legacyToolNodeId && typeof legacyToolNodeId === 'string' && legacyToolNodeId.length > 0) return legacyToolNodeId;
   }
 
-  // For non-tool or when no toolNodeId present, use the standard nodeId
+  // For non-tool, use the standard nodeId
   const nodeId = span.nodeId || (attrs['nodeId'] as string | undefined) || undefined;
   if (typeof nodeId === 'string' && nodeId.length > 0) return nodeId;
   return undefined;

@@ -19,15 +19,15 @@ function spanMatchesContext(span: SpanDoc, node: Node<BuilderPanelNodeData>, kin
   const attrs = (span.attributes || {}) as Record<string, unknown>;
   const kindAttr = String(attrs['kind'] || '');
   const label = span.label || '';
-  const nodeIdAttr = (attrs['nodeId'] as string | undefined) || span.nodeId;
+  const nodeIdAttr = span.nodeId || (attrs['nodeId'] as string | undefined);
   const toolNodeIdAttr = attrs['toolNodeId'] as string | undefined;
   const kindOk = kind === 'agent' ? (kindAttr === 'agent' || label === 'agent') : (kindAttr === 'tool_call' || label.startsWith('tool:'));
   if (!kindOk) return false;
   // Agent: filter by nodeId (agent id)
   if (kind === 'agent') return nodeIdAttr === node.id;
-  // Tool: prefer attributes.toolNodeId (new), fallback to nodeId match for legacy spans
-  if (toolNodeIdAttr) return toolNodeIdAttr === node.id;
-  return nodeIdAttr === node.id;
+  // Tool: prefer nodeId (Tool id), temporary fallback to attributes.toolNodeId for legacy spans
+  if (nodeIdAttr) return nodeIdAttr === node.id;
+  return toolNodeIdAttr === node.id;
 }
 
 function summarizeStatus(s: SpanDoc['status']) {
