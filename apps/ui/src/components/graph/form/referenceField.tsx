@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../lib/graph/api';
 import { parseVaultRef, isValidVaultRef } from '@/lib/vault/parse';
 import { useVaultKeyExistence } from '@/lib/vault/useVaultKeyExistence';
@@ -28,6 +28,7 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
   const ref = useMemo(() => parseVaultRef(val), [val]);
   const existence = useVaultKeyExistence(ref.mount, ref.path, ref.key);
   const [open, setOpen] = useState(false);
+  const editBtnRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (mode !== 'vault') return;
     if (ref.mount) {
@@ -81,7 +82,8 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
       </div>
       {mode === 'vault' && isValidVaultRef(val) && (
         <span
-          aria-label={`vault-ref-status-${status}`}
+          aria-label={`Vault reference status: ${status}`}
+          title={`Vault reference status: ${status}`}
           className={
             'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none border ' +
             (status === 'exists'
@@ -101,7 +103,8 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
           type="button"
           aria-label="Edit vault value"
           className="text-xs px-2 py-1 rounded border hover:bg-accent/50"
-          onClick={() => setOpen(true)}
+          onClick={(e) => { editBtnRef.current = e.currentTarget; setOpen(true); }}
+          ref={editBtnRef}
         >
           ✎
         </button>
@@ -129,6 +132,8 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
           key={ref.key}
           onClose={(didWrite) => {
             setOpen(false);
+            // Return focus to the trigger for accessibility
+            setTimeout(() => editBtnRef.current?.focus(), 0);
             if (didWrite) {
               // Existence hook uses RQ cache; invalidation happens in modal, but ensure here too
               // no-op
