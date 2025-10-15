@@ -13,6 +13,7 @@ import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
 import { TemplateRegistry } from './templateRegistry';
 import type { NodeLifecycle } from '../nodes/node.types';
+import type { ProvisionStatus } from './capabilities';
 
 const configsEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b); // unchanged
 
@@ -86,6 +87,22 @@ export class LiveGraphRuntime {
   }
   async deleteNode(id: string): Promise<void> {
     await this.disposeNode(id);
+  }
+
+  // Status helper retained for UI/diagnostics (no pause fallback)
+  getNodeStatus(id: string): { provisionStatus?: ProvisionStatus; dynamicConfigReady?: boolean } {
+    const inst = this.state.nodes.get(id)?.instance as unknown;
+    const out: { provisionStatus?: ProvisionStatus; dynamicConfigReady?: boolean } = {};
+    if (inst) {
+      const has = (name: string) => typeof (inst as any)[name] === 'function';
+      if (has('getProvisionStatus')) {
+        try { out.provisionStatus = (inst as any).getProvisionStatus(); } catch {}
+      }
+      if (has('isDynamicConfigReady')) {
+        try { out.dynamicConfigReady = !!(inst as any).isDynamicConfigReady(); } catch {}
+      }
+    }
+    return out;
   }
 
   private async _applyGraphInternal(next: GraphDefinition): Promise<GraphDiffResult> {
