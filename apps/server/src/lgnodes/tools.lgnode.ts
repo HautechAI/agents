@@ -45,7 +45,9 @@ export class ToolsNode extends BaseNode {
       toolCalls.map(async (tc) => {
         const callId = tc.id ?? `missing_id_${Math.random().toString(36).slice(2)}`;
         const cfgNodeId = config?.configurable?.nodeId ?? config?.configurable?.node_id;
-        return await withToolCall({ toolCallId: callId, name: tc.name, input: tc.args, nodeId: this.nodeId || cfgNodeId }, async () => {
+        // Prefer nodeId from runtime config (Tool node id) and fall back to agent-level id.
+        // This ensures tool_call spans are attributed to the Tool node in Activity.
+        return await withToolCall({ toolCallId: callId, name: tc.name, input: tc.args, nodeId: cfgNodeId || this.nodeId }, async () => {
           const tool = tools.find((t) => t.name === tc.name);
           const createMessage = (content: string, success = true) => {
             const toolMessage = new ToolMessage({
