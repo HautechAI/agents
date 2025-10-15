@@ -6,7 +6,8 @@ import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 
 // Mock obs-sdk to capture attributes passed to withToolCall
 vi.mock('@hautech/obs-sdk', () => {
-  const captured: any[] = [];
+  type Captured = { toolCallId: string; name: string; input: unknown; nodeId?: string; toolNodeId?: string };
+  const captured: Captured[] = [];
   class ToolCallResponse<TRaw = unknown, TOutput = unknown> {
     raw: TRaw;
     output?: TOutput;
@@ -17,7 +18,7 @@ vi.mock('@hautech/obs-sdk', () => {
       this.status = params.status;
     }
   }
-  const withToolCall = async (attrs: any, fn: any) => {
+  const withToolCall = async (attrs: Captured, fn: () => Promise<any> | any) => {
     captured.push(attrs);
     const res = await fn();
     return (res as any).raw; // return raw ToolMessage like real impl
@@ -33,20 +34,22 @@ class EchoTool extends BaseTool {
   }
 }
 
-describe('ToolsNode nodeId precedence for withToolCall', () => {
-  it('uses config.configurable.nodeId when provided (Tool node id)', async () => {
+describe('ToolsNode tool_call span attribution', () => {
+  it('stamps nodeId=agent and toolNodeId=tool when provided', async () => {
     const node = new ToolsNode([new EchoTool()], 'agent-node-id');
     const ai = new AIMessage({ content: '', tool_calls: [{ id: '1', name: 'echo', args: { x: 1 } }] } as any);
     const config = { configurable: { thread_id: 't1', nodeId: 'tool-node-id' } } as any;
     const res = await node.action({ messages: [ai] } as any, config);
     expect(res.done).toBeFalsy();
     const obs: any = await import('@hautech/obs-sdk');
-    const captured = (obs as any).__test.captured as any[];
+    const captured = (obs as any).__test.captured as Array<{ nodeId?: string; toolNodeId?: string }>;
     expect(captured.length).toBeGreaterThan(0);
-    expect(captured[0].nodeId).toBe('tool-node-id');
+    expect(captured[0].nodeId).toBe('agent-node-id');
+    expect(captured[0].toolNodeId).toBeDefined();
+    expect(captured[0].toolNodeId).toBe('tool-node-id');
   });
 
-  it('falls back to agent node id when config nodeId is absent', async () => {
+  it('stamps nodeId=agent and no toolNodeId when not provided', async () => {
     const obs: any = await import('@hautech/obs-sdk');
     (obs as any).__test.captured.length = 0; // reset captured
 
@@ -54,9 +57,9 @@ describe('ToolsNode nodeId precedence for withToolCall', () => {
     const ai = new AIMessage({ content: '', tool_calls: [{ id: '2', name: 'echo', args: { y: 2 } }] } as any);
     const res = await node.action({ messages: [ai] } as any, { configurable: { thread_id: 't2' } } as any);
     expect(res.done).toBeFalsy();
-    const captured = (obs as any).__test.captured as any[];
+    const captured = (obs as any).__test.captured as Array<{ nodeId?: string; toolNodeId?: string }>;
     expect(captured.length).toBeGreaterThan(0);
     expect(captured[0].nodeId).toBe('agent-node-id');
+    expect(captured[0].toolNodeId).toBeUndefined();
   });
 });
-
