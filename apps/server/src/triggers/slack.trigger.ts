@@ -39,12 +39,8 @@ export class SlackTrigger extends BaseTrigger {
   private client: SocketModeClient | null = null;
   private vault?: VaultService;
 
-  constructor(
-    protected logger: LoggerService,
-    vault?: VaultService,
-  ) {
+  constructor(logger: LoggerService, vault?: VaultService) {
     super(logger);
-    this.logger = logger;
     this.vault = vault;
   }
 
@@ -80,6 +76,7 @@ export class SlackTrigger extends BaseTrigger {
     const appToken = await this.resolveAppToken();
     const client = new SocketModeClient({ appToken, logLevel: undefined });
 
+    // Shape observed from SocketModeClient for a message event envelope.
     type SlackMessageEvent = {
       type: 'message';
       text?: string;
