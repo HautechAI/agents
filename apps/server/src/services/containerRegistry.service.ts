@@ -198,9 +198,11 @@ export class ContainerRegistryService {
           const inspect = await containerService.getDocker().getContainer(item.id).inspect();
           const created = inspect?.Created ? new Date(inspect.Created).toISOString() : nowIso;
           const running = !!inspect?.State?.Running;
-          const update: UpdateFilter<ContainerDoc> = {
-            $setOnInsert: { created_at: created },
-            $set: {
+          // Determine whether this is a new or existing record
+          const existing = await this.col.findOne({ container_id: item.id });
+          if (existing) {
+            // Existing record: do not bump last_used_at; optionally recompute kill_after_at if missing
+            const setFields: Record<string, any> = {
               container_id: item.id,
               node_id: nodeId,
               thread_id: threadId,
@@ -208,14 +210,45 @@ export class ContainerRegistryService {
               image: inspect?.Config?.Image || 'unknown',
               status: running ? 'running' : 'stopped',
               updated_at: nowIso,
-              last_used_at: running ? nowIso : created,
-              kill_after_at: running ? this.computeKillAfter(nowIso, 86400) : null,
               termination_reason: null,
               deleted_at: running ? null : nowIso,
-              metadata: { labels, platform: labels?.['hautech.ai/platform'], ttlSeconds: 86400 },
-            },
-          };
-          await this.col.updateOne({ container_id: item.id }, update, { upsert: true });
+              metadata: { labels, platform: labels?.['hautech.ai/platform'], ttlSeconds: existing?.metadata?.ttlSeconds ?? 86400 },
+            };
+            if (!existing.kill_after_at && existing.last_used_at && typeof existing.metadata?.ttlSeconds === 'number') {
+              const ttl = existing.metadata?.ttlSeconds;
+              const recomputed = this.computeKillAfter(existing.last_used_at, ttl);
+              setFields.kill_after_at = recomputed;
+              this.logger.debug(
+                `ContainerRegistry: backfill recomputed kill_after_at for existing cid=${item.id.substring(0, 12)} ttl=${ttl}`,
+              );
+            } else {
+              this.logger.debug(
+                `ContainerRegistry: backfill existing cid=${item.id.substring(0, 12)} - skipping last_used_at update`,
+              );
+            }
+            const updateExisting: UpdateFilter<ContainerDoc> = { $set: setFields };
+            await this.col.updateOne({ container_id: item.id }, updateExisting, { upsert: false });
+          } else {
+            // New record: set last_used_at on insert and compute kill_after_at
+            const updateNew: UpdateFilter<ContainerDoc> = {
+              $setOnInsert: { created_at: created },
+              $set: {
+                container_id: item.id,
+                node_id: nodeId,
+                thread_id: threadId,
+                provider_type: 'docker',
+                image: inspect?.Config?.Image || 'unknown',
+                status: running ? 'running' : 'stopped',
+                updated_at: nowIso,
+                last_used_at: running ? nowIso : created,
+                kill_after_at: running ? this.computeKillAfter(running ? nowIso : created, 86400) : null,
+                termination_reason: null,
+                deleted_at: running ? null : nowIso,
+                metadata: { labels, platform: labels?.['hautech.ai/platform'], ttlSeconds: 86400 },
+              },
+            };
+            await this.col.updateOne({ container_id: item.id }, updateNew, { upsert: true });
+          }
         } catch (e) {
           this.logger.error('ContainerRegistry: backfill error for container', item.id, e);
         }
