@@ -9,7 +9,7 @@ import { LoggerService } from '../services/logger.service.js';
 import { DockerExecTransport } from './dockerExecTransport.js';
 import { DEFAULT_MCP_COMMAND, McpError, McpServer, McpTool, McpToolCallResult } from './types.js';
 import { VaultService } from '../services/vault.service.js';
-import { parseVaultRef } from '../utils/refs.js';
+import { EnvService, type EnvItem } from '../services/env.service.js';
 import { JSONSchema } from 'zod/v4/core';
 
 const EnvItemSchema = z
@@ -44,31 +44,26 @@ export const LocalMcpServerStaticConfigSchema = z.object({
 // .strict();
 
 export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigurable<Record<string, boolean>> {
+  private envService?: EnvService;
+  private vault?: VaultService;
+
+  setEnvService(svc?: EnvService): void { this.envService = svc; }
+  setVault(vault?: VaultService): void { this.vault = vault; }
+
   private async resolveEnvOverlay(): Promise<Record<string, string> | undefined> {
-    const items = this.cfg?.env || [];
-    if (!items.length) return undefined;
-    // We do not have direct access to VaultService here; reuse from container provider path if available
-    // LocalMCPServer is constructed in templates with a VaultService instance available to ContainerProvider.
-    // For simplicity, try to obtain via this.containerService (not available) so we pass through using parseVaultRef only when vault is injected.
-    const out: Record<string, string> = {};
-    const vlt = (this as any).vault as VaultService | undefined;
-    for (const it of items) {
-      if (!it?.key) continue;
-      if (it.source === 'vault') {
-        if (vlt?.isEnabled()) {
-          try {
-            const ref = parseVaultRef(it.value);
-            const val = await vlt.getSecret(ref);
-            if (val != null) out[it.key] = val;
-          } catch {}
-        }
-      } else out[it.key] = it.value ?? '';
+    const items: EnvItem[] = (this.cfg?.env || []) as EnvItem[];
+    if (!items.length || !this.envService) return undefined;
+    try {
+      const r = await this.envService.resolveEnvItems(items);
+      return Object.keys(r).length ? r : undefined;
+    } catch {
+      return undefined;
     }
-    return Object.keys(out).length ? out : undefined;
   }
 
   private buildExecConfig(command: string, envOverlay?: Record<string, string>) {
-    const cfg = this.cfg!;
+    const cfg = this.cfg;
+    if (!cfg) throw new Error('LocalMCPServer: config not yet set via setConfig');
     const cmdToRun = command;
     const envArr = envOverlay ? Object.entries(envOverlay).map(([k, v]) => `${k}=${v}`) : undefined;
     return { cmdToRun, envArr, workdir: cfg.workdir };
@@ -153,7 +148,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     const tempContainer = await this.containerProvider.provide(`_discovery_temp_${uuidv4()}`);
     const tempContainerId = tempContainer.id;
 
-    const cfg = this.cfg!;
+    const cfg = this.cfg;
+    if (!cfg) throw new Error('LocalMCPServer: config not yet set via setConfig');
     const command = cfg.command ?? DEFAULT_MCP_COMMAND;
     const envOverlay = await this.resolveEnvOverlay();
     const { cmdToRun, envArr, workdir } = this.buildExecConfig(command, envOverlay);
@@ -294,7 +290,9 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     // We purposely avoid triggering a start/discovery from listTools to prevent dual discovery paths.
     const all = force && this.toolsDiscovered ? (this.toolsCache ?? []) : this.toolsCache || [];
     if (!this._enabledTools) return all;
-    return all.filter((t) => this._enabledTools!.has(t.name));
+    const enabled = this._enabledTools;
+    if (!enabled) return all;
+    return all.filter((t) => enabled.has(t.name));
   }
 
   async callTool(
@@ -315,7 +313,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     try { await this.containerService.touchLastUsed(container.id); } catch {}
     const containerId = container.id;
 
-    const cfg = this.cfg!;
+    const cfg = this.cfg;
+    if (!cfg) throw new Error('LocalMCPServer: config not yet set via setConfig');
     const command = cfg.command ?? DEFAULT_MCP_COMMAND;
     const envOverlay = await this.resolveEnvOverlay();
     const { cmdToRun, envArr, workdir } = this.buildExecConfig(command, envOverlay);
@@ -374,29 +373,35 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       });
 
       const rawResult: unknown = result as unknown;
-      const rawContent = (rawResult as any)?.content;
+      const rawContent = (rawResult && typeof rawResult === 'object' && 'content' in (rawResult as Record<string, unknown>)
+        ? (rawResult as Record<string, unknown>).content
+        : undefined) as unknown;
       const contentArr = Array.isArray(rawContent) ? rawContent : [];
       const flattened = contentArr
         .map((c: unknown) => {
           if (typeof c === 'string') return c;
           if (c && typeof c === 'object') {
             const obj = c as Record<string, unknown>;
-            if ('text' in obj && typeof (obj as any).text === 'string') return (obj as any).text as string;
-            if ('data' in obj) return JSON.stringify((obj as any).data);
+            if ('text' in obj && typeof obj.text === 'string') return obj.text as string;
+            if ('data' in obj) return JSON.stringify(obj.data);
           }
           try { return JSON.stringify(c); } catch { return String(c); }
         })
         .join('\n');
       return {
-        isError: (rawResult as any)?.isError,
+        isError: !!(rawResult && typeof rawResult === 'object' && 'isError' in (rawResult as Record<string, unknown>) && (rawResult as Record<string, unknown>).isError),
         content: flattened,
-        structuredContent: (rawResult as any)?.structuredContent,
+        structuredContent: (rawResult && typeof rawResult === 'object' && 'structuredContent' in (rawResult as Record<string, unknown>)
+          ? (rawResult as Record<string, unknown>).structuredContent
+          : undefined) as unknown,
         raw: result,
       };
-    } catch (e: any) {
-      const emsg = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e);
-      const ename = e && typeof e === 'object' && 'name' in e ? String(e.name) : 'Error';
-      throw new McpError(`Tool '${name}' failed: ${ename}: ${emsg}`.trim(), e?.code || 'TOOL_CALL_ERROR');
+    } catch (e: unknown) {
+      const errObj = e as { code?: string } | unknown;
+      const emsg = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : String(e);
+      const ename = e && typeof e === 'object' && 'name' in e ? String((e as { name?: unknown }).name) : 'Error';
+      const code = (errObj && typeof errObj === 'object' && 'code' in errObj) ? String((errObj as { code?: unknown }).code) : 'TOOL_CALL_ERROR';
+      throw new McpError(`Tool '${name}' failed: ${ename}: ${emsg}`.trim(), code);
     } finally {
       // Clean up after tool call
       if (client) {
@@ -541,7 +546,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         // New flat shape: tool names are top-level boolean properties
         normalized = this._dynamicConfigZodSchema.parse(cfg) as Record<string, boolean>;
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed`, e as any);
+        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed`, e);
       }
     }
     const enabled = new Set<string>();

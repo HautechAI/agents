@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LoggerService } from '../services/logger.service';
 import { VaultService } from '../services/vault.service';
-import { parseVaultRef } from '../utils/refs';
+import { EnvService, type EnvItem } from '../services/env.service';
 import { isExecTimeoutError, ExecTimeoutError, ExecIdleTimeoutError, isExecIdleTimeoutError } from '../utils/execTimeout';
 import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { BaseTool } from './base.tool';
@@ -52,8 +52,9 @@ export const ShellToolStaticConfigSchema = z
 export class ShellTool extends BaseTool {
   private containerProvider?: ContainerProviderEntity;
   private cfg?: z.infer<typeof ShellToolStaticConfigSchema>;
+  private envService: EnvService;
 
-  constructor(private vault: VaultService | undefined, logger: LoggerService) { super(logger); }
+  constructor(private vault: VaultService | undefined, logger: LoggerService) { super(logger); this.envService = new EnvService(vault); }
 
   setContainerProvider(provider: ContainerProviderEntity | undefined): void {
     this.containerProvider = provider;
@@ -72,7 +73,7 @@ export class ShellTool extends BaseTool {
         if (!this.containerProvider) {
           throw new Error('ShellTool: containerProvider not set. Connect via graph edge before use.');
         }
-        const container = await this.containerProvider.provide(thread_id!);
+        const container = await this.containerProvider.provide(thread_id);
         const { command } = bashCommandSchema.parse(input);
         this.logger.info('Tool called', 'shell_command', { command });
         const envOverlay = await this.resolveEnv();
@@ -132,26 +133,8 @@ export class ShellTool extends BaseTool {
   }
 
   private async resolveEnv(): Promise<Record<string, string> | undefined> {
-    const items = this.cfg?.env || [];
+    const items: EnvItem[] = (this.cfg?.env || []) as EnvItem[];
     if (!items.length) return undefined;
-    const out: Record<string, string> = {};
-    for (const it of items) {
-      if (!it || !it.key) continue;
-      if (it.source === 'vault') {
-        try {
-          const vlt = this.vault;
-          if (vlt?.isEnabled()) {
-            const ref = parseVaultRef(it.value);
-            const val = await vlt.getSecret(ref);
-            if (val != null) out[it.key] = val;
-          }
-        } catch {
-          // ignore missing/failed secrets
-        }
-      } else {
-        out[it.key] = it.value ?? '';
-      }
-    }
-    return Object.keys(out).length ? out : undefined;
+    try { const r = await this.envService.resolveEnvItems(items); return Object.keys(r).length ? r : undefined; } catch { return undefined; }
   }
 }

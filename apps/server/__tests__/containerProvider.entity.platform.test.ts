@@ -23,6 +23,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('cid123', svc);
     svc = {
       findContainerByLabels: vi.fn(async (_labels: Record<string, string>) => undefined),
+      findContainersByLabels: vi.fn(async (_labels: Record<string, string>) => []),
       start: vi.fn(startImpl),
       getContainerLabels: vi.fn(async (_id: string) => ({})),
       execContainer: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
@@ -34,7 +35,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     (svc.findContainerByLabels as unknown as vi.Mock).mockResolvedValue(existing);
     (svc.getContainerLabels as unknown as vi.Mock).mockResolvedValue({ [PLATFORM_LABEL]: 'linux/amd64' });
 
-    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, undefined as any, {}, idLabels);
     provider.setConfig({ platform: 'linux/arm64' }); // DinD disabled by default
     const c = await provider.provide('t1');
 
@@ -53,19 +54,15 @@ describe('ContainerProviderEntity platform reuse logic', () => {
 
   it("does not select a dind container when sharing the same thread label", async () => {
     const dind = new MockContainer('dind123', svc);
-    // Return a result only if caller forgets to include role=workspace; our code should not do that.
-    (svc.findContainerByLabels as unknown as vi.Mock).mockImplementation(async (labels: Record<string, string>) => {
-      if (labels['hautech.ai/role'] === 'workspace') return undefined; // no existing workspace
-      if (labels['hautech.ai/role'] === 'dind') return dind;
-      // Simulate that a wrong lookup without role filter would match the dind
-      if (!('hautech.ai/role' in labels)) return dind;
-      return undefined;
-    });
+    // No workspace exists; fallback returns candidate dind with same thread label
+    (svc.findContainerByLabels as unknown as vi.Mock).mockResolvedValue(undefined);
+    (svc.findContainersByLabels as unknown as vi.Mock).mockResolvedValue([dind]);
+    (svc.getContainerLabels as unknown as vi.Mock).mockResolvedValueOnce({ 'hautech.ai/role': 'dind' });
 
     const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('ws999', svc);
     (svc.start as vi.Mock).mockImplementationOnce(startImpl);
 
-    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, undefined as any, {}, idLabels);
     // DinD disabled in this test, but even if enabled, provider should not pick dind as workspace
     provider.setConfig({ enableDinD: false });
     const c = await provider.provide('t-dind');
@@ -81,7 +78,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     (svc.findContainerByLabels as unknown as vi.Mock).mockResolvedValue(existing);
     (svc.getContainerLabels as unknown as vi.Mock).mockResolvedValue({});
 
-    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, undefined as any, {}, idLabels);
     provider.setConfig({ platform: 'linux/arm64' }); // DinD disabled by default
     const c = await provider.provide('t2');
 
@@ -97,7 +94,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     const existing = new MockContainer('abc', svc);
     (svc.findContainerByLabels as unknown as vi.Mock).mockResolvedValue(existing);
 
-    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, undefined as any, {}, idLabels);
     // no platform in config
     const c = await provider.provide('t3');
 
@@ -111,7 +108,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     const existing = new MockContainer('abc', svc);
     (svc.findContainerByLabels as unknown as vi.Mock).mockResolvedValue(existing);
 
-    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, undefined as any, {}, idLabels);
     const c = await provider.provide('t4');
 
     expect(existing.stop).not.toHaveBeenCalled();
@@ -127,7 +124,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
   it('does not attempt DinD when flag disabled (default)', async () => {
     const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('cid123', svc);
     (svc.start as vi.Mock).mockImplementationOnce(startImpl);
-    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, undefined as any, {}, idLabels);
     provider.setConfig({});
     const c = await provider.provide('tdis');
     expect(c).toBeInstanceOf(MockContainer);
@@ -140,7 +137,7 @@ describe('ContainerProviderEntity platform reuse logic', () => {
     const startImpl = async (_opts: Parameters<ContainerService['start']>[0]) => new MockContainer('cid999', svc);
     (svc.start as vi.Mock).mockImplementationOnce(startImpl);
     // DinD readiness already mocked in beforeEach via execContainer
-    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, {}, idLabels);
+    const provider = new ContainerProviderEntity(svc as unknown as ContainerService, undefined as any, {}, idLabels);
     provider.setConfig({ enableDinD: true });
     const c = await provider.provide('ten');
     expect(c).toBeInstanceOf(MockContainer);
