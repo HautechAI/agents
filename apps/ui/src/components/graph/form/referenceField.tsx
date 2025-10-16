@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../../lib/graph/api';
+import { parseVaultRef, isValidVaultRef } from '@/lib/vault/parse';
+import { useVaultKeyExistence } from '@/lib/vault/useVaultKeyExistence';
+import { VaultWriteModal } from './VaultWriteModal';
 
 export type ReferenceValue = { value?: string; source?: 'static' | 'vault' };
 
@@ -22,7 +25,10 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
   }, [mode]);
 
   // Minimal ref parsing to drive suggestions
-  const ref = useMemo(() => parseRef(val), [val]);
+  const ref = useMemo(() => parseVaultRef(val), [val]);
+  const existence = useVaultKeyExistence(ref.mount, ref.path, ref.key);
+  const [open, setOpen] = useState(false);
+  const editBtnRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (mode !== 'vault') return;
     if (ref.mount) {
@@ -41,13 +47,23 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
   }, [mode, ref.mount, ref.path]);
 
   const invalidVault = mode === 'vault' && val && !isValidVaultRef(val);
+  const status = mode === 'vault' && isValidVaultRef(val) ? existence.status : 'disabled';
+  const borderByStatus = invalidVault
+    ? 'border-red-500'
+    : status === 'error'
+      ? 'border-red-500'
+      : status === 'missing'
+        ? 'border-amber-400'
+        : status === 'exists'
+          ? 'border-emerald-400'
+          : '';
 
   const uniqueId = useMemo(() => `rf-${Math.random().toString(36).slice(2)}`, []);
 
   return (
     <div className="flex items-center gap-2">
       <input
-        className={`flex-1 rounded border px-2 py-1 text-xs ${invalidVault ? 'border-red-500' : ''}`}
+        className={`flex-1 rounded border px-2 py-1 text-xs ${borderByStatus}`}
         placeholder={mode === 'vault' ? 'mount/path/key' : 'value'}
         value={val}
         onChange={(e) => setVal(e.target.value)}
@@ -64,6 +80,35 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
           <option value="vault">vault</option>
         </select>
       </div>
+      {mode === 'vault' && isValidVaultRef(val) && (
+        <span
+          aria-label={`Vault reference status: ${status}`}
+          title={`Vault reference status: ${status}`}
+          className={
+            'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none border ' +
+            (status === 'exists'
+              ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+              : status === 'missing'
+                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                : status === 'error'
+                  ? 'bg-red-100 text-red-700 border-red-300'
+                  : 'bg-muted text-muted-foreground border-muted-foreground/20')
+          }
+        >
+          {status}
+        </span>
+      )}
+      {mode === 'vault' && isValidVaultRef(val) && status !== 'disabled' && (
+        <button
+          type="button"
+          aria-label="Edit vault value"
+          className="text-xs px-2 py-1 rounded border hover:bg-accent/50"
+          onClick={(e) => { editBtnRef.current = e.currentTarget; setOpen(true); }}
+          ref={editBtnRef}
+        >
+          ✎
+        </button>
+      )}
       {/* datalists for simple suggestions */}
       {mode === 'vault' && (
         <>
@@ -80,26 +125,22 @@ export function ReferenceField({ formData, onChange }: { formData?: ReferenceVal
           </datalist>
         </>
       )}
+      {open && ref.mount && ref.path && ref.key && (
+        <VaultWriteModal
+          mount={ref.mount}
+          path={ref.path}
+          secretKey={ref.key}
+          onClose={(didWrite) => {
+            setOpen(false);
+            // Return focus to the trigger for accessibility
+            setTimeout(() => editBtnRef.current?.focus(), 0);
+            if (didWrite) {
+              // Existence hook uses RQ cache; invalidation happens in modal, but ensure here too
+              // no-op
+            }
+          }}
+        />
+      )}
     </div>
   );
-}
-
-function parseRef(v?: string): { mount?: string; path?: string; key?: string; pathPrefix?: string } {
-  if (!v) return {};
-  if (v.startsWith('/')) return {};
-  const parts = v.split('/').filter(Boolean);
-  if (parts.length === 0) return {};
-  if (parts.length === 1) return { mount: parts[0] };
-  if (parts.length === 2) return { mount: parts[0], pathPrefix: parts[1] };
-  const mount = parts[0];
-  const key = parts[parts.length - 1];
-  const path = parts.slice(1, parts.length - 1).join('/');
-  return { mount, path, key };
-}
-
-function isValidVaultRef(v?: string): boolean {
-  if (!v) return true;
-  if (v.startsWith('/')) return false;
-  const parts = v.split('/').filter(Boolean);
-  return parts.length >= 3;
 }
