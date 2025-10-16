@@ -26,6 +26,7 @@ import { VaultService, VaultConfigSchema } from './services/vault.service.js';
 import { ContainerRegistryService } from './services/containerRegistry.service.js';
 import { ContainerCleanupService } from './services/containerCleanup.service.js';
 import { registerRemindersRoute } from './routes/reminders.route.js';
+import { registerNixRoutes } from './routes/nix.route.js';
 
 const logger = new LoggerService();
 const config = ConfigService.fromEnv();
@@ -277,6 +278,17 @@ async function bootstrap() {
 
   // Register routes that need runtime
   registerRemindersRoute(fastify, runtime, logger);
+  // Nix proxy routes
+  try {
+    registerNixRoutes(fastify, {
+      allowedChannels: config.nixAllowedChannels,
+      timeoutMs: config.nixHttpTimeoutMs,
+      cacheTtlMs: config.nixCacheTtlMs,
+      cacheMax: config.nixCacheMax,
+    });
+  } catch (e) {
+    logger.error('Failed to register Nix routes: %s', (e as any)?.message || e);
+  }
 
   // Start Fastify then attach Socket.io
   const PORT = Number(process.env.PORT) || 3010;
