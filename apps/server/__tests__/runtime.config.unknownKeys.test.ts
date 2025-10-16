@@ -93,4 +93,3 @@ describe('runtime config unknown keys handling', () => {
     expect(live.config).toEqual({ foo: 'next' });
   });
 });
-
