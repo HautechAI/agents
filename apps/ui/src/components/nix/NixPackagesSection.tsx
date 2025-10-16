@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { NixChannel, NixSearchItem } from '@/services/nix';
-import { fetchPackageVersion, mergeChannelSearchResults, searchPackages } from '@/services/nix';
+import { CHANNELS, fetchPackageVersion, mergeChannelSearchResults, searchPackages } from '@/services/nix';
 
 // Debounce helper
 function useDebounced<T>(value: T, delay = 300) {
@@ -18,7 +18,7 @@ type SelectedPkg = {
   pname?: string;
 };
 
-const CHANNELS: NixChannel[] = ['nixpkgs-unstable', 'nixos-24.11'];
+const CHANNELS_CONST = CHANNELS;
 
 export function NixPackagesSection() {
   const [query, setQuery] = useState('');
@@ -47,13 +47,24 @@ export function NixPackagesSection() {
     if (!debouncedQuery || debouncedQuery.trim().length < 2) return [];
     const a = qUnstable.data ?? [];
     const b = qStable.data ?? [];
-    return mergeChannelSearchResults(a, b).slice(0, 20);
-  }, [qUnstable.data, qStable.data, debouncedQuery]);
+    const merged = mergeChannelSearchResults(a, b);
+    const filtered = merged.filter((m) => !selected.some((s) => s.attr === m.attr));
+    return filtered.slice(0, 20);
+  }, [qUnstable.data, qStable.data, debouncedQuery, selected]);
 
   useEffect(() => {
     setIsOpen(suggestions.length > 0 && document.activeElement === inputRef.current);
     setActiveIndex(0);
   }, [suggestions.length]);
+
+  // Scroll active option into view when navigating
+  useEffect(() => {
+    if (!listboxRef.current) return;
+    const el = listboxRef.current.querySelector(`#nix-opt-${activeIndex}`) as HTMLElement | null;
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeIndex]);
 
   const addSelected = (item: NixSearchItem) => {
     setSelected((prev) => {
@@ -81,6 +92,8 @@ export function NixPackagesSection() {
       if (item) addSelected(item);
     } else if (e.key === 'Escape') {
       setIsOpen(false);
+    } else if (e.key === 'Tab') {
+      setIsOpen(false);
     }
   };
 
@@ -94,6 +107,7 @@ export function NixPackagesSection() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsOpen(suggestions.length > 0)}
+          onBlur={() => setTimeout(() => setIsOpen(false), 150)}
           onKeyDown={onKeyDown}
           placeholder="Search Nix packages..."
           className="w-full rounded border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
@@ -101,34 +115,49 @@ export function NixPackagesSection() {
           aria-expanded={isOpen}
           aria-controls="nix-search-listbox"
           aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-activedescendant={isOpen ? `nix-opt-${activeIndex}` : undefined}
+          aria-label="Search Nix packages"
         />
-        {isOpen && suggestions.length > 0 && (
+        {isOpen && (
           <ul
             id="nix-search-listbox"
             role="listbox"
             ref={listboxRef}
             className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded border border-input bg-popover text-sm shadow"
+            aria-busy={(qUnstable.isFetching || qStable.isFetching) ? 'true' : 'false'}
           >
-            {suggestions.map((s, idx) => {
-              const label = s.pname ? `${s.pname} (${s.attr})` : s.attr;
-              const active = idx === activeIndex;
-              return (
-                <li
-                  key={s.attr}
-                  id={`nix-opt-${idx}`}
-                  role="option"
-                  aria-selected={active}
-                  className={`cursor-pointer px-2 py-1 ${active ? 'bg-accent text-accent-foreground' : ''}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => addSelected(s)}
-                >
-                  {label}
-                </li>
-              );
-            })}
+            {(qUnstable.isFetching || qStable.isFetching) && suggestions.length === 0 ? (
+              <li className="px-2 py-1 text-muted-foreground" aria-disabled="true">Searching…</li>
+            ) : suggestions.length === 0 ? (
+              <li className="px-2 py-1 text-muted-foreground" aria-disabled="true">No results</li>
+            ) : (
+              suggestions.map((s, idx) => {
+                const label = s.pname ? `${s.pname} (${s.attr})` : s.attr;
+                const active = idx === activeIndex;
+                return (
+                  <li
+                    key={s.attr}
+                    id={`nix-opt-${idx}`}
+                    role="option"
+                    aria-selected={active}
+                    className={`cursor-pointer px-2 py-1 ${active ? 'bg-accent text-accent-foreground' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => addSelected(s)}
+                  >
+                    {label}
+                  </li>
+                );
+              }))}
           </ul>
         )}
       </div>
+
+      {(qUnstable.error || qStable.error) && (
+        <div className="text-xs text-destructive" aria-live="polite">
+          Error searching Nix packages. This may be due to CORS/network. Please retry.
+        </div>
+      )}
 
       {selected.length > 0 && (
         <ul className="space-y-2" aria-label="Selected Nix packages">
@@ -154,12 +183,13 @@ function SelectedPackageItem({ pkg, onRemove }: { pkg: { attr: string; pname?: s
     staleTime: 5 * 60_000,
   });
   const options = useMemo(() => {
-    return ['nixpkgs-unstable', 'nixos-24.11'].map((ch) => ({
-      ch: ch as NixChannel,
+    return CHANNELS_CONST.map((ch) => ({
+      ch,
       version: ch === 'nixpkgs-unstable' ? qUnstable.data : qStable.data,
       isLoading: ch === 'nixpkgs-unstable' ? qUnstable.isLoading : qStable.isLoading,
+      isError: ch === 'nixpkgs-unstable' ? !!qUnstable.error : !!qStable.error,
     }));
-  }, [qUnstable.data, qStable.data, qUnstable.isLoading, qStable.isLoading]);
+  }, [qUnstable.data, qStable.data, qUnstable.isLoading, qStable.isLoading, qUnstable.error, qStable.error]);
 
   const label = pkg.pname ? `${pkg.pname} (${pkg.attr})` : pkg.attr;
 
@@ -173,9 +203,9 @@ function SelectedPackageItem({ pkg, onRemove }: { pkg: { attr: string; pname?: s
         onChange={(e) => setChosen(e.target.value as NixChannel | '')}
       >
         <option value="">Select version…</option>
-        {options.map(({ ch, version, isLoading }) => (
-          <option key={ch} value={ch} disabled={isLoading || !version}>
-            {ch}: {isLoading ? 'loading…' : version ?? 'n/a'}
+        {options.map(({ ch, version, isLoading, isError }) => (
+          <option key={ch} value={ch} disabled={isLoading || isError || !version} title={isError ? 'Error fetching version' : undefined}>
+            {ch}: {isLoading ? 'loading…' : isError ? 'error' : version ?? 'n/a'}
           </option>
         ))}
       </select>
@@ -192,4 +222,3 @@ function SelectedPackageItem({ pkg, onRemove }: { pkg: { attr: string; pname?: s
 }
 
 export default NixPackagesSection;
-
