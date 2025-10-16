@@ -60,6 +60,25 @@ export const Errors = {
       message: `Config provided for node ${nodeId} but instance has no setConfig method`,
       nodeId,
     }),
+  // Added centralized helpers used by runtime
+  nodeInitFailure: (nodeId: string, cause?: unknown) =>
+    new GraphError({
+      code: 'NODE_INIT_ERROR',
+      message: `Initialization failed for node ${nodeId}`,
+      nodeId,
+      cause,
+    }),
+  configApplyFailed: (
+    nodeId: string,
+    method: 'setConfig' | 'setDynamicConfig',
+    cause?: unknown,
+  ) =>
+    new GraphError({
+      code: 'CONFIG_APPLY_ERROR',
+      message: `Config apply failed (${method}) for node ${nodeId}`,
+      nodeId,
+      cause,
+    }),
 };
 
 export type ErrorCode = keyof typeof Errors;
