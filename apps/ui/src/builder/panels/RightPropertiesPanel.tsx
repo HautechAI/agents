@@ -33,6 +33,8 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
     return <div className="text-xs text-muted-foreground">Select a node to edit its properties.</div>;
   }
   const { data } = node;
+  // Derive readOnly/disabled from runtime status where applicable
+  const { data: status } = useNodeStatus(node.id);
   const tpl = templates.find((t: TemplateNodeSchema) => t.name === data.template);
   const update = (patch: Record<string, unknown>) => onChange(node.id, patch);
   const cfg = (data.config || {}) as Record<string, unknown>;
@@ -84,8 +86,9 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
   }
 
   // Resolve custom view components if enabled
-  const StaticView = getConfigView(data.template, 'static') as any;
-  const DynamicView = getConfigView(data.template, 'dynamic') as any;
+  const StaticView = getConfigView(data.template, 'static');
+  const DynamicView = getConfigView(data.template, 'dynamic');
+  const disableAll = status?.provisionStatus?.state === 'deprovisioning';
 
   return (
     <div className="space-y-4">
@@ -104,9 +107,10 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
               key={`static-${node.id}`}
               templateName={data.template}
               value={cfg}
-              onChange={(next: Record<string, unknown>) => update({ config: next })}
+              onChange={(next) => update({ config: next })}
               readOnly={false}
-              disabled={false}
+              disabled={!!disableAll}
+              onValidate={() => { /* plumbed for future save blocking */ }}
             />
           ) : (
             <div className="text-xs text-muted-foreground">No custom view registered for {data.template} (static)</div>
@@ -122,9 +126,9 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
               nodeId={node.id}
               templateName={data.template}
               value={dynamicConfig}
-              onChange={(next: Record<string, unknown>) => update({ dynamicConfig: next })}
+              onChange={(next) => update({ dynamicConfig: next })}
               readOnly={false}
-              disabled={false}
+              disabled={!!disableAll}
             />
           ) : (
             <div className="text-xs text-muted-foreground">No custom view registered for {data.template} (dynamic)</div>
@@ -146,4 +150,3 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
     </div>
   );
 }
-
