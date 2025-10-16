@@ -1,13 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { BaseTrigger, BaseTriggerOptions } from '../src/triggers/base.trigger';
+import { describe, it, expect, vi } from 'vitest';
+import { BaseTrigger } from '../src/triggers/base.trigger';
 import type { ProvisionStatus } from '../src/graph/capabilities';
 
+const makeLogger = () => ({ info: vi.fn(), debug: vi.fn(), error: vi.fn() });
+
 class ProvTrigger extends BaseTrigger {
-  constructor(private failProvision = false, options?: BaseTriggerOptions) { super(options); }
-  protected async doProvision(): Promise<void> {
-    if (this.failProvision) throw new Error('boom');
-  }
-  protected async doDeprovision(): Promise<void> { /* no-op */ }
+  constructor(private failProvision = false, logger: any = makeLogger()) { super(logger as any); }
+  protected async doProvision(): Promise<void> { if (this.failProvision) throw new Error('boom'); }
+  protected async doDeprovision(): Promise<void> {}
 }
 
 describe('BaseTrigger Provisionable', () => {

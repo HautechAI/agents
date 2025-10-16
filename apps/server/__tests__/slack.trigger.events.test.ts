@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-// Mock socket-mode client to simulate events_api envelope
+// Mock socket-mode client; SlackTrigger registers a 'message' handler
 vi.mock('@slack/socket-mode', () => {
   class MockClient {
     handlers: Record<string, Function[]> = {};
@@ -9,7 +9,6 @@ vi.mock('@slack/socket-mode', () => {
     }
     async start() {}
     async disconnect() {}
-    async ack(_id: string) {}
   }
   return { SocketModeClient: MockClient };
 });
@@ -24,10 +23,17 @@ describe('SlackTrigger events', () => {
     const received: any[] = [];
     await trig.subscribe({ invoke: async (_t, msgs) => { received.push(...msgs); } });
     await trig.provision();
-    // Fire a mock events_api envelope
+    // Fire a mock socket-mode 'message' envelope
     const client: any = (trig as any).client || (await (trig as any).ensureClient?.());
-    const h = (client.handlers['events_api'] || [])[0];
-    await h({ envelope_id: 'e1', payload: { event: { type: 'message', user: 'U', channel: 'C', text: 'hello', ts: '1.0' } } });
+    const h = (client.handlers['message'] || [])[0];
+    await h({
+      envelope_id: 'e1',
+      ack: vi.fn(async () => {}),
+      body: {
+        type: 'event_callback',
+        event: { type: 'message', user: 'U', channel: 'C', text: 'hello', ts: '1.0' },
+      },
+    });
     expect(received.length).toBe(1);
   });
 
