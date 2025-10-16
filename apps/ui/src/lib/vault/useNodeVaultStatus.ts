@@ -1,17 +1,63 @@
 import { useMemo } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { collectVaultRefs } from './collect';
 import { parseVaultRef, isValidVaultRef } from './parse';
-import { useVaultKeyExistence } from './useVaultKeyExistence';
 
 export function useNodeVaultStatus(config?: Record<string, unknown>) {
   const refs = useMemo(() => collectVaultRefs(config || {}), [config]);
-  // Map each ref to a hook call; React rules of hooks require stable call order.
-  const statuses = refs.map((r) => {
-    if (!isValidVaultRef(r)) return 'error' as const; // invalid format
-    const p = parseVaultRef(r);
-    const { status } = useVaultKeyExistence(p.mount, p.path, p.key);
-    return status;
+  // Unique resource tuples (mount,path) to fetch once
+  const uniqueResources = useMemo(() => {
+    const set = new Set<string>();
+    const out: Array<{ mount: string; path: string }> = [];
+    for (const r of refs) {
+      if (!isValidVaultRef(r)) continue;
+      const p = parseVaultRef(r);
+      if (p.mount && p.path) {
+        const k = `${p.mount}::${p.path}`;
+        if (!set.has(k)) {
+          set.add(k);
+          out.push({ mount: p.mount, path: p.path });
+        }
+      }
+    }
+    return out;
+  }, [refs]);
+
+  const queries = useQueries({
+    queries: uniqueResources.map(({ mount, path }) => ({
+      queryKey: ['vault', 'keys', mount, path],
+      queryFn: () => import('../graph/api').then((m) => m.api.listVaultKeys(mount, path, { maskErrors: false })),
+      staleTime: 1000 * 60 * 5,
+      retry: 2,
+      retryDelay: (attempt: number) => Math.min(1000 * Math.pow(2, attempt), 5000),
+    })),
   });
+
+  const statusByResource = useMemo(() => {
+    const map = new Map<string, { status: 'pending' | 'error' | 'success'; items?: string[] }>();
+    uniqueResources.forEach(({ mount, path }, idx) => {
+      const q = queries[idx];
+      const k = `${mount}::${path}`;
+      if (!q) return map.set(k, { status: 'pending' });
+      if (q.status === 'pending') return map.set(k, { status: 'pending' });
+      if (q.status === 'error') return map.set(k, { status: 'error' });
+      map.set(k, { status: 'success', items: (q.data?.items || []) as string[] });
+    });
+    return map;
+  }, [queries, uniqueResources]);
+
+  const statuses = useMemo(() => {
+    return refs.map((r) => {
+      if (!isValidVaultRef(r)) return 'error' as const;
+      const p = parseVaultRef(r);
+      if (!(p.mount && p.path && p.key)) return 'error' as const;
+      const k = `${p.mount}::${p.path}`;
+      const entry = statusByResource.get(k);
+      if (!entry || entry.status === 'pending') return 'loading' as const;
+      if (entry.status === 'error') return 'error' as const;
+      return (entry.items || []).includes(p.key) ? ('exists' as const) : ('missing' as const);
+    });
+  }, [refs, statusByResource]);
 
   const agg = useMemo(() => {
     const total = refs.length;
@@ -30,4 +76,3 @@ export function useNodeVaultStatus(config?: Record<string, unknown>) {
 
   return agg;
 }
-

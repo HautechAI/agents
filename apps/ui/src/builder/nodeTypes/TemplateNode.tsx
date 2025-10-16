@@ -24,7 +24,7 @@ function TemplateNodeComponent({ id, data }: NodeProps<BuilderNodeData>) {
   const reminders = useNodeReminders(id, data.template === 'remindMeTool');
   const reminderCount = reminders.data?.items?.length || 0;
   const nodeStatus = useNodeStatus(id);
-  const vaultAgg = useNodeVaultStatus((data as any)?.config as Record<string, unknown> | undefined);
+  const vaultAgg = useNodeVaultStatus(data?.config);
 
   const provisionError = nodeStatus.data?.provisionStatus?.state === 'error';
   const hasVaultError = (vaultAgg?.error || 0) > 0;
@@ -60,7 +60,7 @@ function TemplateNodeComponent({ id, data }: NodeProps<BuilderNodeData>) {
         {(hasVaultError || hasMissing) && (
           <span
             className={
-              'absolute right-2 top-1 rounded px-1.5 py-0.5 text-[10px] leading-none border ' +
+              'absolute right-2 top-1 rounded px-1.5 py-0.5 text-[10px] leading-none border pointer-events-none ' +
               (hasVaultError ? 'bg-red-100 text-red-700 border-red-300' : 'bg-amber-100 text-amber-900 border-amber-300')
             }
             title={hasVaultError ? 'vault error' : `${vaultAgg.missing} missing secrets`}
