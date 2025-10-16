@@ -36,11 +36,9 @@ describe('Agent.getConfigSchema / Agent.setConfig', () => {
     const a = makeAgent();
     const anyA: any = a as any;
   const originalLLM = (anyA.llm);
-<<<<<<< HEAD
   a.configure({ model: 'override-model' });
 =======
-    a.setConfig({ model: 'override-model' });
->>>>>>> e9905a9 (feat(server): Phase 3 unified Agent node and buffer\n\n- Add unified apps/server/src/agents/agent.ts\n- Add apps/server/src/agents/messages-buffer.ts\n- Remove BaseAgent/SimpleAgent from public surface\n- Update templates to template key agent; adjust schema UI\n- LiveGraph destroy uses delete() if available\n- Update tests/docs references from SimpleAgent to Agent)
+    a.setConfig({ model: 'override-model' }); (feat(server): Phase 3 unified Agent node and buffer\n\n- Add unified apps/server/src/agents/agent.ts\n- Add apps/server/src/agents/messages-buffer.ts\n- Remove BaseAgent/SimpleAgent from public surface\n- Update templates to template key agent; adjust schema UI\n- LiveGraph destroy uses delete() if available\n- Update tests/docs references from SimpleAgent to Agent)
   // Expect underlying llm object mutated, not replaced with a new node
   expect(anyA.llm).toBe(originalLLM);
   expect((anyA.llm as any).model).toBe('override-model');
