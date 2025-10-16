@@ -41,8 +41,11 @@ export const api = {
   listVaultMounts: () => http<{ items: string[] }>(`${BASE}/api/vault/mounts`).catch(() => ({ items: [] })),
   listVaultPaths: (mount: string, prefix = '') =>
     http<{ items: string[] }>(`${BASE}/api/vault/kv/${encodeURIComponent(mount)}/paths?prefix=${encodeURIComponent(prefix)}`).catch(() => ({ items: [] })),
-  listVaultKeys: (mount: string, path = '') =>
-    http<{ items: string[] }>(`${BASE}/api/vault/kv/${encodeURIComponent(mount)}/keys?path=${encodeURIComponent(path)}`).catch(() => ({ items: [] })),
+  listVaultKeys: (mount: string, path = '', opts?: { maskErrors?: boolean }) =>
+    (opts?.maskErrors === false
+      ? http<{ items: string[] }>(`${BASE}/api/vault/kv/${encodeURIComponent(mount)}/keys?path=${encodeURIComponent(path)}`)
+      : http<{ items: string[] }>(`${BASE}/api/vault/kv/${encodeURIComponent(mount)}/keys?path=${encodeURIComponent(path)}`).catch(() => ({ items: [] }))
+    ),
   writeVaultKey: (mount: string, body: { path: string; key: string; value: string }) =>
     http<{ mount: string; path: string; key: string; version: number }>(
       `${BASE}/api/vault/kv/${encodeURIComponent(mount)}/write`,

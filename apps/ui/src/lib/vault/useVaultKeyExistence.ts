@@ -16,7 +16,7 @@ export function useVaultKeyExistence(mount?: string, path?: string, key?: string
 
   const q = useQuery({
     queryKey: ['vault', 'keys', debounced.mount, debounced.path],
-    queryFn: () => api.listVaultKeys(debounced.mount!, debounced.path!),
+    queryFn: () => api.listVaultKeys(debounced.mount!, debounced.path!, { maskErrors: false }),
     enabled: enabled && !!debounced.mount && !!debounced.path,
     staleTime: 1000 * 60 * 5,
     retry: 2,
@@ -34,4 +34,3 @@ export function useVaultKeyExistence(mount?: string, path?: string, key?: string
 
   return { status, query: q };
 }
-

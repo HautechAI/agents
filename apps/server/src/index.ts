@@ -145,8 +145,8 @@ async function bootstrap() {
     });
     fastify.post('/api/vault/kv/:mount/write', async (req, reply) => {
       const { mount } = req.params as { mount: string };
-      const body = (req.body || {}) as { path?: string; key?: string; value?: string };
-      if (!body.path || !body.key || typeof body.value !== 'string') {
+      const body = req.body as unknown;
+      if (!isValidWriteBody(body)) {
         reply.code(400);
         return { error: 'invalid_body' };
       }
@@ -154,10 +154,10 @@ async function bootstrap() {
         const { version } = await vaultService.setSecret({ mount, path: body.path, key: body.key }, body.value);
         reply.code(201);
         return { mount, path: body.path, key: body.key, version };
-      } catch (e: any) {
-        const status = (e as any)?.statusCode || 500;
+      } catch (e: unknown) {
+        const status = isHttpError(e) ? e.statusCode : 500;
         reply.code(status);
-        return { error: e?.message || 'vault_write_failed' };
+        return { error: 'vault_write_failed' };
       }
     });
   }
@@ -345,3 +345,13 @@ bootstrap().catch((e) => {
   logger.error('Bootstrap failure', e);
   process.exit(1);
 });
+
+function isValidWriteBody(body: unknown): body is { path: string; key: string; value: string } {
+  if (!body || typeof body !== 'object') return false;
+  const o = body as Record<string, unknown>;
+  return typeof o.path === 'string' && o.path.length > 0 && typeof o.key === 'string' && o.key.length > 0 && typeof o.value === 'string';
+}
+
+function isHttpError(e: unknown): e is { statusCode?: number } {
+  return !!e && typeof e === 'object' && 'statusCode' in (e as any);
+}

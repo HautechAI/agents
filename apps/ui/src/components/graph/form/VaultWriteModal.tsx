@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/graph/api';
 import { notifyError, notifySuccess } from '@/lib/notify';
@@ -7,9 +7,12 @@ export function VaultWriteModal({ mount, path, key, onClose }: { mount: string; 
   const [value, setValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const qc = useQueryClient();
+  const titleId = useMemo(() => `vault-modal-title-${Math.random().toString(36).slice(2)}`, []);
 
   useEffect(() => {
+    // Focus textarea on mount
     ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose(false);
@@ -17,6 +20,34 @@ export function VaultWriteModal({ mount, path, key, onClose }: { mount: string; 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Basic focus trap within the dialog
+  useEffect(() => {
+    const root = dialogRef.current;
+    if (!root) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusables = root.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])');
+      const list = Array.from(focusables).filter((el) => el.offsetParent !== null);
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) {
+          last.focus();
+          e.preventDefault();
+        }
+      } else {
+        if (active === last) {
+          first.focus();
+          e.preventDefault();
+        }
+      }
+    };
+    root.addEventListener('keydown', onKey);
+    return () => root.removeEventListener('keydown', onKey);
+  }, []);
 
   async function submit() {
     setSubmitting(true);
@@ -33,10 +64,10 @@ export function VaultWriteModal({ mount, path, key, onClose }: { mount: string; 
   }
 
   return (
-    <div role="dialog" aria-label="vault-write-modal" aria-modal className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded shadow-lg w-[520px] max-w-[90vw] p-4">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div ref={dialogRef} className="bg-white rounded shadow-lg w-[520px] max-w-[90vw] p-4">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold">Edit Vault secret</h2>
+          <h2 id={titleId} className="text-sm font-semibold">Edit Vault secret</h2>
           <button aria-label="Close" className="text-xs" onClick={() => onClose(false)}>
             ×
           </button>
@@ -79,4 +110,3 @@ export function VaultWriteModal({ mount, path, key, onClose }: { mount: string; 
     </div>
   );
 }
-
