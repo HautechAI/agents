@@ -17,10 +17,11 @@ describe('ContainerRegistryService backfill last_used behavior', () => {
       client = await MongoClient.connect(mongod.getUri());
       registry = new ContainerRegistryService(client.db('test'), logger);
       await registry.ensureIndexes();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setupOk = false;
       // eslint-disable-next-line no-console
-      console.warn('Skipping backfill last_used tests: mongodb-memory-server unavailable:', e?.message || e);
+      const msg = (e as { message?: string } | null | undefined)?.message ?? String(e);
+      console.warn('Skipping backfill last_used tests: mongodb-memory-server unavailable:', msg);
     }
   });
 
@@ -45,7 +46,6 @@ describe('ContainerRegistryService backfill last_used behavior', () => {
       created_at: past,
       updated_at: past,
       last_used_at: past,
-      kill_after_at: presetKill,
       kill_after_at: presetKill,
       termination_reason: null,
       deleted_at: null,

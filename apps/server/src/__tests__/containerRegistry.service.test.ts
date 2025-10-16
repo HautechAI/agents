@@ -17,10 +17,11 @@ describe('ContainerRegistryService', () => {
       client = await MongoClient.connect(mongod.getUri());
       registry = new ContainerRegistryService(client.db('test'), logger);
       await registry.ensureIndexes();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setupOk = false;
       // eslint-disable-next-line no-console
-      console.warn('Skipping ContainerRegistryService tests: mongodb-memory-server unavailable:', e?.message || e);
+      const msg = (e as { message?: string } | null | undefined)?.message ?? String(e);
+      console.warn('Skipping ContainerRegistryService tests: mongodb-memory-server unavailable:', msg);
     }
   });
 
@@ -93,7 +94,7 @@ describe('ContainerRegistryService', () => {
           inspect: async () => ({ Created: new Date().toISOString(), State: { Running: true }, Config: { Image: 'img' } }),
         }),
       }),
-    } as unknown as Adapter;
+    };
 
     await registry.backfillFromDocker(fake);
     await registry.backfillFromDocker(fake); // run twice

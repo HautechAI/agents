@@ -220,7 +220,7 @@ export class ContainerRegistryService {
           if (existing) {
             // Existing record: do not bump last_used_at; optionally recompute kill_after_at if missing.
             // Preserve unrelated metadata fields (e.g., lastError, retryAfter, terminationAttempts) by updating dotted paths only.
-            const setFields: Record<string, any> = {
+            const setFields: Record<string, unknown> = {
               container_id: item.id,
               node_id: nodeId,
               thread_id: threadId,
@@ -249,7 +249,6 @@ export class ContainerRegistryService {
                 `ContainerRegistry: backfill existing cid=${item.id.substring(0, 12)} - skipping last_used_at update`,
               );
             }
-            // Preserve existing ttlSeconds; only set default when absent.
             // Preserve existing ttlSeconds; only set default when absent.
             if (typeof existing.metadata?.ttlSeconds !== 'number') setFields['metadata.ttlSeconds'] = 86400;
             const updateExisting: UpdateFilter<ContainerDoc> = { $set: setFields };
