@@ -9,7 +9,7 @@ import { LoggerService } from '../services/logger.service.js';
 import { DockerExecTransport } from './dockerExecTransport.js';
 import { DEFAULT_MCP_COMMAND, McpError, McpServer, McpTool, McpToolCallResult } from './types.js';
 import { VaultService } from '../services/vault.service.js';
-import { EnvService } from '../services/env.service.js';
+import { EnvService, type EnvItem } from '../services/env.service.js';
 import { JSONSchema } from 'zod/v4/core';
 
 const EnvItemSchema = z
@@ -51,14 +51,14 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   setVault(vault?: VaultService): void { this.vault = vault; }
 
   private async resolveEnvOverlay(): Promise<Record<string, string> | undefined> {
-    const items = this.cfg?.env || [];
-    if (!items.length) return undefined;
-    if (this.envService) {
-      try { const r = await this.envService.resolveEnvItems(items as any); return Object.keys(r).length ? r : undefined; } catch { return undefined; }
+    const items: EnvItem[] = (this.cfg?.env || []) as EnvItem[];
+    if (!items.length || !this.envService) return undefined;
+    try {
+      const r = await this.envService.resolveEnvItems(items);
+      return Object.keys(r).length ? r : undefined;
+    } catch {
+      return undefined;
     }
-    const out: Record<string, string> = {};
-    for (const it of items) { if (it?.key && (it.source || 'static') === 'static') out[it.key] = it.value ?? ''; }
-    return Object.keys(out).length ? out : undefined;
   }
 
   private buildExecConfig(command: string, envOverlay?: Record<string, string>) {
@@ -368,29 +368,35 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       });
 
       const rawResult: unknown = result as unknown;
-      const rawContent = (rawResult as any)?.content;
+      const rawContent = (rawResult && typeof rawResult === 'object' && 'content' in (rawResult as Record<string, unknown>)
+        ? (rawResult as Record<string, unknown>).content
+        : undefined) as unknown;
       const contentArr = Array.isArray(rawContent) ? rawContent : [];
       const flattened = contentArr
         .map((c: unknown) => {
           if (typeof c === 'string') return c;
           if (c && typeof c === 'object') {
             const obj = c as Record<string, unknown>;
-            if ('text' in obj && typeof (obj as any).text === 'string') return (obj as any).text as string;
-            if ('data' in obj) return JSON.stringify((obj as any).data);
+            if ('text' in obj && typeof obj.text === 'string') return obj.text as string;
+            if ('data' in obj) return JSON.stringify(obj.data);
           }
           try { return JSON.stringify(c); } catch { return String(c); }
         })
         .join('\n');
       return {
-        isError: (rawResult as any)?.isError,
+        isError: !!(rawResult && typeof rawResult === 'object' && 'isError' in (rawResult as Record<string, unknown>) && (rawResult as Record<string, unknown>).isError),
         content: flattened,
-        structuredContent: (rawResult as any)?.structuredContent,
+        structuredContent: (rawResult && typeof rawResult === 'object' && 'structuredContent' in (rawResult as Record<string, unknown>)
+          ? (rawResult as Record<string, unknown>).structuredContent
+          : undefined) as unknown,
         raw: result,
       };
-    } catch (e: any) {
-      const emsg = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e);
-      const ename = e && typeof e === 'object' && 'name' in e ? String(e.name) : 'Error';
-      throw new McpError(`Tool '${name}' failed: ${ename}: ${emsg}`.trim(), e?.code || 'TOOL_CALL_ERROR');
+    } catch (e: unknown) {
+      const errObj = e as { code?: string } | unknown;
+      const emsg = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : String(e);
+      const ename = e && typeof e === 'object' && 'name' in e ? String((e as { name?: unknown }).name) : 'Error';
+      const code = (errObj && typeof errObj === 'object' && 'code' in errObj) ? String((errObj as { code?: unknown }).code) : 'TOOL_CALL_ERROR';
+      throw new McpError(`Tool '${name}' failed: ${ename}: ${emsg}`.trim(), code);
     } finally {
       // Clean up after tool call
       if (client) {
@@ -535,7 +541,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         // New flat shape: tool names are top-level boolean properties
         normalized = this._dynamicConfigZodSchema.parse(cfg) as Record<string, boolean>;
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed`, e as any);
+        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed`, e);
       }
     }
     const enabled = new Set<string>();
