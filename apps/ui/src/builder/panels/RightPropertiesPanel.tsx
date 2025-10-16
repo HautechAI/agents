@@ -12,7 +12,7 @@ import { useNodeAction, useNodeStatus } from '@/lib/graph/hooks';
 import { canPause, canProvision } from '@/lib/graph/capabilities';
 import { NixPackagesSection } from '@/components/nix/NixPackagesSection';
 import { getConfigView } from '@/components/configViews/registry';
-import '@/configViews.init';
+// Registry is initialized once in main.tsx via initConfigViewsRegistry()
 
 interface BuilderPanelNodeData {
   template: string;
