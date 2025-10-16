@@ -69,12 +69,9 @@ export class SlackTrigger extends BaseTrigger {
 
   private async resolveAppToken(): Promise<string> {
     const cfg = this.cfg;
-    console.log(cfg, this.cfg);
     if (!cfg) throw new Error('SlackTrigger not configured: app_token is required');
     const t = cfg.app_token;
-    console.log(t);
     const resolved = await resolveTokenRef(t, { expectedPrefix: 'xapp-', fieldName: 'app_token', vault: this.vault });
-    console.log(resolved);
     return resolved;
   }
 
