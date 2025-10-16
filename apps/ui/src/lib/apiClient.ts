@@ -12,7 +12,8 @@ type ViteEnv = {
 function readViteEnv(): ViteEnv | undefined {
   try {
     // Prefer globalThis.importMeta (used in tests), fallback to import.meta when present
-    const im: unknown = (globalThis as any)?.importMeta ?? (typeof import.meta !== 'undefined' ? import.meta : undefined);
+    const fromGlobal = (globalThis as Record<string, unknown> | undefined)?.importMeta;
+    const im = (typeof import.meta !== 'undefined' ? import.meta : undefined) ?? fromGlobal;
     if (im && typeof im === 'object' && 'env' in (im as Record<string, unknown>)) {
       const env = (im as { env?: unknown }).env;
       if (env && typeof env === 'object') return env as ViteEnv;
@@ -26,8 +27,9 @@ function readViteEnv(): ViteEnv | undefined {
 function readNodeEnv(): Record<string, string | undefined> | undefined {
   try {
     if (typeof process === 'undefined') return undefined;
-    const p: any = process as any;
-    const env = p && typeof p === 'object' ? p.env : undefined;
+    const p: unknown = process;
+    if (!p || typeof p !== 'object' || !('env' in p)) return undefined;
+    const env = (p as { env?: unknown }).env;
     return env && typeof env === 'object' ? (env as Record<string, string | undefined>) : undefined;
   } catch {
     return undefined;
