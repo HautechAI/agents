@@ -73,7 +73,7 @@ export class ShellTool extends BaseTool {
         if (!this.containerProvider) {
           throw new Error('ShellTool: containerProvider not set. Connect via graph edge before use.');
         }
-        const container = await this.containerProvider.provide(thread_id!);
+        const container = await this.containerProvider.provide(thread_id);
         const { command } = bashCommandSchema.parse(input);
         this.logger.info('Tool called', 'shell_command', { command });
         const envOverlay = await this.resolveEnv();

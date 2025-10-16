@@ -62,7 +62,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   }
 
   private buildExecConfig(command: string, envOverlay?: Record<string, string>) {
-    const cfg = this.cfg!;
+    const cfg = this.cfg;
+    if (!cfg) throw new Error('LocalMCPServer: config not yet set via setConfig');
     const cmdToRun = command;
     const envArr = envOverlay ? Object.entries(envOverlay).map(([k, v]) => `${k}=${v}`) : undefined;
     return { cmdToRun, envArr, workdir: cfg.workdir };
@@ -147,7 +148,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     const tempContainer = await this.containerProvider.provide(`_discovery_temp_${uuidv4()}`);
     const tempContainerId = tempContainer.id;
 
-    const cfg = this.cfg!;
+    const cfg = this.cfg;
+    if (!cfg) throw new Error('LocalMCPServer: config not yet set via setConfig');
     const command = cfg.command ?? DEFAULT_MCP_COMMAND;
     const envOverlay = await this.resolveEnvOverlay();
     const { cmdToRun, envArr, workdir } = this.buildExecConfig(command, envOverlay);
@@ -288,7 +290,9 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     // We purposely avoid triggering a start/discovery from listTools to prevent dual discovery paths.
     const all = force && this.toolsDiscovered ? (this.toolsCache ?? []) : this.toolsCache || [];
     if (!this._enabledTools) return all;
-    return all.filter((t) => this._enabledTools!.has(t.name));
+    const enabled = this._enabledTools;
+    if (!enabled) return all;
+    return all.filter((t) => enabled.has(t.name));
   }
 
   async callTool(
@@ -309,7 +313,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     try { await this.containerService.touchLastUsed(container.id); } catch {}
     const containerId = container.id;
 
-    const cfg = this.cfg!;
+    const cfg = this.cfg;
+    if (!cfg) throw new Error('LocalMCPServer: config not yet set via setConfig');
     const command = cfg.command ?? DEFAULT_MCP_COMMAND;
     const envOverlay = await this.resolveEnvOverlay();
     const { cmdToRun, envArr, workdir } = this.buildExecConfig(command, envOverlay);

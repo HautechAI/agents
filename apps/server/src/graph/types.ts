@@ -54,7 +54,7 @@ export interface EndpointBase {
 export interface MethodEndpoint extends EndpointBase {
   type: 'method';
   key: string;
-  fn: Function; // eslint-disable-line @typescript-eslint/ban-types
+  fn: Function;
   owner: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
