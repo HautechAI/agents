@@ -15,6 +15,16 @@ vi.mock('@slack/socket-mode', () => {
 import { SlackTrigger } from '../src/triggers/slack.trigger';
 
 describe('SlackTrigger events', () => {
+  // Typed helper for Slack socket-mode envelope used by our handler
+  type SlackEnvelope = {
+    envelope_id: string;
+    ack: () => Promise<void>;
+    body: {
+      type: 'event_callback';
+      event: { type: 'message'; user: string; channel: string; text: string; ts: string };
+    };
+  };
+
   it('relays message events from socket-mode client', async () => {
     const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn() } as any;
     const trig = new SlackTrigger(logger);
@@ -23,18 +33,22 @@ describe('SlackTrigger events', () => {
     const received: any[] = [];
     await trig.subscribe({ invoke: async (_t, msgs) => { received.push(...msgs); } });
     await trig.provision();
-    // Fire a mock socket-mode 'message' envelope
-    const client: any = (trig as any).client || (await (trig as any).ensureClient?.());
-    const h = (client.handlers['message'] || [])[0];
-    await h({
+    // Fire a mock socket-mode 'message' envelope.
+    // Note: accessing private .client is a minimal cast for test purposes.
+    const client = (trig as any).client as { handlers: Record<string, Function[]> };
+    const h = (client.handlers['message'] || [])[0] as (env: SlackEnvelope) => Promise<void> | void;
+    const ack = vi.fn<[], Promise<void>>(async () => {});
+    const env: SlackEnvelope = {
       envelope_id: 'e1',
-      ack: vi.fn(async () => {}),
+      ack,
       body: {
         type: 'event_callback',
         event: { type: 'message', user: 'U', channel: 'C', text: 'hello', ts: '1.0' },
       },
-    });
+    };
+    await h(env);
     expect(received.length).toBe(1);
+    expect(ack).toHaveBeenCalledTimes(1);
   });
 
   it('fails fast when vault ref provided but vault disabled', async () => {

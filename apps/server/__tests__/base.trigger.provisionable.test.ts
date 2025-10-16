@@ -1,11 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BaseTrigger } from '../src/triggers/base.trigger';
 import type { ProvisionStatus } from '../src/graph/capabilities';
+import type { LoggerService } from '../src/services/logger.service';
 
-const makeLogger = () => ({ info: vi.fn(), debug: vi.fn(), error: vi.fn() });
+const makeLogger = (): Pick<LoggerService, 'info' | 'debug' | 'error'> => ({
+  info: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+});
 
 class ProvTrigger extends BaseTrigger {
-  constructor(private failProvision = false, logger: any = makeLogger()) { super(logger as any); }
+  constructor(private failProvision = false, logger: Pick<LoggerService, 'info' | 'debug' | 'error'> = makeLogger()) {
+    super(logger as LoggerService);
+  }
   protected async doProvision(): Promise<void> { if (this.failProvision) throw new Error('boom'); }
   protected async doDeprovision(): Promise<void> {}
 }
