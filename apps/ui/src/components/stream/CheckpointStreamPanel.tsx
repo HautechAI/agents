@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useCheckpointStream } from '@/hooks/useCheckpointStream';
-import { Button } from '@/components/ui/button';
+import { Button } from '@hautech/ui';
 import { CheckpointItem } from './CheckpointItem';
 import { StatusChip } from './StatusChip';
 

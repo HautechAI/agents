@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Table, Thead, Tbody, Tr, Th, Td, Button } from '@hautech/ui';
 import { Link } from 'react-router-dom';
 import { fetchTraces } from '../services/api';
 import { spanRealtime } from '../services/socket';
@@ -58,23 +59,23 @@ export function TracesListPage() {
           {conn.connected ? 'live' : 'offline'}
         </span>
       </h1>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '1px solid #ddd' }}>
-            <th>Trace ID</th>
-            <th>Thread ID</th>
-            <th>Messages</th>
-            <th>Root Label</th>
-            <th>Status</th>
-            <th>Spans</th>
-            <th>Last Update</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <Thead>
+          <Tr>
+            <Th>Trace ID</Th>
+            <Th>Thread ID</Th>
+            <Th>Messages</Th>
+            <Th>Root Label</Th>
+            <Th>Status</Th>
+            <Th>Spans</Th>
+            <Th>Last Update</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
           {traces.map(t => (
-            <tr key={t.traceId} style={{ borderBottom: '1px solid #eee' }}>
-              <td><Link to={`/trace/${t.traceId}`}>{t.traceId}</Link></td>
-              <td>
+            <Tr key={t.traceId}>
+              <Td><Link to={`/trace/${t.traceId}`}>{t.traceId}</Link></Td>
+              <Td>
                 {(() => {
                   const attrs = t.root?.attributes as AgentRootAttributes | undefined;
                   const attrThreadId = attrs?.threadId;
@@ -88,8 +89,8 @@ export function TracesListPage() {
                     </Link>
                   );
                 })()}
-              </td>
-              <td>
+              </Td>
+              <Td>
                 {(() => {
                   const root = t.root;
                   const attrs = root?.attributes as AgentRootAttributes | undefined;
@@ -115,15 +116,17 @@ export function TracesListPage() {
                     </span>
                   );
                 })()}
-              </td>
-              <td>{t.root?.label}</td>
-              <td>{t.root?.status && <StatusBadge status={t.root.status} />}</td>
-              <td>{t.spanCount} {t.failedCount > 0 && <span style={{ color: 'red' }}>({t.failedCount})</span>}</td>
-              <td>{new Date(t.lastUpdate).toLocaleTimeString()}</td>
-            </tr>
+              </Td>
+              <Td>{t.root?.label}</Td>
+              <Td>{t.root?.status && <StatusBadge status={t.root.status} />}</Td>
+              <Td>
+                {t.spanCount} {t.failedCount > 0 && <span style={{ color: 'red' }}>({t.failedCount})</span>}
+              </Td>
+              <Td>{new Date(t.lastUpdate).toLocaleTimeString()}</Td>
+            </Tr>
           ))}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
     </div>
   );
 }

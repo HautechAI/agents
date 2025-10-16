@@ -15,8 +15,9 @@ function detectBucket(span: SpanDoc): Bucket | undefined {
   const attrs = (span.attributes || {}) as Record<string, unknown>;
   const label = span.label || '';
   const isTool = attrs['kind'] === 'tool_call' || (label.startsWith('tool:') === true);
-  const isAgent = attrs['kind'] === 'agent' || label === 'agent';
-  if (isAgent) return 'agent';
+  // Detect agent spans for completeness (not used here)
+  // treat explicit agent labels as agent bucket
+  if (attrs['kind'] === 'agent' || label === 'agent') return 'agent';
   if (isTool) return 'tool';
   return undefined;
 }
@@ -26,7 +27,6 @@ function getNodeIdFromSpan(span: SpanDoc): string | undefined {
   const attrs = (span.attributes || {}) as Record<string, unknown>;
   const label = span.label || '';
   const isTool = attrs['kind'] === 'tool_call' || (label.startsWith('tool:') === true);
-  const isAgent = attrs['kind'] === 'agent' || label === 'agent';
 
   // For tool spans, use ONLY top-level nodeId (Tool id). No fallback to legacy attributes.toolNodeId
   if (isTool) {

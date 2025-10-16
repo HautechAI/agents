@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@hautech/ui/styles.css";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
