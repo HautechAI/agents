@@ -1,5 +1,5 @@
 // Use relative import to avoid alias resolution issues in test environment
-import { Switch } from '../../ui/switch';
+import { Switch } from '@hautech/ui';
 import type { ReactNode } from 'react';
 
 interface WidgetCommonProps { id: string; value: unknown; onChange: (val: unknown) => void; options?: Record<string, unknown>; placeholder?: string; required?: boolean; disabled?: boolean; readonly?: boolean; label?: string; }

@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { SpanDoc } from '../../obs/api';
 import { obsRealtime } from '../../obs/socket';
-import '../../obs/runningStore';
-import { useRunningCount } from '../../obs/runningStore';
+import { useRunningCount, __resetRunningStoreForTest } from '../../obs/runningStore';
 import { renderHook, act } from '@testing-library/react';
 
 // Helper to emit span_upsert using the public test API
@@ -34,7 +33,7 @@ describe('runningStore transitions', () => {
   const now = () => new Date().toISOString();
 
   beforeEach(() => {
-    // no global reset available; use unique spanIds per test
+    __resetRunningStoreForTest();
   });
 
   it('increments on running and decrements on ok', async () => {
@@ -54,16 +53,16 @@ describe('runningStore transitions', () => {
     const { result } = renderHook(() => useRunningCount(nodeId, 'tool'));
     expect(result.current).toBe(0);
     act(() => {
-      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
+      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
     });
     expect(result.current).toBe(1);
     act(() => {
-      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'error', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
+      upsert({ traceId: 't2', spanId: 's2', label: 'tool:x', status: 'error', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
     });
     expect(result.current).toBe(0);
     act(() => {
-      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
-      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'cancelled', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId }, nodeId });
+      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
+      upsert({ traceId: 't3', spanId: 's3', label: 'tool:x', status: 'cancelled', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call', nodeId, toolNodeId: nodeId }, nodeId });
     });
     expect(result.current).toBe(0);
   });
@@ -84,6 +83,43 @@ describe('runningStore transitions', () => {
       upsert({ traceId: 'te', spanId: 'e0', label: 'agent', status: 'ok', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'agent', nodeId }, nodeId });
     });
     expect(result.current).toBe(N - 1);
+  });
+
+  it('tool bucket only counts when nodeId equals Tool id', async () => {
+    const { result } = renderHook(() => useRunningCount(nodeId, 'tool'));
+    expect(result.current).toBe(0);
+    // Missing nodeId on tool_call should not count, even if legacy toolNodeId present
+    act(() => {
+      upsert({ traceId: 'tf', spanId: 'sf', label: 'tool:legacy', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call', toolNodeId: nodeId } });
+    });
+    expect(result.current).toBe(0);
+    // Properly attributed with nodeId should count
+    act(() => {
+      upsert({ traceId: 'tf2', spanId: 'sf2', label: 'tool:new', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'tool_call' }, nodeId });
+    });
+    expect(result.current).toBe(1);
+    act(() => {
+      upsert({ traceId: 'tf2', spanId: 'sf2', label: 'tool:new', status: 'ok', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'tool_call' }, nodeId });
+    });
+    expect(result.current).toBe(0);
+  });
+
+  it('does not misclassify agent-kind spans as tool_call', async () => {
+    const { result: agentCount } = renderHook(() => useRunningCount(nodeId, 'agent'));
+    const { result: toolCount } = renderHook(() => useRunningCount(nodeId, 'tool'));
+    expect(agentCount.current).toBe(0);
+    expect(toolCount.current).toBe(0);
+    act(() => {
+      // attrs.kind explicitly agent; label is not a tool
+      upsert({ traceId: 'ta', spanId: 'sa', label: 'agent', status: 'running', startTime: now(), completed: false, lastUpdate: now(), attributes: { kind: 'agent', nodeId }, nodeId });
+    });
+    expect(agentCount.current).toBe(1);
+    expect(toolCount.current).toBe(0);
+    act(() => {
+      upsert({ traceId: 'ta', spanId: 'sa', label: 'agent', status: 'ok', startTime: now(), completed: true, lastUpdate: now(), attributes: { kind: 'agent', nodeId }, nodeId });
+    });
+    expect(agentCount.current).toBe(0);
+    expect(toolCount.current).toBe(0);
   });
 });
 /* @vitest-environment jsdom */

@@ -19,10 +19,12 @@ function spanMatchesContext(span: SpanDoc, node: Node<BuilderPanelNodeData>, kin
   const attrs = (span.attributes || {}) as Record<string, unknown>;
   const kindAttr = String(attrs['kind'] || '');
   const label = span.label || '';
-  const nodeIdAttr = (attrs['nodeId'] as string | undefined) || span.nodeId;
+  const nodeIdAttr = span.nodeId || (attrs['nodeId'] as string | undefined);
   const kindOk = kind === 'agent' ? (kindAttr === 'agent' || label === 'agent') : (kindAttr === 'tool_call' || label.startsWith('tool:'));
   if (!kindOk) return false;
-  // Strict: require nodeId match; do not fallback to kind-only
+  // Agent: filter by nodeId (agent id)
+  if (kind === 'agent') return nodeIdAttr === node.id;
+  // Tool: ONLY include spans where nodeId equals Tool id (no legacy fallback)
   return nodeIdAttr === node.id;
 }
 

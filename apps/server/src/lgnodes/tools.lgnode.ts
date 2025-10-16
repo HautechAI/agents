@@ -44,8 +44,17 @@ export class ToolsNode extends BaseNode {
     const toolMessages: ToolMessage[] = await Promise.all(
       toolCalls.map(async (tc) => {
         const callId = tc.id ?? `missing_id_${Math.random().toString(36).slice(2)}`;
-        const cfgNodeId = config?.configurable?.nodeId ?? config?.configurable?.node_id;
-        return await withToolCall({ toolCallId: callId, name: tc.name, input: tc.args, nodeId: this.nodeId || cfgNodeId }, async () => {
+        const cfgToolNodeId = config?.configurable?.nodeId ?? config?.configurable?.node_id;
+        // Attribution model (Issue #171):
+        // - nodeId (top-level) is the Tool node id from config.configurable.nodeId/node_id
+        // - Do not emit attributes.toolNodeId anymore.
+        // - If missing Tool node id, proceed without nodeId to expose gaps.
+        if (!cfgToolNodeId) {
+          try { console.warn('[ToolsNode] Missing Tool node id in config.configurable.nodeId/node_id; emitting tool_call span without nodeId'); } catch {}
+        }
+        return await withToolCall(
+          { toolCallId: callId, name: tc.name, input: tc.args, ...(cfgToolNodeId ? { nodeId: cfgToolNodeId } : {}) },
+          async () => {
           const tool = tools.find((t) => t.name === tc.name);
           const createMessage = (content: string, success = true) => {
             const toolMessage = new ToolMessage({
@@ -91,7 +100,8 @@ export class ToolsNode extends BaseNode {
             }
             return createMessage(`Error executing tool '${tc.name}': ${errStr}`, false);
           }
-        });
+        },
+        );
       }),
     );
 

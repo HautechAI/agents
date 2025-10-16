@@ -12,16 +12,32 @@ type Bucket = 'agent' | 'tool';
 
 // Helper to detect bucket from span attributes/label
 function detectBucket(span: SpanDoc): Bucket | undefined {
-  const kind = (span.attributes?.kind as string | undefined) || undefined;
+  const attrs = (span.attributes || {}) as Record<string, unknown>;
   const label = span.label || '';
-  if (kind === 'agent' || label === 'agent') return 'agent';
-  if (kind === 'tool_call' || label.startsWith('tool:')) return 'tool';
+  const isTool = attrs['kind'] === 'tool_call' || (label.startsWith('tool:') === true);
+  // Detect agent spans for completeness (not used here)
+  // treat explicit agent labels as agent bucket
+  if (attrs['kind'] === 'agent' || label === 'agent') return 'agent';
+  if (isTool) return 'tool';
   return undefined;
 }
 
 function getNodeIdFromSpan(span: SpanDoc): string | undefined {
-  // Strictly require nodeId presence; do not infer
-  const nodeId = span.nodeId || (span.attributes?.nodeId as string | undefined) || undefined;
+  // Determine kind explicitly to avoid precedence bugs
+  const attrs = (span.attributes || {}) as Record<string, unknown>;
+  const label = span.label || '';
+  const isTool = attrs['kind'] === 'tool_call' || (label.startsWith('tool:') === true);
+
+  // For tool spans, use ONLY top-level nodeId (Tool id). No fallback to legacy attributes.toolNodeId
+  if (isTool) {
+    const nodeIdNew = span.nodeId || (attrs['nodeId'] as string | undefined) || undefined;
+    if (nodeIdNew && typeof nodeIdNew === 'string' && nodeIdNew.length > 0) return nodeIdNew;
+    // If absent, do not attribute tool activity to any node (surfacing missing instrumentation)
+    return undefined;
+  }
+
+  // For non-tool, use the standard nodeId
+  const nodeId = span.nodeId || (attrs['nodeId'] as string | undefined) || undefined;
   if (typeof nodeId === 'string' && nodeId.length > 0) return nodeId;
   return undefined;
 }
@@ -149,6 +165,13 @@ class RunningStoreImpl {
       }
     }
   }
+
+  // Test-only: reset internal counters/mappings to isolate tests
+  resetForTest() {
+    this.counts.clear();
+    this.spanToKeys.clear();
+    this.spanFirstSeen.clear();
+  }
 }
 
 const store = new RunningStoreImpl();
@@ -156,4 +179,9 @@ const store = new RunningStoreImpl();
 export function useRunningCount(nodeId: string | undefined, kind: Bucket | undefined): number {
   if (!nodeId || !kind) return 0;
   return useSyncExternalStore((cb) => store.subscribe(cb), () => store.getCount(nodeId, kind));
+}
+
+// Exported only for tests; do not use in production code.
+export function __resetRunningStoreForTest() {
+  store.resetForTest();
 }

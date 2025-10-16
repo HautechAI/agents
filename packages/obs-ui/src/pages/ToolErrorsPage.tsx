@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Button, Table, Thead, Tbody, Tr, Th, Td } from '@hautech/ui';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TimeRangeSelector, defaultLast6h } from '../components/TimeRangeSelector';
 import { fetchSpansInRange } from '../services/api';
@@ -50,32 +51,46 @@ export function ToolErrorsPage() {
       {!loading && !error && (
         <div style={{ display: 'flex', gap: 12, marginTop: 12, minHeight: 0, flex: 1 }}>
           <div style={{ flex: 1, overflow: 'auto', border: '1px solid #eee', borderRadius: 6 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid #ddd' }}>
-                  <th>Time</th>
-                  <th>Trace</th>
-                  <th>Span</th>
-                  <th>Status</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full">
+              <Thead>
+                <Tr>
+                  <Th>Time</Th>
+                  <Th>Trace</Th>
+                  <Th>Span</Th>
+                  <Th>Status</Th>
+                  <Th>Duration</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
                 {items.map((s) => (
-                  <tr key={s._id || s.spanId} style={{ borderBottom: '1px solid #eee', cursor: 'pointer', background: selected?.spanId === s.spanId ? '#f1f8ff' : undefined }} onClick={() => setSelected(s)}>
-                    <td>{new Date(s.lastUpdate).toLocaleString()}</td>
-                    <td style={{ fontFamily: 'monospace' }}>{s.traceId}</td>
-                    <td style={{ fontFamily: 'monospace' }}>{s.spanId}</td>
-                    <td>{s.status}</td>
-                    <td>{s.endTime ? (Date.parse(s.endTime) - Date.parse(s.startTime)) + ' ms' : 'running'}</td>
-                  </tr>
+                  <Tr
+                    key={s._id || s.spanId}
+                    className={selected?.spanId === s.spanId ? 'bg-accent/50' : ''}
+                    onClick={() => setSelected(s)}
+                  >
+                    <Td>{new Date(s.lastUpdate).toLocaleString()}</Td>
+                    <Td className="font-mono">{s.traceId}</Td>
+                    <Td className="font-mono">{s.spanId}</Td>
+                    <Td>{s.status}</Td>
+                    <Td>{s.endTime ? Date.parse(s.endTime) - Date.parse(s.startTime) + ' ms' : 'running'}</Td>
+                  </Tr>
                 ))}
-                {items.length === 0 && <tr><td colSpan={5} style={{ padding: 12 }}>No errors for this tool in range.</td></tr>}
-              </tbody>
-            </table>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: 8 }}>
-              <button disabled={!cursor} onClick={() => setCursor(undefined)} style={{ fontSize: 12, padding: '4px 8px' }}>Reset</button>
-              <button disabled={!nextCursor} onClick={() => setCursor(nextCursor)} style={{ fontSize: 12, padding: '4px 8px' }}>Next →</button>
+                {items.length === 0 && (
+                  <Tr>
+                    <Td colSpan={5} className="p-3">
+                      No errors for this tool in range.
+                    </Td>
+                  </Tr>
+                )}
+              </Tbody>
+            </Table>
+            <div className="flex items-center justify-between p-2">
+              <Button size="sm" variant="outline" disabled={!cursor} onClick={() => setCursor(undefined)}>
+                Reset
+              </Button>
+              <Button size="sm" disabled={!nextCursor} onClick={() => setCursor(nextCursor)}>
+                Next →
+              </Button>
             </div>
           </div>
           <div style={{ flex: 1, minWidth: 0, height: '70vh' }}>

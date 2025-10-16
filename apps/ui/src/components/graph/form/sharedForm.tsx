@@ -1,7 +1,7 @@
 import Form from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
 import { useMemo, useState } from 'react';
-import { Switch } from '@/components/ui/switch';
+import { Switch } from '@hautech/ui';
 import type { ReactNode } from 'react';
 
 // Types
