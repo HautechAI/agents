@@ -1,10 +1,8 @@
 import * as React from 'react';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
+import { cn } from '../utils/cn';
 
-// Use relative import to avoid alias issues in test environment
-import { cn } from '../../lib/utils';
-
-function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
+export function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
@@ -24,4 +22,3 @@ function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimi
   );
 }
 
-export { Switch };

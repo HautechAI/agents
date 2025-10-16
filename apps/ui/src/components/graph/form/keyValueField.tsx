@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Switch } from '../../ui/switch';
+import { Switch } from '@hautech/ui';
 
 interface KeyValueFieldProps {
   formData?: Record<string, unknown>;

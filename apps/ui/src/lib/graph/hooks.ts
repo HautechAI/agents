@@ -92,11 +92,14 @@ export function useDynamicConfig(nodeId: string) {
     queryFn: () => api.getDynamicConfigSchema(nodeId),
     staleTime: 1000 * 60, // cache briefly
     retry: 2,
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      notifyError(`Dynamic config load failed: ${message}`);
-    },
   });
+  // Notify on errors (React Query v5 removed onError callback from useQuery options)
+  useEffect(() => {
+    if (schema.error) {
+      const message = schema.error instanceof Error ? schema.error.message : String(schema.error);
+      notifyError(`Dynamic config load failed: ${message}`);
+    }
+  }, [schema.error]);
   return { schema };
 }
 
