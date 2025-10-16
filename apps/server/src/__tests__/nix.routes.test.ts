@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import nock from 'nock';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { registerNixRoutes } from '../routes/nix.route';
+import { registerNixRoutes } from '../routes/nix.route.js';
 
 const BASE = 'https://search.nixos.org';
 
@@ -51,6 +51,21 @@ describe('nix routes', () => {
     scope.done();
   });
 
+  it('retries on 502 then succeeds', async () => {
+    const scope = nock(BASE)
+      .get('/packages')
+      .query(true)
+      .reply(502, 'bad gateway')
+      .get('/packages')
+      .query(true)
+      .reply(200, { items: [{ attr: 'ret', pname: 'ret', version: '1' }] });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=nixpkgs-unstable&query=retry' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.items[0].attr).toBe('ret');
+    scope.done();
+  });
+
   it('timeout mapped to 504', async () => {
     const scope = nock(BASE)
       .get('/packages')
@@ -86,5 +101,32 @@ describe('nix routes', () => {
     expect(second.statusCode).toBe(200);
     scope.done();
   });
-});
 
+  it('error is not cached (500 then 200)', async () => {
+    const scope = nock(BASE)
+      .get('/packages')
+      .query((q) => q.query === 'flip')
+      .reply(500, 'oops')
+      .get('/packages')
+      .query((q) => q.query === 'flip')
+      .reply(200, { items: [{ attr: 'flip', pname: 'flip', version: '1.2' }] });
+
+    const url = '/api/nix/search?channel=nixpkgs-unstable&query=flip';
+    const first = await fastify.inject({ method: 'GET', url });
+    expect(first.statusCode).toBe(502);
+    const second = await fastify.inject({ method: 'GET', url });
+    expect(second.statusCode).toBe(200);
+    scope.done();
+  });
+
+  it('forwards size/from and accepts alias q', async () => {
+    const scope = nock(BASE)
+      .get('/packages')
+      .query((q) => q.query === 'alias' && q.size === '10' && q.from === '5' && q.format === 'json')
+      .reply(200, { items: [] });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=nixpkgs-unstable&q=alias&size=10&from=5' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('public, max-age=60, stale-while-revalidate=300');
+    scope.done();
+  });
+});

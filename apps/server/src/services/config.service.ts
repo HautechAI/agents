@@ -109,16 +109,16 @@ export class ConfigService implements Config {
 
   // Nix proxy getters
   get nixAllowedChannels(): string[] {
-    return (this.params.nixAllowedChannels as unknown as string[]) || ['nixpkgs-unstable', 'nixos-24.11'];
+    return this.params.nixAllowedChannels;
   }
   get nixHttpTimeoutMs(): number {
-    return Number(this.params.nixHttpTimeoutMs) || 5000;
+    return this.params.nixHttpTimeoutMs;
   }
   get nixCacheTtlMs(): number {
-    return Number(this.params.nixCacheTtlMs) || 5 * 60_000;
+    return this.params.nixCacheTtlMs;
   }
   get nixCacheMax(): number {
-    return Number(this.params.nixCacheMax) || 500;
+    return this.params.nixCacheMax;
   }
 
   static fromEnv(): ConfigService {

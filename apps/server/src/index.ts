@@ -111,8 +111,9 @@ async function bootstrap() {
     } else {
       logger.info('No persisted graph found; starting with empty runtime graph.');
     }
-  } catch (e: any) {
-    logger.error('Failed to apply initial persisted graph: %s', e?.message || e);
+  } catch (e) {
+    const err = e as Error;
+    logger.error('Failed to apply initial persisted graph: %s', err?.message || String(e));
   }
 
   // Expose globally for diagnostics (optional)
@@ -287,7 +288,8 @@ async function bootstrap() {
       cacheMax: config.nixCacheMax,
     });
   } catch (e) {
-    logger.error('Failed to register Nix routes: %s', (e as any)?.message || e);
+    const err = e as Error;
+    logger.error('Failed to register Nix routes: %s', err?.message || String(e));
   }
 
   // Start Fastify then attach Socket.io

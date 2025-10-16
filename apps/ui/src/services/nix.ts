@@ -23,10 +23,8 @@ const NixItemSchema = z.object({
 });
 const NixSearchResponseSchema = z.object({ items: z.array(NixItemSchema) });
 
-// Base host aligns with graph API helper
-const VITE = (typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined) || {};
-const isVitest = typeof process !== 'undefined' && process.env && typeof process.env.VITEST === 'string';
-const BASE = VITE.VITE_GRAPH_API_BASE || (isVitest ? '' : (typeof window === 'undefined' ? '' : 'http://localhost:3010'));
+// Use relative paths so the UI hits the same origin backend proxy
+const BASE = '';
 
 export async function searchPackages(query: string, channel: NixChannel, signal?: AbortSignal): Promise<NixSearchItem[]> {
   if (!query || query.trim().length < 2) return [];
