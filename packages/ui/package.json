@@ -6,15 +6,7 @@
   "sideEffects": [
     "styles.css"
   ],
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./styles.css": "./styles.css",
-    "./tailwind-preset": "./dist/tailwind-preset.js",
-    "./package.json": "./package.json"
-  },
+  "main": "src/index.ts",
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",

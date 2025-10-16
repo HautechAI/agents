@@ -2,7 +2,12 @@ import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { ContainerEntity } from '../entities/container.entity';
 import { LoggerService } from './logger.service';
 import { PLATFORM_LABEL, type Platform } from '../constants.js';
-import { isExecTimeoutError, ExecTimeoutError, ExecIdleTimeoutError, isExecIdleTimeoutError } from '../utils/execTimeout';
+import {
+  isExecTimeoutError,
+  ExecTimeoutError,
+  ExecIdleTimeoutError,
+  isExecIdleTimeoutError,
+} from '../utils/execTimeout';
 import type { ContainerRegistryService } from './containerRegistry.service';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
@@ -52,7 +57,11 @@ export class ContainerService {
 
   constructor(private logger: LoggerService) {
     this.docker = new Docker({
-      socketPath: process.env.DOCKER_SOCKET
+      ...(process.env.DOCKER_SOCKET
+        ? {
+            socketPath: process.env.DOCKER_SOCKET,
+          }
+        : {}),
     });
   }
 
@@ -199,7 +208,14 @@ export class ContainerService {
   async execContainer(
     containerId: string,
     command: string[] | string,
-    options?: { workdir?: string; env?: Record<string, string> | string[]; timeoutMs?: number; idleTimeoutMs?: number; tty?: boolean; killOnTimeout?: boolean },
+    options?: {
+      workdir?: string;
+      env?: Record<string, string> | string[];
+      timeoutMs?: number;
+      idleTimeoutMs?: number;
+      tty?: boolean;
+      killOnTimeout?: boolean;
+    },
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const container = this.docker.getContainer(containerId);
     const inspectData = await container.inspect();
@@ -228,7 +244,11 @@ export class ContainerService {
     });
 
     try {
-      const { stdout, stderr, exitCode } = await this.startAndCollectExec(exec, options?.timeoutMs, options?.idleTimeoutMs);
+      const { stdout, stderr, exitCode } = await this.startAndCollectExec(
+        exec,
+        options?.timeoutMs,
+        options?.idleTimeoutMs,
+      );
       this.logger.debug(
         `Exec finished cid=${inspectData.Id.substring(0, 12)} exitCode=${exitCode} stdoutBytes=${stdout.length} stderrBytes=${stderr.length}`,
       );
@@ -347,15 +367,18 @@ export class ContainerService {
       // Underlying hijacked stream reference, to destroy on timeouts
       let streamRef: NodeJS.ReadableStream | null = null;
       const clearAll = (...ts: (NodeJS.Timeout | null)[]) => ts.forEach((t) => t && clearTimeout(t));
-      const execTimer = timeoutMs && timeoutMs > 0
-        ? setTimeout(() => {
-            if (finished) return;
-            finished = true;
-            // Ensure underlying stream is torn down to avoid further data/timers
-            try { streamRef?.destroy?.(); } catch {}
-            reject(new ExecTimeoutError(timeoutMs!, stdout, stderr));
-          }, timeoutMs)
-        : null;
+      const execTimer =
+        timeoutMs && timeoutMs > 0
+          ? setTimeout(() => {
+              if (finished) return;
+              finished = true;
+              // Ensure underlying stream is torn down to avoid further data/timers
+              try {
+                streamRef?.destroy?.();
+              } catch {}
+              reject(new ExecTimeoutError(timeoutMs!, stdout, stderr));
+            }, timeoutMs)
+          : null;
       let idleTimer: NodeJS.Timeout | null = null;
       const armIdle = () => {
         if (finished) return; // do not arm after completion
@@ -365,7 +388,9 @@ export class ContainerService {
           if (finished) return;
           finished = true;
           // Ensure underlying stream is torn down to avoid further data/timers
-          try { streamRef?.destroy?.(); } catch {}
+          try {
+            streamRef?.destroy?.();
+          } catch {}
           reject(new ExecIdleTimeoutError(idleTimeoutMs!, stdout, stderr));
         }, idleTimeoutMs);
       };
