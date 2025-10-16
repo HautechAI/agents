@@ -1,7 +1,7 @@
 import { BaseMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { BaseTool } from '../tools/base.tool';
-import { BaseNode } from './base.node';
+import { BaseNode } from './lgnodes/base.lgnode';
 import { NodeOutput } from '../types';
 import { withTask } from '@traceloop/node-server-sdk';
 import type { InjectionProvider } from '../agents/base.agent';
