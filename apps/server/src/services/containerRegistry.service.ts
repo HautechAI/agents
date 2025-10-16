@@ -220,7 +220,7 @@ export class ContainerRegistryService {
           if (existing) {
             // Existing record: do not bump last_used_at; optionally recompute kill_after_at if missing.
             // Preserve unrelated metadata fields (e.g., lastError, retryAfter, terminationAttempts) by updating dotted paths only.
-            const setFields: Record<string, unknown> = {
+            const setFields: Partial<ContainerDoc> & Record<string, unknown> = {
               container_id: item.id,
               node_id: nodeId,
               thread_id: threadId,
