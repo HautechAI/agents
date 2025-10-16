@@ -1,4 +1,5 @@
 import type { Node } from 'reactflow';
+import { useState } from 'react';
 import type { TemplateNodeSchema } from 'shared';
 import { useTemplates } from '../useTemplates';
 // Runtime graph components & hooks
@@ -89,6 +90,8 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
   const StaticView = getConfigView(data.template, 'static');
   const DynamicView = getConfigView(data.template, 'dynamic');
   const disableAll = status?.provisionStatus?.state === 'deprovisioning';
+  // Track static validation errors reported by StaticView
+  const [staticErrors, setStaticErrors] = useState<string[]>([]);
 
   return (
     <div className="space-y-4">
@@ -110,7 +113,7 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
               onChange={(next) => update({ config: next })}
               readOnly={false}
               disabled={!!disableAll}
-              onValidate={() => { /* plumbed for future save blocking */ }}
+              onValidate={(errs) => setStaticErrors(errs || [])}
             />
           ) : (
             <div className="text-xs text-muted-foreground">No custom view registered for {data.template} (static)</div>
@@ -138,6 +141,13 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
       {data.template === 'containerProvider' && (
         <div className="space-y-2">
           <NixPackagesSection />
+        </div>
+      )}
+      {staticErrors.length > 0 && (
+        <div className="text-xs text-red-500" data-testid="static-errors">
+          {staticErrors.map((e, i) => (
+            <div key={i}>• {e}</div>
+          ))}
         </div>
       )}
       <hr className="border-border" />
