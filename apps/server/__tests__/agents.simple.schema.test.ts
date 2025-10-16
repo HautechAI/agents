@@ -14,7 +14,7 @@ describe('Agent.getConfigSchema / Agent.setConfig', () => {
     const schema = (a as unknown as any).getConfigSchema() as any;
     expect(schema.type).toBe('object');
     expect(schema.properties.systemPrompt).toMatchObject({ type: 'string' });
-  // Legacy key summarizationKeepLast intentionally not present in schema anymore; we accept it leniently at runtime.
+  // Note: no legacy aliases are supported; only summarizationKeepTokens/summarizationMaxTokens are valid.
     expect(schema.properties.summarizationMaxTokens).toMatchObject({ type: 'integer', minimum: 1 });
   });
 
@@ -28,7 +28,7 @@ describe('Agent.getConfigSchema / Agent.setConfig', () => {
     a.configure({ systemPrompt: 'You are helpful.' });
     expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledWith('You are helpful.');
 
-    a.configure({ summarizationKeepLast: 5, summarizationMaxTokens: 100 });
+  a.configure({ summarizationKeepTokens: 5, summarizationMaxTokens: 100 });
     expect(anyA.summarizeNode.setOptions).toHaveBeenCalledWith({ keepTokens: 5, maxTokens: 100 });
   });
 

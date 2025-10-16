@@ -231,8 +231,8 @@ export class Agent implements TriggerListener, StaticConfigurable, InjectionProv
             'debounceMs',
             'whenBusy',
             'processBuffer',
-            'summarizationKeepTokens',
             'summarizationMaxTokens',
+            'summarizationKeepTokens',
             'restrictOutput',
             'restrictionMessage',
             'restrictionMaxInjections',
@@ -252,10 +252,7 @@ export class Agent implements TriggerListener, StaticConfigurable, InjectionProv
       this.loggerService.info(`Agent model updated to ${parsed.model}`);
     }
 
-    const keepTokensRaw =
-      (config as any).summarizationKeepTokens !== undefined
-        ? (config as any).summarizationKeepTokens
-        : (config as any).summarizationKeepLast;
+    const keepTokensRaw = (config as any).summarizationKeepTokens;
     const maxTokensRaw = (config as any).summarizationMaxTokens;
     const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
     const updates: { keepTokens?: number; maxTokens?: number } = {};
