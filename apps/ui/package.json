@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hautech/ui": "workspace:*",
+    "date-fns": "^3.6.0",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.6",
     "@tailwindcss/vite": "^4.1.13",
