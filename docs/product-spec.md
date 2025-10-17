@@ -150,8 +150,11 @@ Runbooks
   - Server: pnpm -w -F server dev
   - UI: pnpm -w -F ui dev
   - Verify: curl http://localhost:3010/api/templates; open UI; connect socket to observe node_status when provisioning.
-- Docker Compose stack
-  - Services: mongo, mongo-express, jaeger, vault (auto-init), postgres, registry-mirror.
+ - Docker Compose stack
+  - Services: mongo, mongo-express, vault (auto-init), postgres, registry-mirror.
+  - Observability: This repo does not include Jaeger in compose. Use packages/obs-server (port 4319) and packages/obs-ui (port 4320) for observability. Quickstart:
+    - `pnpm --filter @hautech/obs-server dev` (or build+start)
+    - `pnpm --filter @hautech/obs-ui dev` (or build+start)
   - Vault init: vault/auto-init.sh populates root token/unseal keys; set VAULT_ENABLED=true and VAULT_ADDR/VAULT_TOKEN.
   - Postgres checkpointer: set LANGGRAPH_CHECKPOINTER=postgres and POSTGRES_URL; UI stream caveat remains.
 
@@ -175,4 +178,3 @@ Release qualification plan
 Glossary and templates
 - Glossary: docs/glossary.md
 - Changelog template: docs/CHANGELOG_TEMPLATE.md
-
