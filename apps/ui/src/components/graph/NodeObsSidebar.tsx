@@ -92,7 +92,7 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
   useEffect(() => {
     if (kind !== 'agent') return;
     let cancelled = false;
-    let timer: any;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
       try {
         const res = await api.listNodeRuns(node.id, 'all');
@@ -109,10 +109,12 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [node.id, kind]);
 
+  const [terminating, setTerminating] = useState<Record<string, boolean>>({});
   async function onTerminate(runId: string) {
     const ok = typeof window !== 'undefined' ? window.confirm('Terminate this run?') : true;
     if (!ok) return;
     try {
+      setTerminating((prev) => ({ ...prev, [runId]: true }));
       await api.terminateRun(node.id, runId);
       notifySuccess('Termination signaled');
       // locally mark as terminating immediately
@@ -120,6 +122,8 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       notifyError(`Failed to terminate: ${msg}`);
+    } finally {
+      setTerminating((prev) => ({ ...prev, [runId]: false }));
     }
   }
 
@@ -177,7 +181,10 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
                   <div className="flex items-center gap-2">
                     <span className="px-1.5 py-0.5 rounded border bg-accent/20 text-[10px]">{r.status}</span>
                     {r.status === 'running' && (
-                      <button className="text-[11px] text-red-700 hover:underline" onClick={() => onTerminate(r.runId)}>Terminate</button>
+                      <button className="text-[11px] text-red-700 hover:underline disabled:opacity-50"
+                        disabled={!!terminating[r.runId]}
+                        onClick={() => onTerminate(r.runId)}
+                      >Terminate</button>
                     )}
                   </div>
                 </li>
