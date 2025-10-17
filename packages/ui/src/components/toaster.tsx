@@ -1,7 +1,6 @@
 "use client";
 
-import 'sonner/dist/index.css';
+import 'sonner/styles.css';
 import { Toaster as SonnerToaster, toast } from 'sonner';
 
 export { SonnerToaster as Toaster, toast };
-
