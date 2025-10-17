@@ -35,7 +35,7 @@ export default function ContainerProviderConfigView({ value, onChange, readOnly,
   return (
     <div className="space-y-3 text-sm">
       <div>
-        <label htmlFor="image" className="block text-xs mb-1">Image (optional)</label>
+        <label htmlFor="image" className="block text-xs mb-1">Image</label>
         <Input id="image" value={image} onChange={(e) => setImage(e.target.value)} disabled={isDisabled} placeholder="e.g., alpine:3" />
       </div>
       <div>
