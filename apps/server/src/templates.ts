@@ -1,5 +1,5 @@
 import { toJSONSchema } from 'zod';
-import { Agent, AgentStaticConfigSchema } from './agents/agent';
+import { Agent, AgentStaticConfigSchema } from './nodes/agent.node';
 import { ContainerProviderEntity, ContainerProviderExposedStaticConfigSchema } from './entities/containerProvider.entity';
 import { TemplateRegistry } from './graph';
 import { LocalMCPServer } from './mcp';
