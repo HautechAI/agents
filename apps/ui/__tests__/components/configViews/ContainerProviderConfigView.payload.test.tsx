@@ -14,6 +14,7 @@ describe('ContainerProviderConfigView payload', () => {
         disabled={false}
       />,
     );
+    // Query the exact label as in UI
     const img = screen.getByLabelText('Image') as HTMLInputElement;
     fireEvent.change(img, { target: { value: 'node:20' } });
     fireEvent.click(screen.getByText('Add env'));
