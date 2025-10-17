@@ -11,7 +11,7 @@ Repository layout (root)
 
 Deterministic edge IDs
 - ID = `${source}-${sourceHandle}__${target}-${targetHandle}`
-- On upsert, if a provided edge.id does not match this deterministic form, the request fails with `EDGE_ID_MISMATCH`.
+- On upsert, if a provided edge.id does not match this deterministic form, the request fails with HTTP 400. The response body contains the error message, for example: `{ error: 'Edge id mismatch: expected <id> got <id>' }`.
 
 Lifecycle and apply flow
 1) Validate request against template registry (unknown config keys stripped on runtime apply, not in persistence).
@@ -21,10 +21,10 @@ Lifecycle and apply flow
 5) `git add --all` changed paths; `git commit` with author from headers or default author. On commit failure, rollback touched paths and return `COMMIT_FAILED`.
 6) Return the persisted graph with incremented version.
 
-Error codes
+Error behaviors
 - VERSION_CONFLICT (409): version mismatch with current HEAD/meta.
 - LOCK_TIMEOUT (409): could not acquire advisory lock within timeout.
-- EDGE_ID_MISMATCH (400): supplied edge id does not match deterministic id.
+- Edge id mismatch (400): supplied edge id does not match deterministic id; surfaced as a descriptive error message in the body.
 - COMMIT_FAILED (500): git commit failure.
 
 Optimistic locking
@@ -73,4 +73,3 @@ Related code
 - apps/server/src/services/gitGraph.service.ts
 - apps/server/scripts/migrate_graph_to_git.ts
 - apps/server/src/index.ts (routes)
-
