@@ -30,7 +30,13 @@ Graph state (Mongo or Git-backed)
     - 409 `{ error: 'LOCK_TIMEOUT' }`
     - 409 `{ error: 'MCP_COMMAND_MUTATION_FORBIDDEN' }` (enum value GraphErrorCode.McpCommandMutationForbidden)
     - 500 `{ error: 'COMMIT_FAILED' }`
-    - 400 `{ error: 'Bad Request' | string }`
+    - 400 `{ error: 'Bad Request' | string }` (includes Git-store deterministic edge check; see notes)
+  - Notes:
+    - When `GRAPH_STORE=git`:
+      - A provided `edge.id` must match the deterministic id `${source}-${sourceHandle}__${target}-${targetHandle}`. If it doesn't, the server returns `400` with `{ error: 'Edge id mismatch: expected <id> got <id>' }`.
+      - Commit failures surface as `500 { error: 'COMMIT_FAILED' }`.
+      - Lock acquisition timeout surfaces as `409 { error: 'LOCK_TIMEOUT' }`.
+    - When `GRAPH_STORE=mongo`, the deterministic edge check is not enforced by the store and Git-specific errors do not occur.
   - Example:
     ```bash
     curl -X POST http://localhost:3010/api/graph \
@@ -69,10 +75,10 @@ Vault proxy (enabled only when VAULT_ENABLED=true)
   - 4xx/5xx `{ error: 'vault_write_failed' }`
 
 Sockets
-- Namespace `/graph`
+- Default namespace (no custom path)
   - Event `node_status`: `{ nodeId, isPaused?, provisionStatus?, dynamicConfigReady?, updatedAt }`
   - Event `node_config`: `{ nodeId, config, dynamicConfig, version }` (emitted after successful /api/graph save with changes)
-  - See docs/graph/status-updates.md
+  - See docs/graph/status-updates.md and docs/ui/graph/index.md
 
 Related code
 - apps/server/src/index.ts (route handlers and socket events)
@@ -80,4 +86,3 @@ Related code
 - apps/server/src/services/graph.service.ts (Mongo-backed store)
 - apps/server/src/services/graph.guard.ts (MCP mutation guard)
 - apps/server/src/graph/errors.ts (GraphErrorCode)
-
