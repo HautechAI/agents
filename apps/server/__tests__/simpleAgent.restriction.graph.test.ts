@@ -53,7 +53,7 @@ vi.mock('../src/services/checkpointer.service', async (importOriginal) => {
 });
 
 // Patch SimpleAgent to add finish tool quickly in tests
-vi.mock('../src/agents/simple.agent', async (importOriginal) => {
+vi.mock('../src/nodes/agent.node', async (importOriginal) => {
   const mod = await importOriginal();
   const Original = mod.SimpleAgent;
   class TestAgent extends Original {

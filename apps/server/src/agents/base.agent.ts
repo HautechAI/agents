@@ -2,7 +2,7 @@ import { BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messag
 import { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, AnnotationRoot, CompiledStateGraph } from '@langchain/langgraph';
 import { LoggerService } from '../services/logger.service';
-import { TriggerListener, TriggerMessage, isSystemTrigger } from '../triggers/base.trigger';
+import { TriggerListener, TriggerMessage, isSystemTrigger } from '../nodes/triggers/base.trigger.node';
 import { NodeOutput } from '../types';
 import { withAgent } from '@hautech/obs-sdk';
 import type { StaticConfigurable } from '../graph/capabilities';

@@ -1,9 +1,9 @@
 import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { ToolCallResponse, withToolCall } from '@hautech/obs-sdk';
-import { BaseTool } from '../tools/base.tool';
+import { BaseTool } from './tools/base.tool';
 import { NodeOutput } from '../types';
-import { TerminateResponse } from '../tools/terminateResponse';
+import { TerminateResponse } from './tools/terminateResponse';
 
 // Narrowed view of a tool call extracted from AIMessage
 type ToolCall = { id?: string; name: string; args: unknown };

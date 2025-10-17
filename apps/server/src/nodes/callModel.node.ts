@@ -1,6 +1,6 @@
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
-import { BaseTool } from '../tools/base.tool';
+import { BaseTool } from './tools/base.tool';
 import { NodeOutput } from '../types';
 import { LLMResponse, withLLM } from '@hautech/obs-sdk';
 

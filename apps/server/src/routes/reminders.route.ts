@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { LoggerService } from '../services/logger.service';
-import type { ActiveReminder, RemindMeInspectable } from '../tools/remind_me.tool';
+import type { ActiveReminder, RemindMeInspectable } from '../nodes/tools/remind-me-tool.node';
 
 // Minimal interface to look up live node instances
 interface HasNodeLookup { getNodeInstance(id: string): unknown }

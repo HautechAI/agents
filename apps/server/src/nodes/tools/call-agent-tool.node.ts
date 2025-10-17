@@ -4,7 +4,7 @@ import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { BaseTool } from './base.tool';
 import { LoggerService } from '../services/logger.service';
 import type { Agent } from '../nodes/agent.node';
-import { TriggerMessage } from '../triggers/base.trigger';
+import { TriggerMessage } from '../triggers/base.trigger.node';
 import { BaseMessage } from '@langchain/core/messages';
 
 const invocationSchema = z.object({

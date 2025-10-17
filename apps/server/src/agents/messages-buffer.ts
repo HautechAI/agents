@@ -1,4 +1,4 @@
-import { TriggerMessage } from '../triggers/base.trigger';
+import { TriggerMessage } from '../nodes/triggers/base.trigger.node';
 
 export enum ProcessBuffer {
   OneByOne = 'oneByOne',
@@ -110,4 +110,3 @@ export class MessagesBuffer {
     return s;
   }
 }
-
