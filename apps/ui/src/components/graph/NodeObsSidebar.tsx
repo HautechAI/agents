@@ -76,7 +76,7 @@ function NodeObsSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) {
         console.warn('Failed to seed OBS spans', err);
       });
     return () => { cancelled = true; };
-  }, [node.id, node.data.template, kind]);
+  }, [node, kind]);
 
   // Realtime subscription
   useEffect(() => {
@@ -90,7 +90,7 @@ function NodeObsSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) {
       });
     });
     return () => { off(); };
-  }, [node.id, node.data.template, kind]);
+  }, [node, kind]);
 
   // Poll active runs every ~3s for agent nodes
   useEffect(() => {
@@ -112,7 +112,7 @@ function NodeObsSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) {
       tick();
     }
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [node.id, kind]);
+  }, [node, kind]);
 
   const [terminating, setTerminating] = useState<Record<string, boolean>>({});
   async function onTerminate(runId: string) {
