@@ -15,7 +15,7 @@ Endpoints (reference)
 - GET /graph/templates
 - GET /graph/nodes/:nodeId/status
 - POST /graph/nodes/:nodeId/actions  body: { action: 'provision' | 'deprovision' | 'pause' | 'resume' }
-- GET /graph/nodes/:nodeId/dynamic-config/schema
+- GET /graph/nodes/:nodeId/dynamic-config/schema (UI may fallback to a legacy internal path)
 
 Socket updates
 - Socket: default namespace (no custom path)

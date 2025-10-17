@@ -35,6 +35,10 @@ Notes
 - HTTP endpoints remain for actions (pause/resume, provision/deprovision) and configuration updates.
 - Remove any polling loops (e.g., 2s intervals) for status; rely on socket events.
 
+Config persistence
+- Graph configuration changes persist via POST /api/graph (full-graph updates).
+- The per-node dynamic-config save endpoint was removed; only the schema endpoint remains for rendering purposes.
+
 ## Template Capabilities & Static Config (Updated)
 
 Each template now advertises its capabilities and optional static configuration schema via the `/api/templates` and `/graph/templates` endpoints. UI palette entries can introspect:
