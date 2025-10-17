@@ -1,4 +1,6 @@
 
+import { Button } from '@hautech/ui';
+
 export interface NodeActionButtonsProps {
   provisionable: boolean;
   pausable: boolean;
@@ -55,5 +57,3 @@ export function NodeActionButtons({
 }
 
 export default NodeActionButtons;
- 
-import { Button } from '@hautech/ui';
