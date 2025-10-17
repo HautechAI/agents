@@ -150,8 +150,8 @@ export class SlackTrigger extends BaseTrigger {
       this.logger.info('SlackTrigger started');
       this.markReady();
     } catch (e) {
+      // Mark error and do not throw to allow callers to observe error state
       this.markError(e);
-      throw e;
     }
   }
   async stop(): Promise<void> {

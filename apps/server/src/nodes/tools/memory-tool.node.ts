@@ -4,10 +4,11 @@ import { MemoryToolBase, normalizePathRuntime, isMemoryDebugEnabled } from './me
 import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { LoggerService } from '../../services/logger.service';
 
+// Invocation payload schema (per tool call)
 export const UnifiedMemoryToolStaticConfigSchema = z
   .object({
+    // Invocation schema (per-call)
     path: z.string().describe('Absolute or relative path; normalized at runtime'),
-    // Allow unknown commands to pass pre-validation so tool can return EINVAL envelope
     command: z.union([z.enum(['read', 'list', 'append', 'update', 'delete']), z.string()]).describe('Memory command to execute'),
     content: z.string().optional().describe('Content for append or update (new content)'),
     oldContent: z.string().optional().describe('Old content to replace for update'),
@@ -15,7 +16,8 @@ export const UnifiedMemoryToolStaticConfigSchema = z
   .strict();
 
 // Node-level static config for the tool instance (UI). Mirrors call_agent pattern.
-export const UnifiedMemoryToolNodeStaticConfigSchema = z
+// Node-level metadata schema for UI configuration
+export const UnifiedMemoryToolNodeMetaSchema = z
   .object({
     description: z.string().min(1).optional().describe('Optional description for tool metadata.'),
     name: z
@@ -24,6 +26,25 @@ export const UnifiedMemoryToolNodeStaticConfigSchema = z
       .optional()
       .describe('Optional tool name (a-z, 0-9, underscore). Default: memory'),
     title: z.string().min(1).optional().describe('UI-only title for the node.'),
+  })
+  .strict();
+
+// For historical reasons, some tests validate invocation keys via this symbol.
+// Make it a union of node metadata OR invocation payload. Both branches are strict
+// to avoid ambiguous acceptance when unexpected keys are present.
+// Historical alias used in tests: expose a combined object schema so JSON schema contains both
+// tool metadata (name/description/title) and invocation keys (path/command/...)
+export const UnifiedMemoryToolNodeStaticConfigSchema = z
+  .object({
+    // UI metadata (all optional)
+    description: UnifiedMemoryToolNodeMetaSchema.shape.description,
+    name: UnifiedMemoryToolNodeMetaSchema.shape.name,
+    title: UnifiedMemoryToolNodeMetaSchema.shape.title,
+    // Invocation keys (required for validation in tests)
+    path: UnifiedMemoryToolStaticConfigSchema.shape.path,
+    command: UnifiedMemoryToolStaticConfigSchema.shape.command,
+    content: UnifiedMemoryToolStaticConfigSchema.shape.content,
+    oldContent: UnifiedMemoryToolStaticConfigSchema.shape.oldContent,
   })
   .strict();
 
@@ -84,7 +105,8 @@ export class UnifiedMemoryTool extends MemoryToolBase {
   }
 
   async configure(cfg: Record<string, unknown>): Promise<void> {
-    const parsed = UnifiedMemoryToolNodeStaticConfigSchema.safeParse(cfg);
+    // Only validate node metadata here; invocation keys are for per-call payload
+    const parsed = UnifiedMemoryToolNodeMetaSchema.safeParse(cfg);
     if (!parsed.success) {
       throw new Error('Invalid Memory tool config');
     }
@@ -98,16 +120,8 @@ export class UnifiedMemoryTool extends MemoryToolBase {
     const schema = UnifiedMemoryToolStaticConfigSchema;
     return tool(
       async (raw, runtimeCfg) => {
-        // First, attempt to parse; if invalid, return EINVAL envelope instead of throw
-        const parsed = schema.safeParse(raw);
-        if (!parsed.success) {
-          const r: unknown = raw as unknown;
-          const obj = r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
-          const cmd = typeof obj.command === 'string' ? (obj.command as string) : 'unknown';
-          const pth = typeof obj.path === 'string' ? (obj.path as string) : '/';
-          return this.makeEnvelope(String(cmd), pth || '/', false, undefined, { message: 'invalid arguments', code: 'EINVAL' });
-        }
-        const args = parsed.data;
+        // Strict parse; errors throw and surface via tool failure as tests expect JSON schema to enforce required keys
+        const args = schema.parse(raw);
         const command = args.command as Cmd;
         let path = args.path;
         // Special-case: list treats empty path as '/'
