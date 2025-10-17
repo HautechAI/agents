@@ -146,7 +146,7 @@ export function AgentBuilder() {
     if (!isActivityEligible(selectedNode, templates) && rightTab === 'activity') {
       setRightTab('properties');
     }
-  }, [selectedNode, rightTab]);
+  }, [selectedNode, rightTab, isActivityEligible, templates]);
 
   // Eligibility: show tabs for agent or tool nodes
   const isActivityEligible = useCallback((node: RFNode | null, tpls: TemplateNodeSchema[]): boolean => {

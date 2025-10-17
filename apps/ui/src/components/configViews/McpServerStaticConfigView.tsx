@@ -14,8 +14,16 @@ export default function McpServerStaticConfigView({ value, onChange, readOnly, d
   const [startupTimeoutMs, setStartupTimeoutMs] = useState<number>(typeof init.startupTimeoutMs === 'number' ? (init.startupTimeoutMs as number) : 15000);
   const [heartbeatIntervalMs, setHeartbeatIntervalMs] = useState<number>(typeof init.heartbeatIntervalMs === 'number' ? (init.heartbeatIntervalMs as number) : 300000);
   const [staleTimeoutMs, setStaleTimeoutMs] = useState<number>(typeof init.staleTimeoutMs === 'number' ? (init.staleTimeoutMs as number) : 0);
-  const [restartMaxAttempts, setRestartMaxAttempts] = useState<number>((init.restart as any)?.maxAttempts ?? 5);
-  const [restartBackoffMs, setRestartBackoffMs] = useState<number>((init.restart as any)?.backoffMs ?? 2000);
+  // Safely read optional restart config without using 'any'
+  const restartInitUnknown = (init as Record<string, unknown>)['restart'];
+  const restartInit =
+    restartInitUnknown && typeof restartInitUnknown === 'object'
+      ? (restartInitUnknown as Record<string, unknown>)
+      : undefined;
+  const restartInitMax = typeof restartInit?.['maxAttempts'] === 'number' ? (restartInit['maxAttempts'] as number) : undefined;
+  const restartInitBackoff = typeof restartInit?.['backoffMs'] === 'number' ? (restartInit['backoffMs'] as number) : undefined;
+  const [restartMaxAttempts, setRestartMaxAttempts] = useState<number>(restartInitMax ?? 5);
+  const [restartBackoffMs, setRestartBackoffMs] = useState<number>(restartInitBackoff ?? 2000);
   const isDisabled = !!readOnly || !!disabled;
 
   useEffect(() => {
