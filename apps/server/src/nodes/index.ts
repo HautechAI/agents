@@ -1,5 +1,4 @@
-// Public node exports should expose only *.node.ts shims/wrappers.
-// Do not re-export raw lgnodes to keep separation clear.
+// Export only real Node classes. lgnodes are internal and not re-exported.
 export * from './memory.node';
 export * from './memory.connector.node';
 export * from './callModel.node';
