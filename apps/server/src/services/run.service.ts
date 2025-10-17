@@ -64,14 +64,29 @@ export class AgentRunService {
     );
   }
 
-  async markTerminating(nodeId: string, runId: string): Promise<'ok' | 'not_found' | 'already'> {
+  async markTerminating(
+    nodeId: string,
+    runId: string,
+  ): Promise<'ok' | 'not_found' | 'already' | 'not_running'> {
+    // Idempotent transition to 'terminating' with explicit state checks.
+    // 1) not found -> 'not_found'
+    // 2) already 'terminating' -> 'already'
+    // 3) in ['terminated','completed'] -> 'not_running'
+    // 4) else set 'terminating' and return 'ok'
+    const doc = await this.col.findOne({ nodeId, runId });
+    if (!doc) return 'not_found';
+
+    if (doc.status === 'terminating') return 'already';
+
+    if (doc.status === 'terminated' || (doc as unknown as { status?: string }).status === 'completed') {
+      return 'not_running';
+    }
+
     const now = new Date();
-    const res = await this.col.updateOne(
-      { nodeId, runId },
+    await this.col.updateOne(
+      { _id: (doc as WithId<AgentRunDoc>)._id },
       { $set: { status: 'terminating' as AgentRunStatus, updatedAt: now }, $unset: { expiresAt: true } },
     );
-    if (res.matchedCount === 0) return 'not_found';
-    if (res.modifiedCount === 0) return 'already'; // no state change
     return 'ok';
   }
 
