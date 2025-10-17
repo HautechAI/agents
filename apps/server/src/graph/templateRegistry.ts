@@ -5,7 +5,6 @@ import { FactoryFn, TemplateKind, TemplateNodeSchema } from './types';
 export interface TemplateMeta {
   title: string;
   kind: TemplateKind;
-  capabilities?: TemplateNodeSchema['capabilities'];
   staticConfigSchema?: JSONSchema.BaseSchema;
 }
 
@@ -47,9 +46,8 @@ export class TemplateRegistry {
         kind: meta.kind,
         sourcePorts,
         targetPorts,
-        capabilities: meta.capabilities,
         staticConfigSchema: meta.staticConfigSchema,
-      });
+      } as any);
     }
     return schemas.sort((a, b) => a.name.localeCompare(b.name));
   }

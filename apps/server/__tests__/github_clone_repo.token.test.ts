@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GithubCloneRepoTool } from '../tools/github_clone_repo';
-import { LoggerService } from '../services/logger.service';
-import type { VaultService } from '../services/vault.service';
+import { GithubCloneRepoTool } from '../src/tools/github_clone_repo';
+import { LoggerService } from '../src/services/logger.service';
+import type { VaultService } from '../src/services/vault.service';
 
 const logger = new LoggerService();
 

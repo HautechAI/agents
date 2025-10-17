@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ContainerProviderEntity } from '../entities/containerProvider.entity';
-import { LoggerService } from '../services/logger.service';
+import { ContainerProviderEntity } from '../src/entities/containerProvider.entity';
+import { LoggerService } from '../src/services/logger.service';
 
 class FakeRegistry {
   lastUsed: string[] = [];

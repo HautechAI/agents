@@ -9,8 +9,8 @@ const dummyPorts = {
   targetPorts: { inp: { kind: 'instance' as const } },
 };
 
-describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () => {
-  it('includes capabilities and staticConfigSchema when provided in meta', () => {
+describe('TemplateRegistry.toSchema with staticConfigSchema', () => {
+  it('includes staticConfigSchema when provided in meta', () => {
     const reg = new TemplateRegistry();
     reg.register(
       'withMeta',
@@ -19,12 +19,6 @@ describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () =>
       {
         title: 'With Meta',
         kind: 'service' as TemplateKind,
-        capabilities: {
-          pausable: true,
-          staticConfigurable: true,
-          dynamicConfigurable: false,
-          provisionable: true,
-        },
         staticConfigSchema: {
           type: 'object',
           properties: {
@@ -38,12 +32,6 @@ describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () =>
     const schema = reg.toSchema();
     const entry = schema.find((s) => s.name === 'withMeta') as TemplateNodeSchema;
     expect(entry).toBeTruthy();
-    expect(entry.capabilities).toEqual({
-      pausable: true,
-      staticConfigurable: true,
-      dynamicConfigurable: false,
-      provisionable: true,
-    });
     expect(entry.staticConfigSchema).toEqual({
       type: 'object',
       properties: { foo: { type: 'string' } },
@@ -61,7 +49,6 @@ describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () =>
     const schema = reg.toSchema();
     const entry = schema.find((s) => s.name === 'noMeta') as TemplateNodeSchema;
     expect(entry).toBeTruthy();
-    expect(entry.capabilities).toBeUndefined();
     expect(entry.staticConfigSchema).toBeUndefined();
   });
 });

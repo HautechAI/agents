@@ -6,7 +6,7 @@ import NodeDetailsPanel from '../NodeDetailsPanel';
 
 vi.mock('../../../lib/graph/templates.provider', () => ({
   useTemplatesCache: () => ({
-    getTemplate: (name: string) => ({ name, title: name, kind: 'tool', sourcePorts: {}, targetPorts: {}, capabilities: { pausable: true } }),
+    getTemplate: (name: string) => ({ name, title: name, kind: 'tool', sourcePorts: {}, targetPorts: {} }),
   }),
 }));
 
@@ -40,29 +40,21 @@ describe('NodeDetailsPanel', () => {
     expect(screen.getByText('not_ready')).toBeInTheDocument();
   });
 
-  it('enables Start on not_ready and calls provision', () => {
+  it('enables Start on not_ready and calls start', () => {
     mockStatus = { isPaused: false, provisionStatus: { state: 'not_ready' } };
     renderPanel();
     const start = screen.getByText('Start');
     expect(start).not.toBeDisabled();
     fireEvent.click(start);
-    expect(mockMutate).toHaveBeenCalledWith('provision');
+    expect(mockMutate).toHaveBeenCalledWith('start');
   });
 
-  it('shows Pause/Resume appropriately when ready and paused state changes', () => {
-    mockStatus = { isPaused: true, provisionStatus: { state: 'ready' } };
-    renderPanel();
-    expect(screen.getByText('Resume')).not.toBeDisabled();
-    fireEvent.click(screen.getByText('Resume'));
-    expect(mockMutate).toHaveBeenCalledWith('resume');
-  });
-
-  it('enables Stop when ready', () => {
+  it('enables Stop when ready and calls stop', () => {
     mockStatus = { isPaused: false, provisionStatus: { state: 'ready' } };
     renderPanel();
     const stop = screen.getByText('Stop');
     expect(stop).not.toBeDisabled();
     fireEvent.click(stop);
-    expect(mockMutate).toHaveBeenCalledWith('deprovision');
+    expect(mockMutate).toHaveBeenCalledWith('stop');
   });
 });

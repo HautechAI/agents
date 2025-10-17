@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
-import { ContainerRegistryService } from '../services/containerRegistry.service';
-import { ContainerCleanupService } from '../services/containerCleanup.service';
-import { LoggerService } from '../services/logger.service';
+import { ContainerRegistryService } from '../src/services/containerRegistry.service';
+import { ContainerCleanupService } from '../src/services/containerCleanup.service';
+import { LoggerService } from '../src/services/logger.service';
 
 class FakeContainerService {
   stopped: string[] = [];

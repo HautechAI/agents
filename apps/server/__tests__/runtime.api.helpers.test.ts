@@ -23,16 +23,14 @@ describe('Runtime helpers and GraphService API surfaces', () => {
     const { registry, runtime } = makeRuntimeAndRegistry();
 
     // Mock node impl
-    class MockNode implements Provisionable, DynamicConfigurable<Record<string, boolean>> {
+    class MockNode implements DynamicConfigurable<Record<string, boolean>> {
       private status: ProvisionStatus = { state: 'not_ready' };
       private dynReady = false;
       private listeners: Array<(s: ProvisionStatus)=>void> = [];
       configure = vi.fn(async (_cfg: Record<string, unknown>) => {});
       getProvisionStatus() { return this.status; }
-      async start() { await this.provision(); }
-      async stop() { await this.deprovision(); }
-      async provision() { this.status = { state: 'ready' }; this.dynReady = true; this.listeners.forEach(l=>l(this.status)); }
-      async deprovision() { this.status = { state: 'not_ready' }; this.dynReady = false; this.listeners.forEach(l=>l(this.status)); }
+      async start() { this.status = { state: 'ready' }; this.dynReady = true; this.listeners.forEach(l=>l(this.status)); }
+      async stop() { this.status = { state: 'not_ready' }; this.dynReady = false; this.listeners.forEach(l=>l(this.status)); }
       onProvisionStatusChange(l: (s: ProvisionStatus)=>void) { this.listeners.push(l); return ()=>{ this.listeners = this.listeners.filter(x=>x!==l); }; }
       isDynamicConfigReady() { return this.dynReady; }
       getDynamicConfigSchema() { return undefined; }
@@ -59,8 +57,7 @@ describe('Runtime helpers and GraphService API surfaces', () => {
 
     // Expand template with capabilities and static schema
     registry.register('dyn', async () => ({ configure: async () => {} } as any), { sourcePorts: {}, targetPorts: {} }, {
-      title: 'Dyn', kind: 'tool', capabilities: { pausable: true, provisionable: true, dynamicConfigurable: true, staticConfigurable: false },
-      staticConfigSchema: { type: 'object', properties: {} } as any,
+      title: 'Dyn', kind: 'tool', staticConfigSchema: { type: 'object', properties: {} } as any,
     });
 
     // Create a mock dyn-configurable node instance
@@ -81,7 +78,6 @@ describe('Runtime helpers and GraphService API surfaces', () => {
     // Template schema via registry directly (GraphService now stateless for templates only)
     const templates = registry.toSchema();
     const dynEntry = templates.find(t => t.name === 'dyn');
-    expect(dynEntry?.capabilities?.dynamicConfigurable).toBe(true);
     expect(dynEntry?.staticConfigSchema).toBeTruthy();
 
     // Node pause via runtime directly

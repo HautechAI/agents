@@ -41,27 +41,25 @@ export class PRTrigger extends BaseTrigger {
     if (!opts.intervalMs) opts.intervalMs = 60_000;
   }
 
-  // Node lifecycle API
+  // Node lifecycle API (pure lifecycle, no legacy provision)
   async start(): Promise<void> {
     if (!this.stopped) return;
+    this.markProvisioning();
     this.stopped = false;
-    await this.provision();
     this.logger.info(`[PRTrigger] Starting polling (interval=${this.opts.intervalMs}ms, repos=${this.opts.repos.join(",")})`);
     await this.pollOnce();
     this.schedule();
+    this.markReady();
   }
 
   async stop(): Promise<void> {
+    this.markDeprovisioning();
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
-    await this.deprovision();
     this.logger.info(`[PRTrigger] Stopped.`);
+    this.markNotReady();
   }
-
-  // Provision hooks don't need to do anything for PRTrigger beyond timer lifecycle, which is managed by start/stop
-  protected async doProvision(): Promise<void> { /* no-op */ }
-  protected async doDeprovision(): Promise<void> { /* no-op */ }
 
   private schedule() {
     if (this.stopped) return;

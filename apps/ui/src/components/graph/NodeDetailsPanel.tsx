@@ -21,10 +21,7 @@ export default function NodeDetailsPanel({ nodeId, templateName }: Props) {
       <div className="flex flex-wrap gap-1 items-center">
         <span className="px-1.5 py-0.5 rounded border bg-accent/20">Template: {templateName}</span>
         <span className="px-1.5 py-0.5 rounded border bg-accent/20">{provisionState}</span>
-        {tmpl?.capabilities?.pausable && <span className="px-1.5 py-0.5 rounded border bg-accent/20">pausable</span>}
-        {tmpl?.capabilities?.pausable && isReady && isPaused && (
-          <span className="px-1.5 py-0.5 rounded border bg-accent/20">paused</span>
-        )}
+        {isReady && isPaused && (<span className="px-1.5 py-0.5 rounded border bg-accent/20">paused</span>)}
       </div>
       <div className="flex gap-2 items-center flex-wrap">
         <button

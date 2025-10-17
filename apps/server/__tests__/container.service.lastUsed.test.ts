@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LoggerService } from '../../src/services/logger.service';
-import { ContainerService } from '../../src/services/container.service';
+import { LoggerService } from '../src/services/logger.service';
+import { ContainerService } from '../src/services/container.service';
 
 describe('ContainerService last_used updates', () => {
   let svc: ContainerService;
@@ -62,4 +62,3 @@ describe('ContainerService last_used updates', () => {
     await sess.close();
   });
 });
-

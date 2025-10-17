@@ -14,8 +14,8 @@ describe('Templates cache provider', () => {
       if (url.endsWith('/graph/templates')) {
         return new Response(
           JSON.stringify([
-            { name: 'a', title: 'A', kind: 'tool', sourcePorts: {}, targetPorts: {}, capabilities: { pausable: true } },
-            { name: 'b', title: 'B', kind: 'tool', sourcePorts: {}, targetPorts: {}, capabilities: { dynamicConfigurable: true } },
+            { name: 'a', title: 'A', kind: 'tool', sourcePorts: {}, targetPorts: {} },
+            { name: 'b', title: 'B', kind: 'tool', sourcePorts: {}, targetPorts: {} },
           ]),
         );
       }

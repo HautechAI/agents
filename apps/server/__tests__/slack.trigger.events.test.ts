@@ -23,7 +23,7 @@ describe('SlackTrigger events', () => {
     // Subscribe a listener
     const received: any[] = [];
     await trig.subscribe({ invoke: async (_t, msgs) => { received.push(...msgs); } });
-    await trig.provision();
+    await trig.start();
     // Fire a mock events_api envelope
     const client: any = (trig as any).client || (await (trig as any).ensureClient?.());
     const h = (client.handlers['events_api'] || [])[0];
@@ -42,7 +42,7 @@ describe('SlackTrigger events', () => {
     const vault = { isEnabled: () => true, getSecret: vi.fn(async () => 'xapp-from-vault') } as any;
     const trig = new SlackTrigger(logger, vault);
     await trig.configure({ app_token: { value: 'secret/slack/APP', source: 'vault' } } as any);
-    await trig.provision();
+    await trig.start();
     expect((trig as any).client).toBeTruthy();
   });
 
@@ -51,7 +51,7 @@ describe('SlackTrigger events', () => {
     const vault = { isEnabled: () => true, getSecret: vi.fn(async () => 'xoxb-wrong') } as any;
     const trig = new SlackTrigger(logger, vault);
     await trig.configure({ app_token: { value: 'secret/slack/APP', source: 'vault' } } as any);
-    await trig.provision();
+    await trig.start();
     expect(trig.getProvisionStatus().state).toBe('error');
   });
 });

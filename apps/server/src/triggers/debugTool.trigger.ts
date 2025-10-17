@@ -32,15 +32,12 @@ export class DebugToolTrigger extends BaseTrigger {
     if (this.unregisterRoute) await this.rebindRoute();
   }
 
-  protected async doProvision(): Promise<void> {
-    if (this.unregisterRoute) return; // already provisioned
+  async start(): Promise<void> {
+    if (this.unregisterRoute) return; // already bound
     await this.rebindRoute();
   }
-  protected async doDeprovision(): Promise<void> {
-    if (this.unregisterRoute) {
-      try { this.unregisterRoute(); } catch {}
-      this.unregisterRoute = null;
-    }
+  async stop(): Promise<void> {
+    if (this.unregisterRoute) { try { this.unregisterRoute(); } catch {} this.unregisterRoute = null; }
   }
 
   private async rebindRoute(): Promise<void> {

@@ -219,8 +219,8 @@ export class Agent implements TriggerListener, StaticConfigurable, InjectionProv
     this.setConfig(config);
   }
 
-  // Runtime config (called by LiveGraphRuntime)
-  setConfig(config: Record<string, unknown>): void {
+  // Internal runtime config helper (not public API)
+  private setConfig(config: Record<string, unknown>): void {
     const parsed = AgentStaticConfigSchema.partial().parse(
       Object.fromEntries(
         Object.entries(config).filter(([k]) =>

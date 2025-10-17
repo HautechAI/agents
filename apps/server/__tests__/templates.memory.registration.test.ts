@@ -37,11 +37,9 @@ describe('templates: memory registration and agent memory port', () => {
     const memConnSchema = schema.find((s) => s.name === 'memoryConnector');
     expect(memConnSchema?.staticConfigSchema).toBeTruthy();
 
-    // Capabilities include staticConfigurable and exclude dynamicConfigurable
-    expect(memSchema?.capabilities?.staticConfigurable).toBe(true);
-    expect(memConnSchema?.capabilities?.staticConfigurable).toBe(true);
-    expect(memSchema?.capabilities?.dynamicConfigurable).toBeUndefined();
-    expect(memConnSchema?.capabilities?.dynamicConfigurable).toBeUndefined();
+    // staticConfigSchema present; no capabilities in lifecycle-only mode
+    expect(!!memSchema?.staticConfigSchema).toBe(true);
+    expect(!!memConnSchema?.staticConfigSchema).toBe(true);
     // memory node exposes only $self; memoryConnector exposes $self and $memory target
     const memorySources = ports.memory.sourcePorts!;
     expect(memorySources.$self).toBeTruthy();

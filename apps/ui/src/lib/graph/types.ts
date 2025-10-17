@@ -6,12 +6,6 @@ export interface TemplateSchema {
   kind: string;
   sourcePorts: Record<string, unknown> | string[] | undefined;
   targetPorts: Record<string, unknown> | string[] | undefined;
-  capabilities?: {
-    pausable?: boolean;
-    provisionable?: boolean;
-    dynamicConfigurable?: boolean;
-    staticConfigurable?: boolean;
-  };
   staticConfigSchema?: unknown; // JSON Schema 7
 }
 

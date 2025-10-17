@@ -14,7 +14,6 @@ vi.mock('../../../lib/graph/templates.provider', () => ({
       kind: 'tool',
       sourcePorts: {},
       targetPorts: {},
-      capabilities: { staticConfigurable: withSchema },
       staticConfigSchema: withSchema
         ? useRefToken
           ? {

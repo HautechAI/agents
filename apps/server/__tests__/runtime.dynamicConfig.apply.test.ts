@@ -18,7 +18,7 @@ describe('Runtime dynamicConfig first-class support', () => {
       setDynamicConfig: (cfg: Record<string, unknown>) => { instSetDynamic(cfg); dynStore.push(cfg); },
       isDynamicConfigReady: () => true,
       getDynamicConfigSchema: () => ({ type: 'object', properties: { a: { type: 'boolean' } } }),
-    } as any), { sourcePorts: {}, targetPorts: {} }, { title: 'Dyn', kind: 'tool', capabilities: { dynamicConfigurable: true } });
+    } as any), { sourcePorts: {}, targetPorts: {} }, { title: 'Dyn', kind: 'tool' });
 
     await runtime.apply({ nodes: [{ id: 'n1', data: { template: 'dynNode', dynamicConfig: { a: true } } }], edges: [] });
     expect(instSetDynamic).toHaveBeenCalledWith({ a: true });

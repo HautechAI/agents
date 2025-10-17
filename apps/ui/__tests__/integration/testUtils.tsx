@@ -22,7 +22,6 @@ export const mockTemplates: TemplateSchema[] = [
     kind: 'tool',
     sourcePorts: {},
     targetPorts: {},
-    capabilities: { pausable: true, staticConfigurable: true, dynamicConfigurable: true },
     staticConfigSchema: { type: 'object', properties: { systemPrompt: { type: 'string', title: 'systemPrompt' } } } as any,
   },
 ];

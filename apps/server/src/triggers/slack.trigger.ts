@@ -140,23 +140,27 @@ export class SlackTrigger extends BaseTrigger {
     return client;
   }
 
-  protected async doProvision(): Promise<void> {
-    const client = await this.ensureClient();
-    this.logger.info('Starting SlackTrigger (socket mode)');
-    await client.start();
-    this.logger.info('SlackTrigger started');
-  }
-  protected async doDeprovision(): Promise<void> {
+  // Node lifecycle API (idempotent) using pure start/stop
+  async start(): Promise<void> {
+    this.markProvisioning();
     try {
-      await this.client?.disconnect();
-    } catch {}
+      const client = await this.ensureClient();
+      this.logger.info('Starting SlackTrigger (socket mode)');
+      await client.start();
+      this.logger.info('SlackTrigger started');
+      this.markReady();
+    } catch (e) {
+      this.markError(e);
+      throw e;
+    }
+  }
+  async stop(): Promise<void> {
+    this.markDeprovisioning();
+    try { await this.client?.disconnect(); } catch {}
     this.client = null;
     this.logger.info('SlackTrigger stopped');
+    this.markNotReady();
   }
-
-  // Node lifecycle API (idempotent)
-  async start(): Promise<void> { await this.provision(); }
-  async stop(): Promise<void> { await this.deprovision(); }
 
   async setDynamicConfig(_cfg: Record<string, unknown>): Promise<void> { /* no dynamic config */ }
 }

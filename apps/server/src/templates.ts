@@ -74,12 +74,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           sourcePorts: { $self: { kind: 'instance' } },
         },
-        {
-          title: 'Workspace',
-          kind: 'service',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(ContainerProviderExposedStaticConfigSchema),
-        },
+        { title: 'Workspace', kind: 'service', staticConfigSchema: toJSONSchema(ContainerProviderExposedStaticConfigSchema) },
       )
       .register(
         'shellTool',
@@ -90,12 +85,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             containerProvider: { kind: 'method', create: 'setContainerProvider' },
           },
         },
-        {
-          title: 'Shell',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(ShellToolStaticConfigSchema),
-        },
+        { title: 'Shell', kind: 'tool', staticConfigSchema: toJSONSchema(ShellToolStaticConfigSchema) },
       )
       .register(
         'githubCloneRepoTool',
@@ -106,12 +96,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             containerProvider: { kind: 'method', create: 'setContainerProvider' },
           },
         },
-        {
-          title: 'Github clone',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(GithubCloneRepoToolExposedStaticConfigSchema),
-        },
+        { title: 'Github clone', kind: 'tool', staticConfigSchema: toJSONSchema(GithubCloneRepoToolExposedStaticConfigSchema) },
       )
       .register(
         'sendSlackMessageTool',
@@ -119,12 +104,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: { $self: { kind: 'instance' } },
         },
-        {
-          title: 'Send Slack message',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(SendSlackMessageToolExposedStaticConfigSchema),
-        },
+        { title: 'Send Slack message', kind: 'tool', staticConfigSchema: toJSONSchema(SendSlackMessageToolExposedStaticConfigSchema) },
       )
       .register(
         'finishTool',
@@ -132,12 +112,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: { $self: { kind: 'instance' } },
         },
-        {
-          title: 'Finish',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(FinishToolStaticConfigSchema),
-        },
+        { title: 'Finish', kind: 'tool', staticConfigSchema: toJSONSchema(FinishToolStaticConfigSchema) },
       )
       .register(
         'callAgentTool',
@@ -146,34 +121,19 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           targetPorts: { $self: { kind: 'instance' } },
           sourcePorts: { agent: { kind: 'method', create: 'setAgent' } },
         },
-        {
-          title: 'Call agent',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(CallAgentToolStaticConfigSchema),
-        },
+        { title: 'Call agent', kind: 'tool', staticConfigSchema: toJSONSchema(CallAgentToolStaticConfigSchema) },
       )
       .register(
         'remindMeTool',
         () => new RemindMeTool(logger),
         { targetPorts: { $self: { kind: 'instance' } } },
-        {
-          title: 'Remind Me',
-          kind: 'tool',
-          capabilities: { staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(RemindMeToolStaticConfigSchema),
-        },
+        { title: 'Remind Me', kind: 'tool', staticConfigSchema: toJSONSchema(RemindMeToolStaticConfigSchema) },
       )
       .register(
         'debugTool',
         () => new DebugToolTrigger(logger),
         { targetPorts: { $tool: { kind: 'method', create: 'setTool' } } },
-        {
-          title: 'HTTP Debug Tool',
-          kind: 'trigger',
-          capabilities: { provisionable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(DebugToolTriggerStaticConfigSchema),
-        },
+        { title: 'HTTP Debug Tool', kind: 'trigger', staticConfigSchema: toJSONSchema(DebugToolTriggerStaticConfigSchema) },
       )
       .register(
         'slackTrigger',
@@ -184,12 +144,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' },
           },
         },
-        {
-          title: 'Slack (Socket Mode)',
-          kind: 'trigger',
-          capabilities: { provisionable: true, pausable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(SlackTriggerExposedStaticConfigSchema),
-        },
+        { title: 'Slack (Socket Mode)', kind: 'trigger', staticConfigSchema: toJSONSchema(SlackTriggerExposedStaticConfigSchema) },
       )
       .register(
         'agent',
@@ -205,25 +160,14 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             memory: { kind: 'method', create: 'attachMemoryConnector', destroy: 'detachMemoryConnector' },
           },
         },
-        {
-          title: 'Agent',
-          kind: 'agent',
-          capabilities: { pausable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(AgentStaticConfigSchema),
-        },
+        { title: 'Agent', kind: 'agent', staticConfigSchema: toJSONSchema(AgentStaticConfigSchema) },
       )
       // Register a single unified Memory tool
       .register(
         'memoryTool',
         () => new UnifiedMemoryTool(logger),
         { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
-        {
-          title: 'Memory Tool',
-          kind: 'tool',
-          capabilities: {},
-          // Expose node-level static config (name/description/title), not invocation schema
-          staticConfigSchema: toJSONSchema(UnifiedMemoryToolNodeStaticConfigSchema),
-        },
+        { title: 'Memory Tool', kind: 'tool', staticConfigSchema: toJSONSchema(UnifiedMemoryToolNodeStaticConfigSchema) },
       )
       .register(
         'mcpServer',
@@ -234,12 +178,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
             containerProvider: { kind: 'method', create: 'setContainerProvider' },
           },
         },
-        {
-          title: 'MCP Server',
-          kind: 'mcp',
-          capabilities: { provisionable: true, dynamicConfigurable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(LocalMcpServerStaticConfigSchema),
-        },
+        { title: 'MCP Server', kind: 'mcp', staticConfigSchema: toJSONSchema(LocalMcpServerStaticConfigSchema) },
       )
       // Memory: provide MemoryNode and MemoryConnectorNode as explicit templates with ports
       .register(
@@ -252,12 +191,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           // Expose only $self for instance wiring
           sourcePorts: { $self: { kind: 'instance' } },
         },
-        {
-          title: 'Memory',
-          kind: 'service',
-          capabilities: { provisionable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(MemoryNodeStaticConfigSchema),
-        },
+        { title: 'Memory', kind: 'service', staticConfigSchema: toJSONSchema(MemoryNodeStaticConfigSchema) },
       )
       .register(
         'memoryConnector',
@@ -273,12 +207,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
           targetPorts: { $memory: { kind: 'method', create: 'setMemorySource' } },
           sourcePorts: { $self: { kind: 'instance' } },
         },
-        {
-          title: 'Memory Connector',
-          kind: 'service',
-          capabilities: { provisionable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(MemoryConnectorStaticConfigSchema),
-        },
+        { title: 'Memory Connector', kind: 'service', staticConfigSchema: toJSONSchema(MemoryConnectorStaticConfigSchema) },
       )
   );
 }

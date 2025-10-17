@@ -1,4 +1,4 @@
-import type { Pausable, ProvisionStatus, Provisionable } from '../graph/capabilities';
+import type { ProvisionStatus } from '../graph/capabilities';
 
 // Base trigger message. Backward-compatible: no 'kind' field required.
 export interface TriggerMessage {
@@ -19,16 +19,15 @@ export interface TriggerListener {
   invoke(thread: string, messages: TriggerMessage[]): Promise<unknown>;
 }
 
-export abstract class BaseTrigger implements Pausable, Provisionable {
+export abstract class BaseTrigger {
   private listeners: TriggerListener[] = [];
 
   // Pausable implementation
   private _paused = false;
 
-  // Provisionable implementation
+  // Legacy provision status retained to feed UI status; managed by subclasses using start/stop
   private _provStatus: ProvisionStatus = { state: 'not_ready' };
   private _provListeners: Array<(s: ProvisionStatus) => void> = [];
-  private _provInFlight: Promise<void> | null = null;
 
   constructor() {}
 
@@ -51,7 +50,7 @@ export abstract class BaseTrigger implements Pausable, Provisionable {
     return this._paused;
   }
 
-  // Provisionable
+  // Status accessors (for UI)
   getProvisionStatus(): ProvisionStatus {
     return this._provStatus;
   }
@@ -74,38 +73,12 @@ export abstract class BaseTrigger implements Pausable, Provisionable {
     }
   }
 
-  async provision(): Promise<void> {
-    // Idempotent: if already ready, no-op
-    if (this._provStatus.state === 'ready') return;
-    if (this._provInFlight) return this._provInFlight;
-    this.setProvisionStatus({ state: 'provisioning' });
-    this._provInFlight = (async () => {
-      try {
-        await this.doProvision();
-        this.setProvisionStatus({ state: 'ready' });
-      } catch (err) {
-        this.setProvisionStatus({ state: 'error', details: err });
-      } finally {
-        this._provInFlight = null;
-      }
-    })();
-    return this._provInFlight;
-  }
-
-  async deprovision(): Promise<void> {
-    if (this._provStatus.state === 'not_ready') return;
-    this.setProvisionStatus({ state: 'deprovisioning' });
-    try {
-      await this.doDeprovision();
-    } finally {
-      // Regardless of outcome, transition to not_ready as per spec
-      this.setProvisionStatus({ state: 'not_ready' });
-    }
-  }
-
-  /** Hooks for subclasses to implement actual resource lifecycle */
-  protected async doProvision(): Promise<void> { /* no-op by default */ }
-  protected async doDeprovision(): Promise<void> { /* no-op by default */ }
+  // Convenience helpers for subclasses to update status during start/stop
+  protected markProvisioning() { this.setProvisionStatus({ state: 'provisioning' }); }
+  protected markReady(details?: unknown) { this.setProvisionStatus({ state: 'ready', details }); }
+  protected markError(details?: unknown) { this.setProvisionStatus({ state: 'error', details }); }
+  protected markDeprovisioning() { this.setProvisionStatus({ state: 'deprovisioning' }); }
+  protected markNotReady() { this.setProvisionStatus({ state: 'not_ready' }); }
 
   /**
    * External triggers call this to fan-out messages to listeners immediately (agent-side buffering applies).
