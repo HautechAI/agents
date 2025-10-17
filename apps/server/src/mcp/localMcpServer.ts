@@ -52,9 +52,12 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
 
   private async resolveEnvOverlay(): Promise<Record<string, string> | undefined> {
     const items: EnvItem[] = (this.cfg?.env || []) as EnvItem[];
-    if (!items.length || !this.envService) return undefined;
+    if (!items.length) return undefined;
+    // Prefer injected EnvService; fallback to local via Vault if available
+    const svc = this.envService || (this.vault ? new EnvService(this.vault) : undefined);
+    if (!svc) return undefined;
     try {
-      const r = await this.envService.resolveEnvItems(items);
+      const r = await svc.resolveEnvItems(items);
       return Object.keys(r).length ? r : undefined;
     } catch {
       return undefined;

@@ -221,12 +221,11 @@ export class SimpleAgent extends BaseAgent {
       checkpointer: this.checkpointerService.getCheckpointer(this.agentId),
     }) as CompiledStateGraph<unknown, unknown>;
 
-    // Attach run service if runtime provided one via global. Best effort; guarded by typeof checks
+    // Attach run service if runtime provided one via global. Best effort; no casts.
     try {
-      const anyGlobal: any = globalThis as any;
-      const runSvc = anyGlobal?.__agentRunsService as import('../services/run.service').AgentRunService | undefined;
-      if (runSvc && typeof (this as any)?.setRunService === 'function') {
-        (this as any).setRunService(runSvc);
+      const runSvc = globalThis.__agentRunsService;
+      if (runSvc) {
+        this.setRunService(runSvc);
       }
     } catch {}
 

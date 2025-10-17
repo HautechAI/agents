@@ -3,7 +3,16 @@ import type { LiveGraphRuntime } from '../graph/liveGraph.manager.js';
 import { LoggerService } from '../services/logger.service';
 import { AgentRunService } from '../services/run.service';
 
-export function registerRunsRoutes(fastify: FastifyInstance, runtime: LiveGraphRuntime, runs: AgentRunService, logger: LoggerService) {
+export function registerRunsRoutes(
+  fastify: FastifyInstance,
+  runtime: LiveGraphRuntime,
+  runs: AgentRunService,
+  logger: LoggerService,
+) {
+  type TerminableAgent = {
+    terminateRun: (threadId: string, runId?: string) => 'ok' | 'not_running' | 'not_found';
+    getCurrentRunId?: (threadId: string) => string | undefined;
+  };
   type ListParams = { nodeId: string };
   type ListQuery = { status?: 'running' | 'terminating' | 'all' };
   type ListReply = { items: Array<{ nodeId: string; threadId: string; runId: string; status: string; startedAt: string; updatedAt: string; expiresAt?: string }> } | { error: string };
@@ -76,7 +85,7 @@ export function registerRunsRoutes(fastify: FastifyInstance, runtime: LiveGraphR
     async (req: FastifyRequest<{ Params: TerminateParams }>, reply: FastifyReply) => {
       const { nodeId, runId } = req.params;
       try {
-        const inst = runtime.getNodeInstance<any>(nodeId);
+        const inst = runtime.getNodeInstance<TerminableAgent>(nodeId);
         if (!inst) { reply.code(404); return { error: 'node_not_found' } as const; }
         if (typeof inst.terminateRun !== 'function') { reply.code(404); return { error: 'not_terminable' } as const; }
         // Use persisted threadId from AgentRunService if available
@@ -122,7 +131,7 @@ export function registerRunsRoutes(fastify: FastifyInstance, runtime: LiveGraphR
     async (req: FastifyRequest<{ Params: TerminateThreadParams }>, reply: FastifyReply) => {
       const { nodeId, threadId } = req.params;
       try {
-        const inst = runtime.getNodeInstance<any>(nodeId);
+        const inst = runtime.getNodeInstance<TerminableAgent>(nodeId);
         if (!inst) { reply.code(404); return { error: 'node_not_found' } as const; }
         if (typeof inst.terminateRun !== 'function' || typeof inst.getCurrentRunId !== 'function') { reply.code(404); return { error: 'not_terminable' } as const; }
         const runId = inst.getCurrentRunId(threadId) as string | undefined;
