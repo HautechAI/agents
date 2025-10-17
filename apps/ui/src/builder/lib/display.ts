@@ -10,7 +10,10 @@ export function getDisplayTitle(
   templateName: string,
   config?: Record<string, unknown>
 ) {
-  const custom = (config as any)?.title as string | undefined;
+  const titleVal = config && Object.prototype.hasOwnProperty.call(config, 'title')
+    ? (config as Record<string, unknown>)['title']
+    : undefined;
+  const custom = typeof titleVal === 'string' ? titleVal : undefined;
   if (custom && custom.trim().length > 0) return custom.trim();
   const tpl = getTemplateSchema(templates, templateName);
   return tpl?.title || templateName;

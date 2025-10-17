@@ -41,6 +41,10 @@ function summarizeStatus(s: SpanDoc['status']) {
 }
 
 export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
+  return <NodeObsSidebarBody node={node} />;
+}
+
+function NodeObsSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) {
   const [spans, setSpans] = useState<SpanDoc[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [runs, setRuns] = useState<Array<{ runId: string; threadId: string; status: string; updatedAt: string }>>([]);
@@ -49,10 +53,9 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
   const kind: 'agent' | 'tool' | 'other' = (tmpl?.kind === 'agent' || /agent/i.test(node.data.template)) ? 'agent' : (tmpl?.kind === 'tool' ? 'tool' : 'other');
   const reminders = useNodeReminders(node.id, node.data.template === 'remindMeTool');
 
-  if (kind === 'other') return null; // Only show for agent/tool nodes
-
   // Seed: last 24 hours from obs-server, optionally by label
   useEffect(() => {
+    if (kind === 'other') return;
     let cancelled = false;
     const now = new Date();
     const from = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
@@ -77,6 +80,7 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
 
   // Realtime subscription
   useEffect(() => {
+    if (kind === 'other') return;
     const off = obsRealtime.onSpanUpsert((s) => {
       if (!spanMatchesContext(s, node, kind === 'agent' ? 'agent' : 'tool')) return;
       setSpans((prev) => {
@@ -90,7 +94,6 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
 
   // Poll active runs every ~3s for agent nodes
   useEffect(() => {
-    if (kind !== 'agent') return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
@@ -99,13 +102,15 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
         if (cancelled) return;
         const items = (res.items || []).map((r) => ({ runId: r.runId, threadId: r.threadId, status: r.status, updatedAt: r.updatedAt }));
         setRuns(items);
-      } catch (e) {
-        // mask errors in UI; devtools will show console
+      } catch {
+        /* no-op */
       } finally {
         if (!cancelled) timer = setTimeout(tick, 3000);
       }
     };
-    tick();
+    if (kind === 'agent') {
+      tick();
+    }
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [node.id, kind]);
 
@@ -132,10 +137,13 @@ export function NodeObsSidebar({ node }: { node: Node<BuilderPanelNodeData> }) {
     link: `${OBS_UI_BASE}/trace/${encodeURIComponent(s.traceId)}`,
   })), [spans]);
 
-  const title = kind === 'agent' ? 'Agent Activity' : 'Tool Spans (24h)';
+  const title = kind === 'agent' ? 'Agent Activity' : kind === 'tool' ? 'Tool Spans (24h)' : 'Spans';
 
   return (
     <div className="space-y-2 text-xs">
+      {kind === 'other' ? (
+        <div className="text-muted-foreground">No spans to display.</div>
+      ) : null}
       {node.data.template === 'remindMeTool' && (
         <div className="space-y-1">
           <div className="text-[10px] uppercase text-muted-foreground">Active Reminders</div>

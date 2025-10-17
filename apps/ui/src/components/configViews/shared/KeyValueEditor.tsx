@@ -34,7 +34,7 @@ export function KeyValueEditor({ value, onChange, readOnly, disabled, addLabel =
 
   function addRow() {
     const next: Record<string, string> = { ...(value || {}) };
-    let base = 'KEY';
+    const base = 'KEY';
     let i = 1;
     while (`${base}_${i}` in next) i++;
     next[`${base}_${i}`] = '';

@@ -27,12 +27,17 @@ interface Props {
 }
 
 export function RightPropertiesPanel({ node, onChange }: Props) {
-  const { templates } = useTemplates();
-  const runtimeTemplates = useTemplatesCache();
-
+  // Wrapper delegates to body to avoid conditional hooks
   if (!node) {
     return <div className="text-xs text-muted-foreground">Select a node to edit its properties.</div>;
   }
+  return <RightPropertiesPanelBody node={node} onChange={onChange} />;
+}
+
+function RightPropertiesPanelBody({ node, onChange }: Props) {
+  const { templates } = useTemplates();
+  const runtimeTemplates = useTemplatesCache();
+
   const { data } = node;
   // Derive readOnly/disabled from runtime status where applicable
   const { data: status } = useNodeStatus(node.id);
@@ -41,15 +46,11 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
   const cfg = (data.config || {}) as Record<string, unknown>;
   const dynamicConfig = (data.dynamicConfig || {}) as Record<string, unknown>;
 
-  // Feature flag removed: always use custom views
-
   // Runtime capabilities (may be absent if backend templates not yet loaded)
   const runtimeStaticCap = hasStaticConfigByName(data.template, runtimeTemplates.getTemplate);
   const runtimeDynamicCap = hasDynamicConfigByName(data.template, runtimeTemplates.getTemplate);
   const runtimeTemplate = runtimeTemplates.getTemplate(data.template);
   const hasRuntimeCaps = runtimeTemplate ? canProvision(runtimeTemplate) || canPause(runtimeTemplate) : false;
-
-  // Runtime status + actions logic moved into child component to avoid conditional hook usage
 
   function RuntimeNodeSection({ nodeId, templateName }: { nodeId: string; templateName: string }) {
     const { data: status } = useNodeStatus(nodeId);
@@ -96,7 +97,6 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Runtime status & actions */}
       {hasRuntimeCaps && (
         <div className="space-y-2">
           <div className="text-[10px] uppercase text-muted-foreground">Runtime Status</div>

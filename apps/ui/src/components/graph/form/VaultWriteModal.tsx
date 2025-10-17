@@ -57,8 +57,8 @@ export function VaultWriteModal({ mount, path, secretKey, onClose }: { mount: st
       await qc.invalidateQueries({ queryKey: ['vault', 'keys', mount, path] });
       notifySuccess('Secret updated');
       onClose(true);
-    } catch (e: any) {
-      const msg = e?.message || 'Write failed';
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Write failed';
       notifyError(msg);
       setSubmitting(false);
     }

@@ -64,7 +64,9 @@ class RunningStoreImpl {
     this.subscribers.forEach((cb) => {
       try {
         cb();
-      } catch {}
+      } catch {
+        /* no-op */
+      }
     });
   }
 
@@ -92,7 +94,9 @@ class RunningStoreImpl {
       .then((items) => {
         for (const s of items) this.onSpan(s);
       })
-      .catch(() => {})
+      .catch(() => {
+        /* no-op */
+      })
       .finally(() => this.emit());
   }
 
@@ -177,8 +181,10 @@ class RunningStoreImpl {
 const store = new RunningStoreImpl();
 
 export function useRunningCount(nodeId: string | undefined, kind: Bucket | undefined): number {
-  if (!nodeId || !kind) return 0;
-  return useSyncExternalStore((cb) => store.subscribe(cb), () => store.getCount(nodeId, kind));
+  return useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => (nodeId && kind ? store.getCount(nodeId, kind) : 0),
+  );
 }
 
 // Exported only for tests; do not use in production code.

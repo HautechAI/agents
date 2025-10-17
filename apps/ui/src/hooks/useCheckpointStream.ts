@@ -24,9 +24,21 @@ export interface UseCheckpointStreamParams {
 
 type Status = 'idle' | 'connecting' | 'ready' | 'error';
 
+interface ServerCheckpointWrite {
+  id: string;
+  checkpointId: string;
+  threadId: string;
+  taskId: string;
+  channel: string;
+  type: string;
+  idx: number;
+  value: unknown;
+  createdAt: string;
+}
+
 interface InitialPayload {
-  items: any[];
-} // eslint-disable-line @typescript-eslint/no-explicit-any
+  items: ServerCheckpointWrite[];
+}
 
 export function useCheckpointStream({
   url = getApiBase(),
@@ -74,9 +86,8 @@ export function useCheckpointStream({
     socket.on('initial', (payload: InitialPayload) => {
       if (sessionRef.current !== sid) return; // stale
       const normalized = payload.items
-        .filter((n: any) => !EXCLUDED_CHANNELS.current.has(n.channel)) // eslint-disable-line @typescript-eslint/no-explicit-any
-        .map((n: any) => ({
-          // eslint-disable-line @typescript-eslint/no-explicit-any
+        .filter((n) => !EXCLUDED_CHANNELS.current.has(n.channel))
+        .map((n): CheckpointWriteClient => ({
           ...n,
           createdAt: new Date(n.createdAt),
         }));
@@ -84,14 +95,13 @@ export function useCheckpointStream({
       setStatus('ready');
     });
 
-    socket.on('append', (doc: any) => {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
+    socket.on('append', (doc: ServerCheckpointWrite) => {
       if (sessionRef.current !== sid) return;
       if (isPaused) return;
       if (EXCLUDED_CHANNELS.current.has(doc.channel)) return;
       setItems((prev) => {
         if (prev.some((p) => p.id === doc.id)) return prev; // dedupe
-        const next = [...prev, { ...doc, createdAt: new Date(doc.createdAt) }];
+        const next = [...prev, { ...doc, createdAt: new Date(doc.createdAt) } as CheckpointWriteClient];
         if (next.length > maxItems) {
           const overflow = next.length - maxItems;
           setDropped((d) => d + overflow);
@@ -101,10 +111,10 @@ export function useCheckpointStream({
       });
     });
 
-    socket.on('error', (e: any) => {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
+    socket.on('error', (e: unknown) => {
       if (sessionRef.current !== sid) return;
-      setError(e?.message || 'Unknown error');
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setError(msg);
       setStatus('error');
     });
 

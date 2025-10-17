@@ -14,7 +14,7 @@ vi.mock('../../graph/api', () => ({
 }));
 
 const notify = vi.fn();
-vi.mock('../../notify', () => ({ notifyError: (...args: any[]) => notify('error', ...args), notifySuccess: (...args: any[]) => notify('success', ...args) }));
+vi.mock('../../notify', () => ({ notifyError: (..._args: any[]) => notify('error'), notifySuccess: (..._args: any[]) => notify('success') }));
 
 function createWrapper() {
   const qc = new QueryClient();
@@ -38,7 +38,7 @@ describe('optimistic actions with socket reconciliation', () => {
 
     // Simulate socket event to ready
     const anySock: any = graphSocket as any;
-    for (const [nodeId, set] of anySock.listeners as Map<string, Set<Function>>) {
+    for (const [nodeId, set] of anySock.listeners as Map<string, Set<(...args: unknown[]) => unknown>>) {
       if (nodeId === 'n1') for (const fn of set) fn({ nodeId: 'n1', provisionStatus: { state: 'ready' } } as NodeStatusEvent);
     }
 
@@ -55,7 +55,7 @@ describe('optimistic actions with socket reconciliation', () => {
 
     // socket says not paused
     const anySock: any = graphSocket as any;
-    for (const [nodeId, set] of anySock.listeners as Map<string, Set<Function>>) {
+    for (const [nodeId, set] of anySock.listeners as Map<string, Set<(...args: unknown[]) => unknown>>) {
       if (nodeId === 'n2') for (const fn of set) fn({ nodeId: 'n2', isPaused: false } as NodeStatusEvent);
     }
     await waitFor(() => expect(statusQ.current.data?.isPaused).toBe(false));
