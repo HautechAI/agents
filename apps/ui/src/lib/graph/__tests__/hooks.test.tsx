@@ -44,7 +44,7 @@ describe('graph hooks', () => {
 
     // simulate socket event
     const anySock: any = graphSocket as any;
-    for (const [nodeId, set] of anySock.listeners as Map<string, Set<Function>>) {
+    for (const [nodeId, set] of anySock.listeners as Map<string, Set<(...args: unknown[]) => unknown>>) {
       if (nodeId === 'n1') for (const fn of set) fn({ nodeId: 'n1', isPaused: true });
     }
 

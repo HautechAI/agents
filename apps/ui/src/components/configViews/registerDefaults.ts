@@ -1,5 +1,5 @@
 import type { ConfigViewRegistration } from './types';
-import { registerConfigView } from './registry';
+// registerConfigView is not used directly here; exports installer below
 import SimpleAgentConfigView from './SimpleAgentConfigView';
 import McpServerDynamicConfigView from './McpServerDynamicConfigView';
 import McpServerStaticConfigView from './McpServerStaticConfigView';

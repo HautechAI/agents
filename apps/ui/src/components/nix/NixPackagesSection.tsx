@@ -157,9 +157,9 @@ export function NixPackagesSection() {
       </div>
 
       {(() => {
-        const errA = qUnstable.error as any;
-        const errB = qStable.error as any;
-        const isAbort = (e: any) => e && typeof e === 'object' && e.name === 'AbortError';
+        const errA = qUnstable.error as unknown;
+        const errB = qStable.error as unknown;
+        const isAbort = (e: unknown): boolean => e instanceof DOMException && e.name === 'AbortError';
         const showError = (!!errA && !isAbort(errA)) || (!!errB && !isAbort(errB));
         return showError ? (
         <div className="text-xs text-destructive" aria-live="polite">
