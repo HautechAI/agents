@@ -29,8 +29,8 @@ Registry mirror on agents_net
 Cross-links
 - Environment overlays and security: docs/config/env-overlays.md, docs/security/vault.md
 - Graph status streaming: docs/graph/status-updates.md
+- Networking defaults: workspace containers attach to the shared `agents_net` via `createExtras` in apps/server/src/templates.ts
 
 Related code
 - apps/server/src/entities/container.entity.ts, containerProvider.entity.ts
 - apps/server/src/services/container.service.ts, containerRegistry.service.ts, containerCleanup.service.ts
-
