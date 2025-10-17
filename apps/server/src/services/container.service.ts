@@ -388,9 +388,9 @@ export class ContainerService {
         finished = true;
         try { streamRef?.destroy?.(); } catch {}
         try { stdoutCollector.flush(); stderrCollector.flush(); } catch {}
-        // Properly-typed AbortError without any casts
+        // Properly-typed AbortError without casts
         const abortErr = new Error('Aborted');
-        (abortErr as Error).name = 'AbortError';
+        abortErr.name = 'AbortError';
         reject(abortErr);
       };
       if (signal) {

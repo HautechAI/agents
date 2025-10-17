@@ -120,10 +120,9 @@ async function bootstrap() {
     logger.error('Failed to apply initial persisted graph: %s', err?.message || String(e));
   }
 
-  // Expose globally for diagnostics (optional)
-  (globalThis as any).liveGraphRuntime = runtime; // eslint-disable-line @typescript-eslint/no-explicit-any
-  // Expose runsService so agents can capture it during init in a loosely-coupled way
-  (globalThis as any).__agentRunsService = runsService;
+  // Expose selected runtime services globally for diagnostics and agent wiring
+  globalThis.liveGraphRuntime = runtime;
+  globalThis.__agentRunsService = runsService;
 
   const fastify = Fastify({ logger: false });
   await fastify.register(cors, { origin: true });

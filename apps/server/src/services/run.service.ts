@@ -22,14 +22,29 @@ export class AgentRunService {
   }
 
   async ensureIndexes(): Promise<void> {
-    const indexes: IndexSpecification[] = [
-      { key: { nodeId: 1, runId: 1 }, name: 'uniq_node_run', unique: true },
-      { key: { nodeId: 1, status: 1, updatedAt: -1 }, name: 'by_node_status' },
-      { key: { expiresAt: 1 }, name: 'ttl_expires', expireAfterSeconds: 0 },
+    // Build options explicitly to avoid casts; include only known properties
+    const idx1Key: IndexSpecification = { nodeId: 1, runId: 1 };
+    const idx1Opts = { name: 'uniq_node_run', unique: true } as const;
+
+    const idx2Key: IndexSpecification = { nodeId: 1, status: 1, updatedAt: -1 };
+    const idx2Opts = { name: 'by_node_status' } as const;
+
+    const idx3Key: IndexSpecification = { expiresAt: 1 };
+    const idx3Opts = { name: 'ttl_expires', expireAfterSeconds: 0 } as const;
+
+    const plan: Array<{ key: IndexSpecification; opts: { name?: string; unique?: boolean; expireAfterSeconds?: number } }> = [
+      { key: idx1Key, opts: idx1Opts },
+      { key: idx2Key, opts: idx2Opts },
+      { key: idx3Key, opts: idx3Opts },
     ];
-    for (const idx of indexes) {
+    for (const { key, opts } of plan) {
       try {
-        await this.col.createIndex(idx.key as any, idx as any);
+        const options = {
+          ...(opts.name ? { name: opts.name } : {}),
+          ...(opts.unique ? { unique: opts.unique } : {}),
+          ...(typeof opts.expireAfterSeconds === 'number' ? { expireAfterSeconds: opts.expireAfterSeconds } : {}),
+        };
+        await this.col.createIndex(key, options);
       } catch (e) {
         this.logger.debug?.('createIndex failed (non-fatal)', (e as Error)?.message || String(e));
       }

@@ -73,9 +73,9 @@ describe('AgentRunService', () => {
     const doc = await (db.collection('agent_runs')).findOne({ nodeId, runId });
     expect(doc).toBeTruthy();
     expect(doc?.status).toBe('terminated');
-    expect(typeof doc?.startedAt).toBe('string' || 'object');
+    expect(doc?.startedAt).toBeInstanceOf(Date);
+    if (doc?.expiresAt) expect(doc.expiresAt).toBeInstanceOf(Date);
     const exp = new Date(doc!.expiresAt);
     expect(exp.getTime()).toBeGreaterThanOrEqual(now + displaySeconds * 1000 - 500);
   });
 });
-
