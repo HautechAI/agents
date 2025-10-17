@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '@hautech/ui';
 import type { StaticConfigViewProps } from './types';
 import KeyValueEditor from './shared/KeyValueEditor';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Badge } from '@hautech/ui';
 import type { ProvisionState } from '../../lib/graph/types';
 
