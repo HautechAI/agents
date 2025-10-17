@@ -17,6 +17,59 @@ function isLikelyJsonSchemaRoot(obj: unknown): obj is Record<string, unknown> {
   return 'type' in o || 'properties' in o || '$ref' in o;
 }
 
+// Normalize legacy UI config shapes to server-aligned templates
+function normalizeConfigByTemplate(template: string, cfg?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!cfg || typeof cfg !== 'object') return cfg;
+  const c = { ...(cfg as Record<string, unknown>) };
+  switch (template) {
+    case 'containerProvider': {
+      if (c.env && !Array.isArray(c.env) && typeof c.env === 'object') {
+        c.env = Object.entries(c.env as Record<string, string>).map(([k, v]) => ({ key: k, value: v, source: 'static' }));
+      }
+      if ('workingDir' in c) delete (c as any).workingDir;
+      return c;
+    }
+    case 'shellTool': {
+      if ((c as any).workingDir && !(c as any).workdir) {
+        (c as any).workdir = (c as any).workingDir;
+        delete (c as any).workingDir;
+      }
+      if (c.env && !Array.isArray(c.env) && typeof c.env === 'object') {
+        c.env = Object.entries(c.env as Record<string, string>).map(([k, v]) => ({ key: k, value: v, source: 'static' }));
+      }
+      return c;
+    }
+    case 'sendSlackMessageTool': {
+      const t = c.bot_token as any;
+      if (typeof t === 'string') c.bot_token = { value: t, source: 'static' };
+      return c;
+    }
+    case 'slackTrigger': {
+      const at = (c as any).app_token;
+      const bt = (c as any).bot_token;
+      if (typeof at === 'string') (c as any).app_token = { value: at, source: 'static' };
+      if (typeof bt === 'string') (c as any).bot_token = { value: bt, source: 'static' };
+      return c;
+    }
+    case 'githubCloneRepoTool': {
+      const token = (c as any).token;
+      if (typeof token === 'string') (c as any).token = { value: token, source: 'static' };
+      delete (c as any).repoUrl;
+      delete (c as any).destPath;
+      delete (c as any).authToken;
+      return c;
+    }
+    case 'mcpServer': {
+      if (c.env && !Array.isArray(c.env) && typeof c.env === 'object') {
+        c.env = Object.entries(c.env as Record<string, string>).map(([k, v]) => ({ key: k, value: v, source: 'static' }));
+      }
+      return c;
+    }
+    default:
+      return c;
+  }
+}
+
 export const api = {
   getTemplates: () => httpJson<TemplateSchema[]>(`/graph/templates`),
   // Runs: list and termination controls (no auth/gates)
@@ -80,9 +133,14 @@ export const api = {
   },
   postNodeAction: (nodeId: string, action: 'pause' | 'resume' | 'provision' | 'deprovision') =>
     httpJson<void>(`/graph/nodes/${encodeURIComponent(nodeId)}/actions`, { method: 'POST', body: JSON.stringify({ action }) }),
-  saveFullGraph: (graph: PersistedGraphUpsertRequestUI) =>
-    httpJson<PersistedGraphUpsertRequestUI & { version: number; updatedAt: string }>(`/api/graph`, {
+  saveFullGraph: (graph: PersistedGraphUpsertRequestUI) => {
+    const normalized = {
+      ...graph,
+      nodes: graph.nodes.map((n) => ({ ...n, config: normalizeConfigByTemplate(n.template, n.config) })),
+    };
+    return httpJson<PersistedGraphUpsertRequestUI & { version: number; updatedAt: string }>(`/api/graph`, {
       method: 'POST',
-      body: JSON.stringify(graph),
-    }),
+      body: JSON.stringify(normalized),
+    });
+  },
 };
