@@ -61,6 +61,34 @@ export class ContainerCleanupService {
           }
 
           try {
+            // First, stop and remove any DinD sidecars associated with this workspace container
+            try {
+              const svcAny = this.containers as unknown as { findContainersByLabels?: (labels: Record<string, string>, opts?: { all?: boolean }) => Promise<Array<{ stop: (t?: number) => Promise<void>; remove: (force?: boolean) => Promise<void> }>> };
+              const sidecars = typeof svcAny.findContainersByLabels === 'function'
+                ? await svcAny.findContainersByLabels({ 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': id }, { all: true })
+                : [];
+              if (Array.isArray(sidecars) && sidecars.length > 0) {
+                let scCleaned = 0;
+                for (const sc of sidecars) {
+                  try {
+                    await sc.stop(5);
+                  } catch (e: unknown) {
+                    const code = (e as { statusCode?: number } | undefined)?.statusCode;
+                    if (code !== 304 && code !== 404 && code !== 409) throw e;
+                  }
+                  try {
+                    await sc.remove(true);
+                    scCleaned++;
+                  } catch (e: unknown) {
+                    const code = (e as { statusCode?: number } | undefined)?.statusCode;
+                    if (code !== 404 && code !== 409) throw e;
+                  }
+                }
+                if (scCleaned > 0) this.logger.info(`ContainerCleanup: removed ${scCleaned} DinD sidecar(s) for ${id}`);
+              }
+            } catch (e) {
+              this.logger.error('ContainerCleanup: error cleaning DinD sidecars', { id, error: e });
+            }
             // Try graceful stop then remove (handle benign errors)
             try {
               await this.containers.stopContainer(id, 10);

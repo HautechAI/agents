@@ -297,6 +297,41 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       } catch (e) {
         this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Error cleaning up temp container`, e);
       }
+      // Ensure any DinD sidecars created for the temporary discovery container are also cleaned up
+      try {
+        const dinds = await this.containerService.findContainersByLabels(
+          { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': tempContainerId },
+          { all: true },
+        );
+        let cleaned = 0;
+        for (const d of dinds) {
+          try {
+            await d.stop(5);
+          } catch (e: unknown) {
+            const sc = (e as { statusCode?: number } | undefined)?.statusCode;
+            // benign: already stopped / not found / conflict
+            if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
+          }
+          try {
+            await d.remove(true);
+            cleaned++;
+          } catch (e: unknown) {
+            const sc = (e as { statusCode?: number } | undefined)?.statusCode;
+            // benign: already removed / removal in progress
+            if (sc !== 404 && sc !== 409) throw e;
+          }
+        }
+        if (cleaned > 0) {
+          this.logger.info(
+            `[MCP:${this.namespace}] [disc:${discoveryId}] Cleaned ${cleaned} DinD sidecar(s) for temp container ${String(tempContainerId).substring(0, 12)}`,
+          );
+        }
+      } catch (e) {
+        this.logger.error(
+          `[MCP:${this.namespace}] [disc:${discoveryId}] Error cleaning DinD sidecars for temp container`,
+          e,
+        );
+      }
     }
 
     return this.toolsCache ?? [];
