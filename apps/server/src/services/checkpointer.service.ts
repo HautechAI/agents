@@ -3,7 +3,6 @@ import { LoggerService } from './logger.service';
 import { MongoDBSaver } from '../checkpointer';
 // Optional Postgres saver (enabled via env flag)
 // Note: UI stream features (fetchLatestWrites/watchInserts) remain Mongo-only for now.
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 
 // Raw document interface (previously in MongoService)
