@@ -3,8 +3,22 @@ import { Input } from '@hautech/ui';
 import type { StaticConfigViewProps } from './types';
 import ReferenceEnvField, { type EnvItem } from './shared/ReferenceEnvField';
 
+// Local config interface used by this view to avoid any
+interface McpServerStaticConfig {
+  title?: string;
+  namespace?: string;
+  command?: string;
+  workdir?: string;
+  env?: EnvItem[];
+  requestTimeoutMs?: number;
+  startupTimeoutMs?: number;
+  heartbeatIntervalMs?: number;
+  staleTimeoutMs?: number;
+  restart?: { maxAttempts?: number; backoffMs?: number };
+}
+
 export default function McpServerStaticConfigView({ value, onChange, readOnly, disabled, onValidate }: StaticConfigViewProps) {
-  const init = useMemo(() => ({ ...(value || {}) }), [value]);
+  const init = useMemo<McpServerStaticConfig>(() => ({ ...(value || {}) } as McpServerStaticConfig), [value]);
   const [title, setTitle] = useState<string>((init.title as string) || '');
   const [namespace, setNamespace] = useState<string>((init.namespace as string) || 'mcp');
   const [command, setCommand] = useState<string>((init.command as string) || '');
@@ -14,8 +28,8 @@ export default function McpServerStaticConfigView({ value, onChange, readOnly, d
   const [startupTimeoutMs, setStartupTimeoutMs] = useState<number>(typeof init.startupTimeoutMs === 'number' ? (init.startupTimeoutMs as number) : 15000);
   const [heartbeatIntervalMs, setHeartbeatIntervalMs] = useState<number>(typeof init.heartbeatIntervalMs === 'number' ? (init.heartbeatIntervalMs as number) : 300000);
   const [staleTimeoutMs, setStaleTimeoutMs] = useState<number>(typeof init.staleTimeoutMs === 'number' ? (init.staleTimeoutMs as number) : 0);
-  const [restartMaxAttempts, setRestartMaxAttempts] = useState<number>((init.restart as any)?.maxAttempts ?? 5);
-  const [restartBackoffMs, setRestartBackoffMs] = useState<number>((init.restart as any)?.backoffMs ?? 2000);
+  const [restartMaxAttempts, setRestartMaxAttempts] = useState<number>(init.restart?.maxAttempts ?? 5);
+  const [restartBackoffMs, setRestartBackoffMs] = useState<number>(init.restart?.backoffMs ?? 2000);
   const isDisabled = !!readOnly || !!disabled;
 
   useEffect(() => {
@@ -25,9 +39,9 @@ export default function McpServerStaticConfigView({ value, onChange, readOnly, d
   }, [namespace, onValidate]);
 
   useEffect(() => {
-    const restart = { maxAttempts: restartMaxAttempts, backoffMs: restartBackoffMs };
-    onChange({
-      ...value,
+    const restart: McpServerStaticConfig['restart'] = { maxAttempts: restartMaxAttempts, backoffMs: restartBackoffMs };
+    const next: McpServerStaticConfig = {
+      ...(value as McpServerStaticConfig),
       title: title || undefined,
       namespace,
       command: command || undefined,
@@ -38,7 +52,8 @@ export default function McpServerStaticConfigView({ value, onChange, readOnly, d
       heartbeatIntervalMs,
       staleTimeoutMs,
       restart,
-    });
+    };
+    (onChange as (next: McpServerStaticConfig) => void)(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, namespace, command, workdir, JSON.stringify(env), requestTimeoutMs, startupTimeoutMs, heartbeatIntervalMs, staleTimeoutMs, restartMaxAttempts, restartBackoffMs]);
 
