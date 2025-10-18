@@ -25,7 +25,9 @@ class FakeContainerService extends ContainerService {
 }
 
 class FakeVaultService extends VaultService {
-  constructor() { super({ enabled: true, addr: 'http://vault:8200', token: 'x' }); }
+  constructor() {
+    super({ enabled: true, addr: 'http://vault:8200', token: 'x', timeoutMs: 30000, defaultMounts: ['secret'] });
+  }
   override isEnabled(): boolean { return true; }
   override async getSecret(): Promise<string | undefined> { return 'VAL'; }
 }
