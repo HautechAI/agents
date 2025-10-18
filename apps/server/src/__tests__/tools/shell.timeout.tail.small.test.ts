@@ -29,8 +29,11 @@ describe('ShellTool timeout full inclusion when <=10k', () => {
     await tool.setConfig({});
     const t = tool.init();
 
+    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
+    const payload: InvokeArgs[0] = { command: 'sleep 1h' };
+    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
     try {
-      await t.invoke({ command: 'sleep 1h' }, { configurable: { thread_id: 't' } } as any);
+      await t.invoke(payload, ctx);
       throw new Error('expected to throw');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

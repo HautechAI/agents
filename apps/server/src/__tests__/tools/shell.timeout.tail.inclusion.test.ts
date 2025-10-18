@@ -29,12 +29,15 @@ describe('ShellTool timeout tail inclusion and ANSI stripping', () => {
     await tool.setConfig({});
     const t = tool.init();
 
+    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
+    const payload: InvokeArgs[0] = { command: 'sleep 1h' };
+    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
     await expect(
-      t.invoke({ command: 'sleep 1h' }, { configurable: { thread_id: 't' } } as any),
+      t.invoke(payload, ctx),
     ).rejects.toThrowError(/Error \(timeout after 3600000ms\): command exceeded 3600000ms and was terminated\. See output tail below\./);
 
     try {
-      await t.invoke({ command: 'sleep 1h' }, { configurable: { thread_id: 't' } } as any);
+      await t.invoke(payload, ctx);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       // No ANSI should remain

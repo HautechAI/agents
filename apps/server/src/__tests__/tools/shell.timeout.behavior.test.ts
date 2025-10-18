@@ -32,11 +32,14 @@ describe('ShellTool timeout error message', () => {
     await tool.setConfig({});
     const t = tool.init();
 
+    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
+    const payload: InvokeArgs[0] = { command: 'sleep 999999' };
+    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
     await expect(
-      t.invoke({ command: 'sleep 999999' }, { configurable: { thread_id: 't' } } as any),
+      t.invoke(payload, ctx),
     ).rejects.toThrowError(/Error \(timeout after 3600000ms\): command exceeded 3600000ms and was terminated\. See output tail below\./);
     await expect(
-      t.invoke({ command: 'sleep 999999' }, { configurable: { thread_id: 't' } } as any),
+      t.invoke(payload, ctx),
     ).rejects.toThrowError(/----------/);
   });
 
@@ -51,8 +54,11 @@ describe('ShellTool timeout error message', () => {
     tool.setContainerProvider(provider);
     await tool.setConfig({});
     const t = tool.init();
+    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
+    const payload: InvokeArgs[0] = { command: 'sleep 999999' };
+    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
     await expect(
-      t.invoke({ command: 'sleep 999999' }, { configurable: { thread_id: 't' } } as any),
+      t.invoke(payload, ctx),
     ).rejects.toThrowError(/Error \(idle timeout\): no output for 60000ms; command was terminated\./);
   });
 
@@ -67,8 +73,11 @@ describe('ShellTool timeout error message', () => {
     tool.setContainerProvider(provider);
     await tool.setConfig({ idleTimeoutMs: 60000 });
     const t = tool.init();
+    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
+    const payload: InvokeArgs[0] = { command: 'sleep 999999' };
+    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
     await expect(
-      t.invoke({ command: 'sleep 999999' }, { configurable: { thread_id: 't' } } as any),
+      t.invoke(payload, ctx),
     ).rejects.toThrowError(/no output for 12345ms/);
   });
 });
@@ -96,9 +105,12 @@ describe('ContainerService.execContainer killOnTimeout behavior', () => {
 
     // Patch service docker instance without any: use Reflect.set
     Reflect.set(svc as unknown as object, 'docker', docker);
-    // Spy on startAndCollectExec to force timeout rejection
+    // Simulate timeout by throwing during exec.inspect() at end
+    // We'll patch exec.inspect via docker mock below
     const timeoutErr = new Error('Exec timed out after 123ms');
-    vi.spyOn(svc as any, 'startAndCollectExec').mockRejectedValue(timeoutErr);
+    const getContainer = docker.getContainer;
+    // Patch startAndCollectExec behavior by providing a container.exec that yields a stream that errors
+    Reflect.set(svc as unknown as object, 'startAndCollectExec', vi.fn(async () => { throw timeoutErr; }));
 
     await expect(
       svc.execContainer('cid123', 'echo hi', { timeoutMs: 123, killOnTimeout: true }),
@@ -123,13 +135,13 @@ describe('ContainerService.execContainer killOnTimeout behavior', () => {
     } as const;
     Reflect.set(svc as unknown as object, 'docker', docker);
     const timeoutErr = new Error('Exec timed out after 456ms');
-    vi.spyOn(svc as any, 'startAndCollectExec').mockRejectedValue(timeoutErr);
+    Reflect.set(svc as unknown as object, 'startAndCollectExec', vi.fn(async () => { throw timeoutErr; }));
 
     await expect(
       svc.execContainer('cid999', 'echo nope', { timeoutMs: 456 }),
     ).rejects.toThrow(/timed out/);
     // Ensure stop was not called on any container instance
-    const getContainerMock: Mock = docker.getContainer as unknown as Mock;
+    const getContainerMock = docker.getContainer;
     const anyStopped = getContainerMock.mock.results.some((r: any) => r.value.stop.mock.calls.length > 0);
     expect(anyStopped).toBe(false);
     // Optional: verify only one getContainer call (inspect only)
@@ -150,7 +162,7 @@ describe('ContainerService.execContainer killOnTimeout behavior', () => {
     } as const;
     Reflect.set(svc as unknown as object, 'docker', docker);
     const genericErr = new Error('Some other failure');
-    vi.spyOn(svc as any, 'startAndCollectExec').mockRejectedValue(genericErr);
+    Reflect.set(svc as unknown as object, 'startAndCollectExec', vi.fn(async () => { throw genericErr; }));
 
     await expect(svc.execContainer('cid42', 'echo oops', { timeoutMs: 50, killOnTimeout: true })).rejects.toBe(
       genericErr,
@@ -174,7 +186,7 @@ describe('ContainerService.execContainer killOnTimeout behavior', () => {
     } as const;
     Reflect.set(svc as unknown as object, 'docker', docker);
     const idleErr = new ExecIdleTimeoutError(321, 'a', 'b');
-    vi.spyOn(svc as any, 'startAndCollectExec').mockRejectedValue(idleErr);
+    Reflect.set(svc as unknown as object, 'startAndCollectExec', vi.fn(async () => { throw idleErr; }));
 
     await expect(
       svc.execContainer('cidIdle', 'echo idle', { timeoutMs: 9999, idleTimeoutMs: 321, killOnTimeout: true }),
@@ -202,8 +214,11 @@ describe('ShellTool non-timeout error propagation', () => {
     await tool.setConfig({});
     const t = tool.init();
 
+    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
+    const payload: InvokeArgs[0] = { command: 'ls' };
+    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
     await expect(
-      t.invoke({ command: 'ls' }, { configurable: { thread_id: 't' } } as any),
+      t.invoke(payload, ctx),
     ).rejects.toThrow('Permission denied');
   });
 });
