@@ -9,7 +9,7 @@ on:
 
 jobs:
   lint:
-    name: Lint (monorepo)
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
