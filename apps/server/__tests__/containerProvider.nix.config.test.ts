@@ -23,8 +23,21 @@ function makeRuntime() {
   const logger = new StubLogger();
   const deps = {
     logger,
-    containerService: {} as unknown as ContainerService,
-    configService: {} as unknown as ConfigService,
+    containerService: {
+      // minimal methods used by ContainerProviderEntity during tests
+      start: async () => ({
+        id: 'c',
+        exec: async () => ({ exitCode: 0 }),
+        stop: async () => {},
+        remove: async () => {},
+      }),
+      findContainerByLabels: async () => undefined,
+      findContainersByLabels: async () => [],
+      getContainerLabels: async () => ({}),
+    } as unknown as ContainerService,
+    configService: {
+      dockerMirrorUrl: 'http://registry-mirror:5000',
+    } as unknown as ConfigService,
     checkpointerService: {} as unknown as CheckpointerService,
     mongoService: new StubMongo(),
   };

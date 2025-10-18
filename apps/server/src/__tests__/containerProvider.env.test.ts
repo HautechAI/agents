@@ -10,14 +10,22 @@ import { VaultService } from '../services/vault.service';
 class FakeContainerService extends ContainerService {
   constructor() { super(new LoggerService()); }
   override async findContainerByLabels(): Promise<ReturnType<ContainerService['findContainerByLabels']> extends Promise<infer R> ? R : never> {
-    return undefined as any;
+    return undefined as never;
   }
   override async findContainersByLabels(): Promise<ReturnType<ContainerService['findContainersByLabels']> extends Promise<infer R> ? R : never> {
-    return [] as any;
+    return [] as never;
   }
   override async start(opts?: Parameters<ContainerService['start']>[0]): Promise<ReturnType<ContainerService['start']> extends Promise<infer R> ? R : never> {
     // Return a minimal ContainerEntity-like object matching usage in tests
-    return { id: 'c', exec: async () => ({ exitCode: 0 }), ...opts } as any;
+    const container = {
+      id: 'c',
+      exec: async () => ({ exitCode: 0 }),
+      stop: async () => {},
+      remove: async () => {},
+      labels: {} as Record<string, string>,
+      env: (opts?.env && !Array.isArray(opts.env) ? opts.env : {} as Record<string, string>),
+    };
+    return container as never;
   }
   override async getContainerLabels(): Promise<Record<string, string>> {
     return {};
@@ -80,7 +88,7 @@ describe('ContainerProviderEntity parseVaultRef', () => {
         mcpToolsStaleTimeoutMs: '0', ncpsEnabled: 'false', ncpsUrl: 'http://ncps:8501',
       }),
     );
-    const ent1 = new ContainerProviderEntity(svc, undefined as any, {}, () => ({}), cfgFalse);
+    const ent1 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgFalse);
     ent1.setConfig({});
     const c1: any = await ent1.provide('t3');
     expect(c1.env?.NIX_CONFIG).toBeUndefined();
@@ -94,7 +102,7 @@ describe('ContainerProviderEntity parseVaultRef', () => {
         mcpToolsStaleTimeoutMs: '0', ncpsEnabled: 'true', ncpsUrl: 'http://ncps:8501',
       }),
     );
-    const ent2 = new ContainerProviderEntity(svc, undefined as any, {}, () => ({}), cfgMissingKey);
+    const ent2 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgMissingKey);
     ent2.setConfig({});
     const c2: any = await ent2.provide('t4');
     expect(c2.env?.NIX_CONFIG).toBeUndefined();
@@ -108,7 +116,7 @@ describe('ContainerProviderEntity parseVaultRef', () => {
         mcpToolsStaleTimeoutMs: '0', ncpsEnabled: 'true', ncpsUrl: 'http://ncps:8501', ncpsPublicKey: 'pub:key',
       }),
     );
-    const ent3 = new ContainerProviderEntity(svc, undefined as any, {}, () => ({}), cfgTrue);
+    const ent3 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgTrue);
     ent3.setConfig({});
     const c3: any = await ent3.provide('t5');
     expect(c3.env?.NIX_CONFIG).toContain('substituters = http://ncps:8501');
