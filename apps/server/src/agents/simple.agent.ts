@@ -109,6 +109,24 @@ export class SimpleAgent extends BaseAgent {
     "Do not produce a final answer directly. Before finishing, call a tool. If no tool is needed, call the 'finish' tool.";
   private restrictionMaxInjections: number = 0; // 0 = unlimited per turn
 
+  // Lifecycle/config propagation helpers
+  private lifecycleStarted = false;
+  private lifecycleConfigSnapshot: Record<string, unknown> = {};
+  // Allowed config keys for propagation; keep in sync with setConfig filtering
+  private static readonly allowedConfigKeys = [
+    'title',
+    'model',
+    'systemPrompt',
+    'debounceMs',
+    'whenBusy',
+    'processBuffer',
+    'summarizationKeepTokens',
+    'summarizationMaxTokens',
+    'restrictOutput',
+    'restrictionMessage',
+    'restrictionMaxInjections',
+  ] as const;
+
   constructor(
     private configService: ConfigService,
     private loggerService: LoggerService,
@@ -437,37 +455,26 @@ export class SimpleAgent extends BaseAgent {
   // Overload preserves BaseAgent signature while exposing a more precise config shape for callers.
   setConfig(config: Partial<SimpleAgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
-    const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(
-      Object.fromEntries(
-        Object.entries(config).filter(([k]) =>
-          [
-            'title',
-            'model',
-            'systemPrompt',
-            'debounceMs',
-            'whenBusy',
-            'processBuffer',
-            'summarizationKeepTokens',
-            'summarizationMaxTokens',
-            'restrictOutput',
-            'restrictionMessage',
-            'restrictionMaxInjections',
-          ].includes(k),
-        ),
-      ),
-    ) as Partial<SimpleAgentStaticConfig>;
+    // Filter to known keys and validate without letting defaults write missing keys
+    const filtered = Object.fromEntries(
+      Object.entries(config).filter(([k]) => SimpleAgent.allowedConfigKeys.includes(k as any)),
+    );
+    const parsedConfig = SimpleAgentStaticConfigSchema.partial().passthrough().parse(filtered) as Partial<
+      SimpleAgentStaticConfig
+    >;
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
-    if (parsedConfig.systemPrompt !== undefined) {
-      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
+    // Only update fields that were explicitly provided by caller
+    if ('systemPrompt' in filtered) {
+      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt as string);
       this.loggerService.info('SimpleAgent system prompt updated');
     }
 
-    if (parsedConfig.model !== undefined) {
+    if ('model' in filtered) {
       // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
-      this.llm.model = parsedConfig.model;
+      this.llm.model = parsedConfig.model as string;
       this.loggerService.info(`SimpleAgent model updated to ${parsedConfig.model}`);
     }
 
@@ -503,10 +510,57 @@ export class SimpleAgent extends BaseAgent {
     }
 
     // Apply restriction-related config without altering system prompt
-    if (parsedConfig.restrictOutput !== undefined) this.restrictOutput = !!parsedConfig.restrictOutput;
-    if (parsedConfig.restrictionMessage !== undefined) this.restrictionMessage = parsedConfig.restrictionMessage;
-    if (parsedConfig.restrictionMaxInjections !== undefined)
+    if ('restrictOutput' in filtered) this.restrictOutput = !!parsedConfig.restrictOutput;
+    if ('restrictionMessage' in filtered && parsedConfig.restrictionMessage !== undefined)
+      this.restrictionMessage = parsedConfig.restrictionMessage;
+    if ('restrictionMaxInjections' in filtered && parsedConfig.restrictionMaxInjections !== undefined)
       this.restrictionMaxInjections = parsedConfig.restrictionMaxInjections;
+  }
+
+  // ----- NodeLifecycle: configure/start/stop/delete -----
+  configure(cfg: Record<string, unknown>): void {
+    // Keep only allowed keys; do not inject defaults; store snapshot for start() and diff updates
+    const incoming = Object.fromEntries(
+      Object.entries(cfg || {}).filter(([k]) => SimpleAgent.allowedConfigKeys.includes(k as any)),
+    );
+    if (!this.lifecycleStarted) {
+      // Before start: replace snapshot
+      this.lifecycleConfigSnapshot = { ...incoming };
+      return;
+    }
+    // After start: compute delta and apply only changed keys to avoid resetting unspecified fields
+    const delta: Record<string, unknown> = {};
+    const prev = this.lifecycleConfigSnapshot;
+    let changed = false;
+    for (const [k, v] of Object.entries(incoming)) {
+      const before = (prev as any)[k];
+      const same = JSON.stringify(before) === JSON.stringify(v);
+      if (!same) {
+        delta[k] = v;
+        changed = true;
+      }
+    }
+    // Merge snapshot
+    this.lifecycleConfigSnapshot = { ...prev, ...incoming };
+    if (changed) this.setConfig(delta);
+  }
+
+  async start(): Promise<void> {
+    if (this.lifecycleStarted) return; // idempotent
+    this.lifecycleStarted = true;
+    const cfg = this.lifecycleConfigSnapshot;
+    if (cfg && Object.keys(cfg).length > 0) {
+      // Propagate all stored keys immediately
+      this.setConfig(cfg);
+    }
+  }
+
+  async stop(): Promise<void> {
+    // no-op for now
+  }
+
+  async delete(): Promise<void> {
+    await this.destroy();
   }
 
   /**
