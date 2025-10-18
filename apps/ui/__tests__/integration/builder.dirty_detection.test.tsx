@@ -1,6 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React, { useEffect } from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './testUtils';
 import { useBuilderState } from '../../src/builder/hooks/useBuilderState';
@@ -16,7 +16,10 @@ function Harness({ expose, debounceMs = 80 }: { expose: (api: ReturnType<typeof 
 
 describe('Builder dirty detection for graph edits', () => {
   beforeAll(() => server.listen());
-  afterEach(() => server.resetHandlers());
+  afterEach(() => {
+    server.resetHandlers();
+    vi.useRealTimers();
+  });
   afterAll(() => server.close());
 
   function setupServerCounters() {
@@ -48,6 +51,7 @@ describe('Builder dirty detection for graph edits', () => {
   }
 
   it('ignores selection-only changes (no autosave/version bump)', async () => {
+    vi.useFakeTimers();
     const counters = setupServerCounters();
     let api: ReturnType<typeof useBuilderState> | null = null;
 
@@ -65,11 +69,15 @@ describe('Builder dirty detection for graph edits', () => {
     // programmatic selection should not trigger dirty
     const change: NodeChange = { id: 'n1', type: 'select', selected: true };
     api!.onNodesChange([change]);
-    await new Promise((r) => setTimeout(r, 120));
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
     expect(counters.posts).toBe(0);
   });
 
   it('position drag end with no delta is not dirty; real move is dirty', async () => {
+    vi.useFakeTimers();
     const counters = setupServerCounters();
     let api: ReturnType<typeof useBuilderState> | null = null;
 
@@ -87,17 +95,24 @@ describe('Builder dirty detection for graph edits', () => {
     // Drag end with no delta
     const noMove: NodeChange = { id: 'n1', type: 'position', dragging: false, position: { x: 10, y: 10 } } as any;
     api!.onNodesChange([noMove]);
-    await new Promise((r) => setTimeout(r, 120));
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
     expect(counters.posts).toBe(0);
 
     // Real move
     const move: NodeChange = { id: 'n1', type: 'position', dragging: false, position: { x: 20, y: 10 } } as any;
     api!.onNodesChange([move]);
-    await new Promise((r) => setTimeout(r, 120));
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
     expect(counters.posts).toBe(1);
   });
 
   it('node and edge add/remove mark dirty', async () => {
+    vi.useFakeTimers();
     const counters = setupServerCounters();
     let api: ReturnType<typeof useBuilderState> | null = null;
 
@@ -114,26 +129,38 @@ describe('Builder dirty detection for graph edits', () => {
 
     // Node add
     api!.addNode('mock', { x: 0, y: 0 });
-    await new Promise((r) => setTimeout(r, 120));
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
     expect(counters.posts).toBe(1);
 
     // Edge add via valid connection
     const conn: Parameters<OnConnect>[0] = { source: 'n1', sourceHandle: 'out', target: 'n2', targetHandle: 'in' };
     api!.onConnect(conn);
-    await new Promise((r) => setTimeout(r, 120));
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
     expect(counters.posts).toBe(2);
 
     // Edge remove
     const edgeId = 'n1-out__n2-in';
     const erem: EdgeChange = { id: edgeId, type: 'remove' };
     api!.onEdgesChange([erem]);
-    await new Promise((r) => setTimeout(r, 120));
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
     expect(counters.posts).toBe(3);
 
     // Node remove
     const nrem: NodeChange = { id: 'n1', type: 'remove' };
     api!.onNodesChange([nrem]);
-    await new Promise((r) => setTimeout(r, 120));
+    await act(async () => {
+      vi.advanceTimersByTime(1200);
+      await Promise.resolve();
+    });
     expect(counters.posts).toBe(4);
   });
 });
