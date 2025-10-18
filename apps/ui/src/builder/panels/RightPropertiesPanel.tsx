@@ -155,7 +155,10 @@ function RightPropertiesPanelBody({ node, onChange }: { node: Node<BuilderPanelN
       )}
       {data.template === 'containerProvider' && (
         <div className="space-y-2">
-          <NixPackagesSection />
+          <NixPackagesSection
+            config={cfg}
+            onUpdateConfig={(next) => update({ config: next })}
+          />
         </div>
       )}
       {staticErrors.length > 0 && (
