@@ -3,6 +3,7 @@ import { beforeAll, afterAll, afterEach, describe, it, expect } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from '../../integration/testUtils';
+import { TooltipProvider } from '@hautech/ui';
 import { AgentBuilder } from '../../../src/builder/AgentBuilder';
 
 describe('Builder toolbar + popover + DnD', () => {
@@ -29,7 +30,9 @@ describe('Builder toolbar + popover + DnD', () => {
     mockApi();
     render(
       <TestProviders>
-        <AgentBuilder />
+        <TooltipProvider>
+          <AgentBuilder />
+        </TooltipProvider>
       </TestProviders>,
     );
     const toolbar = await screen.findByTestId('builder-toolbar');
@@ -53,7 +56,9 @@ describe('Builder toolbar + popover + DnD', () => {
     mockApi();
     render(
       <TestProviders>
-        <AgentBuilder />
+        <TooltipProvider>
+          <AgentBuilder />
+        </TooltipProvider>
       </TestProviders>,
     );
     fireEvent.click(await screen.findByTestId('add-node-button'));
@@ -78,7 +83,9 @@ describe('Builder toolbar + popover + DnD', () => {
     mockApi();
     render(
       <TestProviders>
-        <AgentBuilder />
+        <TooltipProvider>
+          <AgentBuilder />
+        </TooltipProvider>
       </TestProviders>,
     );
     fireEvent.click(await screen.findByTestId('add-node-button'));
