@@ -335,6 +335,8 @@ export class ContainerProviderEntity {
           );
         }
       }
+      // Intentional ordering: run initialScript first, then Nix install.
+      // This lets the script prepare environment (e.g., user/profile) before installing packages.
       // Install Nix packages when resolved specs are provided (best-effort)
       try {
         const specs = this.normalizeToInstallSpecs((this.cfg?.nix?.packages as unknown[]) || []);
@@ -464,18 +466,23 @@ export class ContainerProviderEntity {
       const refs = specs.map((s) => `github:NixOS/nixpkgs/${s.commitHash}#${s.attributePath}`);
       const PATH_PREFIX = 'export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"';
       const BASE = "nix profile install --accept-flake-config --extra-experimental-features 'nix-command flakes' --no-write-lock-file";
-      const combined = `${PATH_PREFIX} && ${BASE} ${refs.map((r) => r.replace(/\"/g, '')) .join(' ')}`;
+      const combined = `${PATH_PREFIX} && ${BASE} ${refs.join(' ')}`;
       this.logger.info('Nix install: %d packages (combined)', refs.length);
       const combinedRes = await container.exec(combined, { timeoutMs: 10 * 60_000, idleTimeoutMs: 60_000 });
       if (combinedRes.exitCode === 0) return;
       // Fallback per package
       this.logger.error('Nix install (combined) failed', { exitCode: combinedRes.exitCode });
-      for (const ref of refs) {
-        const cmd = `${PATH_PREFIX} && ${BASE} ${ref}`;
-        const r = await container.exec(cmd, { timeoutMs: 3 * 60_000, idleTimeoutMs: 60_000 });
-        if (r.exitCode === 0) this.logger.info('Nix install succeeded for %s', ref);
-        else this.logger.error('Nix install failed for %s', ref, { exitCode: r.exitCode });
-      }
+      const cmdFor = (ref: string) => `${PATH_PREFIX} && ${BASE} ${ref}`;
+      const timeoutOpts = { timeoutMs: 3 * 60_000, idleTimeoutMs: 60_000 } as const;
+      await refs.reduce<Promise<void>>(
+        (p, ref) =>
+          p.then(async () => {
+            const r = await container.exec(cmdFor(ref), timeoutOpts);
+            if (r.exitCode === 0) this.logger.info('Nix install succeeded for %s', ref);
+            else this.logger.error('Nix install failed for %s', ref, { exitCode: r.exitCode });
+          }),
+        Promise.resolve(),
+      );
     } catch (e) {
       // Surface via logger; caller swallows to avoid failing startup
       this.logger.error('Nix install threw', e);
@@ -497,4 +504,3 @@ function getStatusCode(e: unknown): number | undefined {
 // parseVaultRef now imported from ../utils/refs
 
 export type NixInstallSpec = { commitHash: string; attributePath: string };
-

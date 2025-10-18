@@ -15,12 +15,12 @@ class FakeContainer extends ContainerEntity {
   constructor(svc: ContainerService, id: string, private execPlan: ((cmd: string) => { rc: number }) | null) {
     super(svc, id);
   }
-  override async exec(command: string[] | string, options?: any) {
+  override async exec(command: string[] | string, options?: { timeoutMs?: number; idleTimeoutMs?: number; tty?: boolean }) {
     const cmd = Array.isArray(command) ? command.join(' ') : command;
     const plan = this.execPlan || (() => ({ rc: 0 }));
     const { rc } = plan(cmd);
     this.calls.push({ cmd, opts: options, rc });
-    return { stdout: '', stderr: '', exitCode: rc } as any;
+    return { stdout: '', stderr: '', exitCode: rc } as { stdout: string; stderr: string; exitCode: number };
   }
   getExecCalls() { return this.calls; }
 }
@@ -42,7 +42,7 @@ function makeProvider(execPlan?: (cmd: string) => { rc: number }) {
   const svc = new StubContainerService();
   const provider = new ContainerProviderEntity(svc, undefined, {}, () => ({}));
   const logger = new StubLogger();
-  provider.setLogger(logger as any);
+  provider.setLogger(logger);
   // Inject custom plan into created container
   vi.spyOn(svc, 'start').mockImplementation(async () => {
     svc.created = new FakeContainer(svc, 'c', execPlan || null);
@@ -58,10 +58,10 @@ describe('ContainerProviderEntity nix install', () => {
     const { provider, svc, logger } = makeProvider();
     provider.setConfig({ image: 'alpine:3' } as unknown as ContainerProviderStaticConfig);
     await provider.provide('t');
-    const calls = (svc.created as any).getExecCalls();
+    const calls = (svc.created as FakeContainer).getExecCalls();
     // No nix detection nor install
     expect(calls.length).toBe(0);
-    expect((logger.info as any).mock.calls.find((c: any[]) => String(c[0]).includes('skipping install'))).toBeFalsy();
+    expect((logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls.find((c) => String(c[0]).includes('skipping install'))).toBeFalsy();
   });
 
   it('skips with info when nix not present', async () => {
@@ -72,11 +72,11 @@ describe('ContainerProviderEntity nix install', () => {
       return { rc: 0 };
     };
     const { provider, svc, logger } = makeProvider(plan);
-    provider.setConfig({ image: 'alpine:3', nix: { packages: [{ commitHash: 'a'.repeat(40), attributePath: 'htop' }] } } as any);
+    provider.setConfig({ image: 'alpine:3', nix: { packages: [{ commitHash: 'a'.repeat(40), attributePath: 'htop' }] } } as unknown as ContainerProviderStaticConfig);
     await provider.provide('t');
-    const calls = (svc.created as any).getExecCalls();
+    const calls = (svc.created as FakeContainer).getExecCalls();
     expect(calls.length).toBe(1); // only detection
-    expect((logger.info as any).mock.calls.some((c: any[]) => String(c[0]).includes('Nix not present'))).toBe(true);
+    expect((logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('Nix not present'))).toBe(true);
   });
 
   it('runs combined install when nix present', async () => {
@@ -92,9 +92,9 @@ describe('ContainerProviderEntity nix install', () => {
     provider.setConfig({ image: 'alpine:3', nix: { packages: [
       { commitHash: 'b'.repeat(40), attributePath: 'htop' },
       { commitHash: 'c'.repeat(40), attributePath: 'curl' },
-    ] } } as any);
+    ] } } as unknown as ContainerProviderStaticConfig);
     await provider.provide('t');
-    const calls = (svc.created as any).getExecCalls();
+    const calls = (svc.created as FakeContainer).getExecCalls();
     expect(calls.length).toBeGreaterThanOrEqual(2);
     const combined = calls.find((c: any) => String(c.cmd).includes('nix profile install'));
     expect(combined).toBeTruthy();
@@ -102,7 +102,7 @@ describe('ContainerProviderEntity nix install', () => {
     expect(String(combined.cmd)).toContain(`github:NixOS/nixpkgs/${'b'.repeat(40)}#htop`);
     expect(String(combined.cmd)).toContain(`github:NixOS/nixpkgs/${'c'.repeat(40)}#curl`);
     // Info log about combined
-    expect((logger.info as any).mock.calls.some((c: any[]) => String(c[0]).includes('Nix install'))).toBe(true);
+    expect((logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('Nix install'))).toBe(true);
   });
 
   it('falls back per-package on combined failure', async () => {
@@ -119,25 +119,33 @@ describe('ContainerProviderEntity nix install', () => {
     provider.setConfig({ image: 'alpine:3', nix: { packages: [
       { commitHash: 'd'.repeat(40), attributePath: 'htop' },
       { commitHash: 'e'.repeat(40), attributePath: 'curl' },
-    ] } } as any);
+    ] } } as unknown as ContainerProviderStaticConfig);
     await provider.provide('t');
-    const calls = (svc.created as any).getExecCalls();
+    const calls = (svc.created as FakeContainer).getExecCalls();
+
+    // Ensure sequential per-package fallback executed in order
+    const pkgCalls = calls.filter((c) => String(c.cmd).includes('nix profile install') && !String(c.cmd).includes('#htop #curl'));
+    // Expect exactly two per-package calls
+    expect(pkgCalls.length).toBeGreaterThanOrEqual(2);
+    // Order should be htop then curl per our staged plan
+    expect(String(pkgCalls[0].cmd)).toContain('#htop');
+    expect(String(pkgCalls[1].cmd)).toContain('#curl');
     // Expect detection + combined + 2 per-package = 4 execs
     expect(calls.length).toBeGreaterThanOrEqual(4);
     // Error logs recorded
-    expect((logger.error as any).mock.calls.some((c: any[]) => String(c[0]).includes('combined'))).toBe(true);
+    expect((logger.error as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('combined'))).toBe(true);
     // Success/failure logs per package
-    expect((logger.info as any).mock.calls.some((c: any[]) => String(c[0]).includes('succeeded for'))).toBe(true);
-    expect((logger.error as any).mock.calls.some((c: any[]) => String(c[0]).includes('failed for'))).toBe(true);
+    expect((logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('succeeded for'))).toBe(true);
+    expect((logger.error as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('failed for'))).toBe(true);
   });
 
   it('logs unresolved legacy/UI shapes and skips', async () => {
     const { provider, svc, logger } = makeProvider();
-    provider.setConfig({ image: 'alpine:3', nix: { packages: [ { attr: 'htop' }, { name: 'htop', version: '1.2.3' } ] } } as any);
+    provider.setConfig({ image: 'alpine:3', nix: { packages: [ { attr: 'htop' }, { name: 'htop', version: '1.2.3' } ] } } as unknown as ContainerProviderStaticConfig);
     await provider.provide('t');
-    const calls = (svc.created as any).getExecCalls();
+    const calls = (svc.created as FakeContainer).getExecCalls();
     // No detection nor install
     expect(calls.length).toBe(0);
-    expect((logger.info as any).mock.calls.some((c: any[]) => String(c[0]).includes('unresolved'))).toBe(true);
+    expect((logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('unresolved'))).toBe(true);
   });
 });
