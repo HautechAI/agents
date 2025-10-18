@@ -1,81 +1,37 @@
-// Client for NixOS Search via backend proxy
+// Minimal Nix service for simplified endpoints
 import { z } from 'zod';
 import { buildUrl } from '../lib/apiClient';
 
-export const CHANNELS = ['nixpkgs-unstable', 'nixos-24.11'] as const;
-export type NixChannel = typeof CHANNELS[number];
-
-export interface NixSearchItem {
-  // Nix attribute/path, typically unique across channels
-  attr: string;
-  pname?: string;
-  version?: string;
-  description?: string;
+export interface NixPackageDTO {
+  name: string;
+  description?: string | null;
 }
+export interface PackagesResponse { packages: NixPackageDTO[] }
+export interface VersionsResponse { versions: string[] }
 
-export interface NixSearchResponse { items: NixSearchItem[] }
+const PackagesResponseSchema = z.object({ packages: z.array(z.object({ name: z.string(), description: z.string().nullable().optional() })) });
+const VersionsResponseSchema = z.object({ versions: z.array(z.string()) });
 
-// zod schemas for strict parsing
-const NixItemSchema = z.object({
-  attr: z.string(),
-  pname: z.string().optional().nullable(),
-  version: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
-});
-const NixSearchResponseSchema = z.object({ items: z.array(NixItemSchema) });
-
-// Resolved via buildUrl/getApiBase; do not hardcode base here.
-
-export async function searchPackages(query: string, channel: NixChannel, signal?: AbortSignal): Promise<NixSearchItem[]> {
-  if (!query || query.trim().length < 2) return [];
-  const url = buildUrl(`/api/nix/search?channel=${encodeURIComponent(channel)}&query=${encodeURIComponent(query.trim())}`);
+export async function fetchPackages(query: string, signal?: AbortSignal): Promise<NixPackageDTO[]> {
+  const q = (query || '').trim();
+  if (q.length < 2) return [];
+  const url = buildUrl(`/api/nix/packages?query=${encodeURIComponent(q)}`);
   const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`Nix search failed: ${res.status}`);
+  if (!res.ok) throw new Error(`Nix packages failed: ${res.status}`);
   const json = await res.json();
-  const parsed = NixSearchResponseSchema.safeParse(json);
-  if (!parsed.success) throw new Error('Nix search: invalid response shape');
-  return parsed.data.items.map((it) => ({
-    attr: it.attr,
-    pname: it.pname ?? undefined,
-    version: it.version ?? undefined,
-    description: it.description ?? undefined,
-  }));
+  const parsed = PackagesResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error('Nix packages: invalid response');
+  return parsed.data.packages;
 }
 
-// Fetches a specific package by attribute (preferred) or pname from a given channel to read its version.
-export async function fetchPackageVersion(
-  ident: { attr?: string; pname?: string },
-  channel: NixChannel,
-  signal?: AbortSignal,
-): Promise<string | null> {
-  const q = ident.attr ? `attr:${ident.attr}` : ident.pname ? ident.pname : '';
-  if (!q) return null;
-  const params = new URLSearchParams({ channel, ...(ident.attr ? { attr: ident.attr } : { pname: ident.pname! }) });
-  const url = buildUrl(`/api/nix/show?${params.toString()}`);
+export async function fetchVersions(name: string, signal?: AbortSignal): Promise<string[]> {
+  if (!name) return [];
+  const url = buildUrl(`/api/nix/versions?name=${encodeURIComponent(name)}`);
   const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`Nix package lookup failed: ${res.status}`);
+  if (res.status === 404) return []; // treat not found as no versions for UI purposes
+  if (!res.ok) throw new Error(`Nix versions failed: ${res.status}`);
   const json = await res.json();
-  const parsed = NixItemSchema.safeParse(json);
-  if (!parsed.success) throw new Error('Nix details: invalid response shape');
-  return parsed.data.version ?? null;
-}
-
-// Utility to merge results from two channels by attr; prefer pname when present.
-export function mergeChannelSearchResults(a: NixSearchItem[], b: NixSearchItem[]): NixSearchItem[] {
-  const map = new Map<string, NixSearchItem>();
-  for (const it of [...a, ...b]) {
-    if (!it.attr) continue;
-    const existing = map.get(it.attr);
-    if (!existing) map.set(it.attr, it);
-    else {
-      // Keep first, but backfill fields if missing
-      map.set(it.attr, {
-        attr: existing.attr,
-        pname: existing.pname ?? it.pname,
-        version: existing.version ?? it.version,
-        description: existing.description ?? it.description,
-      });
-    }
-  }
-  return Array.from(map.values());
+  const parsed = VersionsResponseSchema.safeParse(json);
+  if (!parsed.success) throw new Error('Nix versions: invalid response');
+  return parsed.data.versions;
 }

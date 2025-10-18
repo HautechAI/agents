@@ -10,7 +10,6 @@ describe('nix routes', () => {
   beforeEach(() => {
     fastify = Fastify({ logger: false });
     registerNixRoutes(fastify as any, {
-      allowedChannels: ['nixpkgs-unstable', 'nixos-24.11'],
       timeoutMs: 200,
       cacheTtlMs: 5 * 60_000,
       cacheMax: 500,
@@ -21,7 +20,7 @@ describe('nix routes', () => {
     nock.cleanAll();
   });
 
-  it('search success', async () => {
+  it('packages: success mapping and strict upstream URL', async () => {
     const scope = nock(BASE)
       .get('/search')
       // Nock provides decoded query values to predicate; ensure decoded match
@@ -32,31 +31,16 @@ describe('nix routes', () => {
         results: [{ name: 'git', summary: 'the fast version control system', last_updated: '2024-10-01' }],
       });
 
-    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=nixpkgs-unstable&query=git' });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/packages?query=git' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toContain('max-age=60');
     const body = res.json();
-    expect(Array.isArray(body.items)).toBe(true);
-    expect(body.items[0].attr).toBe('git');
+    expect(Array.isArray(body.packages)).toBe(true);
+    expect(body.packages[0].name).toBe('git');
     scope.done();
   });
-
-  it('validation error on bad channel', async () => {
-    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=bad&query=ab' });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('upstream 500 mapped to 502', async () => {
-    const scope = nock(BASE)
-      .get('/search')
-      .query(true)
-      .reply(500, 'oops');
-    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=nixpkgs-unstable&query=tool' });
-    expect(res.statusCode).toBe(502);
-    scope.done();
-  });
-
-  it('retries on 502 then succeeds', async () => {
+  
+  it('packages: 502 retry then success', async () => {
     const scope = nock(BASE)
       .get('/search')
       .query(true)
@@ -64,43 +48,43 @@ describe('nix routes', () => {
       .get('/search')
       .query(true)
       .reply(200, { query: 'retry', total_results: 1, results: [{ name: 'ret', summary: 'pkg' }] });
-    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=nixpkgs-unstable&query=retry' });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/packages?query=retry' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.items[0].attr).toBe('ret');
+    expect(body.packages[0].name).toBe('ret');
     scope.done();
   });
 
-  it('timeout mapped to 504', async () => {
+  it('packages: timeout -> 504', async () => {
     const scope = nock(BASE)
       .get('/search')
       .query(true)
       .delay(500)
       .reply(200, { query: 'long', total_results: 0, results: [] });
-    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=nixpkgs-unstable&query=long' });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/packages?query=long' });
     expect(res.statusCode).toBe(504);
     scope.done();
   });
 
-  it('show not found -> 404', async () => {
+  it('versions: 404 mapping and strict upstream path/query', async () => {
     const scope = nock(BASE)
       .get('/packages/pkgs.missing')
       // Decoded form from Nock predicate
       .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
       .reply(404, 'not found');
-    const res = await fastify.inject({ method: 'GET', url: '/api/nix/show?channel=nixpkgs-unstable&attr=pkgs.missing' });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/versions?name=pkgs.missing' });
     expect(res.statusCode).toBe(404);
     scope.done();
   });
 
-  it('cache hit returns quickly', async () => {
+  it('packages: cache hit; strict upstream URL', async () => {
     const scope = nock(BASE)
       .get('/search')
       .query((q) => q.q === 'hello' && q._data === 'routes/_nixhub.search')
       .once()
       .reply(200, { query: 'hello', total_results: 1, results: [{ name: 'hello', summary: 'hello pkg' }] });
 
-    const url = '/api/nix/search?channel=nixpkgs-unstable&query=hello';
+    const url = '/api/nix/packages?query=hello';
     const first = await fastify.inject({ method: 'GET', url });
     expect(first.statusCode).toBe(200);
     const second = await fastify.inject({ method: 'GET', url });
@@ -108,7 +92,7 @@ describe('nix routes', () => {
     scope.done();
   });
 
-  it('error is not cached (500 then 200)', async () => {
+  it('packages: error is not cached (500 then 200)', async () => {
     const scope = nock(BASE)
       .get('/search')
       .query((q) => q.q === 'flip')
@@ -117,7 +101,7 @@ describe('nix routes', () => {
       .query((q) => q.q === 'flip')
       .reply(200, { query: 'flip', total_results: 1, results: [{ name: 'flip', summary: 'flip pkg' }] });
 
-    const url = '/api/nix/search?channel=nixpkgs-unstable&query=flip';
+    const url = '/api/nix/packages?query=flip';
     const first = await fastify.inject({ method: 'GET', url });
     expect(first.statusCode).toBe(502);
     const second = await fastify.inject({ method: 'GET', url });
@@ -125,15 +109,50 @@ describe('nix routes', () => {
     scope.done();
   });
 
-  it('forwards size/from and accepts alias q', async () => {
-    const scope = nock(BASE)
-      .get('/search')
-      // Ensure only exact NixHub params are sent, extra ones are not forwarded upstream
-      .query((q) => q.q === 'alias' && q._data === 'routes/_nixhub.search')
-      .reply(200, { query: 'alias', total_results: 0, results: [] });
-    const res = await fastify.inject({ method: 'GET', url: '/api/nix/search?channel=nixpkgs-unstable&q=alias&size=10&from=5' });
+  it('packages: short query returns empty without upstream', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/packages?query=g' });
     expect(res.statusCode).toBe(200);
-    expect(res.headers['cache-control']).toBe('public, max-age=60, stale-while-revalidate=300');
+    expect(res.json()).toEqual({ packages: [] });
+  });
+
+  it('versions: success mapping (unique + sorted) and cache hit', async () => {
+    const scope = nock(BASE)
+      .get('/packages/git')
+      .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
+      .once()
+      .reply(200, { name: 'git', releases: [{ version: '2.43.1' }, { version: '2.44.0' }, { version: '2.44.0' }, { version: 'v2.45.0' }] });
+    const url = '/api/nix/versions?name=git';
+    const r1 = await fastify.inject({ method: 'GET', url });
+    expect(r1.statusCode).toBe(200);
+    const b1 = r1.json();
+    expect(b1.versions[0]).toBe('v2.45.0');
+    const r2 = await fastify.inject({ method: 'GET', url });
+    expect(r2.statusCode).toBe(200);
+    scope.done();
+  });
+
+  it('versions: 502 retry then success', async () => {
+    const scope = nock(BASE)
+      .get('/packages/htop')
+      .query(true)
+      .reply(502, 'bad gateway')
+      .get('/packages/htop')
+      .query(true)
+      .reply(200, { name: 'htop', releases: [{ version: '3.0.0' }] });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/versions?name=htop' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().versions).toEqual(['3.0.0']);
+    scope.done();
+  });
+
+  it('versions: timeout -> 504', async () => {
+    const scope = nock(BASE)
+      .get('/packages/curl')
+      .query(true)
+      .delay(500)
+      .reply(200, { name: 'curl', releases: [] });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/versions?name=curl' });
+    expect(res.statusCode).toBe(504);
     scope.done();
   });
 });

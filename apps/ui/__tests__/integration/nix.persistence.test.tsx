@@ -63,11 +63,11 @@ describe('Nix packages persistence in builder graph', () => {
     ;(input as HTMLInputElement).focus();
     fireEvent.change(input, { target: { value: 'htop' } });
     await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
-    fireEvent.click(await screen.findByRole('option', { name: /htop \(htop\.attr\)/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /htop/ }));
 
     // Choose channel
-    const select = await screen.findByLabelText('Select version for htop (htop.attr)');
-    fireEvent.change(select, { target: { value: 'nixpkgs-unstable' } });
+    const select = await screen.findByLabelText(/Select version for htop/);
+    fireEvent.change(select, { target: { value: '1.2.3' } });
 
     // Wait for autosave debounce (default 1000ms) + buffer
     await new Promise((r) => setTimeout(r, 1200));
@@ -77,6 +77,10 @@ describe('Nix packages persistence in builder graph', () => {
     const node = posted.nodes.find((n: any) => n.id === 'ws');
     expect(node.config.image).toBe('alpine:3');
     expect(node.config.nix.packages.length).toBe(1);
-    expect(node.config.nix.packages[0]).toEqual({ attr: 'htop.attr', pname: 'htop', channel: 'nixpkgs-unstable' });
+    // New persistence only stores { name, version }
+    expect(node.config.nix.packages[0]).toEqual({ name: 'htop', version: '1.2.3' });
+
+    // Allow any trailing save-state timers to flush before teardown to avoid unhandled updates
+    await new Promise((r) => setTimeout(r, 1600));
   });
 });

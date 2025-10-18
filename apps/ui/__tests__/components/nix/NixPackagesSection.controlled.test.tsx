@@ -29,20 +29,21 @@ describe('NixPackagesSection (controlled)', () => {
 
     // Wait for suggestion to appear and click it
     await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
-    fireEvent.click(await screen.findByRole('option', { name: /gi \(gi\.attr\)/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /gi/ }));
 
     // Selected list shows chosen item
     const selectedList = await screen.findByRole('list', { name: 'Selected Nix packages' });
     expect(selectedList).toBeInTheDocument();
-    expect(screen.getByText(/gi \(gi\.attr\)/)).toBeInTheDocument();
+    expect(screen.getByText(/gi/)).toBeInTheDocument();
 
     // Choose a channel (version label will be fetched via MSW)
-    const select = screen.getByLabelText('Select version for gi (gi.attr)') as HTMLSelectElement;
-    await waitFor(() => expect(select.querySelector('option[value="nixpkgs-unstable"]')?.getAttribute('disabled')).toBeNull());
-    fireEvent.change(select, { target: { value: 'nixpkgs-unstable' } });
+    const select = screen.getByLabelText(/Select version for gi/) as HTMLSelectElement;
+    // MSW returns versions: ['1.2.3','1.0.0']
+    await waitFor(() => expect(select.querySelector('option[value="1.2.3"]')).not.toBeNull());
+    fireEvent.change(select, { target: { value: '1.2.3' } });
 
     // Remove the package
-    fireEvent.click(screen.getByLabelText('Remove gi (gi.attr)'));
+    fireEvent.click(screen.getByLabelText('Remove gi'));
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Selected Nix packages' })).not.toBeInTheDocument());
   });
 });

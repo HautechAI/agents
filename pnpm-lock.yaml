@@ -111,6 +111,9 @@ importers:
       p-limit:
         specifier: ^3.1.0
         version: 3.1.0
+      semver:
+        specifier: ^7.6.3
+        version: 7.7.2
       uuid:
         specifier: ^13.0.0
         version: 13.0.0

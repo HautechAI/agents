@@ -380,7 +380,6 @@ async function bootstrap() {
   // Nix proxy routes
   try {
     registerNixRoutes(fastify, {
-      allowedChannels: config.nixAllowedChannels,
       timeoutMs: config.nixHttpTimeoutMs,
       cacheTtlMs: config.nixCacheTtlMs,
       cacheMax: config.nixCacheMax,
