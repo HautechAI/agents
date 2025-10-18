@@ -97,6 +97,9 @@ export class SimpleAgent extends BaseAgent {
   private mcpServerTools: Map<McpServer, BaseTool[]> = new Map();
   // Persist the underlying ChatOpenAI instance so we can update its model dynamically
   private llm!: ChatOpenAI;
+  // Track systemPrompt handling to avoid overwriting with defaults
+  private hasExplicitSystemPrompt: boolean = false; // set once a custom prompt is provided
+  private appliedDefaultSystemPrompt: boolean = false; // ensure default applied at most once
 
   private summarizationKeepTokens?: number; // token budget for verbatim tail
   private summarizationMaxTokens?: number;
@@ -437,31 +440,35 @@ export class SimpleAgent extends BaseAgent {
   // Overload preserves BaseAgent signature while exposing a more precise config shape for callers.
   setConfig(config: Partial<SimpleAgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
-    const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(
-      Object.fromEntries(
-        Object.entries(config).filter(([k]) =>
-          [
-            'title',
-            'model',
-            'systemPrompt',
-            'debounceMs',
-            'whenBusy',
-            'processBuffer',
-            'summarizationKeepTokens',
-            'summarizationMaxTokens',
-            'restrictOutput',
-            'restrictionMessage',
-            'restrictionMaxInjections',
-          ].includes(k),
-        ),
-      ),
-    ) as Partial<SimpleAgentStaticConfig>;
+    const allowedKeys = [
+      'title',
+      'model',
+      'systemPrompt',
+      'debounceMs',
+      'whenBusy',
+      'processBuffer',
+      'summarizationKeepTokens',
+      'summarizationMaxTokens',
+      'restrictOutput',
+      'restrictionMessage',
+      'restrictionMaxInjections',
+    ];
+    const filtered = Object.fromEntries(Object.entries(config).filter(([k]) => allowedKeys.includes(k)));
+    const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(filtered) as Partial<SimpleAgentStaticConfig>;
+    const hasProvidedSystemPrompt = Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt');
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
-    if (parsedConfig.systemPrompt !== undefined) {
-      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
+    // System prompt handling: apply explicit if provided; otherwise apply schema default once
+    if (hasProvidedSystemPrompt) {
+      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt as string);
+      this.hasExplicitSystemPrompt = true;
+      this.loggerService.info('SimpleAgent system prompt updated');
+    } else if (!this.hasExplicitSystemPrompt && !this.appliedDefaultSystemPrompt) {
+      const defaultPrompt = SimpleAgentStaticConfigSchema.parse({}).systemPrompt;
+      this.callModelNode.setSystemPrompt(defaultPrompt);
+      this.appliedDefaultSystemPrompt = true;
       this.loggerService.info('SimpleAgent system prompt updated');
     }
 
