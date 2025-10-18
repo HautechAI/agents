@@ -178,7 +178,12 @@ export class LiveGraphRuntime {
       const live = this.state.nodes.get(nodeId);
       if (!live) continue;
       try {
-        if (hasSetConfig(live.instance)) {
+        const { isNodeLifecycle } = await import('../nodes/types');
+        if (isNodeLifecycle(live.instance)) {
+          const cfg = nodeDef.data.config || {};
+          await (live.instance as any).configure(cfg);
+          live.config = cfg;
+        } else if (hasSetConfig(live.instance)) {
           const cfg = nodeDef.data.config || {};
           const cleaned = await this.applyConfigWithUnknownKeyStripping(live.instance, 'setConfig', cfg, nodeId);
           // set live.config to cleaned object only on success
@@ -335,7 +340,8 @@ export class LiveGraphRuntime {
       } catch (e) {
         this.logger.debug('Post-create wiring failed', e);
       }
-      if (node.data.config) {
+      const { isNodeLifecycle } = await import('../nodes/types');
+      if (!isNodeLifecycle(created) && node.data.config) {
         if (hasSetConfig(created)) {
           try {
             const cleaned = await this.applyConfigWithUnknownKeyStripping(created, 'setConfig', node.data.config, node.id);
@@ -343,6 +349,17 @@ export class LiveGraphRuntime {
           } catch (err) {
             throw Errors.nodeInitFailure(node.id, err);
           }
+        }
+      }
+      // Lifecycle-aware path: configure + start
+      if (isNodeLifecycle(created)) {
+        try {
+          const cfg = (node.data.config || {}) as Record<string, unknown>;
+          await created.configure(cfg);
+          await created.start();
+          live.config = cfg;
+        } catch (err) {
+          throw Errors.nodeInitFailure(node.id, err);
         }
       }
       if (node.data.dynamicConfig) {
@@ -437,21 +454,37 @@ export class LiveGraphRuntime {
     // Call lifecycle teardown if present
     const inst = live.instance as unknown;
     if (inst) {
-      const destroy = (inst as Record<string, unknown>)['destroy'];
-      if (typeof destroy === 'function') {
-        try {
-          await (destroy as Function).call(inst);
-        } catch {}
-      } else {
-        // fallback legacy
-        for (const method of ['dispose', 'close', 'stop'] as const) {
-          const fn = (inst as Record<string, unknown>)[method];
-          if (typeof fn === 'function') {
+      try {
+        const { isNodeLifecycle } = await import('../nodes/types');
+        if (isNodeLifecycle(inst)) {
+          try { await (inst as any).stop?.(); } catch {}
+          try { await (inst as any).delete?.(); } catch {}
+        } else {
+          const destroy = (inst as Record<string, unknown>)['destroy'];
+          if (typeof destroy === 'function') {
             try {
-              await (fn as Function).call(inst);
+              await (destroy as Function).call(inst);
             } catch {}
-            break;
+          } else {
+            // fallback legacy
+            for (const method of ['dispose', 'close', 'stop'] as const) {
+              const fn = (inst as Record<string, unknown>)[method];
+              if (typeof fn === 'function') {
+                try {
+                  await (fn as Function).call(inst);
+                } catch {}
+                break;
+              }
+            }
           }
+        }
+      } catch {
+        // fallback to legacy behavior above if import fails
+        const destroy = (inst as Record<string, unknown>)['destroy'];
+        if (typeof destroy === 'function') {
+          try {
+            await (destroy as Function).call(inst);
+          } catch {}
         }
       }
     }
@@ -521,4 +554,30 @@ export class LiveGraphRuntime {
   private resolveEdgeWithPorts(edge: EdgeDef, sourceTemplate: string, targetTemplate: string) {
     return this.portsRegistry.resolveEdge(edge, sourceTemplate, targetTemplate);
   }
+  // Stop and delete all live nodes that implement lifecycle; ignore errors and always clear state
+  async shutdown(): Promise<void> {
+    const nodes = Array.from(this.state.nodes.values());
+    const { isNodeLifecycle } = await import('../nodes/types');
+    await Promise.all(
+      nodes.map(async (live) => {
+        const inst = live.instance as unknown;
+        if (isNodeLifecycle(inst)) {
+          try { await inst.stop(); } catch {}
+          try { await inst.delete(); } catch {}
+        }
+        const inbound = this.state.inboundEdges.get(live.id) || new Set<string>();
+        const outbound = this.state.outboundEdges.get(live.id) || new Set<string>();
+        const all = new Set<string>([...inbound, ...outbound]);
+        for (const key of all) {
+          const rec = this.state.executedEdges.get(key);
+          if (rec) this.unregisterEdgeRecord(rec);
+        }
+        this.state.nodes.delete(live.id);
+        this.state.inboundEdges.delete(live.id);
+        this.state.outboundEdges.delete(live.id);
+      })
+    );
+    this.state.executedEdges.clear();
+  }
+
 }
