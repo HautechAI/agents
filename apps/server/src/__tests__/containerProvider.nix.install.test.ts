@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContainerProviderEntity, type ContainerProviderStaticConfig } from '../entities/containerProvider.entity';
-import { ContainerService } from '../services/container.service';
+import { ContainerService, type ContainerOpts } from '../services/container.service';
 import { LoggerService } from '../services/logger.service';
 import { ContainerEntity } from '../entities/container.entity';
 
@@ -15,27 +15,40 @@ class FakeContainer extends ContainerEntity {
   constructor(svc: ContainerService, id: string, private execPlan: ((cmd: string) => { rc: number }) | null) {
     super(svc, id);
   }
-  override async exec(command: string[] | string, options?: { timeoutMs?: number; idleTimeoutMs?: number; tty?: boolean }) {
+  override async exec(
+    command: string[] | string,
+    options?: {
+      workdir?: string;
+      env?: Record<string, string> | string[];
+      timeoutMs?: number;
+      idleTimeoutMs?: number;
+      killOnTimeout?: boolean;
+      tty?: boolean;
+      signal?: AbortSignal;
+    },
+  ) {
     const cmd = Array.isArray(command) ? command.join(' ') : command;
     const plan = this.execPlan || (() => ({ rc: 0 }));
     const { rc } = plan(cmd);
     this.calls.push({ cmd, opts: options, rc });
     return { stdout: '', stderr: '', exitCode: rc } as { stdout: string; stderr: string; exitCode: number };
   }
-  getExecCalls() { return this.calls; }
+  getExecCalls() {
+    return this.calls;
+  }
 }
 
 class StubContainerService extends ContainerService {
   constructor() { super(new LoggerService()); }
   created?: FakeContainer;
-  override async start(): Promise<ContainerEntity> {
+  override async start(_opts?: ContainerOpts): Promise<ContainerEntity> {
     // Default: container with all exec returning rc=0
     this.created = new FakeContainer(this, 'c', null);
     return this.created;
   }
-  override async findContainerByLabels(): Promise<ContainerEntity | undefined> { return undefined; }
-  override async findContainersByLabels(): Promise<ContainerEntity[]> { return []; }
-  override async getContainerLabels(): Promise<Record<string, string>> { return {}; }
+  override async findContainerByLabels(_labels: Record<string, string>, _opts?: { all?: boolean }): Promise<ContainerEntity | undefined> { return undefined; }
+  override async findContainersByLabels(_labels: Record<string, string>, _opts?: { all?: boolean }): Promise<ContainerEntity[]> { return []; }
+  override async getContainerLabels(_containerId: string): Promise<Record<string, string> | undefined> { return {}; }
 }
 
 function makeProvider(execPlan?: (cmd: string) => { rc: number }) {
@@ -149,6 +162,10 @@ describe('ContainerProviderEntity nix install', () => {
     expect((logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('unresolved'))).toBe(true);
   });
 });
+
+// Remove duplicate test suite introduced by a bad merge.
+// The following second import block and tests are intentionally deleted.
+// Keeping a single, type-safe suite aligned with current ContainerProviderEntity implementation.
 import { describe, it, expect } from 'vitest';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
 import { ContainerEntity } from '../entities/container.entity';
@@ -300,4 +317,3 @@ describe('ContainerProviderEntity Nix install behavior', () => {
     expect(svc.c?.installSkippedDueToLock).toBeGreaterThanOrEqual(1);
   });
 });
-
