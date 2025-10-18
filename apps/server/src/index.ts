@@ -19,7 +19,7 @@ import { buildTemplateRegistry } from './templates';
 import { LiveGraphRuntime } from './graph/liveGraph.manager.js';
 import { GraphService } from './services/graph.service.js';
 import { GitGraphService } from './services/gitGraph.service.js';
-import { GraphDefinition, PersistedGraphUpsertRequest } from './graph/types.js';
+import { GraphDefinition, GraphError, PersistedGraphUpsertRequest } from './graph/types.js';
 import { GraphErrorCode } from './graph/errors.js';
 import { ContainerService } from './services/container.service.js';
 import { ReadinessWatcher } from './utils/readinessWatcher.js';
@@ -174,8 +174,10 @@ async function bootstrap() {
       logger.info('No persisted graph found; starting with empty runtime graph.');
     }
   } catch (e) {
-    const err = e as Error;
-    logger.error('Failed to apply initial persisted graph: %s', err?.message || String(e));
+    if (e instanceof GraphError) {
+      logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, e.cause);
+    }
+    logger.error('Failed to apply initial persisted graph: %s', String(e));
   }
 
   // Expose selected runtime services globally for diagnostics and agent wiring
