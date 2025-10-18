@@ -39,7 +39,7 @@ export class ToolsNode extends BaseNode {
     const toolCalls = (lastMessage.tool_calls as ToolCall[]) || [];
     if (!toolCalls.length) return {};
 
-    const tools = this.tools.map((tool) => tool.init(config));
+    const toolPairs = this.tools.map((base) => ({ base, dyn: base.init(config) }));
 
     let terminated = false;
 
@@ -57,7 +57,8 @@ export class ToolsNode extends BaseNode {
         return await withToolCall(
           { toolCallId: callId, name: tc.name, input: tc.args, ...(cfgToolNodeId ? { nodeId: cfgToolNodeId } : {}) },
           async () => {
-          const tool = tools.find((t) => t.name === tc.name);
+          const pair = toolPairs.find((p) => p.dyn.name === tc.name);
+          const tool = pair?.dyn;
           const createMessage = (content: string, success = true) => {
             const toolMessage = new ToolMessage({
               tool_call_id: callId,
@@ -93,7 +94,7 @@ export class ToolsNode extends BaseNode {
             if (content.length > MAX_TOOL_OUTPUT) {
               // Attempt to save oversized output when tool is container-backed and thread_id is present
               const threadId = config?.configurable?.thread_id;
-              const baseTool = this.tools.find((t) => t.name === tc.name);
+              const baseTool = pair?.base;
               let savedOk = false;
               let savedPath = '';
               if (threadId && baseTool && typeof baseTool.getContainerForThread === 'function') {

@@ -11,14 +11,14 @@ describe('archive.createSingleFileTar', () => {
     const e = extract();
     const seen: { name: string; data: string }[] = [];
     await new Promise<void>((resolve, reject) => {
-      e.on('entry', (header, stream, next) => {
+      e.on('entry', (header: any, stream: NodeJS.ReadableStream, next: () => void) => {
         const chunks: Buffer[] = [];
-        stream.on('data', (c: Buffer) => chunks.push(c));
-        stream.on('end', () => {
+        (stream as any).on('data', (c: Buffer) => chunks.push(c));
+        (stream as any).on('end', () => {
           seen.push({ name: header.name, data: Buffer.concat(chunks).toString('utf8') });
           next();
         });
-        stream.on('error', reject);
+        (stream as any).on('error', reject);
       });
       e.on('finish', () => resolve());
       e.on('error', reject);
@@ -29,4 +29,3 @@ describe('archive.createSingleFileTar', () => {
     expect(seen[0].data).toBe(content);
   });
 });
-
