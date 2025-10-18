@@ -48,3 +48,22 @@ Docs
 Docs
 - Custom ConfigViews use shadcn/ui primitives and a typed registry. See docs/ui/config-views.md
 - Actions are optimistic; authoritative socket events reconcile cache.
+
+Routing (Issue #285)
+- Client routing via react-router-dom; default redirect to /agents/graph and 404 fallback to /agents/graph.
+- Root layout includes persistent left sidebar on desktop (md+) and Drawer on mobile.
+- Collapse toggle and per-section open states persist in localStorage.
+  - Keys:
+    - ui.sidebar.collapsed
+    - ui.sidebar.section.agents.open
+    - ui.sidebar.section.tracing.open
+    - ui.sidebar.section.monitoring.open
+    - ui.sidebar.section.settings.open
+- Routes:
+  - Agents → Graph (/agents/graph) renders AgentBuilder
+  - Agents → Chat (/agents/chat) placeholder
+  - Tracing → Traces (/tracing/traces) placeholder
+  - Tracing → Errors (/tracing/errors) placeholder
+  - Monitoring → Containers (/monitoring/containers) placeholder
+  - Monitoring → Resources (/monitoring/resources) placeholder
+  - Settings → Secrets (/settings/secrets) placeholder

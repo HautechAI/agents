@@ -295,6 +295,9 @@ importers:
       react-resizable-panels:
         specifier: ^2.0.22
         version: 2.1.9(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      react-router-dom:
+        specifier: ^6.27.0
+        version: 6.30.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       reactflow:
         specifier: ^11.11.4
         version: 11.11.4(@types/react@19.1.13)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)

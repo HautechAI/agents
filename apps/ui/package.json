@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "react-router-dom": "^6.27.0",
     "@hautech/ui": "workspace:*",
     "date-fns": "^3.6.0",
     "@radix-ui/react-slot": "^1.2.3",
