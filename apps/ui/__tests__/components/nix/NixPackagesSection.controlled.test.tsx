@@ -22,7 +22,9 @@ describe('NixPackagesSection (controlled)', () => {
   it('adds, selects channel, and removes packages via onChange', async () => {
     render(<Harness />);
 
-    const input = screen.getByLabelText('Search Nix packages');
+    const input = screen.getByLabelText('Search Nix packages') as HTMLInputElement;
+    // Focus is required for the listbox to open (component checks document.activeElement)
+    input.focus();
     fireEvent.change(input, { target: { value: 'gi' } });
 
     // Wait for suggestion to appear and click it
@@ -44,4 +46,3 @@ describe('NixPackagesSection (controlled)', () => {
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Selected Nix packages' })).not.toBeInTheDocument());
   });
 });
-
