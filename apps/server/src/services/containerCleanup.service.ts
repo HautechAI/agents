@@ -63,10 +63,10 @@ export class ContainerCleanupService {
           try {
             // First, stop and remove any DinD sidecars associated with this workspace container
             try {
-              const svcAny = this.containers as unknown as { findContainersByLabels?: (labels: Record<string, string>, opts?: { all?: boolean }) => Promise<Array<{ stop: (t?: number) => Promise<void>; remove: (force?: boolean) => Promise<void> }>> };
-              const sidecars = typeof svcAny.findContainersByLabels === 'function'
-                ? await svcAny.findContainersByLabels({ 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': id }, { all: true })
-                : [];
+              const sidecars = await this.containers.findContainersByLabels(
+                { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': id },
+                { all: true },
+              );
               if (Array.isArray(sidecars) && sidecars.length > 0) {
                 let scCleaned = 0;
                 for (const sc of sidecars) {
