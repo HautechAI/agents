@@ -23,7 +23,8 @@ describe('SendSlackMessageTool', () => {
     await tool.setConfig({ bot_token: 'xoxb-valid', default_channel: 'C1' });
     const t = tool.init();
     type InvokeInput = Parameters<ReturnType<SendSlackMessageTool['init']>['invoke']>[0];
-    const res = await t.invoke({ text: 'hi', channel: 'C2' } satisfies InvokeInput);
+    const payload: InvokeInput = { text: 'hi', channel: 'C2' };
+    const res = await t.invoke(payload);
     expect(String(res)).toContain('ok');
   });
 
@@ -32,7 +33,8 @@ describe('SendSlackMessageTool', () => {
     await tool.setConfig({ bot_token: 'xoxb-valid', default_channel: 'C1' });
     const t = tool.init();
     type InvokeInput = Parameters<ReturnType<SendSlackMessageTool['init']>['invoke']>[0];
-    const res = await t.invoke({ text: 'hi', channel: 'C1', ephemeral_user: 'U1' } satisfies InvokeInput);
+    const payload: InvokeInput = { text: 'hi', channel: 'C1', ephemeral_user: 'U1' };
+    const res = await t.invoke(payload);
     expect(String(res)).toContain('ephemeral');
   });
 
@@ -41,7 +43,8 @@ describe('SendSlackMessageTool', () => {
     await tool.setConfig({ bot_token: 'xoxb-valid', default_channel: 'CDEF' });
     const t = tool.init();
     type InvokeInput = Parameters<ReturnType<SendSlackMessageTool['init']>['invoke']>[0];
-    const res = await t.invoke({ text: 'hello' } satisfies InvokeInput);
+    const payload: InvokeInput = { text: 'hello' };
+    const res = await t.invoke(payload);
     expect(String(res)).toContain('ok');
   });
 
@@ -56,7 +59,8 @@ describe('SendSlackMessageTool', () => {
     await tool.setConfig({ bot_token: { value: 'secret/slack/BOT', source: 'vault' }, default_channel: 'C1' });
     const t = tool.init();
     type InvokeInput = Parameters<ReturnType<SendSlackMessageTool['init']>['invoke']>[0];
-    const res = await t.invoke({ text: 'hi' } satisfies InvokeInput);
+    const payload: InvokeInput = { text: 'hi' };
+    const res = await t.invoke(payload);
     expect(String(res)).toContain('ok');
     expect(vault.getSecret).toHaveBeenCalled();
   });
@@ -67,7 +71,8 @@ describe('SendSlackMessageTool', () => {
     await tool.setConfig({ bot_token: { value: 'secret/slack/BOT', source: 'vault' }, default_channel: 'C1' });
     const t = tool.init();
     type InvokeInput = Parameters<ReturnType<SendSlackMessageTool['init']>['invoke']>[0];
-    const res = await t.invoke({ text: 'hi' } satisfies InvokeInput);
+    const payload: InvokeInput = { text: 'hi' };
+    const res = await t.invoke(payload);
     expect(String(res)).toContain('Error sending Slack message');
   });
 
@@ -83,7 +88,8 @@ describe('SendSlackMessageTool', () => {
     await tool.setConfig({ bot_token: { value: 'secret/slack/BOT', source: 'vault' }, default_channel: 'C1' });
     const t = tool.init();
     type InvokeInput = Parameters<ReturnType<SendSlackMessageTool['init']>['invoke']>[0];
-    const res = await t.invoke({ text: 'hi' } satisfies InvokeInput);
+    const payload: InvokeInput = { text: 'hi' };
+    const res = await t.invoke(payload);
     expect(String(res)).toContain('Error sending Slack message');
   });
 });
