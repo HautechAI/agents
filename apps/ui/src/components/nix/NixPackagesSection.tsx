@@ -254,8 +254,8 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
             <SelectedPackageItem
               key={p.name}
               pkg={p}
-              chosen={versionsByName[p.name] || ''}
-              onChoose={(v) => setVersionsByName((prev) => ({ ...prev, [p.name]: v }))}
+              chosen={releasesByName[p.name] || null}
+              onChoose={(v) => setReleasesByName((prev) => ({ ...prev, [p.name]: v }))}
               onRemove={() => removeSelected(p.name)}
             />
           ))}
