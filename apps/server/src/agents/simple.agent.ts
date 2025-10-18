@@ -22,6 +22,21 @@ import { EnforceRestrictionNode } from '../lgnodes/enforceRestriction.lgnode';
 import { stringify as toYaml } from 'yaml';
 import { buildMcpToolError } from '../mcp/errorUtils';
 
+// Module-level constants for clarity and reuse (schema-dependent constant is declared after schema)
+const ALLOWED_CONFIG_KEYS = [
+  'title',
+  'model',
+  'systemPrompt',
+  'debounceMs',
+  'whenBusy',
+  'processBuffer',
+  'summarizationKeepTokens',
+  'summarizationMaxTokens',
+  'restrictOutput',
+  'restrictionMessage',
+  'restrictionMaxInjections',
+] as const;
+
 /**
  * Zod schema describing static configuration for SimpleAgent.
  * Keep this colocated with the implementation so updates stay in sync.
@@ -88,6 +103,8 @@ export const SimpleAgentStaticConfigSchema = z
       .describe('Max enforcement injections per turn (0 = unlimited).'),
   })
   .strict();
+
+export const DEFAULT_SYSTEM_PROMPT = SimpleAgentStaticConfigSchema.parse({}).systemPrompt;
 
 export type SimpleAgentStaticConfig = z.infer<typeof SimpleAgentStaticConfigSchema>;
 export class SimpleAgent extends BaseAgent {
@@ -440,34 +457,24 @@ export class SimpleAgent extends BaseAgent {
   // Overload preserves BaseAgent signature while exposing a more precise config shape for callers.
   setConfig(config: Partial<SimpleAgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
-    const allowedKeys = [
-      'title',
-      'model',
-      'systemPrompt',
-      'debounceMs',
-      'whenBusy',
-      'processBuffer',
-      'summarizationKeepTokens',
-      'summarizationMaxTokens',
-      'restrictOutput',
-      'restrictionMessage',
-      'restrictionMaxInjections',
-    ];
-    const filtered = Object.fromEntries(Object.entries(config).filter(([k]) => allowedKeys.includes(k)));
+    const filtered = Object.fromEntries(Object.entries(config).filter(([k]) => (ALLOWED_CONFIG_KEYS as readonly string[]).includes(k)));
     const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(filtered) as Partial<SimpleAgentStaticConfig>;
-    const hasProvidedSystemPrompt = Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt');
+    // Treat only a provided string (including empty string) as explicit; ignore undefined (treated as omission)
+    const rawProvidedSystemPrompt = (filtered as any).systemPrompt;
+    const hasExplicitSystemPromptValue = typeof rawProvidedSystemPrompt === 'string';
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
-    // System prompt handling: apply explicit if provided; otherwise apply schema default once
-    if (hasProvidedSystemPrompt) {
-      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt as string);
+    // System prompt handling:
+    // - Only set when parsed value is a defined string (treat undefined as omission).
+    // - Else, if never explicitly set and default not yet applied, set schema default exactly once.
+    if (hasExplicitSystemPromptValue) {
+      this.callModelNode.setSystemPrompt(rawProvidedSystemPrompt as string); // allow empty string as explicit
       this.hasExplicitSystemPrompt = true;
       this.loggerService.info('SimpleAgent system prompt updated');
     } else if (!this.hasExplicitSystemPrompt && !this.appliedDefaultSystemPrompt) {
-      const defaultPrompt = SimpleAgentStaticConfigSchema.parse({}).systemPrompt;
-      this.callModelNode.setSystemPrompt(defaultPrompt);
+      this.callModelNode.setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
       this.appliedDefaultSystemPrompt = true;
       this.loggerService.info('SimpleAgent system prompt updated');
     }

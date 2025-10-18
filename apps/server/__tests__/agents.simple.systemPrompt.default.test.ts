@@ -47,5 +47,23 @@ describe('SimpleAgent systemPrompt defaults behavior', () => {
     agent.setConfig({ model: 'y' } as any);
     expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledTimes(2);
   });
-});
 
+  it('treats systemPrompt: undefined as omission; applies default on first call', () => {
+    const { agent, anyA } = makeAgentWithSpies();
+    const defaultPrompt = SimpleAgentStaticConfigSchema.parse({}).systemPrompt;
+    // Explicit key with undefined should be treated as omission
+    agent.setConfig({ systemPrompt: undefined } as any);
+    expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledTimes(1);
+    expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledWith(defaultPrompt);
+  });
+
+  it("accepts empty string '' as explicit override and prevents default re-application", () => {
+    const { agent, anyA } = makeAgentWithSpies();
+    agent.setConfig({ systemPrompt: '' });
+    expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledTimes(1);
+    expect(anyA.callModelNode.setSystemPrompt).toHaveBeenLastCalledWith('');
+    // Later omission should not re-apply default since explicit already set
+    agent.setConfig({ model: 'z' } as any);
+    expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledTimes(1);
+  });
+});
