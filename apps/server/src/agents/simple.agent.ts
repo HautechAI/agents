@@ -469,14 +469,14 @@ export class SimpleAgent extends BaseAgent {
     this.applyRuntimeConfig(config);
 
     // Only update fields that were explicitly provided by caller
-    if (Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt')) {
-      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt as string);
+    if (Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
+      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('SimpleAgent system prompt updated');
     }
 
-    if (Object.prototype.hasOwnProperty.call(filtered, 'model')) {
+    if (Object.prototype.hasOwnProperty.call(filtered, 'model') && typeof parsedConfig.model === 'string') {
       // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
-      this.llm.model = parsedConfig.model as string;
+      this.llm.model = parsedConfig.model;
       this.loggerService.info(`SimpleAgent model updated to ${parsedConfig.model}`);
     }
 

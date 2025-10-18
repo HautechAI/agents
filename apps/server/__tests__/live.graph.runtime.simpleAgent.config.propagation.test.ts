@@ -6,6 +6,7 @@ import { LoggerService } from '../src/services/logger.service';
 import { ContainerService } from '../src/services/container.service';
 import { ConfigService } from '../src/services/config.service';
 import { CheckpointerService } from '../src/services/checkpointer.service';
+import { vi } from 'vitest';
 import type { MongoService } from '../src/services/mongo.service';
 
 // Avoid any real network calls by ensuring ChatOpenAI token counting/invoke are not used in this test.
@@ -22,17 +23,28 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
       openaiApiKey: 'test',
       githubToken: 'test',
       mongodbUrl: 'mongodb://localhost:27017/?replicaSet=rs0',
-    } as any);
+      graphStore: 'mongo',
+      graphRepoPath: './data/graph',
+      graphBranch: 'graph-state',
+      dockerMirrorUrl: 'http://registry-mirror:5000',
+      nixAllowedChannels: ['nixpkgs-unstable'],
+      nixHttpTimeoutMs: 5000,
+      nixCacheTtlMs: 300000,
+      nixCacheMax: 500,
+      mcpToolsStaleTimeoutMs: 0,
+      ncpsEnabled: false,
+      ncpsUrl: 'http://ncps:8501',
+    } satisfies import('../src/services/config.service').Config);
     const checkpointerService = new CheckpointerService(logger);
-    // Patch to bypass Mongo requirement for this lightweight test
-    (checkpointerService as any).getCheckpointer = () => ({
+    // Typed fake checkpointer via vi.spyOn
+    vi.spyOn(checkpointerService as CheckpointerService, 'getCheckpointer').mockImplementation(() => ({
       async getTuple() { return undefined; },
       async *list() {},
-      async put(_config: any, _checkpoint: any, _metadata: any) { return { configurable: { thread_id: 't' } } as any; },
+      async put(_config: unknown, _checkpoint: unknown, _metadata: unknown) { return { configurable: { thread_id: 't' } }; },
       async putWrites() {},
       getNextVersion() { return '1'; },
-    });
-    const mongoService = { getDb: () => ({} as any) } satisfies Pick<MongoService, 'getDb'>;
+    } as unknown as ReturnType<CheckpointerService['getCheckpointer']>);
+    const mongoService = { getDb: () => ({}) } satisfies Pick<MongoService, 'getDb'>;
     const registry = buildTemplateRegistry({ logger, containerService, configService, checkpointerService, mongoService: mongoService as unknown as MongoService });
     const runtime = new LiveGraphRuntime(logger, registry);
     return { runtime };
@@ -68,15 +80,22 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
     };
 
     await runtime.apply(graph1);
-    const agent: any = runtime.getNodeInstance('agent');
-
+    type InspectableAgent = {
+      callModelNode?: { systemPrompt?: string };
+      llm?: { model?: string };
+      summarizeNode?: { keepTokens?: number; maxTokens?: number };
+      restrictOutput?: boolean;
+      restrictionMessage?: string;
+    };
+    const agent = runtime.getNodeInstance('agent') as unknown as InspectableAgent;
+    
     // Validate propagation into internal nodes/fields
-    expect((agent as any).callModelNode?.['systemPrompt']).toBe(systemPrompt);
-    expect((agent as any).llm?.['model']).toBe(model);
-    expect((agent as any).summarizeNode?.['keepTokens']).toBe(keep);
-    expect((agent as any).summarizeNode?.['maxTokens']).toBe(max);
-    expect((agent as any).restrictOutput).toBe(restrict);
-    expect((agent as any).restrictionMessage).toBe(restrictionMessage);
+    expect(agent.callModelNode?.systemPrompt).toBe(systemPrompt);
+    expect(agent.llm?.model).toBe(model);
+    expect(agent.summarizeNode?.keepTokens).toBe(keep);
+    expect(agent.summarizeNode?.maxTokens).toBe(max);
+    expect(agent.restrictOutput).toBe(restrict);
+    expect(agent.restrictionMessage).toBe(restrictionMessage);
 
     // Update config live and re-apply
     const newSystemPrompt = 'You are Even Stricter.';
@@ -102,9 +121,9 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
     };
 
     await runtime.apply(graph2);
-    const agent2: any = runtime.getNodeInstance('agent');
-    expect(agent2).toBe(agent); // same instance should be updated, not recreated
-    expect((agent2 as any).callModelNode?.['systemPrompt']).toBe(newSystemPrompt);
-    expect((agent2 as any).llm?.['model']).toBe(newModel);
+    const agent2 = runtime.getNodeInstance('agent') as unknown as InspectableAgent;
+    // Validate updates applied
+    expect(agent2.callModelNode?.systemPrompt).toBe(newSystemPrompt);
+    expect(agent2.llm?.model).toBe(newModel);
   });
 });
