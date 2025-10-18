@@ -17,9 +17,8 @@ export const Controlled: Story = {
           { label: 'Cherry', value: 'cherry' }
         ]}
         value={value}
-        onChange={setValue as any}
+        onChange={(v: string | undefined) => setValue(v)}
       />
     );
   }
 };
-

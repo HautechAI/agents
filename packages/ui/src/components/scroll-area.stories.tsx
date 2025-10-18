@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { ScrollArea } from './scroll-area';
 
-const meta = { title: 'Components/Scroll Area', component: ScrollArea } satisfies Meta<typeof ScrollArea>;
+const meta = { title: 'Components/ScrollArea', component: ScrollArea } satisfies Meta<typeof ScrollArea>;
 export default meta;
 export type Story = StoryObj<typeof meta>;
 
@@ -18,4 +18,3 @@ export const Basic: Story = {
     </div>
   )
 };
-

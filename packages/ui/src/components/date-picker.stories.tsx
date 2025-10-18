@@ -3,8 +3,12 @@ import { DatePicker } from './date-picker';
 import * as React from 'react';
 import { enUS } from 'date-fns/locale';
 
-const meta = { title: 'Components/Date Picker', component: DatePicker, args: { locale: enUS } } satisfies Meta<typeof DatePicker> as any;
-export default meta as Meta;
+const meta: Meta<typeof DatePicker> = {
+  title: 'Components/DatePicker',
+  component: DatePicker,
+  args: { locale: enUS }
+};
+export default meta;
 export type Story = StoryObj<typeof meta>;
 
 export const Basic: Story = {
@@ -13,4 +17,3 @@ export const Basic: Story = {
     return <DatePicker date={date} onChange={setDate} />;
   }
 };
-

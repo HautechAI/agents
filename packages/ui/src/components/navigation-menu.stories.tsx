@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { NavigationMenu, NavigationMenuList, NavigationMenuItem, NavigationMenuContent, NavigationMenuTrigger, NavigationMenuLink, NavigationMenuViewport } from './navigation-menu';
 
-const meta = { title: 'Components/Navigation Menu', component: NavigationMenu } satisfies Meta<typeof NavigationMenu>;
+const meta = { title: 'Components/NavigationMenu', component: NavigationMenu } satisfies Meta<typeof NavigationMenu>;
 export default meta;
 export type Story = StoryObj<typeof meta>;
 
@@ -23,4 +23,3 @@ export const Basic: Story = {
     </NavigationMenu>
   )
 };
-

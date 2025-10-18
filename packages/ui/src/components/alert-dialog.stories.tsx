@@ -11,7 +11,7 @@ import {
 } from './alert-dialog';
 import { Button } from './button';
 
-const meta = { title: 'Components/Alert Dialog', component: AlertDialogContent } satisfies Meta<typeof AlertDialogContent>;
+const meta = { title: 'Components/AlertDialog', component: AlertDialog } satisfies Meta<typeof AlertDialog>;
 export default meta;
 export type Story = StoryObj<typeof meta>;
 
@@ -38,4 +38,3 @@ export const Basic: Story = {
     </AlertDialog>
   )
 };
-

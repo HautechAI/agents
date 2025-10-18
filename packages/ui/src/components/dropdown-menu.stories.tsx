@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './dropdown-menu';
 import { Button } from './button';
 
-const meta = { title: 'Components/Dropdown Menu', component: DropdownMenuContent } satisfies Meta<typeof DropdownMenuContent>;
+const meta = { title: 'Components/DropdownMenu', component: DropdownMenu } satisfies Meta<typeof DropdownMenu>;
 export default meta;
 export type Story = StoryObj<typeof meta>;
 
@@ -20,4 +20,3 @@ export const Basic: Story = {
     </DropdownMenu>
   )
 };
-
