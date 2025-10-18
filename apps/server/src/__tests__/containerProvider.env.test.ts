@@ -2,9 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { parseVaultRef } from '../utils/refs';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
 import { ConfigService, configSchema } from '../services/config.service';
-import { ContainerService } from '../services/container.service';
+import { ContainerService, type ContainerOpts } from '../services/container.service';
 import { LoggerService } from '../services/logger.service';
 import { VaultService } from '../services/vault.service';
+
+// Test ContainerEntity with exposed env/labels for assertions
+class TestContainerEntity extends (await import('../entities/container.entity')).ContainerEntity {
+  constructor(service: ContainerService, id: string, public env: Record<string, string>, public labels: Record<string, string>) {
+    super(service, id);
+  }
+}
 
 // Typed fakes (no any)
 class FakeContainerService extends ContainerService {
@@ -15,17 +22,10 @@ class FakeContainerService extends ContainerService {
   override async findContainersByLabels(): Promise<ReturnType<ContainerService['findContainersByLabels']> extends Promise<infer R> ? R : never> {
     return [] as never;
   }
-  override async start(opts?: Parameters<ContainerService['start']>[0]): Promise<ReturnType<ContainerService['start']> extends Promise<infer R> ? R : never> {
-    // Return a minimal ContainerEntity-like object matching usage in tests
-    const container = {
-      id: 'c',
-      exec: async () => ({ exitCode: 0 }),
-      stop: async () => {},
-      remove: async () => {},
-      labels: {} as Record<string, string>,
-      env: (opts?.env && !Array.isArray(opts.env) ? opts.env : {} as Record<string, string>),
-    };
-    return container as never;
+  override async start(opts?: ContainerOpts): Promise<TestContainerEntity> {
+    const env: Record<string, string> = (opts?.env && !Array.isArray(opts.env) ? opts.env : {}) || {};
+    const labels: Record<string, string> = opts?.labels || {};
+    return new TestContainerEntity(this, 'c', env, labels);
   }
   override async getContainerLabels(): Promise<Record<string, string>> {
     return {};
@@ -56,9 +56,9 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     const vault = new FakeVaultService();
     const ent = new ContainerProviderEntity(svc, vault, {}, () => ({}));
     ent.setConfig({ env: [ { key: 'A', value: 'x' }, { key: 'B', value: 'secret/path/key', source: 'vault' } ] });
-    const container: any = await ent.provide('t');
-    expect(container.env.A).toBe('x');
-    expect(container.env.B).toBe('VAL');
+    const container = (await ent.provide('t')) as TestContainerEntity;
+    expect(container.env['A']).toBe('x');
+    expect(container.env['B']).toBe('VAL');
     // labels should include role=workspace now
     expect(container.labels['hautech.ai/role']).toBe('workspace');
   });
@@ -73,8 +73,8 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     });
     const ent = new ContainerProviderEntity(svc, undefined, { env: { NIX_CONFIG: 'keep=me' } }, () => ({}), new ConfigService(cfg));
     ent.setConfig({});
-    const container: any = await ent.provide('t2');
-    expect(container.env.NIX_CONFIG).toBe('keep=me');
+    const container = (await ent.provide('t2')) as TestContainerEntity;
+    expect(container.env['NIX_CONFIG']).toBe('keep=me');
   });
 
   it('injects NIX_CONFIG only when ncps enabled and URL+PUBLIC_KEY present', async () => {
@@ -90,8 +90,8 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     );
     const ent1 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgFalse);
     ent1.setConfig({});
-    const c1: any = await ent1.provide('t3');
-    expect(c1.env?.NIX_CONFIG).toBeUndefined();
+    const c1 = (await ent1.provide('t3')) as TestContainerEntity;
+    expect(c1.env?.['NIX_CONFIG']).toBeUndefined();
 
     // Case 2: enabled=true but missing public key -> no injection
     const cfgMissingKey = new ConfigService(
@@ -104,8 +104,8 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     );
     const ent2 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgMissingKey);
     ent2.setConfig({});
-    const c2: any = await ent2.provide('t4');
-    expect(c2.env?.NIX_CONFIG).toBeUndefined();
+    const c2 = (await ent2.provide('t4')) as TestContainerEntity;
+    expect(c2.env?.['NIX_CONFIG']).toBeUndefined();
 
     // Case 3: enabled=true and both present -> inject
     const cfgTrue = new ConfigService(
@@ -118,8 +118,8 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     );
     const ent3 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgTrue);
     ent3.setConfig({});
-    const c3: any = await ent3.provide('t5');
-    expect(c3.env?.NIX_CONFIG).toContain('substituters = http://ncps:8501');
-    expect(c3.env?.NIX_CONFIG).toContain('trusted-public-keys = pub:key');
+    const c3 = (await ent3.provide('t5')) as TestContainerEntity;
+    expect(c3.env?.['NIX_CONFIG']).toContain('substituters = http://ncps:8501');
+    expect(c3.env?.['NIX_CONFIG']).toContain('trusted-public-keys = pub:key');
   });
 });

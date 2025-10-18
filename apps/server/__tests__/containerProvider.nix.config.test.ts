@@ -16,21 +16,17 @@ class StubLogger implements LoggerService {
   debug(message: string, ..._args: unknown[]) {}
   error(message: string, ..._args: unknown[]) {}
 }
+import type { Db } from 'mongodb';
 class StubMongo implements MongoService {
-  // Only getDb is accessed by buildTemplateRegistry
-  getDb(): any { return {}; }
-} // eslint-disable-line @typescript-eslint/no-explicit-any
+  // Only getDb is accessed by buildTemplateRegistry via memory template; not used in these tests.
+  getDb(): Db { throw new Error('getDb not used in this test'); }
+}
 
 class StubContainerService extends ContainerService {
   constructor() { super({ info() {}, debug() {}, error() {} } as LoggerService); }
   override async start(): Promise<ContainerEntity> {
-    // return a minimal container entity; methods won't be used in these tests
-    return {
-      id: 'c',
-      exec: async () => ({ exitCode: 0 }),
-      stop: async () => {},
-      remove: async () => {},
-    } as unknown as ContainerEntity;
+    // Return a real ContainerEntity bound to this stub service; tests won't call its methods.
+    return new ContainerEntity(this, 'c');
   }
   override async findContainerByLabels(): Promise<ContainerEntity | undefined> { return undefined; }
   override async findContainersByLabels(): Promise<ContainerEntity[]> { return []; }
@@ -50,7 +46,7 @@ function makeRuntime() {
         mcpToolsStaleTimeoutMs: '0', ncpsEnabled: 'false', ncpsUrl: 'http://ncps:8501'
       })
     ),
-    checkpointerService: new CheckpointerService({ info() {}, debug() {}, error() {} } as LoggerService),
+    checkpointerService: new CheckpointerService(logger),
     mongoService: new StubMongo(),
   };
   const registry = buildTemplateRegistry(deps);

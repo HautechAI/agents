@@ -31,18 +31,18 @@ describe('EnvService', () => {
   });
 
   it('resolveEnvItems: vault disabled error', async () => {
-    const svc = new EnvService({ isEnabled: () => false } as any);
+    const svc = new EnvService({ isEnabled: () => false, getSecret: async () => undefined } as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'secret/x/y', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_unavailable' });
   });
 
   it('resolveEnvItems: invalid vault ref', async () => {
-    const svc = new EnvService({ isEnabled: () => true } as any);
+    const svc = new EnvService({ isEnabled: () => true, getSecret: async () => undefined } as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'bad-ref', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_ref_invalid' });
   });
 
   it('resolveEnvItems: missing secret error', async () => {
     const vault = new FakeVault({}, true);
-    const svc = new EnvService(vault as any);
+    const svc = new EnvService(vault as unknown as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'secret/app/db/PASSWORD', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_secret_missing' });
   });
 
@@ -51,7 +51,7 @@ describe('EnvService', () => {
       'secret/app/db/PASSWORD': 'pw',
       'secret/app/api/TOKEN': 'tok',
     });
-    const svc = new EnvService(vault as any);
+    const svc = new EnvService(vault as unknown as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
     const res = await svc.resolveEnvItems([
       { key: 'A', value: 'secret/app/db/PASSWORD', source: 'vault' },
       { key: 'B', value: 'secret/app/api/TOKEN', source: 'vault' },
@@ -109,7 +109,7 @@ describe('EnvService', () => {
 
   it('resolveProviderEnv: rejects cfgEnvRefs usage', async () => {
     const svc = new EnvService(undefined);
-    await expect(svc.resolveProviderEnv([], undefined as any, {})).resolves.toEqual({});
+    await expect(svc.resolveProviderEnv([], undefined, {})).resolves.toEqual({});
     await expect(
       // @ts-expect-error simulate passing a defined cfgEnvRefs param, which should be rejected
       svc.resolveProviderEnv([], 'anything', {} as Record<string, string>),
