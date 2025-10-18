@@ -54,10 +54,13 @@ export function getApiBase(override?: string): string {
   const isVitest = (() => {
     try {
       if (typeof ne?.VITEST === 'string') return true;
-      const im: any = (typeof import.meta !== 'undefined' && (import.meta as any)) || (globalThis as any).importMeta;
-      if (im && typeof im === 'object' && 'vitest' in im) return true;
-      if (typeof (globalThis as any).vitest !== 'undefined') return true;
-      if (typeof (globalThis as any).vi !== 'undefined') return true;
+      const im: unknown = (typeof import.meta !== 'undefined' ? import.meta : undefined) ?? (globalThis as { importMeta?: unknown }).importMeta;
+      const has = (obj: unknown, key: string): obj is Record<string, unknown> =>
+        !!obj && typeof obj === 'object' && key in obj;
+      if (has(im, 'vitest')) return true;
+      const g = globalThis as Record<string, unknown>;
+      if (typeof g.vitest !== 'undefined') return true;
+      if (typeof g.vi !== 'undefined') return true;
       return false;
     } catch {
       return false;
