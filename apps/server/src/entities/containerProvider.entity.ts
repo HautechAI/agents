@@ -1,7 +1,7 @@
 import { ContainerOpts, ContainerService } from '../services/container.service';
 import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
-import { PLATFORM_LABEL, SUPPORTED_PLATFORMS, type Platform } from '../constants.js';
+import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../constants.js';
 import { VaultService } from '../services/vault.service';
 import { ConfigService } from '../services/config.service';
 import { EnvService, type EnvItem } from '../services/env.service';
@@ -116,15 +116,7 @@ type NewEnvItem = EnvItem;
 
 export class ContainerProviderEntity {
   // Keep cfg loosely typed; normalize before use to ContainerOpts at boundaries
-  private cfg?: {
-    image?: ContainerOpts['image'];
-    env?: Record<string, string> | Array<NewEnvItem>;
-    platform?: ContainerOpts['platform'];
-    initialScript?: string;
-    enableDinD?: boolean;
-    ttlSeconds?: number;
-    nix?: { packages: { attr: string; pname?: string; channel?: string | null }[] };
-  };
+  private cfg?: ContainerProviderStaticConfig;
 
   private vaultService: VaultService | undefined;
   private opts: ContainerOpts;
@@ -148,17 +140,7 @@ export class ContainerProviderEntity {
   // Accept static configuration (image/env/initialScript). Validation performed via zod schema.
   setConfig(cfg: Record<string, unknown>): void {
     // Let ZodError propagate so runtime can handle unknown-key stripping
-    const parsed = ContainerProviderStaticConfigSchema.parse(cfg);
-    this.cfg = parsed;
-    // Mutate input object to reflect defaults in live config (e.g., nix.packages defaults to [])
-    try {
-      if (parsed && typeof parsed === 'object' && 'nix' in parsed) {
-        const n = (parsed as any).nix;
-        if (n && typeof n === 'object') {
-          (cfg as any).nix = { packages: Array.isArray(n.packages) ? n.packages : [] };
-        }
-      }
-    } catch {}
+    this.cfg = ContainerProviderStaticConfigSchema.parse(cfg);
   }
 
   async provide(threadId: string) {

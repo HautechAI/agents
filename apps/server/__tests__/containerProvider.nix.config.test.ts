@@ -68,8 +68,33 @@ describe('containerProvider nix config acceptance', () => {
     expect(res.errors.length).toBe(0);
     const live = runtime.getNodes().find((n) => n.id === 'ws2');
     expect((live?.config as any).nix).toBeTruthy();
-    expect((live?.config as any).nix.packages).toEqual([]);
+    // Live config may omit explicit defaults; instance config must include defaults from schema
+    const inst: any = runtime.getNodeInstance('ws2');
+    expect(inst?.cfg?.nix?.packages).toEqual([]);
     expect((live?.config as any).bogusTopLevelKey).toBeUndefined();
   });
-});
 
+  it('rejects nested unknown keys under nix.packages items', async () => {
+    const { runtime } = makeRuntime();
+    const graph = {
+      nodes: [
+        {
+          id: 'ws3',
+          data: {
+            template: 'containerProvider',
+            config: {
+              image: 'alpine:3',
+              nix: { packages: [{ attr: 'htop', extra: 'x' }] },
+            },
+          },
+        },
+      ],
+      edges: [],
+    } as any;
+    await expect(runtime.apply(graph)).rejects.toMatchObject({
+      name: 'GraphError',
+      code: 'NODE_INIT_ERROR',
+      nodeId: 'ws3',
+    } as any);
+  });
+});
