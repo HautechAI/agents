@@ -5,7 +5,7 @@ import { enUS } from 'date-fns/locale';
 const meta = {
   title: 'Components/Calendar',
   component: Calendar,
-  args: { locale: enUS } as Partial<CalendarProps>,
+  args: { locale: enUS, className: 'rounded-md border shadow-sm' } as Partial<CalendarProps>,
   argTypes: {
     locale: { control: false }
   }
@@ -15,4 +15,3 @@ export default meta;
 export type Story = StoryObj<typeof meta>;
 
 export const Basic: Story = { args: {} };
-
