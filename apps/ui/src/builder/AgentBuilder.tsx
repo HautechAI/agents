@@ -132,7 +132,7 @@ function CanvasArea({
         >
           Fit
         </Button>
-        <div className="pointer-events-auto text-[10px] text-muted-foreground" aria-live="polite">
+        <div className="text-[10px] text-muted-foreground" aria-live="polite">
           Save: {saveState}
         </div>
       </div>
@@ -152,7 +152,8 @@ function CanvasArea({
               <Plus />
             </Button>
           </PopoverTrigger>
-          <PopoverContent side="top" align="center" className="w-[720px] max-w-[90vw] p-2">
+          <PopoverContent side="top" align="center" className="w-[720px] max-w-[90vw] p-2" aria-labelledby="add-node-title">
+            <h2 id="add-node-title" className="sr-only">Add node</h2>
             <ScrollArea className="max-h-[60vh]">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 p-1">
                 {templates.map((tpl) => (
