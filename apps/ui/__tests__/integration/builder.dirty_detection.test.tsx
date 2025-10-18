@@ -62,8 +62,8 @@ describe('Builder dirty detection for graph edits', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('ready'));
-    // switch to fake timers after hydration only
-    vi.useFakeTimers();
+    // Switch to fake timers after hydration only
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.now() });
 
     // programmatic selection should not trigger dirty
     const change: NodeChange = { id: 'n1', type: 'select', selected: true };
@@ -88,7 +88,7 @@ describe('Builder dirty detection for graph edits', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('ready'));
-    vi.useFakeTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.now() });
 
     // Drag end with no delta
     // Simulate drag start then drag end with same position (no delta)
@@ -148,7 +148,7 @@ describe('Builder dirty detection for graph edits', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('ready'));
-    vi.useFakeTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.now() });
 
     // Node add
     await act(async () => {
