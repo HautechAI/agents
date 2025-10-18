@@ -52,16 +52,14 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
       async putWrites() {},
       getNextVersion() { return '1'; },
     } as unknown as ReturnType<CheckpointerService['getCheckpointer']>);
-    class TestMongoService extends (MongoService as { new (...args: any[]): MongoService }) {
-      constructor() {
-        // Pass through to satisfy parent constructor; will not connect/use client
-        super(configService, logger);
-      }
-      // Override to avoid requiring an actual DB
-      getDb(): any { return {}; }
-    }
-    const mongoService = new TestMongoService();
-    const registry = buildTemplateRegistry({ logger, containerService, configService, checkpointerService, mongoService });
+    const testMongoService = { getDb: () => ({}) } satisfies Pick<MongoService, 'getDb'>;
+    const registry = buildTemplateRegistry({
+      logger,
+      containerService,
+      configService,
+      checkpointerService,
+      mongoService: testMongoService as unknown as MongoService,
+    });
     const runtime = new LiveGraphRuntime(logger, registry);
     return { runtime };
   }
