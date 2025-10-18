@@ -10,7 +10,7 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   }
 }
 
-export function shallowEqual<T extends Record<string, any>>(a: T | undefined, b: T | undefined): boolean {
+export function shallowEqual<T extends Record<string, unknown>>(a: T | undefined, b: T | undefined): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   const aKeys = Object.keys(a);
