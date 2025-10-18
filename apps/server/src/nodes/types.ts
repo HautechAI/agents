@@ -6,9 +6,6 @@ export interface NodeLifecycle<Config = Record<string, unknown>> {
   delete(): Promise<void> | void;
 }
 
-export function isNodeLifecycle(obj: unknown): obj is NodeLifecycle<any> {
-  return !!obj && typeof (obj as any).configure === 'function';
-}
 
 export function isNodeLifecycle(obj: unknown): obj is NodeLifecycle<Record<string, unknown>> {
   if (!obj || typeof obj !== 'object') return false;
