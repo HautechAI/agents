@@ -70,6 +70,14 @@ function useStoredBoolean(key: string, defaultValue: boolean) {
 }
 
 type NavItem = { label: string; to: string; icon: React.ComponentType<{ className?: string }>; };
+type Section = {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  isOpen: boolean;
+  setOpen: (open: boolean) => void;
+  items: NavItem[];
+};
 
 export function RootLayout() {
   const [collapsed, setCollapsed] = useStoredBoolean(STORAGE_KEYS.collapsed, false);
@@ -78,7 +86,7 @@ export function RootLayout() {
   const [monitoringOpen, setMonitoringOpen] = useStoredBoolean(STORAGE_KEYS.monitoringOpen, false);
   const [settingsOpen, setSettingsOpen] = useStoredBoolean(STORAGE_KEYS.settingsOpen, false);
 
-  const sections = useMemo(
+  const sections: Section[] = useMemo(
     () => [
       {
         id: 'agents',
@@ -89,7 +97,7 @@ export function RootLayout() {
         items: [
           { label: 'Graph', to: '/agents/graph', icon: GitBranch },
           { label: 'Chat', to: '/agents/chat', icon: MessageSquare }
-        ] as NavItem[]
+        ]
       },
       {
         id: 'tracing',
@@ -100,7 +108,7 @@ export function RootLayout() {
         items: [
           { label: 'Traces', to: '/tracing/traces', icon: Activity },
           { label: 'Errors', to: '/tracing/errors', icon: AlertTriangle }
-        ] as NavItem[]
+        ]
       },
       {
         id: 'monitoring',
@@ -111,7 +119,7 @@ export function RootLayout() {
         items: [
           { label: 'Containers', to: '/monitoring/containers', icon: Boxes },
           { label: 'Resources', to: '/monitoring/resources', icon: Gauge }
-        ] as NavItem[]
+        ]
       },
       {
         id: 'settings',
@@ -121,14 +129,14 @@ export function RootLayout() {
         setOpen: setSettingsOpen,
         items: [
           { label: 'Secrets', to: '/settings/secrets', icon: KeyRound }
-        ] as NavItem[]
+        ]
       }
     ], [agentsOpen, tracingOpen, monitoringOpen, settingsOpen, setAgentsOpen, setTracingOpen, setMonitoringOpen, setSettingsOpen]
   );
 
   const { user } = useUser();
 
-  function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
+  function SidebarInner({ linkWrapper }: { linkWrapper?: (children: React.ReactNode) => React.ReactNode }) {
     return (
       <div className="flex h-full flex-col">
         <SidebarHeader className="flex items-center justify-between">
@@ -161,19 +169,21 @@ export function RootLayout() {
                   <SidebarMenu>
                     {section.items.map((item) => (
                       <SidebarMenuItem key={item.to}>
-                        <NavLink to={item.to} onClick={onNavigate} className="block">
-                          {({ isActive }) => (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <SidebarMenuButton isActive={isActive} className="">
-                                  <item.icon className="h-4 w-4" />
-                                  {!collapsed && <span>{item.label}</span>}
-                                </SidebarMenuButton>
-                              </TooltipTrigger>
-                              {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
-                            </Tooltip>
-                          )}
-                        </NavLink>
+                        {(linkWrapper ?? ((c) => c))(
+                          <NavLink to={item.to} className="block">
+                            {({ isActive }) => (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <SidebarMenuButton isActive={isActive} className="">
+                                    <item.icon className="h-4 w-4" />
+                                    {!collapsed && <span>{item.label}</span>}
+                                  </SidebarMenuButton>
+                                </TooltipTrigger>
+                                {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
+                              </Tooltip>
+                            )}
+                          </NavLink>
+                        )}
                       </SidebarMenuItem>
                     ))}
                   </SidebarMenu>
@@ -203,7 +213,7 @@ export function RootLayout() {
   return (
     <div className="flex min-h-screen w-full">
       {/* Desktop sidebar */}
-      <aside className={`hidden md:flex ${collapsed ? 'w-16' : 'w-64'}`}>
+      <aside className={`hidden md:flex`}>
         <Sidebar className={`${collapsed ? 'w-16' : 'w-64'}`}>
           <SidebarInner />
         </Sidebar>
@@ -221,7 +231,7 @@ export function RootLayout() {
             <DrawerContent className="p-0">
               <div className="h-[85vh]">
                 <Sidebar className="w-full">
-                  <SidebarInner onNavigate={() => {/* Close drawer on nav */}} />
+                  <SidebarInner linkWrapper={(node) => <DrawerClose asChild>{node}</DrawerClose>} />
                 </Sidebar>
                 <div className="p-2">
                   <DrawerClose asChild>
