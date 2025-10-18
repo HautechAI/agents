@@ -1,18 +1,21 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@hautech/ui';
 import ShellToolConfigView from '@/components/configViews/ShellToolConfigView';
 
 describe('ShellToolConfigView payload', () => {
   it('emits aligned schema shape', () => {
     let cfg: any = {};
     render(
-      <ShellToolConfigView
-        templateName="shellTool"
-        value={{}}
-        onChange={(v) => (cfg = v)}
-        readOnly={false}
-        disabled={false}
-      />,
+      <TooltipProvider delayDuration={0}>
+        <ShellToolConfigView
+          templateName="shellTool"
+          value={{}}
+          onChange={(v) => (cfg = v)}
+          readOnly={false}
+          disabled={false}
+        />
+      </TooltipProvider>,
     );
     const wd = screen.getByDisplayValue('/workspace') as HTMLInputElement;
     fireEvent.change(wd, { target: { value: '/work' } });
