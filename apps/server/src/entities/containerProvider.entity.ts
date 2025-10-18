@@ -159,7 +159,18 @@ export class ContainerProviderEntity {
 
   // Accept static configuration (image/env/initialScript). Validation performed via zod schema.
   setConfig(cfg: Record<string, unknown>): void {
-    // Let ZodError propagate so runtime can handle unknown-key stripping
+    // Explicit error for legacy nix.packages shape (name/version only) per product decision
+    const maybeNix = (cfg as any)?.nix;
+    const pkgs = maybeNix?.packages as any;
+    if (Array.isArray(pkgs)) {
+      const legacy = pkgs.find((p) => p && typeof p === 'object' && 'name' in p && 'version' in p && (!('commitHash' in p) || !('attributePath' in p)));
+      if (legacy) {
+        throw new Error(
+          'Invalid nix.packages item: expected { name, version, commitHash, attributePath }. Backward-compatible shapes are not accepted at this time.'
+        );
+      }
+    }
+    // Let ZodError propagate so runtime can handle other validation errors
     this.cfg = ContainerProviderStaticConfigSchema.parse(cfg);
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input } from '@hautech/ui';
 import type { ContainerNixConfig, NixPackageSelection } from './types';
 import { useQuery } from '@tanstack/react-query';
@@ -29,17 +29,12 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
   const [selected, setSelected] = useState<SelectedPkg[]>([]);
   const [versionsByName, setVersionsByName] = useState<Record<string, string | ''>>({});
   const [detailsByName, setDetailsByName] = useState<Record<string, { version: string; commitHash: string; attributePath: string }>>({});
-  // Listen for resolve events from child items and update local details
-  useEffect(() => {
-    const onResolved = (e: Event) => {
-      const ce = e as CustomEvent<{ name: string; version: string; commitHash: string; attributePath: string }>;
-      const d = ce.detail;
-      if (!d || !d.name) return;
-      setDetailsByName((prev) => ({ ...prev, [d.name]: { version: d.version, commitHash: d.commitHash, attributePath: d.attributePath } }));
-    };
-    window.addEventListener('nix:resolved', onResolved as EventListener);
-    return () => window.removeEventListener('nix:resolved', onResolved as EventListener);
-  }, []);
+  const handleResolved = useCallback(
+    (name: string, detail: { version: string; commitHash: string; attributePath: string }) => {
+      setDetailsByName((prev) => ({ ...prev, [name]: detail }));
+    },
+    [],
+  );
   const lastPushedJson = useRef<string>('');
   const lastPushedPackagesLen = useRef<number>(0);
 
@@ -82,7 +77,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
         return next;
       });
     }
-  }, [controlled, controlledValueKey, uncontrolledPkgsKey]);
+  }, [controlled, controlledValueKey, uncontrolledPkgsKey, props]);
 
   // Push updates into node config when selections/channels change
   useEffect(() => {
@@ -272,6 +267,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
               pkg={p}
               chosen={versionsByName[p.name] || ''}
               onChoose={(v) => setVersionsByName((prev) => ({ ...prev, [p.name]: v }))}
+              onResolved={handleResolved}
               onRemove={() => removeSelected(p.name)}
             />
           ))}
@@ -287,7 +283,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
 // Note: debounce not required; builder autosave already debounces
 export default NixPackagesSection;
 
-function SelectedPackageItem({ pkg, chosen, onChoose, onRemove }: { pkg: { name: string }; chosen: string | ''; onChoose: (v: string | '') => void; onRemove: () => void }) {
+function SelectedPackageItem({ pkg, chosen, onChoose, onRemove, onResolved }: { pkg: { name: string }; chosen: string | ''; onChoose: (v: string | '') => void; onRemove: () => void; onResolved: (name: string, detail: { version: string; commitHash: string; attributePath: string }) => void }) {
   const qVersions = useQuery({
     queryKey: ['nix', 'versions', pkg.name],
     queryFn: ({ signal }) => fetchVersions(pkg.name, signal),
@@ -304,6 +300,36 @@ function SelectedPackageItem({ pkg, chosen, onChoose, onRemove }: { pkg: { name:
     }
   }, [chosen, versions]);
 
+  // Resolve selected version -> commitHash/attributePath with cancellation to avoid races
+  const resolveRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      // Cancel in-flight on unmount
+      resolveRef.current?.abort();
+    };
+  }, []);
+
+  const onChangeVersion = useCallback(async (v: string) => {
+    onChoose(v);
+    // Cancel previous resolve
+    resolveRef.current?.abort();
+    if (!v) return;
+    const ac = new AbortController();
+    resolveRef.current = ac;
+    try {
+      const res = await resolvePackage(pkg.name, v, ac.signal);
+      // Only apply if not aborted
+      if (!ac.signal.aborted) {
+        onResolved(pkg.name, { version: res.version, commitHash: res.commitHash, attributePath: res.attributePath });
+      }
+    } catch (_e) {
+      // swallow errors; UI will not push unresolved entries
+    } finally {
+      if (resolveRef.current === ac) resolveRef.current = null;
+    }
+  }, [onChoose, onResolved, pkg.name]);
+
   return (
     <li className="flex items-center gap-2">
       <span className="flex-1 text-sm">{label}</span>
@@ -311,23 +337,7 @@ function SelectedPackageItem({ pkg, chosen, onChoose, onRemove }: { pkg: { name:
         aria-label={`Select version for ${label}`}
         className="rounded border border-input bg-background px-2 py-1 text-sm"
         value={chosen}
-        onChange={async (e) => {
-          const v = e.target.value;
-          onChoose(v);
-          if (v) {
-            try {
-              const ac = new AbortController();
-              const timer = setTimeout(() => ac.abort(), 15_000);
-              const res = await resolvePackage(pkg.name, v, ac.signal);
-              clearTimeout(timer);
-              // Emit a custom event so parent can capture details; parent reads chosen via closure
-              const ev = new CustomEvent('nix:resolved', { detail: { name: pkg.name, version: res.version, commitHash: res.commitHash, attributePath: res.attributePath } });
-              window.dispatchEvent(ev);
-            } catch {
-              // Ignore resolve errors; UI keeps selection and will not push until resolved
-            }
-          }
-        }}
+        onChange={(e) => onChangeVersion(e.target.value)}
       >
         <option value="">Select version…</option>
         {qVersions.isLoading ? (

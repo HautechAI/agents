@@ -232,4 +232,15 @@ describe('nix routes', () => {
     expect(res.statusCode).toBe(502);
     scope.done();
   });
+
+  it('resolve: timeout -> 504', async () => {
+    const scope = nock(BASE)
+      .get('/packages/slow')
+      .query(true)
+      .delay(500)
+      .reply(200, { name: 'slow', releases: [{ version: '1.0.0', commit_hash: 'x', platforms: [{ system: 'x86_64-linux', attribute_path: 'x' }] }] });
+    const res = await fastify.inject({ method: 'GET', url: '/api/nix/resolve?name=slow&version=1.0.0' });
+    expect(res.statusCode).toBe(504);
+    scope.done();
+  });
 });
