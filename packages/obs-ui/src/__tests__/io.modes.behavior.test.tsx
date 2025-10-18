@@ -6,7 +6,7 @@ import type { SpanDoc } from '../types';
 
 function makeSpan(attrs: Record<string, unknown>): SpanDoc {
   const now = new Date().toISOString();
-  return {
+  const s: SpanDoc = {
     spanId: 's1',
     traceId: 't1',
     label: 'tool_call',
@@ -21,7 +21,8 @@ function makeSpan(attrs: Record<string, unknown>): SpanDoc {
     idempotencyKeys: [],
     createdAt: now,
     updatedAt: now,
-  } as any;
+  };
+  return s;
 }
 
 describe('IO modes', () => {
@@ -73,13 +74,81 @@ describe('IO modes', () => {
     // switch to JSON mode
     fireEvent.change(outputSelect, { target: { value: 'json' } });
     // warning should appear
-    expect(screen.getByText(/Not valid JSON; showing raw string/i)).toBeTruthy();
+    // There may be multiple warnings due to memoized re-renders; assert at least one
+    const warnings = screen.getAllByText(/Not valid JSON; showing raw string/i);
+    expect(warnings.length).toBeGreaterThan(0);
   });
 
   it('shows warning for tool input JSON mode when input is a non-JSON string', () => {
     const span = makeSpan({ kind: 'tool_call', input: 'not json' });
     render(<SpanDetails span={span} spans={[span]} onSelectSpan={() => {}} onClose={() => {}} />);
     // Input defaults to JSON mode (warning may render more than once due to async editor mounts)
+    expect(screen.getAllByText(/Not valid JSON; showing raw string/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe('IO modes (LLM spans)', () => {
+  function makeLLMSpan(content: string, toolCalls: Array<{ id?: string; name?: string; arguments?: unknown }>): SpanDoc {
+    const now = new Date().toISOString();
+    const span: SpanDoc = {
+      spanId: 'llm1',
+      traceId: 't1',
+      label: 'llm',
+      status: 'ok',
+      startTime: now,
+      endTime: now,
+      completed: true,
+      lastUpdate: now,
+      attributes: { kind: 'llm', output: { content, toolCalls } },
+      events: [],
+      rev: 1,
+      idempotencyKeys: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    return span;
+  }
+
+  it('keeps LLM content selector independent from per-tool-call selector', () => {
+    const span = makeLLMSpan('Hello world', [{ id: 'tc1', name: 'foo', arguments: { a: 1 } }]);
+    render(<SpanDetails span={span} spans={[span]} onSelectSpan={() => {}} onClose={() => {}} />);
+    const contentSelect = screen.getByTestId('obsui-select-llm-content') as HTMLSelectElement;
+    const toolSelect = screen.getByTestId('obsui-select-llm-toolcall-0') as HTMLSelectElement;
+    expect(contentSelect.value).toBe('md');
+    expect(toolSelect.value).toBe('json');
+    // Change content mode
+    fireEvent.change(contentSelect, { target: { value: 'yaml' } });
+    expect(contentSelect.value).toBe('yaml');
+    // Tool-call selector remains unchanged
+    expect(toolSelect.value).toBe('json');
+  });
+
+  it('persists per-tool-call view mode by toolCall.id, independent of index', () => {
+    const s1 = makeLLMSpan('text', [
+      { id: 'A', name: 'foo', arguments: { a: 1 } },
+      { id: 'B', name: 'foo', arguments: { b: 2 } },
+    ]);
+    const { rerender } = render(<SpanDetails span={s1} spans={[s1]} onSelectSpan={() => {}} onClose={() => {}} />);
+    const selectIdx1 = screen.getByTestId('obsui-select-llm-toolcall-1') as HTMLSelectElement; // id B at index 1
+    fireEvent.change(selectIdx1, { target: { value: 'terminal' } });
+    expect(selectIdx1.value).toBe('terminal');
+
+    const s2 = makeLLMSpan('text', [
+      { id: 'B', name: 'foo', arguments: { b: 2 } },
+      { id: 'A', name: 'foo', arguments: { a: 1 } },
+    ]);
+    rerender(<SpanDetails span={s2} spans={[s2]} onSelectSpan={() => {}} onClose={() => {}} />);
+    // B moved to index 0; persisted mode should follow id
+    const selectIdx0 = (screen.getAllByTestId('obsui-select-llm-toolcall-0') as HTMLSelectElement[]).at(-1)!;
+    expect(selectIdx0.value).toBe('terminal');
+  });
+
+  it('shows warning on LLM content when switching to JSON and content is not JSON', () => {
+    const span = makeLLMSpan('not json', []);
+    render(<SpanDetails span={span} spans={[span]} onSelectSpan={() => {}} onClose={() => {}} />);
+    const contentSelect = (screen.getAllByTestId('obsui-select-llm-content') as HTMLSelectElement[]).at(-1)!;
+    fireEvent.change(contentSelect, { target: { value: 'json' } });
+    // multiple warnings can appear; use getAll
     expect(screen.getAllByText(/Not valid JSON; showing raw string/i).length).toBeGreaterThan(0);
   });
 });

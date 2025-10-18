@@ -9,7 +9,7 @@ import { fetchLogs } from '../services/api';
 import { spanRealtime } from '../services/socket';
 import { toJSONStable, toYAML } from '../utils/format';
 import { isBrowser, isTest } from '../utils/env';
-import { normalizeKeyPart } from '../utils/keys';
+import { normalizeKeyPart, makeStorageKey } from '../utils/keys';
 import { usePersistedViewMode } from '../hooks/usePersistedViewMode';
 
 export function SpanDetails({
@@ -32,18 +32,18 @@ export function SpanDetails({
   const spanLabel = span.label || '';
   const normKind = normalizeKeyPart(spanKind || 'unknown');
   const normLabel = normalizeKeyPart(spanLabel || 'unlabeled');
-  const [inputMode, setInputMode] = usePersistedViewMode(
-    ['io', 'tool_input', normKind, normLabel],
+  const [inputMode, setInputMode] = usePersistedViewMode<InputMode>(
+    makeStorageKey(['io', 'tool_input', normKind, normLabel]),
     'json'
-  ) as [InputMode, (v: InputMode) => void];
-  const [toolOutputMode, setToolOutputMode] = usePersistedViewMode(
-    ['io', 'tool_output', normKind, normLabel],
+  );
+  const [toolOutputMode, setToolOutputMode] = usePersistedViewMode<OutputMode>(
+    makeStorageKey(['io', 'tool_output', normKind, normLabel]),
     'md'
-  ) as [OutputMode, (v: OutputMode) => void];
-  const [contentMode, setContentMode] = usePersistedViewMode(
-    ['io', 'llm_content', normKind, normLabel],
+  );
+  const [contentMode, setContentMode] = usePersistedViewMode<OutputMode>(
+    makeStorageKey(['io', 'llm_content', normKind, normLabel]),
     'md'
-  ) as [OutputMode, (v: OutputMode) => void];
+  );
   
 
   useEffect(() => {
@@ -430,12 +430,12 @@ export function SpanDetails({
                           {isToolSpan ? 'Input' : 'Context'}
                         </h3>
                         {isToolSpan && (
-                          <ModeSelect
+                          <ModeSelect<InputMode>
                             ariaLabel="Input view mode"
                             dataTestId="obsui-select-tool-input"
-                            modes={[{ value: 'json', label: 'JSON' }, { value: 'yaml', label: 'YAML' }]}
+                            modes={INPUT_MODES}
                             value={inputMode}
-                            onChange={(v) => setInputMode(v as InputMode)}
+                            onChange={setInputMode}
                           />
                         )}
                       </div>
@@ -717,17 +717,12 @@ export function SpanDetails({
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 8px 0' }}>
                     <h3 id="obsui-output-heading" style={{ margin: 0, fontSize: 13 }}>Output</h3>
-                    <ModeSelect
+                    <ModeSelect<OutputMode>
                       ariaLabel={isLLMSpan ? 'Content view mode' : 'Output view mode'}
                       dataTestId={isLLMSpan ? 'obsui-select-llm-content' : 'obsui-select-tool-output'}
-                      modes={[
-                        { value: 'md', label: 'Markdown' },
-                        { value: 'json', label: 'JSON' },
-                        { value: 'yaml', label: 'YAML' },
-                        { value: 'terminal', label: 'Terminal' },
-                      ]}
+                      modes={OUTPUT_MODES}
                       value={isLLMSpan ? contentMode : toolOutputMode}
-                      onChange={(v) => (isLLMSpan ? setContentMode(v as OutputMode) : setToolOutputMode(v as OutputMode))}
+                      onChange={(v) => (isLLMSpan ? setContentMode(v) : setToolOutputMode(v))}
                     />
                   </div>
                   <section
@@ -761,35 +756,35 @@ export function SpanDetails({
   );
 }
 
-function ModeSelect({
+function ModeSelect<T extends string>({
   modes,
   value,
   onChange,
   ariaLabel,
   dataTestId,
 }: {
-  modes: { value: string; label: string }[];
-  value: string;
-  onChange(v: string): void;
+  modes: { value: T; label: string }[];
+  value: T;
+  onChange(v: T): void;
   ariaLabel?: string;
   dataTestId?: string;
 }) {
   return (
-    <label style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    <div style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <select
         aria-label={ariaLabel}
         data-testid={dataTestId}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value as T)}
         style={{ fontSize: 12, padding: '2px 6px', border: '1px solid #ccc', borderRadius: 4 }}
       >
         {modes.map((m) => (
-          <option key={m.value} value={m.value}>
+          <option key={m.value as string} value={m.value as string}>
             {m.label}
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
 
@@ -1090,10 +1085,11 @@ function CollapsibleToolCall({ toolCall, index, spanKind }: { toolCall: LocalToo
     return '{}';
   }, [toolCall]);
   const toolNameNorm = normalizeKeyPart(toolCall.name || 'tool');
-  const [mode, setMode] = usePersistedViewMode(
-    ['io', 'llm_toolcall', normalizeKeyPart(spanKind || 'llm'), toolNameNorm, String(index)],
+  const keyId = toolCall.id ? normalizeKeyPart(toolCall.id) : String(index);
+  const [mode, setMode] = usePersistedViewMode<OutputMode>(
+    makeStorageKey(['io', 'llm_toolcall', normalizeKeyPart(spanKind || 'llm'), toolNameNorm, keyId]),
     'json'
-  ) as [OutputMode, (v: OutputMode) => void];
+  );
   return (
     <div style={{ border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden', fontSize: 12 }}>
       <div
@@ -1112,17 +1108,12 @@ function CollapsibleToolCall({ toolCall, index, spanKind }: { toolCall: LocalToo
           {toolCall.id && <span style={{ fontSize: 10, color: '#555' }}>{toolCall.id}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={(e) => e.stopPropagation()}>
-          <ModeSelect
+          <ModeSelect<OutputMode>
             ariaLabel="Tool call view mode"
             dataTestId={`obsui-select-llm-toolcall-${index}`}
-            modes={[
-              { value: 'json', label: 'JSON' },
-              { value: 'yaml', label: 'YAML' },
-              { value: 'terminal', label: 'Terminal' },
-              { value: 'md', label: 'Markdown' },
-            ]}
+            modes={OUTPUT_MODES}
             value={mode}
-            onChange={(v) => setMode(v as OutputMode)}
+            onChange={setMode}
           />
           <span style={{ fontSize: 10, color: '#0366d6', fontWeight: 600 }}>{open ? 'Hide' : 'Show'}</span>
         </div>
@@ -1199,3 +1190,13 @@ function ToolInputContent({ language, value }: { language: 'json' | 'yaml'; valu
 // IO view modes (component-local types)
 type InputMode = 'json' | 'yaml';
 type OutputMode = 'md' | 'json' | 'yaml' | 'terminal';
+const INPUT_MODES: { value: InputMode; label: string }[] = [
+  { value: 'json', label: 'JSON' },
+  { value: 'yaml', label: 'YAML' },
+];
+const OUTPUT_MODES: { value: OutputMode; label: string }[] = [
+  { value: 'md', label: 'Markdown' },
+  { value: 'json', label: 'JSON' },
+  { value: 'yaml', label: 'YAML' },
+  { value: 'terminal', label: 'Terminal' },
+];

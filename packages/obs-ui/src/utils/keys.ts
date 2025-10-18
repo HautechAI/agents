@@ -18,4 +18,3 @@ export function makeStorageKey(parts: (string | number)[]): string {
   const norm = parts.map((p) => normalizeKeyPart(p)).filter(Boolean);
   return ['obsui', 'view', ...norm].join(':');
 }
-
