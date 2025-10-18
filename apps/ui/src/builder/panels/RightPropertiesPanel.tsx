@@ -20,6 +20,7 @@ interface BuilderPanelNodeData {
   name?: string;
   config?: Record<string, unknown>;
   dynamicConfig?: Record<string, unknown>;
+  state?: Record<string, unknown>;
 }
 interface Props {
   node: Node<BuilderPanelNodeData> | null;
@@ -45,6 +46,13 @@ function RightPropertiesPanelBody({ node, onChange }: Props) {
   const update = (patch: Record<string, unknown>) => onChange(node.id, patch);
   const cfg = (data.config || {}) as Record<string, unknown>;
   const dynamicConfig = (data.dynamicConfig || {}) as Record<string, unknown>;
+  const isMcpServer = data.template === 'mcpServer';
+  const mcpTools: Array<{ name: string; description?: string; title?: string }> =
+    (((data.state as any)?.mcp?.tools as Array<any>) || []).map((t) => ({
+      name: String(t?.name ?? ''),
+      description: t?.description,
+      title: t?.title,
+    }));
 
   // Runtime capabilities (may be absent if backend templates not yet loaded)
   const runtimeStaticCap = hasStaticConfigByName(data.template, runtimeTemplates.getTemplate);
@@ -135,7 +143,16 @@ function RightPropertiesPanelBody({ node, onChange }: Props) {
           )}
         </div>
       )}
-      {runtimeDynamicCap && (
+      {isMcpServer && mcpTools.length > 0 && (
+        <ToolsSection
+          tools={mcpTools}
+          enabledMap={dynamicConfig as Record<string, boolean>}
+          readOnly={readOnly}
+          disabled={!!disableAll}
+          onToggle={(name, val) => update({ dynamicConfig: { ...(dynamicConfig as any), [name]: val } })}
+        />
+      )}
+      {!isMcpServer && runtimeDynamicCap && (
         <div className="space-y-2">
           <div className="text-[10px] uppercase text-muted-foreground">Dynamic Configuration</div>
           {DynamicView ? (
@@ -171,6 +188,47 @@ function RightPropertiesPanelBody({ node, onChange }: Props) {
         {tpl?.title ? (
           <span className="ml-2 text-[10px] italic text-muted-foreground">(Default: {tpl.title})</span>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+import { Switch } from '@hautech/ui';
+
+function ToolsSection({
+  tools,
+  enabledMap,
+  readOnly,
+  disabled,
+  onToggle,
+}: {
+  tools: Array<{ name: string; description?: string; title?: string }>;
+  enabledMap: Record<string, boolean>;
+  readOnly?: boolean;
+  disabled?: boolean;
+  onToggle: (name: string, val: boolean) => void;
+}) {
+  const isDisabled = !!readOnly || !!disabled;
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] uppercase text-muted-foreground">Tools</div>
+      <div className="space-y-2 text-sm" data-testid="mcp-tools-section">
+        {tools.map((t) => (
+          <div key={t.name} className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium truncate">{t.title || t.name}</div>
+              {t.description ? (
+                <div className="text-xs text-muted-foreground truncate">{t.description}</div>
+              ) : null}
+            </div>
+            <Switch
+              checked={!!enabledMap[t.name]}
+              onCheckedChange={(v) => onToggle(t.name, !!v)}
+              aria-label={t.name}
+              disabled={isDisabled}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

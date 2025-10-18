@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { RightPropertiesPanel } from '@/builder/panels/RightPropertiesPanel';
 import { registerConfigView, clearRegistry } from '@/components/configViews/registry';
@@ -69,5 +69,24 @@ describe('RightPropertiesPanel', () => {
     render(<RightPropertiesPanel node={makeNode('missing')} onChange={onChange} />);
     expect(screen.getByText(/No custom view registered for missing \(static\)/)).toBeInTheDocument();
     expect(screen.getByText(/No custom view registered for missing \(dynamic\)/)).toBeInTheDocument();
+  });
+
+  it('renders Tools section for mcpServer using node.data.state.mcp.tools and toggles dynamicConfig', () => {
+    const node = makeNode('mcpServer');
+    node.data.state = { mcp: { tools: [{ name: 't1', description: 'Tool 1' }, { name: 't2' }] } };
+    node.data.dynamicConfig = { t1: true };
+    render(<RightPropertiesPanel node={node} onChange={onChange} />);
+    expect(screen.getByTestId('mcp-tools-section')).toBeInTheDocument();
+    // There should be labels/toggles for tools
+    expect(screen.getByText('t1')).toBeInTheDocument();
+    expect(screen.getByText('t2')).toBeInTheDocument();
+    // Toggle t2 on
+    const toggle = screen.getByLabelText('t2');
+    fireEvent.click(toggle);
+    expect(onChange).toHaveBeenCalled();
+    const args = onChange.mock.calls.pop();
+    expect(args[0]).toBe(node.id);
+    expect(args[1].dynamicConfig).toBeDefined();
+    expect(args[1].dynamicConfig.t2).toBe(true);
   });
 });
