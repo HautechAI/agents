@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { SpanDoc, LogDoc } from '../types';
+import { isBrowser, isTest } from '../utils/env';
 
 // Lightweight singleton socket for span realtime events.
 // Stage 1: global subscription to all span_upsert events.
@@ -16,25 +17,7 @@ class SpanRealtime {
   private pingInterval: any;
   private listeners: Array<(state: { connected: boolean; lastPongTs: number | null }) => void> = [];
 
-  // Environment helpers
-  private get isBrowser(): boolean {
-    return typeof window !== 'undefined' && typeof window.addEventListener === 'function';
-  }
-  private get isTest(): boolean {
-    try {
-      if (typeof (import.meta as any)?.vitest !== 'undefined') return true;
-      const mode = (import.meta as any)?.env?.MODE;
-      if (mode === 'test') return true;
-    } catch {
-      // ignore
-    }
-    // Also detect via process.env which is set by Vitest
-    const g: any = typeof globalThis !== 'undefined' ? (globalThis as any) : {};
-    const proc = g.process || undefined;
-    const env = (proc && proc.env) || {};
-    if (env.VITEST || env.VITEST_WORKER_ID || env.JEST_WORKER_ID || env.NODE_ENV === 'test') return true;
-    return false;
-  }
+  // Use centralized env helpers
 
   private notify() {
     const state = { connected: this.connected, lastPongTs: this.lastPongTs };
@@ -69,7 +52,7 @@ class SpanRealtime {
 
   private ensure() {
     // Skip realtime in tests and non-browser/SSR to prevent window access and stray timers
-    if (this.isTest || !this.isBrowser) return;
+    if (isTest || !isBrowser) return;
     if (this.socket || this.connecting) return;
     this.connecting = true;
     const url = 'http://localhost:4319'; // Hardcoded dev endpoint

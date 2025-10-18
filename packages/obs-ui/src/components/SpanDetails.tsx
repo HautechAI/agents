@@ -8,6 +8,7 @@ import { SpanDoc, LogDoc } from '../types';
 import { fetchLogs } from '../services/api';
 import { spanRealtime } from '../services/socket';
 import { toJSONStable, toYAML } from '../utils/format';
+import { isBrowser, isTest } from '../utils/env';
 
 export function SpanDetails({
   span,
@@ -20,18 +21,7 @@ export function SpanDetails({
   onSelectSpan(s: SpanDoc): void;
   onClose(): void;
 }) {
-  // Environment guards for SSR/tests
-  const isBrowser = typeof window !== 'undefined';
-  const isTest = (() => {
-    try {
-      if (typeof (import.meta as any)?.vitest !== 'undefined') return true;
-      const mode = (import.meta as any)?.env?.MODE;
-      if (mode === 'test') return true;
-    } catch {}
-    const g: any = typeof globalThis !== 'undefined' ? (globalThis as any) : {};
-    const env = (g.process && g.process.env) || {};
-    return Boolean(env.VITEST || env.VITEST_WORKER_ID || env.NODE_ENV === 'test');
-  })();
+  // Centralized env helpers
   const [allLogs, setAllLogs] = useState<LogDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

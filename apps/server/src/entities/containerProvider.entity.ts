@@ -29,8 +29,7 @@ export const ContainerProviderStaticConfigSchema = z
       .describe('Shell script (executed with /bin/sh -lc) to run immediately after creating the container.')
       .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
     platform: z
-      // Cast via unknown to allow readonly tuple from const without mutation
-      .enum((SUPPORTED_PLATFORMS as unknown) as [Platform, ...Platform[]])
+      .enum(SUPPORTED_PLATFORMS)
       .optional()
       .describe('Docker platform selector for the workspace container')
       .meta({ 'ui:widget': 'select' }),
@@ -61,8 +60,7 @@ export const ContainerProviderExposedStaticConfigSchema = z
       .describe('Shell script (executed with /bin/sh -lc) to run immediately after creating the container.')
       .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
     platform: z
-      // Cast via unknown to allow readonly tuple from const without mutation
-      .enum((SUPPORTED_PLATFORMS as unknown) as [Platform, ...Platform[]])
+      .enum(SUPPORTED_PLATFORMS)
       .optional()
       .describe('Docker platform selector for the workspace container')
       .meta({ 'ui:widget': 'select' }),
@@ -312,14 +310,16 @@ export class ContainerProviderEntity {
       // Early fail if DinD exited unexpectedly (best-effort; skip if low-level client not available)
       try {
         const maybeSvc: unknown = this.containerService;
-        // Narrow to objects that expose getDocker(): Docker
+        // Minimal interfaces to avoid any-casts
+        interface DockerLike { getContainer(id: string): { inspect(): Promise<unknown> } }
+        interface DockerProvider { getDocker(): DockerLike }
         const hasGetDocker =
           typeof maybeSvc === 'object' && maybeSvc !== null && 'getDocker' in maybeSvc &&
           typeof (maybeSvc as { getDocker?: unknown }).getDocker === 'function';
         if (hasGetDocker) {
-          const docker = (maybeSvc as { getDocker: () => any }).getDocker() as any;
-          const inspect = await docker.getContainer(dind.id).inspect();
-          const state = inspect?.State as { Running?: boolean; Status?: string } | undefined;
+          const docker = (maybeSvc as DockerProvider).getDocker();
+          const inspect = (await docker.getContainer(dind.id).inspect()) as { State?: { Running?: boolean; Status?: string } };
+          const state = inspect?.State;
           if (state && state.Running === false) {
             throw new Error(`DinD sidecar exited unexpectedly: status=${state.Status}`);
           }
