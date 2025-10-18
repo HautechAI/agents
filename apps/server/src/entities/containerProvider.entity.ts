@@ -143,7 +143,7 @@ export class ContainerProviderEntity {
     this.cfg = ContainerProviderStaticConfigSchema.parse(cfg);
   }
 
-  async provide(threadId: string) {
+  async provide(threadId: string): Promise<ContainerEntity> {
     // Build base thread labels and workspace-specific labels
     const labels = this.idLabels(threadId);
     const workspaceLabels = { ...labels, 'hautech.ai/role': 'workspace' } as Record<string, string>;

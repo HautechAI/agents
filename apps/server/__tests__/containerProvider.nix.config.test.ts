@@ -7,6 +7,7 @@ import type { ConfigService } from '../src/services/config.service';
 import type { CheckpointerService } from '../src/services/checkpointer.service';
 import type { MongoService } from '../src/services/mongo.service';
 import type { GraphDefinition } from '../src/graph/types';
+import type { ContainerProviderStaticConfig } from '../src/entities/containerProvider.entity';
 
 // Minimal typed stubs
 class StubLogger implements LoggerService {
@@ -67,8 +68,9 @@ describe('containerProvider nix config acceptance', () => {
     const res = await runtime.apply(graph);
     expect(res.errors.length).toBe(0);
     const live = runtime.getNodes().find((n) => n.id === 'ws');
-    expect(live?.config && (live.config as any).nix?.packages?.length).toBe(1);
-    expect((live?.config as any).nix.packages[0]).toEqual({ attr: 'htop', pname: 'htop', channel: 'nixpkgs' });
+    const cfg = live?.config as Partial<ContainerProviderStaticConfig> | undefined;
+    expect(cfg?.nix?.packages?.length).toBe(1);
+    expect(cfg?.nix?.packages?.[0]).toEqual({ attr: 'htop', pname: 'htop', channel: 'nixpkgs' });
   });
 
   it('defaults nix.packages to [] when nix present without packages and strips unknown top-level keys', async () => {
@@ -92,12 +94,13 @@ describe('containerProvider nix config acceptance', () => {
     const res = await runtime.apply(graph);
     expect(res.errors.length).toBe(0);
     const live = runtime.getNodes().find((n) => n.id === 'ws2');
-    expect((live?.config as any).nix).toBeTruthy();
+    const cfg = live?.config as Partial<ContainerProviderStaticConfig> | undefined;
+    expect(cfg?.nix).toBeTruthy();
     // Live config may omit explicit defaults; instance config must include defaults from schema
     // Instance type is Configurable; access via known class field (cfg)
     const inst = runtime.getNodeInstance<unknown>('ws2') as { cfg?: { nix?: { packages?: unknown[] } } } | undefined;
     expect(inst?.cfg?.nix?.packages).toEqual([]);
-    expect((live?.config as any).bogusTopLevelKey).toBeUndefined();
+    expect((live?.config as Record<string, unknown> | undefined)?.bogusTopLevelKey).toBeUndefined();
   });
 
   it('rejects nested unknown keys under nix.packages items', async () => {

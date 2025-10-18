@@ -12,7 +12,7 @@ class FakeVault {
 
 describe('EnvService', () => {
   it('resolveEnvItems: static only', async () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     const res = await svc.resolveEnvItems([
       { key: 'A', value: '1' },
       { key: 'B', value: '2' },
@@ -21,7 +21,7 @@ describe('EnvService', () => {
   });
 
   it('resolveEnvItems: duplicate key error', async () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     await expect(
       svc.resolveEnvItems([
         { key: 'A', value: '1' },
@@ -60,7 +60,7 @@ describe('EnvService', () => {
   });
 
   it('mergeEnv: overlay precedence and empty preservation', () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     const base = { A: '1', B: '2' };
     const overlay = { B: '22', C: '' };
     expect(svc.mergeEnv(base, undefined)).toEqual(base);
@@ -69,7 +69,7 @@ describe('EnvService', () => {
   });
 
   it('resolveProviderEnv: supports array items with base overlay', async () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     const base = { BASE: 'x' };
     const merged = await svc.resolveProviderEnv(
       [
@@ -83,14 +83,14 @@ describe('EnvService', () => {
   });
 
   it('resolveProviderEnv: supports map input', async () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     const base = { BASE: 'x' };
     const merged = await svc.resolveProviderEnv({ A: '1', B: '2' }, undefined, base);
     expect(merged).toEqual({ BASE: 'x', A: '1', B: '2' });
   });
 
   it('resolveProviderEnv: undefined or empty returns base or undefined', async () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     expect(await svc.resolveProviderEnv(undefined, undefined, undefined)).toBeUndefined();
     expect(await svc.resolveProviderEnv([], undefined, undefined)).toBeUndefined();
     expect(await svc.resolveProviderEnv({}, undefined, undefined)).toBeUndefined();
@@ -98,7 +98,7 @@ describe('EnvService', () => {
   });
 
   it('resolveProviderEnv: base present + empty overlay => {} ; no base + empty overlay => undefined', async () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     // empty overlay (array that resolves to empty) with base present -> {}
     const res1 = await svc.resolveProviderEnv([], undefined, { A: '1' });
     expect(res1).toEqual({});
@@ -108,7 +108,7 @@ describe('EnvService', () => {
   });
 
   it('resolveProviderEnv: rejects cfgEnvRefs usage', async () => {
-    const svc = new EnvService(undefined as any);
+    const svc = new EnvService(undefined);
     await expect(svc.resolveProviderEnv([], undefined as any, {})).resolves.toEqual({});
     await expect(
       // @ts-expect-error simulate passing a defined cfgEnvRefs param, which should be rejected
