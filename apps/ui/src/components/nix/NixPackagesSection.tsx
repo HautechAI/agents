@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input } from '@hautech/ui';
 import type { ContainerNixConfig, NixPackageSelection } from './types';
 import { useQuery } from '@tanstack/react-query';
-import { fetchPackages, fetchVersions, fetchPackageInfo, type PackageInfoResponse } from '@/services/nix';
+import { fetchPackages, fetchVersions, resolvePackage } from '@/services/nix';
 
 // Debounce helper
 function useDebounced<T>(value: T, delay = 300) {
@@ -28,7 +28,18 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [selected, setSelected] = useState<SelectedPkg[]>([]);
   const [versionsByName, setVersionsByName] = useState<Record<string, string | ''>>({});
-  const [metaByName, setMetaByName] = useState<Record<string, PackageInfoResponse | undefined>>({});
+  const [detailsByName, setDetailsByName] = useState<Record<string, { version: string; commitHash: string; attributePath: string }>>({});
+  // Listen for resolve events from child items and update local details
+  useEffect(() => {
+    const onResolved = (e: Event) => {
+      const any = e as CustomEvent<{ name: string; version: string; commitHash: string; attributePath: string }>;
+      const d = any.detail;
+      if (!d || !d.name) return;
+      setDetailsByName((prev) => ({ ...prev, [d.name]: { version: d.version, commitHash: d.commitHash, attributePath: d.attributePath } }));
+    };
+    window.addEventListener('nix:resolved', onResolved as EventListener);
+    return () => window.removeEventListener('nix:resolved', onResolved as EventListener);
+  }, []);
   const lastPushedJson = useRef<string>('');
   const lastPushedPackagesLen = useRef<number>(0);
 
@@ -48,9 +59,10 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
         const nextKey = JSON.stringify(nextSelected);
         return prevKey === nextKey ? prev : nextSelected;
       });
+      // Hydrate chosen versions for UI from controlled value
       setVersionsByName((prev) => {
         const next: Record<string, string | ''> = { ...prev };
-        for (const p of curr) if (p.version) next[p.name] = p.version || '';
+        for (const p of curr) if ((p as any).version) next[p.name] = String((p as any).version);
         return next;
       });
     } else {
@@ -63,9 +75,10 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
         const nextKey = JSON.stringify(nextSelected);
         return prevKey === nextKey ? prev : nextSelected;
       });
+      // Hydrate chosen versions for UI from existing config if present
       setVersionsByName((prev) => {
         const next: Record<string, string | ''> = { ...prev };
-        for (const p of curr) if (p.version) next[p.name] = p.version || '';
+        for (const p of curr) if ((p as any).version) next[p.name] = String((p as any).version);
         return next;
       });
     }
@@ -73,27 +86,12 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
 
   // Push updates into node config when selections/channels change
   useEffect(() => {
-    // Build packages array only for items with a chosen version
+    // Build packages array only for items with fully resolved details
     const packages = selected.flatMap((p) => {
-      const v = versionsByName[p.name];
-      if (!v || v.length === 0) return [];
-      const info = metaByName[p.name];
-      let attribute_path: string | undefined;
-      let commit_hash: string | undefined;
-      if (info && Array.isArray(info.releases)) {
-        const candidates = info.releases.filter((r) => r.version === v);
-        const currentPlatform = '';
-        let chosen = candidates[0];
-        if (candidates.length > 1 && currentPlatform) {
-          const match = candidates.find((r) => (r.platforms || []).includes(currentPlatform));
-          if (match) chosen = match;
-        }
-        if (chosen) {
-          attribute_path = chosen.attribute_path;
-          commit_hash = chosen.commit_hash;
-        }
-      }
-      return [{ name: p.name, version: v, attribute_path, commit_hash }];
+      const d = detailsByName[p.name];
+      return d && d.version && d.commitHash && d.attributePath
+        ? [{ name: p.name, version: d.version, commitHash: d.commitHash, attributePath: d.attributePath }]
+        : [];
     });
     // No debug logs in production
 
@@ -124,7 +122,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
         (props as UncontrolledProps).onUpdateConfig(next);
       }
     }
-  }, [selected, versionsByName, controlled, controlledValueKey, uncontrolledPkgsKey]);
+  }, [selected, detailsByName, controlled, controlledValueKey, uncontrolledPkgsKey]);
   const listboxRef = useRef<HTMLUListElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -175,6 +173,10 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
     setSelected((prev) => prev.filter((p) => p.name !== name));
     setVersionsByName((prev) => {
       const { [name]: _omit, ...rest } = prev;
+      return rest;
+    });
+    setDetailsByName((prev) => {
+      const { [name]: _d, ...rest } = prev;
       return rest;
     });
   };
@@ -271,13 +273,6 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
               chosen={versionsByName[p.name] || ''}
               onChoose={(v) => setVersionsByName((prev) => ({ ...prev, [p.name]: v }))}
               onRemove={() => removeSelected(p.name)}
-              onVersionListReady={() => {
-                if (!metaByName[p.name]) {
-                  void fetchPackageInfo(p.name)
-                    .then((res) => setMetaByName((prev) => ({ ...prev, [p.name]: res })))
-                    .catch(() => {});
-                }
-              }}
             />
           ))}
         </ul>
@@ -292,7 +287,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
 // Note: debounce not required; builder autosave already debounces
 export default NixPackagesSection;
 
-function SelectedPackageItem({ pkg, chosen, onChoose, onRemove, onVersionListReady }: { pkg: { name: string }; chosen: string | ''; onChoose: (v: string | '') => void; onRemove: () => void; onVersionListReady?: () => void }) {
+function SelectedPackageItem({ pkg, chosen, onChoose, onRemove }: { pkg: { name: string }; chosen: string | ''; onChoose: (v: string | '') => void; onRemove: () => void }) {
   const qVersions = useQuery({
     queryKey: ['nix', 'versions', pkg.name],
     queryFn: ({ signal }) => fetchVersions(pkg.name, signal),
@@ -301,7 +296,6 @@ function SelectedPackageItem({ pkg, chosen, onChoose, onRemove, onVersionListRea
 
   const label = pkg.name;
   const versions = qVersions.data || [];
-  useEffect(() => { if (versions.length > 0) onVersionListReady?.(); }, [versions.length]);
 
   // Optional: auto-select only when there is a single version available
   useEffect(() => {
@@ -317,8 +311,22 @@ function SelectedPackageItem({ pkg, chosen, onChoose, onRemove, onVersionListRea
         aria-label={`Select version for ${label}`}
         className="rounded border border-input bg-background px-2 py-1 text-sm"
         value={chosen}
-        onChange={(e) => {
-          onChoose(e.target.value);
+        onChange={async (e) => {
+          const v = e.target.value;
+          onChoose(v);
+          if (v) {
+            try {
+              const ac = new AbortController();
+              const timer = setTimeout(() => ac.abort(), 15_000);
+              const res = await resolvePackage(pkg.name, v, ac.signal);
+              clearTimeout(timer);
+              // Emit a custom event so parent can capture details; parent reads chosen via closure
+              const ev = new CustomEvent('nix:resolved', { detail: { name: pkg.name, version: res.version, commitHash: res.commitHash, attributePath: res.attributePath } });
+              window.dispatchEvent(ev);
+            } catch {
+              // Ignore resolve errors; UI keeps selection and will not push until resolved
+            }
+          }
         }}
       >
         <option value="">Select version…</option>
