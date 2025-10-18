@@ -51,7 +51,21 @@ export function getApiBase(override?: string): string {
   const nodeBase = ne?.API_BASE_URL;
   if (nodeBase) return nodeBase;
 
-  const isVitest = typeof ne?.VITEST === 'string';
+  const isVitest = (() => {
+    try {
+      if (typeof ne?.VITEST === 'string') return true;
+      const im: unknown = (typeof import.meta !== 'undefined' ? import.meta : undefined) ?? (globalThis as { importMeta?: unknown }).importMeta;
+      const has = (obj: unknown, key: string): obj is Record<string, unknown> =>
+        !!obj && typeof obj === 'object' && key in obj;
+      if (has(im, 'vitest')) return true;
+      const g = globalThis as Record<string, unknown>;
+      if (typeof g.vitest !== 'undefined') return true;
+      if (typeof g.vi !== 'undefined') return true;
+      return false;
+    } catch {
+      return false;
+    }
+  })();
   if (isVitest) return '';
 
   return 'http://localhost:3010';

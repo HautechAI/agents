@@ -48,18 +48,17 @@ export const handlers = [
     return _HttpResponse.json({ version: Date.now(), updatedAt: new Date().toISOString() });
   }),
   // Nix proxy handlers used by UI services
-  _http.get('/api/nix/search', ({ request }) => {
+  _http.get('/api/nix/packages', ({ request }) => {
     const url = new URL(request.url);
-    const q = url.searchParams.get('query') || url.searchParams.get('q') || '';
-    const items = q && q.length >= 2 ? [{ attr: `${q}.attr`, pname: q, version: '1.0.0' }] : [];
-    return _HttpResponse.json({ items });
+    const q = url.searchParams.get('query') || '';
+    const packages = q && q.length >= 2 ? [{ name: q, description: `${q} package` }] : [];
+    return _HttpResponse.json({ packages });
   }),
-  _http.get('/api/nix/show', ({ request }) => {
+  _http.get('/api/nix/versions', ({ request }) => {
     const url = new URL(request.url);
-    const attr = url.searchParams.get('attr');
-    const pname = url.searchParams.get('pname');
-    if (!attr && !pname) return new _HttpResponse(null, { status: 400 });
-    return _HttpResponse.json({ attr: attr || `${pname}.attr`, pname: pname || null, version: '1.2.3' });
+    const name = url.searchParams.get('name');
+    if (!name) return new _HttpResponse(null, { status: 400 });
+    return _HttpResponse.json({ versions: ['1.2.3', '1.0.0'] });
   }),
 ];
 

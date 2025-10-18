@@ -63,20 +63,27 @@ describe('Nix packages persistence in builder graph', () => {
     ;(input as HTMLInputElement).focus();
     fireEvent.change(input, { target: { value: 'htop' } });
     await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
-    fireEvent.click(await screen.findByRole('option', { name: /htop \(htop\.attr\)/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /htop/ }));
 
     // Choose channel
-    const select = await screen.findByLabelText('Select version for htop (htop.attr)');
-    fireEvent.change(select, { target: { value: 'nixpkgs-unstable' } });
+    const select = await screen.findByLabelText(/Select version for htop/);
+    // Ensure versions have loaded before selecting
+    await screen.findByRole('option', { name: '1.2.3' });
+    fireEvent.change(select, { target: { value: '1.2.3' } });
+    // Note: selecting version updates config, which marks builder dirty and should trigger autosave.
 
-    // Wait for autosave debounce (default 1000ms) + buffer
-    await new Promise((r) => setTimeout(r, 1200));
+    // Wait until autosave posts updated graph including nix.packages
+    await waitFor(() => {
+      expect(posted).toBeTruthy();
+      const node = posted.nodes.find((n: any) => n.id === 'ws');
+      expect(node.config.image).toBe('alpine:3');
+      expect(Array.isArray(node.config?.nix?.packages)).toBe(true);
+      expect(node.config.nix.packages.length).toBe(1);
+      // New persistence only stores { name, version }
+      expect(node.config.nix.packages[0]).toEqual({ name: 'htop', version: '1.2.3' });
+    }, { timeout: 5000 });
 
-    // Verify graph payload contains nix.packages under config of the containerProvider node
-    expect(posted).toBeTruthy();
-    const node = posted.nodes.find((n: any) => n.id === 'ws');
-    expect(node.config.image).toBe('alpine:3');
-    expect(node.config.nix.packages.length).toBe(1);
-    expect(node.config.nix.packages[0]).toEqual({ attr: 'htop.attr', pname: 'htop', channel: 'nixpkgs-unstable' });
+    // Allow any trailing save-state timers to flush before teardown to avoid unhandled updates
+    await new Promise((r) => setTimeout(r, 1600));
   });
 });

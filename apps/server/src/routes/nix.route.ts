@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import semver from 'semver';
 
 // Upstream base for NixHub
 const NIXHUB_BASE = 'https://www.nixhub.io';
@@ -30,64 +31,66 @@ class LruCache<T> {
   }
 }
 
-// Minimal schemas
-const NixItemSchema = z.object({
-  attr: z.string(),
-  pname: z.string().optional().nullable(),
-  version: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
-});
-const NixSearchResponseSchema = z.object({ items: z.array(NixItemSchema) });
-
-// Security: only allow safe characters in attr/pname to avoid query injection
+// Security: only allow safe characters in name
 const SAFE_IDENT = /^[A-Za-z0-9_.+\-]+$/;
+
+// Outgoing response schemas
+const PackagesResponseSchema = z.object({
+  packages: z.array(z.object({ name: z.string(), description: z.string().nullable().optional() })),
+});
+const VersionsResponseSchema = z.object({ versions: z.array(z.string()) });
+
+// Minimal upstream shapes for type-safe parsing
+const NixhubSearchSchema = z.object({
+  query: z.string().optional(),
+  total_results: z.number().optional(),
+  results: z
+    .array(
+      z.object({
+        name: z.string().optional(),
+        summary: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+type NixhubSearchJSON = z.infer<typeof NixhubSearchSchema>;
+
+const NixhubPackageSchema = z.object({
+  name: z.string().optional(),
+  releases: z
+    .array(
+      z.object({
+        version: z.union([z.string(), z.number()]).optional(),
+      }),
+    )
+    .optional(),
+});
+type NixhubPackageJSON = z.infer<typeof NixhubPackageSchema>;
 
 export function registerNixRoutes(
   fastify: FastifyInstance,
-  opts: { allowedChannels: string[]; timeoutMs: number; cacheTtlMs: number; cacheMax: number },
+  opts: { timeoutMs: number; cacheTtlMs: number; cacheMax: number },
 ) {
-  const cache = new LruCache<any>(opts.cacheMax, opts.cacheTtlMs);
+  const cache = new LruCache<unknown>(opts.cacheMax, opts.cacheTtlMs);
 
-  const channelSchema = z.string().refine((v) => opts.allowedChannels.includes(v), { message: 'channel_not_allowed' });
+  // Strict query schemas (unknown params -> 400)
+  const packagesQuerySchema = z.object({ query: z.string().optional() }).strict();
+  const versionsQuerySchema = z.object({ name: z.string().max(200).regex(SAFE_IDENT) }).strict();
 
-  const searchQuerySchema = z.object({
-    q: z.string().optional(),
-    query: z.string().optional(),
-    channel: channelSchema,
-    // Preserve validation for these fields but do not forward upstream
-    size: z
-      .union([z.string(), z.number()])
-      .optional()
-      .transform((v) => (v == null ? 20 : Number(v)))
-      .refine((n) => Number.isFinite(n) && n > 0 && n <= 50, 'invalid_size'),
-    from: z
-      .union([z.string(), z.number()])
-      .optional()
-      .transform((v) => (v == null ? 0 : Number(v)))
-      .refine((n) => Number.isFinite(n) && n >= 0 && n <= 500, 'invalid_from'),
-    sort: z.enum(['relevance', 'name']).default('relevance'),
-    order: z.enum(['asc', 'desc']).default('desc'),
-  });
-
-  const showQuerySchema = z
-    .object({ attr: z.string().regex(SAFE_IDENT).optional(), pname: z.string().regex(SAFE_IDENT).optional(), channel: channelSchema })
-    .refine((o) => !!o.attr || !!o.pname, { message: 'attr_or_pname_required' });
-
-  async function fetchJson(url: string, signal: AbortSignal): Promise<any> {
+  async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
     const cached = cache.get(url);
     if (cached) return cached;
-    const maxAttempts = 3; // 1 + 2 retries
+    const maxAttempts = 3; // 1 + 2 retries on transient errors
     let lastErr: any;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        // Do not forward inbound auth/cookies; send only Accept header
         const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
         if ([502, 503, 504].includes(res.status)) throw new Error(`upstream_${res.status}`);
         if (!res.ok) {
           const txt = await res.text().catch(() => '');
           throw Object.assign(new Error(`upstream_${res.status}`), { status: res.status, body: txt });
         }
-        const json = await res.json();
+        const json = (await res.json()) as unknown;
         cache.set(url, json);
         return json;
       } catch (e: any) {
@@ -95,42 +98,38 @@ export function registerNixRoutes(
         const msg = String(e?.message || '');
         const retriable = msg.includes('upstream_502') || msg.includes('upstream_503') || msg.includes('upstream_504') || e?.name === 'FetchError' || e?.code === 'ECONNRESET';
         if (attempt >= maxAttempts || !retriable) break;
-        // Retry quickly; keep delay below typical route timeout to allow success within deadline
         await new Promise((r) => setTimeout(r, Math.min(50 * attempt, 200)));
       }
     }
     throw lastErr;
   }
 
-  // GET /api/nix/search
-  fastify.get('/api/nix/search', async (req, reply) => {
+  // GET /api/nix/packages
+  fastify.get('/api/nix/packages', async (req, reply) => {
     try {
       const raw = (req.query || {}) as Record<string, unknown>;
-      const parsed = searchQuerySchema.safeParse(raw);
+      const parsed = packagesQuerySchema.safeParse(raw);
       if (!parsed.success) {
         reply.code(400);
         return { error: 'validation_error', details: parsed.error.issues };
       }
-      const q = (parsed.data.q || parsed.data.query || '').trim();
-      if (q.length < 2) return { items: [] };
-      // NixHub search endpoint: exact params only
+      const q = (parsed.data.query || '').trim();
+      if (q.length < 2) {
+        const body = PackagesResponseSchema.parse({ packages: [] });
+        reply.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        return body;
+      }
       const url = `${NIXHUB_BASE}/search?q=${encodeURIComponent(q)}&_data=routes%2F_nixhub.search`;
       const ac = new AbortController();
       const tid = setTimeout(() => ac.abort(), opts.timeoutMs);
       try {
-        const json = await fetchJson(url, ac.signal);
-        // NixHub shape: { query, total_results, results: [{ name, summary, ... }] }
-        const items = Array.isArray(json?.results) ? json.results : [];
-        const normalized = items
-          .map((it: any) => ({
-            attr: it?.name,
-            pname: it?.name,
-            // Omit version per requirements (undefined -> null in normalization pipeline)
-            version: undefined,
-            description: it?.summary ?? null,
-          }))
-          .filter((x: any) => typeof x.attr === 'string' && x.attr.length > 0);
-        const body = NixSearchResponseSchema.parse({ items: normalized });
+        const json = (await fetchJson(url, ac.signal)) as unknown;
+        const upstream = NixhubSearchSchema.safeParse(json);
+        const items: NonNullable<NixhubSearchJSON['results']> = upstream.success && Array.isArray(upstream.data.results) ? upstream.data.results : [];
+        const mapped = items
+          .map((it) => ({ name: it?.name ?? '', description: it?.summary ?? null }))
+          .filter((x) => typeof x.name === 'string' && x.name.length > 0);
+        const body = PackagesResponseSchema.parse({ packages: mapped });
         reply.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
         return body;
       } finally {
@@ -138,7 +137,8 @@ export function registerNixRoutes(
       }
     } catch (e) {
       const err = e as Error & { status?: number };
-      if ((err as any)?.name === 'AbortError') {
+      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as any);
+      if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };
       }
@@ -151,32 +151,36 @@ export function registerNixRoutes(
     }
   });
 
-  // GET /api/nix/show
-  fastify.get('/api/nix/show', async (req, reply) => {
+  // GET /api/nix/versions
+  fastify.get('/api/nix/versions', async (req, reply) => {
     try {
       const raw = (req.query || {}) as Record<string, unknown>;
-      const parsed = showQuerySchema.safeParse(raw);
+      const parsed = versionsQuerySchema.safeParse(raw);
       if (!parsed.success) {
         reply.code(400);
         return { error: 'validation_error', details: parsed.error.issues };
       }
-      const { attr, pname } = parsed.data;
-      // Prefer attr, fallback to pname to form PACKAGE_NAME
-      const pkgName = (attr || pname) as string;
-      // NixHub package endpoint: exact path and _data param only
-      const url = `${NIXHUB_BASE}/packages/${encodeURIComponent(pkgName)}?_data=routes%2F_nixhub.packages.%24pkg._index`;
+      const name = parsed.data.name;
+      const url = `${NIXHUB_BASE}/packages/${encodeURIComponent(name)}?_data=routes%2F_nixhub.packages.%24pkg._index`;
       const ac = new AbortController();
       const tid = setTimeout(() => ac.abort(), opts.timeoutMs);
       try {
-        const json = await fetchJson(url, ac.signal);
-        // NixHub show payload: { name, summary, releases: [{ version, ... }] }
-        const version = Array.isArray(json?.releases) && json.releases.length > 0 ? json.releases[0]?.version ?? null : null;
-        const body = NixItemSchema.parse({
-          attr: json?.name,
-          pname: json?.name ?? null,
-          description: json?.summary ?? null,
-          version,
-        });
+        const json = (await fetchJson(url, ac.signal)) as unknown;
+        const upstream = NixhubPackageSchema.safeParse(json);
+        const rels: NonNullable<NixhubPackageJSON['releases']> = upstream.success && Array.isArray(upstream.data.releases) ? upstream.data.releases : [];
+        const seen = new Set<string>();
+        const withValid: string[] = [];
+        const withInvalid: string[] = [];
+        for (const r of rels) {
+          const v = String(r?.version ?? '');
+          if (!v || seen.has(v)) continue;
+          seen.add(v);
+          if (semver.valid(v) || semver.valid(semver.coerce(v) || '')) withValid.push(v);
+          else withInvalid.push(v);
+        }
+        withValid.sort((a, b) => semver.rcompare(semver.coerce(a) || a, semver.coerce(b) || b));
+        const versions = [...withValid, ...withInvalid];
+        const body = VersionsResponseSchema.parse({ versions });
         reply.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
         return body;
       } finally {
@@ -184,7 +188,8 @@ export function registerNixRoutes(
       }
     } catch (e) {
       const err = e as Error & { status?: number };
-      if ((err as any)?.name === 'AbortError') {
+      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as any);
+      if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };
       }
