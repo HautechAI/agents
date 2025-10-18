@@ -1,5 +1,18 @@
 import { useCallback, useState } from 'react';
-import { Button, Input, Label } from '@hautech/ui';
+import {
+  Button,
+  Input,
+  Label,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from '@hautech/ui';
+import { Brackets, Lock, X } from 'lucide-react';
 
 export type EnvItem = { key: string; value: string; source?: 'static' | 'vault' };
 
@@ -16,7 +29,8 @@ export interface ReferenceEnvFieldProps {
 function toArray(v?: EnvItem[] | Record<string, string>): EnvItem[] {
   if (!v) return [];
   if (Array.isArray(v)) return v.map((it) => ({ key: it.key, value: it.value, source: it.source || 'static' }));
-  return Object.entries(v).map(([k, val]) => ({ key: k, value: val as string, source: 'static' as const }));
+  // v is Record<string, string> here, so val is already string
+  return Object.entries(v).map(([k, val]) => ({ key: k, value: val, source: 'static' }));
 }
 
 function isVaultRef(v: string) {
@@ -91,16 +105,6 @@ export default function ReferenceEnvField({ label, value, onChange, readOnly, di
               placeholder="KEY"
               data-testid={`env-key-${idx}`}
             />
-            <select
-              className="border rounded px-2 py-1 text-xs bg-background"
-              value={it.source || 'static'}
-              onChange={(e) => updateAt(idx, { source: (e.target.value as 'static' | 'vault') || 'static' })}
-              disabled={isDisabled}
-              data-testid={`env-source-${idx}`}
-            >
-              <option value="static">static</option>
-              <option value="vault">vault</option>
-            </select>
             <Input
               className="text-xs flex-1"
               value={it.value}
@@ -109,8 +113,58 @@ export default function ReferenceEnvField({ label, value, onChange, readOnly, di
               placeholder={it.source === 'vault' ? 'mount/path/key' : 'value'}
               data-testid={`env-value-${idx}`}
             />
-            <Button type="button" size="sm" variant="outline" onClick={() => removeAt(idx)} disabled={isDisabled}>
-              Remove
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={isDisabled}
+                      aria-label={(it.source ?? 'static') === 'vault' ? 'Vault secret' : 'Static value'}
+                      data-testid={`env-source-trigger-${idx}`}
+                    >
+                      {(!it.source || it.source === 'static') ? (
+                        <Brackets aria-hidden className="size-4" />
+                      ) : (
+                        <Lock aria-hidden className="size-4" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {(it.source ?? 'static') === 'vault' ? 'Vault secret' : 'Static value'}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={it.source || 'static'}
+                  onValueChange={(v) => {
+                    const s = v === 'vault' || v === 'static' ? v : 'static';
+                    updateAt(idx, { source: s });
+                  }}
+                  data-testid={`env-source-menu-${idx}`}
+                >
+                  <DropdownMenuRadioItem value="static" data-testid={`env-source-option-static-${idx}`}>
+                    <Brackets className="mr-2 size-4" /> Static
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="vault" data-testid={`env-source-option-vault-${idx}`}>
+                    <Lock className="mr-2 size-4" /> Vault
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={() => removeAt(idx)}
+              disabled={isDisabled}
+              aria-label="Remove variable"
+              data-testid={`env-remove-${idx}`}
+            >
+              <X className="size-4" />
             </Button>
           </div>
         ))}

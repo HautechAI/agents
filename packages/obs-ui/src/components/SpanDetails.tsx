@@ -7,6 +7,8 @@ import ContextView, { ContextMessageLike } from './ContextView';
 import { SpanDoc, LogDoc } from '../types';
 import { fetchLogs } from '../services/api';
 import { spanRealtime } from '../services/socket';
+import { toJSONStable, toYAML } from '../utils/format';
+import { isBrowser, isTest } from '../utils/env';
 
 export function SpanDetails({
   span,
@@ -19,11 +21,21 @@ export function SpanDetails({
   onSelectSpan(s: SpanDoc): void;
   onClose(): void;
 }) {
+  // Centralized env helpers
   const [allLogs, setAllLogs] = useState<LogDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inputMode, setInputMode] = useState<InputMode>('json');
+  const [outputMode, setOutputMode] = useState<OutputMode>('md');
+  useEffect(() => {
+    setInputMode('json');
+    setOutputMode('md');
+  }, [span.spanId]);
+  
 
   useEffect(() => {
+    // Skip network/realtime during tests and SSR; avoids stray timers/updates post-teardown
+    if (isTest || !isBrowser) return;
     let cancelled = false;
     setLoading(true);
     // Fetch all logs for trace; filtering done client-side for subtree view
@@ -46,7 +58,7 @@ export function SpanDetails({
       cancelled = true;
       off();
     };
-  }, [span.spanId, span.traceId]);
+  }, [span.spanId, span.traceId, isTest, isBrowser]);
 
   // Build quick index for parent-child relationships
   const childrenMap = useMemo(() => {
@@ -174,9 +186,14 @@ export function SpanDetails({
 
   // Helper to extract tool output content as string (markdown friendly)
   function getToolOutput(s: SpanDoc): string | undefined {
-    const output = s?.attributes?.output;
+    const output = s?.attributes?.output as unknown;
     if (typeof output === 'string') return output;
-    return JSON.stringify(output, null, 2);
+    if (output && typeof output === 'object') {
+      const maybeContent = (output as Record<string, unknown>)['content'];
+      if (typeof maybeContent === 'string') return maybeContent;
+      return JSON.stringify(output, null, 2);
+    }
+    return undefined;
   }
 
   // Log severity counts (only in logs tab header badges)
@@ -392,9 +409,33 @@ export function SpanDetails({
               <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', height: '100%', minHeight: 0 }}>
                 {/* Left Column: Input / Context */}
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: 13 }}>{isToolSpan ? 'Input' : 'Context'}</h3>
-                  <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {isToolSpan && <ToolInputViewer span={span} />}
+                  {(() => {
+                    const id = isToolSpan ? 'obsui-input-heading' : 'obsui-context-heading';
+                    return (
+                      <h3 id={id} style={{ margin: '0 0 8px 0', fontSize: 13 }}>
+                        {isToolSpan ? 'Input' : 'Context'}
+                      </h3>
+                    );
+                  })()}
+                  {isToolSpan && (
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <ModeSelect
+                        label="Input"
+                        modes={[{ value: 'json', label: 'JSON' }, { value: 'yaml', label: 'YAML' }]}
+                        value={inputMode}
+                        // Adapter to satisfy ModeSelect's (v: string) => void signature
+                        onChange={(v) => setInputMode(v as InputMode)}
+                      />
+                    </div>
+                  )}
+                  <section
+                    role="region"
+                    aria-labelledby={isToolSpan ? 'obsui-input-heading' : 'obsui-context-heading'}
+                    style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}
+                  >
+                    {isToolSpan && (
+                      <ToolInputViewer span={span} language={inputMode} value={formatToolInput(span, inputMode)} />
+                    )}
                     {!isToolSpan && contextMessages.length === 0 && (
                       <div style={{ fontSize: 12, color: '#666' }}>No context messages</div>
                     )}
@@ -452,7 +493,7 @@ export function SpanDetails({
                                   </span>
                                 )}
                             </div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                            <div className="obs-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 components={{
@@ -526,7 +567,7 @@ export function SpanDetails({
                                       </span>
                                     )}
                                 </div>
-                                <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                                <div className="obs-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
                                   <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}
                                     components={{
@@ -619,7 +660,7 @@ export function SpanDetails({
                               </span>
                             )}
                           </div>
-                          <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                          <div className="obs-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
@@ -657,63 +698,33 @@ export function SpanDetails({
                           </div>
                         </div>
                       ))}
-                  </div>
+                  </section>
                 </div>
                 {/* Right Column: Output */}
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: 13 }}>Output</h3>
-                  <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <h3 id="obsui-output-heading" style={{ margin: '0 0 8px 0', fontSize: 13 }}>Output</h3>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <ModeSelect
+                      label="Output"
+                      modes={[
+                        { value: 'md', label: 'Markdown' },
+                        { value: 'json', label: 'JSON' },
+                        { value: 'yaml', label: 'YAML' },
+                        { value: 'terminal', label: 'Terminal' },
+                      ]}
+                      value={outputMode}
+                      // Adapter to satisfy ModeSelect's (v: string) => void signature
+                      onChange={(v) => setOutputMode(v as OutputMode)}
+                    />
+                  </div>
+                  <section
+                    role="region"
+                    aria-labelledby="obsui-output-heading"
+                    style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}
+                  >
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Content</div>
-                      <div
-                        style={{
-                          background: '#f6f8fa',
-                          border: '1px solid #e1e4e8',
-                          borderRadius: 4,
-                          padding: 8,
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                        }}
-                      >
-                        {(isLLMSpan ? llmContent : getToolOutput(span)) ? (
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              code({ className, children, ...props }) {
-                                const isBlock =
-                                  String(className || '').includes('language-') || String(children).includes('\n');
-                                return (
-                                  <code
-                                    style={{
-                                      background: '#eaeef2',
-                                      padding: isBlock ? 8 : '2px 4px',
-                                      display: isBlock ? 'block' : 'inline',
-                                      borderRadius: 4,
-                                      fontSize: 11,
-                                      whiteSpace: 'pre-wrap',
-                                    }}
-                                    className={className}
-                                    {...props}
-                                  >
-                                    {children}
-                                  </code>
-                                );
-                              },
-                              pre({ children }) {
-                                return (
-                                  <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>
-                                    {children}
-                                  </pre>
-                                );
-                              },
-                            }}
-                          >
-                            {(isLLMSpan ? llmContent : getToolOutput(span)) || ''}
-                          </ReactMarkdown>
-                        ) : (
-                          <span style={{ color: '#666' }}>(no content)</span>
-                        )}
-                      </div>
+                      {renderOutputContent(isLLMSpan ? llmContent : getToolOutput(span), outputMode)}
                     </div>
                     {isLLMSpan && (
                       <div>
@@ -726,12 +737,171 @@ export function SpanDetails({
                         </div>
                       </div>
                     )}
-                  </div>
+                  </section>
                 </div>
               </div>
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ModeSelect({
+  label,
+  modes,
+  value,
+  onChange,
+}: {
+  label: string;
+  modes: { value: string; label: string }[];
+  value: string;
+  onChange(v: string): void;
+}) {
+  return (
+    <label style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ color: '#555' }}>{label}:</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ fontSize: 12, padding: '2px 6px', border: '1px solid #ccc', borderRadius: 4 }}
+      >
+        {modes.map((m) => (
+          <option key={m.value} value={m.value}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function formatToolInput(span: SpanDoc, mode: 'json' | 'yaml'): string {
+  const attrs = (span.attributes || {}) as Record<string, unknown>;
+  const toolObj = (attrs['tool'] as unknown) ?? undefined;
+  const outputObj = (attrs['output'] as unknown) ?? undefined;
+  const getProp = (o: unknown, k: string): unknown =>
+    typeof o === 'object' && o !== null && k in (o as Record<string, unknown>)
+      ? (o as Record<string, unknown>)[k]
+      : undefined;
+  const input =
+    (attrs['input'] !== undefined ? attrs['input'] : undefined) ??
+    (attrs['args'] !== undefined ? attrs['args'] : undefined) ??
+    getProp(toolObj, 'input') ??
+    getProp(outputObj, 'input');
+  if (mode === 'yaml') return toYAML(input ?? {});
+  return toJSONStable(input ?? {});
+}
+
+function renderOutputContent(content: string | undefined, mode: 'md' | 'json' | 'yaml' | 'terminal') {
+  const baseStyle: React.CSSProperties = {
+    background: '#f6f8fa',
+    border: '1px solid #e1e4e8',
+    borderRadius: 4,
+    padding: 8,
+    fontSize: 12,
+    fontFamily: 'monospace',
+  };
+  if (!content) return <div style={baseStyle}><span style={{ color: '#666' }}>(no content)</span></div>;
+  if (mode === 'md') {
+    return (
+      <div className="obs-md" data-testid="obs-md" style={baseStyle}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            code({ className, children, ...props }) {
+              const isBlock = String(className || '').includes('language-') || String(children).includes('\n');
+              return (
+                <code
+                  style={{
+                    background: '#eaeef2',
+                    padding: isBlock ? 8 : '2px 4px',
+                    display: isBlock ? 'block' : 'inline',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    whiteSpace: 'pre-wrap',
+                  }}
+                  className={className}
+                  {...props}
+                >
+                  {children}
+                </code>
+              );
+            },
+            pre({ children }) {
+              return (
+                <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>{children}</pre>
+              );
+            },
+          }}
+        >
+          {content || ''}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+  if (mode === 'terminal') {
+    return (
+      <pre className="obs-terminal" style={baseStyle}>
+        {content}
+      </pre>
+    );
+  }
+  if (mode === 'yaml') {
+    let v: unknown = content;
+    try {
+      v = JSON.parse(content);
+    } catch {
+      v = content;
+    }
+    return (
+      <div style={{ ...baseStyle, padding: 0 }}>
+        {typeof window !== 'undefined' ? (
+          <MonacoEditor
+            height="240px"
+            defaultLanguage="yaml"
+            value={toYAML(v)}
+            theme="vs-light"
+            options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, wordWrap: 'on', scrollBeyondLastLine: false }}
+          />
+        ) : (
+          <pre style={{ margin: 0, padding: 8 }}>{toYAML(v)}</pre>
+        )}
+      </div>
+    );
+  }
+  // json with fallback warning if not parseable
+  let jsonStr = '';
+  let jsonParseFailed = false;
+  try {
+    jsonStr = toJSONStable(content);
+    // If content was non-JSON string, toJSONStable returns the same string; detect by a quick parse attempt
+    JSON.parse(jsonStr);
+  } catch {
+    jsonParseFailed = true;
+  }
+  const editorLang = jsonParseFailed ? 'plaintext' : 'json';
+  const editorValue = jsonParseFailed ? String(content) : jsonStr;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {jsonParseFailed && (
+        <div style={{ color: '#8a6d3b', background: '#fcf8e3', border: '1px solid #faebcc', borderRadius: 4, padding: '4px 6px', fontSize: 11 }}>
+          Not valid JSON; showing raw string
+        </div>
+      )}
+      <div style={{ ...baseStyle, padding: 0 }}>
+        {typeof window !== 'undefined' ? (
+          <MonacoEditor
+            height="240px"
+            defaultLanguage={editorLang}
+            value={editorValue}
+            theme="vs-light"
+            options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, wordWrap: 'on', scrollBeyondLastLine: false }}
+          />
+        ) : (
+          <pre style={{ margin: 0, padding: 8 }}>{editorValue}</pre>
+        )}
       </div>
     </div>
   );
@@ -763,6 +933,7 @@ function SummarizeIO({ span }: { span: SpanDoc }) {
             }}
           >
             {summary ? (
+              <div className="obs-md" data-testid="obs-md">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -794,6 +965,7 @@ function SummarizeIO({ span }: { span: SpanDoc }) {
               >
                 {summary}
               </ReactMarkdown>
+              </div>
             ) : (
               <span style={{ color: '#666' }}>(no summary)</span>
             )}
@@ -938,50 +1110,66 @@ function CollapsibleToolCall({ toolCall }: { toolCall: LocalToolCall }) {
   );
 }
 
-// Renders tool input JSON using monaco editor (read-only)
-function ToolInputViewer({ span }: { span: SpanDoc }) {
-  const inputValue = useMemo(() => {
-    const attrs = (span.attributes || {}) as Record<string, unknown>;
-    const toolObj = attrs['tool'] as Record<string, unknown> | undefined;
-    const outputObj = attrs['output'] as Record<string, unknown> | undefined;
-    const input =
-      (attrs['input'] !== undefined ? attrs['input'] : undefined) ??
-      (attrs['args'] !== undefined ? attrs['args'] : undefined) ??
-      (toolObj && toolObj['input']) ??
-      (outputObj && outputObj['input']);
-    if (input == null) return '// (no input)';
-    if (typeof input === 'string') {
-      // If already JSON string try to pretty format
-      try {
-        return JSON.stringify(JSON.parse(input), null, 2);
-      } catch {
-        return input;
-      }
-    }
-    try {
-      return JSON.stringify(input, null, 2);
-    } catch {
-      return String(input);
-    }
-  }, [span.attributes]);
-
+// Renders tool input using monaco editor (read-only)
+function ToolInputViewer({ span, language, value }: { span: SpanDoc; language: 'json' | 'yaml'; value: string }) {
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1, minHeight: 200, border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden' }}>
-        <MonacoEditor
-          height="100%"
-          defaultLanguage="json"
-          value={inputValue}
-          theme="vs-light"
-          options={{
-            readOnly: true,
-            minimap: { enabled: false },
-            fontSize: 12,
-            scrollBeyondLastLine: false,
-            wordWrap: 'on',
-          }}
-        />
-      </div>
+      <ToolInputContent language={language} value={value} />
     </div>
   );
 }
+
+function ToolInputContent({ language, value }: { language: 'json' | 'yaml'; value: string }) {
+  // For JSON mode, detect invalid JSON string to show warning and fallback to plaintext editor
+  if (language === 'json') {
+    let jsonParseFailed = false;
+    try {
+      JSON.parse(value);
+    } catch {
+      jsonParseFailed = true;
+    }
+    const editorLang = jsonParseFailed ? 'plaintext' : 'json';
+    const editorValue = value;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {jsonParseFailed && (
+          <div style={{ color: '#8a6d3b', background: '#fcf8e3', border: '1px solid #faebcc', borderRadius: 4, padding: '4px 6px', fontSize: 11 }}>
+            Not valid JSON; showing raw string
+          </div>
+        )}
+        <div style={{ flex: 1, minHeight: 200, border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden' }}>
+          {typeof window !== 'undefined' ? (
+            <MonacoEditor
+              height="100%"
+              defaultLanguage={editorLang}
+              value={editorValue}
+              theme="vs-light"
+              options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false, wordWrap: 'on' }}
+            />
+          ) : (
+            <pre style={{ margin: 0, padding: 8 }}>{editorValue}</pre>
+          )}
+        </div>
+      </div>
+    );
+  }
+  // YAML mode
+  return (
+    <div style={{ flex: 1, minHeight: 200, border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden' }}>
+      {typeof window !== 'undefined' ? (
+        <MonacoEditor
+          height="100%"
+          defaultLanguage="yaml"
+          value={value}
+          theme="vs-light"
+          options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false, wordWrap: 'on' }}
+        />
+      ) : (
+        <pre style={{ margin: 0, padding: 8 }}>{value}</pre>
+      )}
+    </div>
+  );
+}
+// IO view modes (component-local types)
+type InputMode = 'json' | 'yaml';
+type OutputMode = 'md' | 'json' | 'yaml' | 'terminal';

@@ -34,7 +34,7 @@ export function RightPropertiesPanel({ node, onChange }: Props) {
   return <RightPropertiesPanelBody node={node} onChange={onChange} />;
 }
 
-function RightPropertiesPanelBody({ node, onChange }: Props) {
+function RightPropertiesPanelBody({ node, onChange }: { node: Node<BuilderPanelNodeData>; onChange: (id: string, data: Partial<BuilderPanelNodeData>) => void }) {
   const { templates } = useTemplates();
   const runtimeTemplates = useTemplatesCache();
 
@@ -155,7 +155,10 @@ function RightPropertiesPanelBody({ node, onChange }: Props) {
       )}
       {data.template === 'containerProvider' && (
         <div className="space-y-2">
-          <NixPackagesSection />
+          <NixPackagesSection
+            config={cfg}
+            onUpdateConfig={(next) => update({ config: next })}
+          />
         </div>
       )}
       {staticErrors.length > 0 && (

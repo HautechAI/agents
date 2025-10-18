@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input } from '@hautech/ui';
+import type { ContainerNixConfig, NixPackageSelection } from './types';
 import { useQuery } from '@tanstack/react-query';
 import type { NixChannel, NixSearchItem } from '@/services/nix';
 import { CHANNELS, fetchPackageVersion, mergeChannelSearchResults, searchPackages } from '@/services/nix';
@@ -21,11 +22,94 @@ type SelectedPkg = {
 
 //
 
-export function NixPackagesSection() {
+type ControlledProps = { value: NixPackageSelection[]; onChange: (next: NixPackageSelection[]) => void };
+type ConfigWithNix = Record<string, unknown> & { nix?: ContainerNixConfig };
+type UncontrolledProps = { config: ConfigWithNix; onUpdateConfig: (next: Record<string, unknown>) => void };
+
+export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selected, setSelected] = useState<SelectedPkg[]>([]);
+  // Track chosen channel per attr
+  const [channelsByAttr, setChannelsByAttr] = useState<Record<string, NixChannel | ''>>({});
+  const lastPushedJson = useRef<string>('');
+
+  // Initialize from existing config.nix.packages when mounting or when config changes externally
+  const isControlled = (p: ControlledProps | UncontrolledProps): p is ControlledProps => 'value' in p && 'onChange' in p;
+  const toStableKey = (arr: NixPackageSelection[] | undefined) => JSON.stringify(arr ?? []);
+  // Stable discriminants derived from props to satisfy hooks deps
+  const controlled = isControlled(props);
+  const controlledValueKey = controlled ? toStableKey((props as ControlledProps).value) : '';
+  const uncontrolledPkgsKey = controlled ? '' : toStableKey((props as UncontrolledProps).config.nix?.packages);
+  useEffect(() => {
+    if (controlled) {
+      const curr = (((props as ControlledProps).value) || []).filter((p) => p && typeof p.attr === 'string');
+      const nextSelected: SelectedPkg[] = curr.map((p) => ({ attr: p.attr, pname: p.pname }));
+      setSelected((prev) => {
+        const prevKey = JSON.stringify(prev);
+        const nextKey = JSON.stringify(nextSelected);
+        return prevKey === nextKey ? prev : nextSelected;
+      });
+      setChannelsByAttr((prev) => {
+        const next: Record<string, NixChannel | ''> = { ...prev };
+        for (const p of curr) {
+          if (p.channel) next[p.attr] = p.channel;
+        }
+        return next;
+      });
+    } else {
+      const conf = (props as UncontrolledProps).config as ConfigWithNix;
+      const rawPkgs = conf.nix?.packages ?? [];
+      const curr = (rawPkgs as NixPackageSelection[]).filter((p) => p && typeof p.attr === 'string');
+      const nextSelected: SelectedPkg[] = curr.map((p) => ({ attr: p.attr, pname: p.pname }));
+      setSelected((prev) => {
+        const prevKey = JSON.stringify(prev);
+        const nextKey = JSON.stringify(nextSelected);
+        return prevKey === nextKey ? prev : nextSelected;
+      });
+      setChannelsByAttr((prev) => {
+        const next: Record<string, NixChannel | ''> = { ...prev };
+        for (const p of curr) {
+          if (p.channel) next[p.attr] = p.channel;
+        }
+        return next;
+      });
+    }
+  }, [controlled, controlledValueKey, uncontrolledPkgsKey]);
+
+  // Push updates into node config when selections/channels change
+  useEffect(() => {
+    // Build packages array only for items with a chosen channel
+    const packages = selected
+      .map((p) => {
+        const ch = channelsByAttr[p.attr] || '';
+        if (!ch) return null;
+        return { attr: p.attr, pname: p.pname, channel: ch } as { attr: string; pname?: string; channel: NixChannel };
+      })
+      .filter(Boolean) as Array<{ attr: string; pname?: string; channel: NixChannel }>;
+
+    if (controlled) {
+      const next: NixPackageSelection[] = packages.map((p) => ({ attr: p.attr, pname: p.pname, channel: p.channel }));
+      // Avoid reentrancy loops; compare shallow JSON
+      const json = JSON.stringify(next);
+      if (json !== lastPushedJson.current) {
+        lastPushedJson.current = json;
+        (props as ControlledProps).onChange(next);
+      }
+    } else {
+      const conf = (props as UncontrolledProps).config as ConfigWithNix;
+      const next: Record<string, unknown> = {
+        ...conf,
+        nix: { ...(conf.nix ?? {}), packages },
+      };
+      const json = JSON.stringify(next);
+      if (json !== lastPushedJson.current) {
+        lastPushedJson.current = json;
+        (props as UncontrolledProps).onUpdateConfig(next);
+      }
+    }
+  }, [selected, channelsByAttr, controlled, controlledValueKey, uncontrolledPkgsKey]);
   const listboxRef = useRef<HTMLUListElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -80,7 +164,13 @@ export function NixPackagesSection() {
     inputRef.current?.focus();
   };
 
-  const removeSelected = (attr: string) => setSelected((prev) => prev.filter((p) => p.attr !== attr));
+  const removeSelected = (attr: string) => {
+    setSelected((prev) => prev.filter((p) => p.attr !== attr));
+    setChannelsByAttr((prev) => {
+      const { [attr]: _omit, ...rest } = prev;
+      return rest;
+    });
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen || suggestions.length === 0) return;
@@ -171,7 +261,13 @@ export function NixPackagesSection() {
       {selected.length > 0 && (
         <ul className="space-y-2" aria-label="Selected Nix packages">
           {selected.map((p) => (
-            <SelectedPackageItem key={p.attr} pkg={p} onRemove={() => removeSelected(p.attr)} />
+            <SelectedPackageItem
+              key={p.attr}
+              pkg={p}
+              chosen={channelsByAttr[p.attr] || ''}
+              onChoose={(ch) => setChannelsByAttr((prev) => ({ ...prev, [p.attr]: ch }))}
+              onRemove={() => removeSelected(p.attr)}
+            />
           ))}
         </ul>
       )}
@@ -179,8 +275,13 @@ export function NixPackagesSection() {
   );
 }
 
-function SelectedPackageItem({ pkg, onRemove }: { pkg: { attr: string; pname?: string }; onRemove: () => void }) {
-  const [chosen, setChosen] = useState<NixChannel | ''>('');
+// Bubble updates to config when either selection list or channels change
+// Done outside of return to avoid re-creating effect per SelectedPackageItem
+// Compute and push updated config.nix.packages
+// Note: debounce not required; builder autosave already debounces
+export default NixPackagesSection;
+
+function SelectedPackageItem({ pkg, chosen, onChoose, onRemove }: { pkg: { attr: string; pname?: string }; chosen: NixChannel | ''; onChoose: (ch: NixChannel | '') => void; onRemove: () => void }) {
   const qUnstable = useQuery({
     queryKey: ['nix', 'version', pkg.attr, 'nixpkgs-unstable'],
     queryFn: ({ signal }) => fetchPackageVersion({ attr: pkg.attr }, 'nixpkgs-unstable', signal),
@@ -212,7 +313,7 @@ function SelectedPackageItem({ pkg, onRemove }: { pkg: { attr: string; pname?: s
         onChange={(e) => {
           const v = e.target.value;
           const isChannel = (x: string): x is NixChannel => (CHANNELS as readonly string[]).includes(x);
-          setChosen(v === '' ? '' : isChannel(v) ? v : '');
+          onChoose(v === '' ? '' : isChannel(v) ? v : '');
         }}
       >
         <option value="">Select version…</option>
@@ -229,4 +330,4 @@ function SelectedPackageItem({ pkg, onRemove }: { pkg: { attr: string; pname?: s
   );
 }
 
-export default NixPackagesSection;
+// End of component file
