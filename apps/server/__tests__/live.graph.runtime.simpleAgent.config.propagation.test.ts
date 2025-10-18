@@ -1,10 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
+import type { GraphDefinition } from '../src/graph/types';
 import { buildTemplateRegistry } from '../src/templates';
 import { LoggerService } from '../src/services/logger.service';
 import { ContainerService } from '../src/services/container.service';
 import { ConfigService } from '../src/services/config.service';
 import { CheckpointerService } from '../src/services/checkpointer.service';
+import type { MongoService } from '../src/services/mongo.service';
 
 // Avoid any real network calls by ensuring ChatOpenAI token counting/invoke are not used in this test.
 // We don't invoke the graph; we only verify propagation of config to internal nodes/fields.
@@ -30,8 +32,8 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
       async putWrites() {},
       getNextVersion() { return '1'; },
     });
-    const mongoService = { getDb: () => ({} as any) } as any;
-    const registry = buildTemplateRegistry({ logger, containerService, configService, checkpointerService, mongoService });
+    const mongoService = { getDb: () => ({} as any) } satisfies Pick<MongoService, 'getDb'>;
+    const registry = buildTemplateRegistry({ logger, containerService, configService, checkpointerService, mongoService: mongoService as unknown as MongoService });
     const runtime = new LiveGraphRuntime(logger, registry);
     return { runtime };
   }
@@ -45,7 +47,7 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
     const restrict = true;
     const restrictionMessage = 'Always call a tool first.';
 
-    const graph1 = {
+    const graph1: GraphDefinition = {
       nodes: [
         {
           id: 'agent',
@@ -62,12 +64,11 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
           },
         },
       ],
-      edges: [] as any[],
+      edges: [],
     };
 
-    await runtime.apply(graph1 as any);
+    await runtime.apply(graph1);
     const agent: any = runtime.getNodeInstance('agent');
-    expect(agent).toBeDefined();
 
     // Validate propagation into internal nodes/fields
     expect((agent as any).callModelNode?.['systemPrompt']).toBe(systemPrompt);
@@ -80,7 +81,7 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
     // Update config live and re-apply
     const newSystemPrompt = 'You are Even Stricter.';
     const newModel = 'gpt-9x-test';
-    const graph2 = {
+    const graph2: GraphDefinition = {
       nodes: [
         {
           id: 'agent',
@@ -97,14 +98,13 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
           },
         },
       ],
-      edges: [] as any[],
+      edges: [],
     };
 
-    await runtime.apply(graph2 as any);
+    await runtime.apply(graph2);
     const agent2: any = runtime.getNodeInstance('agent');
     expect(agent2).toBe(agent); // same instance should be updated, not recreated
     expect((agent2 as any).callModelNode?.['systemPrompt']).toBe(newSystemPrompt);
     expect((agent2 as any).llm?.['model']).toBe(newModel);
   });
 });
-

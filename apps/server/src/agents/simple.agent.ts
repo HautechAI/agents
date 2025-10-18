@@ -111,9 +111,9 @@ export class SimpleAgent extends BaseAgent {
 
   // Lifecycle/config propagation helpers
   private lifecycleStarted = false;
-  private lifecycleConfigSnapshot: Record<string, unknown> = {};
+  private lifecycleConfigSnapshot: Partial<SimpleAgentStaticConfig> = {};
   // Allowed config keys for propagation; keep in sync with setConfig filtering
-  private static readonly allowedConfigKeys = [
+  private static readonly allowedConfigKeysArray = [
     'title',
     'model',
     'systemPrompt',
@@ -125,7 +125,10 @@ export class SimpleAgent extends BaseAgent {
     'restrictOutput',
     'restrictionMessage',
     'restrictionMaxInjections',
-  ] as const;
+  ] as const satisfies readonly (keyof SimpleAgentStaticConfig)[];
+  private static readonly allowedConfigKeys = new Set<typeof SimpleAgent.allowedConfigKeysArray[number]>(
+    SimpleAgent.allowedConfigKeysArray,
+  );
 
   constructor(
     private configService: ConfigService,
@@ -456,23 +459,22 @@ export class SimpleAgent extends BaseAgent {
   setConfig(config: Partial<SimpleAgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
     // Filter to known keys and validate without letting defaults write missing keys
-    const filtered = Object.fromEntries(
-      Object.entries(config).filter(([k]) => SimpleAgent.allowedConfigKeys.includes(k as any)),
+    const filteredEntries = Object.entries(config).filter(([k]) =>
+      SimpleAgent.allowedConfigKeys.has(k as (typeof SimpleAgent.allowedConfigKeysArray)[number]),
     );
-    const parsedConfig = SimpleAgentStaticConfigSchema.partial().passthrough().parse(filtered) as Partial<
-      SimpleAgentStaticConfig
-    >;
+    const filtered = Object.fromEntries(filteredEntries) as Partial<SimpleAgentStaticConfig> & Record<string, unknown>;
+    const parsedConfig = SimpleAgentStaticConfigSchema.partial().parse(filtered) as Partial<SimpleAgentStaticConfig>;
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
     // Only update fields that were explicitly provided by caller
-    if ('systemPrompt' in filtered) {
+    if (Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt')) {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt as string);
       this.loggerService.info('SimpleAgent system prompt updated');
     }
 
-    if ('model' in filtered) {
+    if (Object.prototype.hasOwnProperty.call(filtered, 'model')) {
       // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
       this.llm.model = parsedConfig.model as string;
       this.loggerService.info(`SimpleAgent model updated to ${parsedConfig.model}`);
@@ -510,10 +512,13 @@ export class SimpleAgent extends BaseAgent {
     }
 
     // Apply restriction-related config without altering system prompt
-    if ('restrictOutput' in filtered) this.restrictOutput = !!parsedConfig.restrictOutput;
-    if ('restrictionMessage' in filtered && parsedConfig.restrictionMessage !== undefined)
+    if (Object.prototype.hasOwnProperty.call(filtered, 'restrictOutput')) this.restrictOutput = !!parsedConfig.restrictOutput;
+    if (Object.prototype.hasOwnProperty.call(filtered, 'restrictionMessage') && parsedConfig.restrictionMessage !== undefined)
       this.restrictionMessage = parsedConfig.restrictionMessage;
-    if ('restrictionMaxInjections' in filtered && parsedConfig.restrictionMaxInjections !== undefined)
+    if (
+      Object.prototype.hasOwnProperty.call(filtered, 'restrictionMaxInjections') &&
+      parsedConfig.restrictionMaxInjections !== undefined
+    )
       this.restrictionMaxInjections = parsedConfig.restrictionMaxInjections;
   }
 
@@ -521,8 +526,10 @@ export class SimpleAgent extends BaseAgent {
   configure(cfg: Record<string, unknown>): void {
     // Keep only allowed keys; do not inject defaults; store snapshot for start() and diff updates
     const incoming = Object.fromEntries(
-      Object.entries(cfg || {}).filter(([k]) => SimpleAgent.allowedConfigKeys.includes(k as any)),
-    );
+      Object.entries(cfg || {}).filter(([k]) =>
+        SimpleAgent.allowedConfigKeys.has(k as (typeof SimpleAgent.allowedConfigKeysArray)[number]),
+      ),
+    ) as Partial<SimpleAgentStaticConfig> & Record<string, unknown>;
     if (!this.lifecycleStarted) {
       // Before start: replace snapshot
       this.lifecycleConfigSnapshot = { ...incoming };
@@ -533,7 +540,7 @@ export class SimpleAgent extends BaseAgent {
     const prev = this.lifecycleConfigSnapshot;
     let changed = false;
     for (const [k, v] of Object.entries(incoming)) {
-      const before = (prev as any)[k];
+      const before = (prev as Partial<SimpleAgentStaticConfig> & Record<string, unknown>)[k];
       const same = JSON.stringify(before) === JSON.stringify(v);
       if (!same) {
         delta[k] = v;
