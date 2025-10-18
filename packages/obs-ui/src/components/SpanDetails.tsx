@@ -400,7 +400,14 @@ export function SpanDetails({
               <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', height: '100%', minHeight: 0 }}>
                 {/* Left Column: Input / Context */}
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: 13 }}>{isToolSpan ? 'Input' : 'Context'}</h3>
+                  {(() => {
+                    const id = isToolSpan ? 'obsui-input-heading' : 'obsui-context-heading';
+                    return (
+                      <h3 id={id} style={{ margin: '0 0 8px 0', fontSize: 13 }}>
+                        {isToolSpan ? 'Input' : 'Context'}
+                      </h3>
+                    );
+                  })()}
                   {isToolSpan && (
                     <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                       <ModeSelect
@@ -411,7 +418,11 @@ export function SpanDetails({
                       />
                     </div>
                   )}
-                  <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <section
+                    role="region"
+                    aria-labelledby={isToolSpan ? 'obsui-input-heading' : 'obsui-context-heading'}
+                    style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}
+                  >
                     {isToolSpan && (
                       <ToolInputViewer span={span} language={inputMode} value={formatToolInput(span, inputMode)} />
                     )}
@@ -472,7 +483,7 @@ export function SpanDetails({
                                   </span>
                                 )}
                             </div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                            <div className="obs-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
                               <ReactMarkdown
                                 className="obs-md"
                                 remarkPlugins={[remarkGfm]}
@@ -547,7 +558,7 @@ export function SpanDetails({
                                       </span>
                                     )}
                                 </div>
-                                <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                                <div className="obs-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
                                   <ReactMarkdown
                                     className="obs-md"
                                     remarkPlugins={[remarkGfm]}
@@ -641,7 +652,7 @@ export function SpanDetails({
                               </span>
                             )}
                           </div>
-                          <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
+                          <div className="obs-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
                             <ReactMarkdown
                               className="obs-md"
                               remarkPlugins={[remarkGfm]}
@@ -680,25 +691,29 @@ export function SpanDetails({
                           </div>
                         </div>
                       ))}
-                  </div>
+                  </section>
                 </div>
                 {/* Right Column: Output */}
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: 13 }}>Output</h3>
+                  <h3 id="obsui-output-heading" style={{ margin: '0 0 8px 0', fontSize: 13 }}>Output</h3>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                     <ModeSelect
                       label="Output"
-                      modes={[
+                      modes=[
                         { value: 'md', label: 'Markdown' },
                         { value: 'json', label: 'JSON' },
                         { value: 'yaml', label: 'YAML' },
                         { value: 'terminal', label: 'Terminal' },
-                      ]}
+                      ]
                       value={outputMode}
                       onChange={setOutputMode}
                     />
                   </div>
-                  <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <section
+                    role="region"
+                    aria-labelledby="obsui-output-heading"
+                    style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}
+                  >
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Content</div>
                       {renderOutputContent(isLLMSpan ? llmContent : getToolOutput(span), outputMode)}
@@ -714,7 +729,7 @@ export function SpanDetails({
                         </div>
                       </div>
                     )}
-                  </div>
+                  </section>
                 </div>
               </div>
             )}
@@ -902,6 +917,7 @@ function SummarizeIO({ span }: { span: SpanDoc }) {
             }}
           >
             {summary ? (
+              <div className="obs-md" data-testid="obs-md">
               <ReactMarkdown
                 className="obs-md"
                 remarkPlugins={[remarkGfm]}
@@ -934,6 +950,7 @@ function SummarizeIO({ span }: { span: SpanDoc }) {
               >
                 {summary}
               </ReactMarkdown>
+              </div>
             ) : (
               <span style={{ color: '#666' }}>(no summary)</span>
             )}
