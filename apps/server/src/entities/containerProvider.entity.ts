@@ -132,24 +132,26 @@ export class ContainerProviderEntity {
     try { console.debug('[ContainerProviderEntity] lookup labels (workspace)', workspaceLabels); } catch {}
     let container: ContainerEntity | undefined = await this.containerService.findContainerByLabels(workspaceLabels);
 
-    // Back-compat safe fallback: if no labeled workspace found, retry by thread_id only
-    // and exclude any DinD sidecars by inspecting labels before reuse.
+    // Typed fallback: retry by thread_id only and exclude DinD sidecars.
     if (!container) {
       try { console.debug('[ContainerProviderEntity] fallback lookup by thread_id only', labels); } catch {}
       const candidates = await this.containerService.findContainersByLabels(labels);
-      // Fetch candidate labels in parallel, then iterate in original order to preserve selection semantics
-      const labelPromises = candidates.map((c) =>
-        this.containerService
-          .getContainerLabels(c.id)
-          .then((cl) => ({ c, cl }))
-          .catch(() => ({ c, cl: undefined as Record<string, string> | undefined })),
-      );
-      const results = await Promise.all(labelPromises);
-      for (const { c, cl } of results) {
-        // Skip DinD sidecars; allow unlabeled legacy workspaces
-        if (cl?.['hautech.ai/role'] === 'dind') continue;
-        container = c;
-        break;
+      if (Array.isArray(candidates) && candidates.length) {
+        const results = await Promise.all(
+          candidates.map(async (c) => {
+            try {
+              const cl = await this.containerService.getContainerLabels(c.id);
+              return { c, cl };
+            } catch {
+              return { c, cl: undefined as Record<string, string> | undefined };
+            }
+          }),
+        );
+        for (const { c, cl } of results) {
+          if (cl?.['hautech.ai/role'] === 'dind') continue;
+          container = c;
+          break;
+        }
       }
     }
     const DOCKER_HOST_ENV = 'tcp://localhost:2375';
@@ -229,7 +231,7 @@ export class ContainerProviderEntity {
       const DOCKER_HOST_ENV = 'tcp://localhost:2375';
       const DOCKER_MIRROR_URL = this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
       const enableDinD = this.cfg?.enableDinD ?? false;
-      const envMerged = await (async () => {
+      let envMerged = await (async () => {
         const base: Record<string, string> = Array.isArray(this.opts.env)
           ? Object.fromEntries(
               (this.opts.env || [])
@@ -243,6 +245,17 @@ export class ContainerProviderEntity {
         const cfgEnv = this.cfg?.env as Record<string, string> | EnvItem[] | undefined;
         return this.envService.resolveProviderEnv(cfgEnv, undefined, base);
       })();
+      // Inject NIX_CONFIG only when not present and ncps is explicitly enabled and fully configured
+      try {
+        const hasNixConfig = !!envMerged && typeof envMerged === 'object' && 'NIX_CONFIG' in (envMerged as Record<string, string>);
+        const ncpsEnabled = this.configService?.ncpsEnabled === true;
+        const ncpsUrl = this.configService?.ncpsUrl;
+        const ncpsPub = this.configService?.ncpsPublicKey;
+        if (!hasNixConfig && ncpsEnabled && !!ncpsUrl && !!ncpsPub) {
+          const nixConfig = `substituters = ${ncpsUrl} https://cache.nixos.org\ntrusted-public-keys = ${ncpsPub} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=`;
+          envMerged = { ...(envMerged || {}), NIX_CONFIG: nixConfig } as Record<string, string>;
+        }
+      } catch {}
       const normalizedEnv = envMerged as Record<string, string> | undefined;
       container = await this.containerService.start({
         ...this.opts,
