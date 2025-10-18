@@ -25,13 +25,17 @@ function makeSpan(attrs: Record<string, unknown>): SpanDoc {
 }
 
 describe('IO modes', () => {
+  function getLatestByTestId<T extends HTMLElement = HTMLElement>(testId: string): T {
+    const nodes = screen.getAllByTestId(testId) as T[];
+    return nodes[nodes.length - 1];
+  }
   // label-based helpers removed after selector UI change
   it('renders input mode selector (JSON/YAML) and output mode selector', () => {
     const span = makeSpan({ kind: 'tool_call', input: { a: 1 } });
     render(<SpanDetails span={span} spans={[span]} onSelectSpan={() => {}} onClose={() => {}} />);
     // IO tab is active by default for tool span; look for selectors
-    const inputSelect = screen.getByTestId('obsui-select-tool-input') as HTMLSelectElement;
-    const outputSelect = screen.getByTestId('obsui-select-tool-output') as HTMLSelectElement;
+    const inputSelect = getLatestByTestId('obsui-select-tool-input') as HTMLSelectElement;
+    const outputSelect = getLatestByTestId('obsui-select-tool-output') as HTMLSelectElement;
     expect(inputSelect.value).toBe('json');
     expect(outputSelect.value).toBe('md');
 
@@ -49,8 +53,8 @@ describe('IO modes', () => {
 
     const { rerender } = render(<SpanDetails span={s1} spans={[s1]} onSelectSpan={() => {}} onClose={() => {}} />);
 
-    const inputSelect = screen.getByTestId('obsui-select-tool-input') as HTMLSelectElement;
-    const outputSelect = screen.getByTestId('obsui-select-tool-output') as HTMLSelectElement;
+    const inputSelect = getLatestByTestId('obsui-select-tool-input') as HTMLSelectElement;
+    const outputSelect = getLatestByTestId('obsui-select-tool-output') as HTMLSelectElement;
     fireEvent.change(inputSelect, { target: { value: 'yaml' } });
     fireEvent.change(outputSelect, { target: { value: 'json' } });
     expect(inputSelect.value).toBe('yaml');
@@ -58,14 +62,14 @@ describe('IO modes', () => {
 
     rerender(<SpanDetails span={s2} spans={[s2]} onSelectSpan={() => {}} onClose={() => {}} />);
     // Should persist previous selection for tool kind+label
-    expect((screen.getByTestId('obsui-select-tool-input') as HTMLSelectElement).value).toBe('yaml');
-    expect((screen.getByTestId('obsui-select-tool-output') as HTMLSelectElement).value).toBe('json');
+    expect((getLatestByTestId('obsui-select-tool-input') as HTMLSelectElement).value).toBe('yaml');
+    expect((getLatestByTestId('obsui-select-tool-output') as HTMLSelectElement).value).toBe('json');
   });
 
   it('shows warning when switching output to JSON for non-JSON string', () => {
     const span = makeSpan({ kind: 'tool_call', output: { content: 'not json' } });
     render(<SpanDetails span={span} spans={[span]} onSelectSpan={() => {}} onClose={() => {}} />);
-    const outputSelect = screen.getByTestId('obsui-select-tool-output') as HTMLSelectElement;
+    const outputSelect = getLatestByTestId('obsui-select-tool-output') as HTMLSelectElement;
     // switch to JSON mode
     fireEvent.change(outputSelect, { target: { value: 'json' } });
     // warning should appear
