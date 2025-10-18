@@ -3,6 +3,9 @@ import { LoggerService } from '../../services/logger.service';
 import { ShellTool } from '../../tools/shell_command';
 import { ContainerService } from '../../services/container.service';
 import { isExecTimeoutError, ExecIdleTimeoutError } from '../../utils/execTimeout';
+import { ContainerProviderEntity } from '../../entities/containerProvider.entity';
+import { ContainerEntity } from '../../entities/container.entity';
+import type { Mock } from 'vitest';
 
 describe('ShellTool timeout error message', () => {
   it('throws clear timeout error with tail header on exec timeout', async () => {
@@ -15,7 +18,14 @@ describe('ShellTool timeout error message', () => {
       }),
     } as const;
 
-    const provider = { provide: vi.fn(async () => fakeContainer) } as { provide: (t: string) => Promise<typeof fakeContainer> };
+    class FakeContainer extends ContainerEntity {
+      override async exec(_cmd: string | string[], _opts?: unknown): Promise<never> { throw timeoutErr; }
+    }
+    class FakeProvider extends ContainerProviderEntity {
+      constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); }
+      override async provide(_t: string): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); }
+    }
+    const provider = new FakeProvider(logger);
 
     const tool = new ShellTool(undefined, logger);
     tool.setContainerProvider(provider);
@@ -34,7 +44,9 @@ describe('ShellTool timeout error message', () => {
     const logger = new LoggerService();
     const idleErr = new ExecIdleTimeoutError(60000, 'out', 'err');
     const fakeContainer = { exec: vi.fn(async () => { throw idleErr; }) } as const;
-    const provider = { provide: vi.fn(async () => fakeContainer) } as { provide: (t: string) => Promise<typeof fakeContainer> };
+    class FakeContainer extends ContainerEntity { override async exec(): Promise<never> { throw idleErr; } }
+    class FakeProvider extends ContainerProviderEntity { constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); } override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); } }
+    const provider = new FakeProvider(logger);
     const tool = new ShellTool(undefined, logger);
     tool.setContainerProvider(provider);
     await tool.setConfig({});
@@ -48,7 +60,9 @@ describe('ShellTool timeout error message', () => {
     const logger = new LoggerService();
     const idleErr = new (class extends ExecIdleTimeoutError { constructor() { super(12345, 'out', 'err'); } })();
     const fakeContainer = { exec: vi.fn(async () => { throw idleErr; }) } as const;
-    const provider = { provide: vi.fn(async () => fakeContainer) } as { provide: (t: string) => Promise<typeof fakeContainer> };
+    class FakeContainer extends ContainerEntity { override async exec(): Promise<never> { throw idleErr; } }
+    class FakeProvider extends ContainerProviderEntity { constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); } override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); } }
+    const provider = new FakeProvider(logger);
     const tool = new ShellTool(undefined, logger);
     tool.setContainerProvider(provider);
     await tool.setConfig({ idleTimeoutMs: 60000 });
@@ -116,7 +130,7 @@ describe('ContainerService.execContainer killOnTimeout behavior', () => {
       svc.execContainer('cid999', 'echo nope', { timeoutMs: 456 }),
     ).rejects.toThrow(/timed out/);
     // Ensure stop was not called on any container instance
-    const anyStopped = (docker.getContainer as unknown as vi.Mock).mock.results.some((r: any) => r.value.stop.mock.calls.length > 0);
+    const anyStopped = (docker.getContainer as unknown as Mock).mock.results.some((r: any) => r.value.stop.mock.calls.length > 0);
     expect(anyStopped).toBe(false);
     // Optional: verify only one getContainer call (inspect only)
     expect(docker.getContainer).toHaveBeenCalledTimes(1);
@@ -175,14 +189,14 @@ describe('ContainerService.execContainer killOnTimeout behavior', () => {
 describe('ShellTool non-timeout error propagation', () => {
   it('rethrows non-timeout errors', async () => {
     const logger = new LoggerService();
-    const provider = {
-      provide: vi.fn(async () => ({
-        exec: vi.fn(async () => {
-          // Simulate generic error from container.exec
-          throw new Error('Permission denied');
-        }),
-      })),
-    } as { provide: (id: string) => Promise<{ exec: (cmd: string, opts?: unknown) => Promise<never> }> };
+    class FakeContainer extends ContainerEntity {
+      override async exec(): Promise<never> { throw new Error('Permission denied'); }
+    }
+    class FakeProvider extends ContainerProviderEntity {
+      constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); }
+      override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); }
+    }
+    const provider = new FakeProvider(logger);
 
     const tool = new ShellTool(undefined, logger);
     tool.setContainerProvider(provider);

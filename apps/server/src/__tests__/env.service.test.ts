@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EnvService, EnvError, type EnvItem } from '../services/env.service';
+import type { VaultService } from '../services/vault.service';
 
-class FakeVault {
+class FakeVault implements Pick<VaultService, 'isEnabled' | 'getSecret'> {
   constructor(private map: Record<string, string>, private enabled = true) {}
   isEnabled() { return this.enabled; }
   async getSecret(ref: { mount: string; path: string; key: string }): Promise<string | undefined> {
@@ -31,18 +32,20 @@ describe('EnvService', () => {
   });
 
   it('resolveEnvItems: vault disabled error', async () => {
-    const svc = new EnvService({ isEnabled: () => false, getSecret: async () => undefined } as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
+    const vaultStub: Pick<VaultService, 'isEnabled' | 'getSecret'> = { isEnabled: () => false, getSecret: vi.fn(async () => undefined) };
+    const svc = new EnvService(vaultStub as VaultService);
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'secret/x/y', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_unavailable' });
   });
 
   it('resolveEnvItems: invalid vault ref', async () => {
-    const svc = new EnvService({ isEnabled: () => true, getSecret: async () => undefined } as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
+    const vaultStub: Pick<VaultService, 'isEnabled' | 'getSecret'> = { isEnabled: () => true, getSecret: vi.fn(async () => undefined) };
+    const svc = new EnvService(vaultStub as VaultService);
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'bad-ref', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_ref_invalid' });
   });
 
   it('resolveEnvItems: missing secret error', async () => {
     const vault = new FakeVault({}, true);
-    const svc = new EnvService(vault as unknown as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
+    const svc = new EnvService(vault as unknown as VaultService);
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'secret/app/db/PASSWORD', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_secret_missing' });
   });
 
@@ -51,7 +54,7 @@ describe('EnvService', () => {
       'secret/app/db/PASSWORD': 'pw',
       'secret/app/api/TOKEN': 'tok',
     });
-    const svc = new EnvService(vault as unknown as { isEnabled: () => boolean; getSecret: (ref: { mount: string; path: string; key: string }) => Promise<string | undefined> });
+    const svc = new EnvService(vault as unknown as VaultService);
     const res = await svc.resolveEnvItems([
       { key: 'A', value: 'secret/app/db/PASSWORD', source: 'vault' },
       { key: 'B', value: 'secret/app/api/TOKEN', source: 'vault' },
