@@ -8,6 +8,15 @@ const meta = {
   argTypes: {
     variant: { control: 'select', options: ['light', 'dark', 'gradient'] },
     size: { control: { type: 'number', min: 16, max: 512, step: 8 } }
+  },
+  parameters: {
+    backgrounds: {
+      default: 'light',
+      values: [
+        { name: 'light', value: '#ffffff' },
+        { name: 'dark', value: '#0F172A' }
+      ]
+    }
   }
 } satisfies Meta<typeof Logo>;
 
@@ -16,3 +25,15 @@ export type Story = StoryObj<typeof meta>;
 
 export const Basic: Story = {};
 
+export const OnLightBackground: Story = {
+  args: { variant: 'dark' }
+};
+
+export const OnDarkBackground: Story = {
+  args: { variant: 'light' },
+  parameters: { backgrounds: { default: 'dark' } }
+};
+
+export const GradientOnLight: Story = {
+  args: { variant: 'gradient' }
+};
