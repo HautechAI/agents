@@ -61,6 +61,41 @@ export class ContainerCleanupService {
           }
 
           try {
+            // First, stop and remove any DinD sidecars associated with this workspace container
+            try {
+              const sidecars = await this.containers.findContainersByLabels(
+                { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': id },
+                { all: true },
+              );
+              if (Array.isArray(sidecars) && sidecars.length > 0) {
+                const results = await Promise.allSettled(
+                  sidecars.map(async (sc) => {
+                    try {
+                      await sc.stop(5);
+                    } catch (e: unknown) {
+                      const code = (e as { statusCode?: number } | undefined)?.statusCode;
+                      if (code !== 304 && code !== 404 && code !== 409) throw e;
+                    }
+                    try {
+                      await sc.remove(true);
+                      return true;
+                    } catch (e: unknown) {
+                      const code = (e as { statusCode?: number } | undefined)?.statusCode;
+                      if (code !== 404 && code !== 409) throw e;
+                      return false;
+                    }
+                  }),
+                );
+                const scCleaned = results.reduce((acc, r) => acc + (r.status === 'fulfilled' && r.value ? 1 : 0), 0);
+                if (scCleaned > 0) this.logger.info(`ContainerCleanup: removed ${scCleaned} DinD sidecar(s) for ${id}`);
+                const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+                if (rejected.length) {
+                  throw new AggregateError(rejected.map((r) => r.reason), 'One or more sidecar cleanup tasks failed');
+                }
+              }
+            } catch (e) {
+              this.logger.error('ContainerCleanup: error cleaning DinD sidecars', { id, error: e });
+            }
             // Try graceful stop then remove (handle benign errors)
             try {
               await this.containers.stopContainer(id, 10);
