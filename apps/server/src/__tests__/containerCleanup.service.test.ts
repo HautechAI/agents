@@ -144,7 +144,6 @@ describe('ContainerCleanupService', () => {
     // Restore for other tests
     process.env.CONTAINERS_CLEANUP_ENABLED = 'true';
   });
-});
 
   it('removes associated DinD sidecars before workspace removal', async () => {
     if (!setupOk) return;
@@ -172,3 +171,4 @@ describe('ContainerCleanupService', () => {
     expect(doc?.status).toBe('stopped');
     expect(sidecarOps).toEqual(expect.arrayContaining(['sc1.stop','sc1.remove','sc2.stop','sc2.remove']));
   });
+});
