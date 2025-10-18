@@ -29,6 +29,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
   const [selected, setSelected] = useState<SelectedPkg[]>([]);
   const [versionsByName, setVersionsByName] = useState<Record<string, string | ''>>({});
   const lastPushedJson = useRef<string>('');
+  const lastPushedPackagesLen = useRef<number>(0);
 
   // Initialize from existing config.nix.packages when mounting or when config changes externally
   const isControlled = (p: ControlledProps | UncontrolledProps): p is ControlledProps => 'value' in p && 'onChange' in p;
@@ -78,12 +79,18 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
     });
     // No debug logs in production
 
+    // Skip no-op early pushes when there are no chosen versions and nothing was previously pushed
+    if (packages.length === 0 && lastPushedPackagesLen.current === 0) {
+      return;
+    }
+
     if (controlled) {
       const next: NixPackageSelection[] = packages;
       // Avoid reentrancy loops; compare shallow JSON
       const json = JSON.stringify(next);
       if (json !== lastPushedJson.current) {
         lastPushedJson.current = json;
+        lastPushedPackagesLen.current = packages.length;
         (props as ControlledProps).onChange(next);
       }
     } else {
@@ -95,6 +102,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
       const json = JSON.stringify(next);
       if (json !== lastPushedJson.current) {
         lastPushedJson.current = json;
+        lastPushedPackagesLen.current = packages.length;
         (props as UncontrolledProps).onUpdateConfig(next);
       }
     }

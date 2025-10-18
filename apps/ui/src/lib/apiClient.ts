@@ -51,7 +51,18 @@ export function getApiBase(override?: string): string {
   const nodeBase = ne?.API_BASE_URL;
   if (nodeBase) return nodeBase;
 
-  const isVitest = typeof ne?.VITEST === 'string';
+  const isVitest = (() => {
+    try {
+      if (typeof ne?.VITEST === 'string') return true;
+      const im: any = (typeof import.meta !== 'undefined' && (import.meta as any)) || (globalThis as any).importMeta;
+      if (im && typeof im === 'object' && 'vitest' in im) return true;
+      if (typeof (globalThis as any).vitest !== 'undefined') return true;
+      if (typeof (globalThis as any).vi !== 'undefined') return true;
+      return false;
+    } catch {
+      return false;
+    }
+  })();
   if (isVitest) return '';
 
   return 'http://localhost:3010';
