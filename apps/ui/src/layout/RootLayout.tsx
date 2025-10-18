@@ -155,7 +155,7 @@ export function RootLayout() {
         <SidebarContent>
           <SidebarMenu>
             {sections.map((section) => (
-              <Collapsible key={section.id} open={section.isOpen} onOpenChange={section.setOpen}>
+              <Collapsible key={section.id} open={section.isOpen || collapsed} onOpenChange={section.setOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <button className="inline-flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/50">
