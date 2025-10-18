@@ -9,6 +9,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   Button,
+  Logo,
   Drawer,
   DrawerTrigger,
   DrawerContent,
@@ -148,7 +149,11 @@ export function RootLayout() {
       <div className="flex h-full flex-col">
         <SidebarHeader className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="font-semibold">Hautech Agents</span>
+            {!collapsed ? (
+              <Logo size={128} variant="light" aria-label="Hautech Agents" />
+            ) : (
+              <Logo size={28} variant="light" aria-label="Hautech Agents" />
+            )}
           </div>
           {/* Removed header expand/collapse icon per spec */}
         </SidebarHeader>
@@ -252,7 +257,7 @@ export function RootLayout() {
             </DrawerContent>
           </Drawer>
           <Separator orientation="vertical" className="h-6" />
-          <div className="font-semibold">Hautech Agents</div>
+          <Logo size={112} variant="dark" aria-label="Hautech Agents" />
         </div>
 
         {/* Main content */}
