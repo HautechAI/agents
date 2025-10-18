@@ -152,8 +152,6 @@ function MessageCard({ message, index }: { message: ContextMessageLike; index: n
       </div>
       <div className="obs-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
         <ReactMarkdown
-          className="obs-md"
-          className="obs-md"
           remarkPlugins={[remarkGfm]}
           components={{
             code({ className, children, ...props }) {
