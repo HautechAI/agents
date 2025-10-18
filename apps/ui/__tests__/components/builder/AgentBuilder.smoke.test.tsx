@@ -49,5 +49,8 @@ describe('AgentBuilder smoke render', () => {
     expect(status).toHaveAttribute('role', 'status');
     // On initial hydration it should be idle/saved -> label should be defined
     expect(status.getAttribute('aria-label')).toBeTruthy();
+
+    // Ensure the removed Fit button is not present
+    expect(screen.queryByText('Fit')).toBeNull();
   });
 });
