@@ -84,7 +84,7 @@ jobs:
         run: pnpm --filter server test
 
   test-ui:
-    name: Test UI (apps/ui + @hautech/obs-ui)
+    name: Test UI
     runs-on: ubuntu-latest
     needs: [lint]
     steps:
@@ -164,7 +164,7 @@ jobs:
         run: pnpm --filter server exec tsc -p tsconfig.json --noEmit
 
   build-ui:
-    name: Build UI (apps/ui + @hautech/obs-ui)
+    name: Build UI
     runs-on: ubuntu-latest
     needs: [test-ui]
     steps:
