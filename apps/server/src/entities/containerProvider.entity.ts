@@ -42,6 +42,23 @@ export const ContainerProviderStaticConfigSchema = z
       .int()
       .default(86400)
       .describe('Idle TTL (seconds) before workspace cleanup; <=0 disables cleanup.'),
+    // Optional Nix metadata (no provisioning behavior change in this PR)
+    nix: z
+      .object({
+        packages: z
+          .array(
+            z
+              .object({
+                attr: z.string(),
+                pname: z.string().optional(),
+                channel: z.string().nullable().optional(),
+              })
+              .strict(),
+          )
+          .default([]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -73,6 +90,23 @@ export const ContainerProviderExposedStaticConfigSchema = z
       .int()
       .default(86400)
       .describe('Idle TTL (seconds) before workspace cleanup; <=0 disables cleanup.'),
+    // Expose Nix metadata for UI/templates
+    nix: z
+      .object({
+        packages: z
+          .array(
+            z
+              .object({
+                attr: z.string(),
+                pname: z.string().optional(),
+                channel: z.string().nullable().optional(),
+              })
+              .strict(),
+          )
+          .default([]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -89,6 +123,7 @@ export class ContainerProviderEntity {
     initialScript?: string;
     enableDinD?: boolean;
     ttlSeconds?: number;
+    nix?: { packages: { attr: string; pname?: string; channel?: string | null }[] };
   };
 
   private vaultService: VaultService | undefined;
@@ -112,14 +147,18 @@ export class ContainerProviderEntity {
 
   // Accept static configuration (image/env/initialScript). Validation performed via zod schema.
   setConfig(cfg: Record<string, unknown>): void {
+    // Let ZodError propagate so runtime can handle unknown-key stripping
+    const parsed = ContainerProviderStaticConfigSchema.parse(cfg);
+    this.cfg = parsed;
+    // Mutate input object to reflect defaults in live config (e.g., nix.packages defaults to [])
     try {
-      const parsed = ContainerProviderStaticConfigSchema.parse(cfg);
-      this.cfg = parsed;
-    } catch (e: unknown) {
-      // If validation fails, surface a clearer error (caller can decide how to handle)
-      const err = e as Error;
-      throw new Error(`Invalid ContainerProvider configuration: ${err.message}`);
-    }
+      if (parsed && typeof parsed === 'object' && 'nix' in parsed) {
+        const n = (parsed as any).nix;
+        if (n && typeof n === 'object') {
+          (cfg as any).nix = { packages: Array.isArray(n.packages) ? n.packages : [] };
+        }
+      }
+    } catch {}
   }
 
   async provide(threadId: string) {
