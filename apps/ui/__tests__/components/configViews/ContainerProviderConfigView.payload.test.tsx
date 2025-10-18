@@ -1,18 +1,21 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@hautech/ui';
 import ContainerProviderConfigView from '@/components/configViews/ContainerProviderConfigView';
 
 describe('ContainerProviderConfigView payload', () => {
   it('emits aligned schema shape', () => {
     let cfg: any = {};
     render(
-      <ContainerProviderConfigView
-        templateName="containerProvider"
-        value={{}}
-        onChange={(v) => (cfg = v)}
-        readOnly={false}
-        disabled={false}
-      />,
+      <TooltipProvider delayDuration={0}>
+        <ContainerProviderConfigView
+          templateName="containerProvider"
+          value={{}}
+          onChange={(v) => (cfg = v)}
+          readOnly={false}
+          disabled={false}
+        />
+      </TooltipProvider>,
     );
     // Query the exact label as in UI
     const img = screen.getByLabelText('Image') as HTMLInputElement;
