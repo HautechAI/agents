@@ -13,7 +13,7 @@ import ReactFlow, {
   SelectionMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { DndProvider, useDrop, useDragLayer } from 'react-dnd';
+import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { DND_ITEM_NODE } from './dnd';
 import type { DragItem } from './dnd';
@@ -200,7 +200,7 @@ function CanvasArea({
         </Popover>
       </div>
       {/* Global custom drag layer for preview */}
-      <BuilderDragLayer containerRef={flowWrapper} />
+      <BuilderDragLayer />
     </div>
   );
 }

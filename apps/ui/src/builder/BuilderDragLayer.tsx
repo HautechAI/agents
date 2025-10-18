@@ -1,9 +1,9 @@
-import React from 'react';
+import type React from 'react';
 import { useDragLayer } from 'react-dnd';
 import type { DragItem } from './dnd';
 
 // Simple card preview that follows cursor while dragging from popover/palette
-export function BuilderDragLayer({ containerRef }: { containerRef: React.RefObject<HTMLElement | null> }) {
+export function BuilderDragLayer() {
   const collected = useDragLayer((monitor) => ({
     item: monitor.getItem() as DragItem | null,
     isDragging: monitor.isDragging(),
@@ -33,4 +33,3 @@ export function BuilderDragLayer({ containerRef }: { containerRef: React.RefObje
     </div>
   );
 }
-

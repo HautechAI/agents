@@ -55,10 +55,9 @@ describe('Popover outside click behavior with/without dragging', () => {
     // Mock react-dnd to report isDragging=true for useDrag to trigger internal isAnyDragging state
     vi.resetModules();
     vi.doMock('react-dnd', async () => {
-      const React = (await import('react')).default;
       return {
         // Provide a pass-through provider
-        DndProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+        DndProvider: ({ children }: { children: any }) => React.createElement(React.Fragment, null, children),
         // useDrop stub: return stable collector and no-op ref
         useDrop: () => [{ isOver: false }, () => {}] as any,
         // useDrag stub: report isDragging=true
