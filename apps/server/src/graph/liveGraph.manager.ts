@@ -554,8 +554,6 @@ export class LiveGraphRuntime {
   private resolveEdgeWithPorts(edge: EdgeDef, sourceTemplate: string, targetTemplate: string) {
     return this.portsRegistry.resolveEdge(edge, sourceTemplate, targetTemplate);
   }
-}
-
   // Stop and delete all live nodes that implement lifecycle; ignore errors and always clear state
   async shutdown(): Promise<void> {
     const nodes = Array.from(this.state.nodes.values());
@@ -564,14 +562,16 @@ export class LiveGraphRuntime {
       nodes.map(async (live) => {
         const inst = live.instance as unknown;
         if (isNodeLifecycle(inst)) {
-          try {
-            await inst.stop();
-          } catch {}
-          try {
-            await inst.delete();
-          } catch {}
+          try { await inst.stop(); } catch {}
+          try { await inst.delete(); } catch {}
         }
-        this.unregisterAllEdgesForNode(live.id);
+        const inbound = this.state.inboundEdges.get(live.id) || new Set<string>();
+        const outbound = this.state.outboundEdges.get(live.id) || new Set<string>();
+        const all = new Set<string>([...inbound, ...outbound]);
+        for (const key of all) {
+          const rec = this.state.executedEdges.get(key);
+          if (rec) this.unregisterEdgeRecord(rec);
+        }
         this.state.nodes.delete(live.id);
         this.state.inboundEdges.delete(live.id);
         this.state.outboundEdges.delete(live.id);
@@ -579,3 +579,5 @@ export class LiveGraphRuntime {
     );
     this.state.executedEdges.clear();
   }
+
+}
