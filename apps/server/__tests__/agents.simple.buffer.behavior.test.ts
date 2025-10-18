@@ -66,6 +66,7 @@ describe('SimpleAgent buffer behavior', () => {
     });
     const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as LoggerService;
     const agent = new SimpleAgent(cfg, logger as any, new CheckpointerService(new LoggerService()) as any, 'agent-deb');
+    await agent.start();
     agent.setConfig({ debounceMs: 50, processBuffer: 'allTogether' });
 
     const p1 = agent.invoke('td', { content: 'a', info: {} });
@@ -91,6 +92,7 @@ describe('SimpleAgent buffer behavior', () => {
     });
     const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as LoggerService;
     const agent = new SimpleAgent(cfg, logger as any, new CheckpointerService(new LoggerService()) as any, 'agent-one');
+    await agent.start();
     agent.setConfig({ processBuffer: 'oneByOne' });
     const msgs: TriggerMessage[] = [
       { content: 'a', info: {} },
@@ -110,6 +112,7 @@ describe('SimpleAgent buffer behavior', () => {
     });
     const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as LoggerService;
     const agent = new SimpleAgent(cfg, logger as any, new CheckpointerService(new LoggerService()), 'agent-all');
+    await agent.start();
     agent.setConfig({ processBuffer: 'allTogether', debounceMs: 0 });
     const msgs: TriggerMessage[] = [
       { content: 'a', info: {} },
@@ -124,6 +127,7 @@ describe('SimpleAgent buffer behavior', () => {
 
   it("whenBusy='injectAfterTools' injects messages during in-flight run", async () => {
     const agent = makeAgent();
+    await agent.start();
     agent.setConfig({ whenBusy: 'injectAfterTools', debounceMs: 0 });
     // Kick off a run with one message
     const p = agent.invoke('t2', { content: 'start', info: {} });

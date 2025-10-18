@@ -17,6 +17,7 @@ describe('SimpleAgent config restrictions', () => {
       githubAppId: '1', githubAppPrivateKey: 'k', githubInstallationId: 'i', openaiApiKey: 'x', githubToken: 't', mongodbUrl: 'm',
     } as any);
     const agent = new SimpleAgent(cfg, new LoggerService(), new CheckpointerService(new LoggerService()) as any, 'a1');
+    await agent.start();
     // Update system prompt
     agent.setConfig({ systemPrompt: 'Base system' });
     // Toggle restriction flags

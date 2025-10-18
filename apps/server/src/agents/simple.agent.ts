@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { EnforceRestrictionNode } from '../lgnodes/enforceRestriction.lgnode';
 import { stringify as toYaml } from 'yaml';
 import { buildMcpToolError } from '../mcp/errorUtils';
+import type { NodeLifecycle } from '../nodes/types';
 
 /**
  * Zod schema describing static configuration for SimpleAgent.
@@ -90,24 +91,35 @@ export const SimpleAgentStaticConfigSchema = z
   .strict();
 
 export type SimpleAgentStaticConfig = z.infer<typeof SimpleAgentStaticConfigSchema>;
-export class SimpleAgent extends BaseAgent {
-  private callModelNode!: CallModelNode;
-  private toolsNode!: ToolsNode;
+export class SimpleAgent extends BaseAgent implements NodeLifecycle<Partial<SimpleAgentStaticConfig>> {
+  private callModelNode?: CallModelNode;
+  private toolsNode?: ToolsNode;
   // Track tools registered per MCP server so we can remove them on detachment
   private mcpServerTools: Map<McpServer, BaseTool[]> = new Map();
   // Persist the underlying ChatOpenAI instance so we can update its model dynamically
-  private llm!: ChatOpenAI;
+  private llm?: ChatOpenAI;
 
   private summarizationKeepTokens?: number; // token budget for verbatim tail
   private summarizationMaxTokens?: number;
-  private summarizeNode!: SummarizationNode;
-  private enforceNode!: EnforceRestrictionNode;
+  private summarizeNode?: SummarizationNode;
+  private enforceNode?: EnforceRestrictionNode;
 
   // Restriction config (static-config driven)
   private restrictOutput: boolean = false;
   private restrictionMessage: string =
     "Do not produce a final answer directly. Before finishing, call a tool. If no tool is needed, call the 'finish' tool.";
   private restrictionMaxInjections: number = 0; // 0 = unlimited per turn
+
+  // Lifecycle state
+  private _started = false;
+  private _deleted = false;
+  private _configuredSnapshot: Record<string, unknown> | undefined;
+  // Buffers for pre-start wiring
+  private _pendingTools: BaseTool[] = [];
+  private _pendingMemoryConnector: MemoryConnector | undefined;
+  // Cache tool names to avoid repeated init() for dedupe
+  private toolNames: Map<BaseTool, string> = new Map();
+  private toolNameSet: Set<string> = new Set();
 
   constructor(
     private configService: ConfigService,
@@ -116,7 +128,7 @@ export class SimpleAgent extends BaseAgent {
     private agentId?: string,
   ) {
     super(loggerService);
-    this.init();
+    // DI-only constructor; no initialization here. Call configure()/start() explicitly.
   }
 
   // Expose nodeId for instrumentation (used by BaseAgent.withAgent wrapper)
@@ -149,18 +161,41 @@ export class SimpleAgent extends BaseAgent {
     });
   }
 
-  init(config: RunnableConfig = { recursionLimit: 2500 }) {
+  // NodeLifecycle: configure -> start -> stop -> delete
+  async configure(cfg: Partial<SimpleAgentStaticConfig>): Promise<void> {
+    // Merge into existing snapshot, strip unknown keys, and apply live if started
+    const allowed = new Set([
+      'title',
+      'model',
+      'systemPrompt',
+      'debounceMs',
+      'whenBusy',
+      'processBuffer',
+      'summarizationKeepTokens',
+      'summarizationMaxTokens',
+      'restrictOutput',
+      'restrictionMessage',
+      'restrictionMaxInjections',
+    ]);
+    const incoming = Object.fromEntries(Object.entries(cfg || {}).filter(([k]) => allowed.has(k)));
+    this._staticConfig = { ...(this._staticConfig || {}), ...incoming };
+    const snap = JSON.stringify(this._staticConfig || {});
+    if (snap === JSON.stringify(this._configuredSnapshot || {})) return; // idempotent
+    this._configuredSnapshot = JSON.parse(snap);
+    // If already started, apply through setConfig for dynamic updates
+    if (this._started) this.setConfig(incoming as Record<string, unknown>);
+  }
+
+  async start(): Promise<void> {
+    if (this._started || this._deleted) return; // idempotent
     if (!this.agentId) throw new Error('agentId is required to initialize SimpleAgent');
 
-    this._config = config;
+    // Build runtime config
+    this._config = { recursionLimit: 2500 } satisfies RunnableConfig;
 
-    this.llm = new ChatOpenAI({
-      model: 'gpt-5',
-      apiKey: this.configService.openaiApiKey,
-    });
-
+    // Create LLM and nodes
+    this.llm = new ChatOpenAI({ model: 'gpt-5', apiKey: this.configService.openaiApiKey });
     this.callModelNode = new CallModelNode([], this.llm);
-    // Pass this agent's node id to ToolsNode for span attribution
     this.toolsNode = new ToolsNode([], this.agentId);
     this.summarizeNode = new SummarizationNode(this.llm, {
       keepTokens: this.summarizationKeepTokens ?? 0,
@@ -184,28 +219,23 @@ export class SimpleAgent extends BaseAgent {
     );
 
     const builder = new StateGraph(
-      {
-        stateSchema: this.state(),
-      },
+      { stateSchema: this.state() },
       this.configuration(),
     )
       .addNode('summarize', async (state: { messages: BaseMessage[]; summary?: string }) => {
-        const res = await this.summarizeNode.action(state);
+        const res = await this.summarizeNode!.action(state);
         // Reset restriction counters per new turn
         return { ...res, restrictionInjectionCount: 0, restrictionInjected: false };
       })
-      .addNode('call_model', this.callModelNode.action.bind(this.callModelNode))
-      .addNode('tools', this.toolsNode.action.bind(this.toolsNode))
-      .addNode('enforce', this.enforceNode.action.bind(this.enforceNode))
+      .addNode('call_model', this.callModelNode!.action.bind(this.callModelNode))
+      .addNode('tools', this.toolsNode!.action.bind(this.toolsNode))
+      .addNode('enforce', this.enforceNode!.action.bind(this.enforceNode))
       .addEdge(START, 'summarize')
       .addEdge('summarize', 'call_model')
       .addConditionalEdges(
         'call_model',
         (state) => (last(state.messages as AIMessage[])?.tool_calls?.length ? 'tools' : 'enforce'),
-        {
-          tools: 'tools',
-          enforce: 'enforce',
-        },
+        { tools: 'tools', enforce: 'enforce' },
       )
       .addConditionalEdges('enforce', (state) => (state.restrictionInjected === true ? 'call_model' : END), {
         call_model: 'call_model',
@@ -216,21 +246,54 @@ export class SimpleAgent extends BaseAgent {
         summarize: 'summarize',
       });
 
-    // Compile with a plain MongoDBSaver; scoping is handled via configurable.checkpoint_ns
+    // Compile graph
     this._graph = builder.compile({
       checkpointer: this.checkpointerService.getCheckpointer(this.agentId),
     }) as CompiledStateGraph<unknown, unknown>;
 
     // Attach run service if runtime provided one via global. Best effort; no casts.
     try {
-      const runSvc = globalThis.__agentRunsService;
-      if (runSvc) {
-        this.setRunService(runSvc);
-      }
+      const runSvc = globalThis.__agentRunsService as Record<string, unknown> | undefined;
+      if (runSvc) this.setRunService(runSvc as any);
     } catch {}
 
-    // Apply runtime scheduling defaults (debounce=0, whenBusy=wait) already set in BaseAgent; allow overrides from agentId namespace if needed later
-    return this;
+    // Apply any pre-start config via setConfig (scheduling, model, prompt, summarization)
+    if (this._staticConfig && Object.keys(this._staticConfig).length) {
+      this.setConfig(this._staticConfig);
+    }
+
+    // Apply pending memory connector and tools
+    if (this._pendingMemoryConnector) this.callModelNode!.setMemoryConnector(this._pendingMemoryConnector);
+    if (this._pendingTools.length) {
+      for (const t of this._pendingTools) {
+        try { this.callModelNode!.addTool(t); this.toolsNode!.addTool(t); } catch {}
+      }
+      this._pendingTools = [];
+    }
+
+    this._started = true;
+  }
+
+  async stop(): Promise<void> {
+    if (!this._started) return; // idempotent
+    try {
+      await this.destroy();
+    } catch {}
+    // Drop references so a subsequent start() rebuilds cleanly
+    this._graph = undefined;
+    // keep _staticConfig for future restarts
+    this.llm = undefined;
+    this.callModelNode = undefined;
+    this.toolsNode = undefined;
+    this.summarizeNode = undefined;
+    this.enforceNode = undefined;
+    this._started = false;
+  }
+
+  async delete(): Promise<void> {
+    if (this._deleted) return; // idempotent
+    try { await this.stop(); } catch {}
+    this._deleted = true;
   }
 
   // Attach/detach a memory connector into the underlying CallModel
@@ -250,24 +313,51 @@ export class SimpleAgent extends BaseAgent {
         connector = prov.createConnector();
       }
     }
-    this.callModelNode.setMemoryConnector(connector);
+    if (this._started) this.callModelNode!.setMemoryConnector(connector);
+    else this._pendingMemoryConnector = connector;
     this.loggerService.info('SimpleAgent memory connector attached');
   }
   detachMemoryConnector() {
-    this.callModelNode.setMemoryConnector(undefined);
+    if (this._started) this.callModelNode!.setMemoryConnector(undefined);
+    else this._pendingMemoryConnector = undefined;
     this.loggerService.info('SimpleAgent memory connector detached');
+  }
+
+  private getToolName(tool: BaseTool): string {
+    const cached = this.toolNames.get(tool);
+    if (cached) return cached;
+    const dyn = tool.init();
+    const name = dyn.name;
+    this.toolNames.set(tool, name);
+    this.toolNameSet.add(name);
+    return name;
   }
 
   addTool(tool: BaseTool) {
     // using any to avoid circular import issues if BaseTool is extended differently later
-    this.callModelNode.addTool(tool);
-    this.toolsNode.addTool(tool);
+    if (this._started) {
+      this.callModelNode!.addTool(tool);
+      this.toolsNode!.addTool(tool);
+    } else {
+      // Buffer until start()
+      if (!this._pendingTools.includes(tool)) this._pendingTools.push(tool);
+    }
+    // Cache tool name on add for dedupe
+    try { this.getToolName(tool); } catch {}
     this.loggerService.info(`Tool added to SimpleAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
   removeTool(tool: BaseTool) {
-    this.callModelNode.removeTool(tool);
-    this.toolsNode.removeTool(tool);
+    if (this._started) {
+      this.callModelNode!.removeTool(tool);
+      this.toolsNode!.removeTool(tool);
+    } else {
+      this._pendingTools = this._pendingTools.filter((t) => t !== tool);
+    }
+    // Drop from name caches
+    const name = this.toolNames.get(tool);
+    if (name) this.toolNameSet.delete(name);
+    this.toolNames.delete(tool);
     this.loggerService.info(`Tool removed from SimpleAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
@@ -321,8 +411,8 @@ export class SimpleAgent extends BaseAgent {
             },
           );
           const adapted = new LangChainToolAdapter(dynamic, this.loggerService);
-          // Defensive: skip if already present (e.g. if a dynamic sync slipped through).
-          const existingNames = new Set(this.toolsNode.listTools().map((tool) => tool.init().name));
+          // Defensive: skip if already present (use cached names)
+          const existingNames = new Set(this.toolNameSet);
           if (existingNames.has(dynamic.name)) {
             this.loggerService.debug?.(
               `Skipping duplicate MCP tool registration ${dynamic.name} (initial register phase)`,
@@ -333,7 +423,7 @@ export class SimpleAgent extends BaseAgent {
           }
         }
         this.loggerService.info(
-          `Registered ${tools.length} MCP tools for namespace ${namespace}. Total: ${this.toolsNode.listTools().length}`,
+          `Registered ${tools.length} MCP tools for namespace ${namespace}. Total: ${this.toolNameSet.size}`,
         );
         const existing = this.mcpServerTools.get(server) || [];
         this.mcpServerTools.set(server, existing.concat(registered));
@@ -365,7 +455,7 @@ export class SimpleAgent extends BaseAgent {
           const tools: McpTool[] = await server.listTools();
           const desiredNames = new Set(tools.map((t) => `${namespace}_${t.name}`));
           const existing = this.mcpServerTools.get(server) || [];
-          const existingByName = new Map(existing.map((tool) => [tool.init().name, tool]));
+          const existingByName = new Map(existing.map((tool) => [this.getToolName(tool), tool]));
 
           const existingNames = new Set(existingByName.keys());
           const removedNames: string[] = [];
@@ -461,13 +551,13 @@ export class SimpleAgent extends BaseAgent {
     this.applyRuntimeConfig(config);
 
     if (parsedConfig.systemPrompt !== undefined) {
-      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
+      if (this._started && this.callModelNode) this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('SimpleAgent system prompt updated');
     }
 
     if (parsedConfig.model !== undefined) {
       // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
-      this.llm.model = parsedConfig.model;
+      if (this._started && this.llm) this.llm.model = parsedConfig.model;
       this.loggerService.info(`SimpleAgent model updated to ${parsedConfig.model}`);
     }
 
@@ -498,7 +588,7 @@ export class SimpleAgent extends BaseAgent {
     }
 
     if (updates.keepTokens !== undefined || updates.maxTokens !== undefined) {
-      this.summarizeNode.setOptions(updates);
+      if (this._started && this.summarizeNode) this.summarizeNode.setOptions(updates);
       this.loggerService.info('SimpleAgent summarization options updated');
     }
 
@@ -520,11 +610,12 @@ export class SimpleAgent extends BaseAgent {
       }
     }
     this.mcpServerTools.delete(server);
-    // Attempt to call stop/destroy lifecycle if available
-    const anyServer: any = server;
+    // Attempt to call stop/destroy lifecycle if available (refined type)
+    type MaybeDisposable = { destroy?: () => Promise<void> | void; stop?: () => Promise<void> | void };
+    const s = server as unknown as MaybeDisposable;
     try {
-      if (typeof anyServer.destroy === 'function') await anyServer.destroy();
-      else if (typeof anyServer.stop === 'function') await anyServer.stop();
+      if (typeof s.destroy === 'function') await s.destroy();
+      else if (typeof s.stop === 'function') await s.stop();
     } catch (e) {
       const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
       this.loggerService.error(`Error destroying MCP server ${server.namespace}: ${msg}`);
