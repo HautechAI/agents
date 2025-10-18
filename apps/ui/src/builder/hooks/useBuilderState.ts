@@ -101,13 +101,39 @@ export function useBuilderState(
   const selectedNode = useMemo(() => nodes.find((n) => n.selected) ?? null, [nodes]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
-    setNodes((nds) => applyNodeChanges(changes, nds));
-    // Only mark dirty for graph-affecting changes (ignore selection, dimensions)
-    if (
-      changes.some((c) => c.type === 'add' || c.type === 'remove' || c.type === 'position')
-    ) {
-      setDirty(true);
-    }
+    // Determine dirty changes precisely:
+    // - add/remove: always dirty
+    // - position: only when drag ended (dragging === false) or explicit move (dragging === undefined)
+    //   AND the position actually changed compared to previous state.
+    // Ignore selection-only and dimensions/measurement updates.
+    let shouldDirty = false;
+    setNodes((prev) => {
+      const next = applyNodeChanges(changes, prev);
+      for (const c of changes) {
+        if (c.type === 'add' || c.type === 'remove') {
+          shouldDirty = true;
+          break;
+        }
+        if (c.type === 'position') {
+          const dragging = (c as any).dragging;
+          const dragEndedOrExplicit = dragging === false || dragging === undefined;
+          if (!dragEndedOrExplicit) continue; // ignore intermediate drag events
+          const id = (c as any).id as string;
+          const prevNode = prev.find((n) => n.id === id);
+          const nextNode = next.find((n) => n.id === id);
+          if (prevNode && nextNode) {
+            const moved =
+              prevNode.position.x !== nextNode.position.x || prevNode.position.y !== nextNode.position.y;
+            if (moved) {
+              shouldDirty = true;
+              break;
+            }
+          }
+        }
+      }
+      return next;
+    });
+    if (shouldDirty) setDirty(true);
   }, []);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
