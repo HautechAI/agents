@@ -3,7 +3,6 @@ import { Button, Input } from '@hautech/ui';
 import { useQuery } from '@tanstack/react-query';
 import type { NixChannel, NixSearchItem } from '@/services/nix';
 import { CHANNELS, fetchPackageVersion, mergeChannelSearchResults, searchPackages } from '@/services/nix';
-import type { NixPackageSelection } from './types';
 
 // Debounce helper
 function useDebounced<T>(value: T, delay = 300) {
@@ -15,17 +14,18 @@ function useDebounced<T>(value: T, delay = 300) {
   return debounced;
 }
 
-export interface NixPackagesSectionProps {
-  value: NixPackageSelection[];
-  onChange: (next: NixPackageSelection[]) => void;
-  readOnly?: boolean;
-  disabled?: boolean;
-}
+type SelectedPkg = {
+  attr: string;
+  pname?: string;
+};
 
-export function NixPackagesSection({ value, onChange, readOnly, disabled }: NixPackagesSectionProps) {
+//
+
+export function NixPackagesSection() {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [selected, setSelected] = useState<SelectedPkg[]>([]);
   const listboxRef = useRef<HTMLUListElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -49,9 +49,9 @@ export function NixPackagesSection({ value, onChange, readOnly, disabled }: NixP
     const a = qUnstable.data ?? [];
     const b = qStable.data ?? [];
     const merged = mergeChannelSearchResults(a, b);
-    const filtered = merged.filter((m) => !value.some((s) => s.attr === m.attr));
+    const filtered = merged.filter((m) => !selected.some((s) => s.attr === m.attr));
     return filtered.slice(0, 20);
-  }, [qUnstable.data, qStable.data, debouncedQuery, value]);
+  }, [qUnstable.data, qStable.data, debouncedQuery, selected]);
 
   const isSearching = debouncedQuery.trim().length >= 2 && (qUnstable.isFetching || qStable.isFetching);
 
@@ -71,20 +71,16 @@ export function NixPackagesSection({ value, onChange, readOnly, disabled }: NixP
   }, [activeIndex]);
 
   const addSelected = (item: NixSearchItem) => {
-    if (readOnly || disabled) return;
-    const exists = value.find((p) => p.attr === item.attr);
-    const next = exists ? value : [...value, { attr: item.attr, pname: item.pname }];
-    if (next !== value) onChange(next);
+    setSelected((prev) => {
+      if (prev.find((p) => p.attr === item.attr)) return prev;
+      return [...prev, { attr: item.attr, pname: item.pname }];
+    });
     setQuery('');
     setIsOpen(false);
     inputRef.current?.focus();
   };
 
-  const removeSelected = (attr: string) => {
-    if (readOnly || disabled) return;
-    const next = value.filter((p) => p.attr !== attr);
-    onChange(next);
-  };
+  const removeSelected = (attr: string) => setSelected((prev) => prev.filter((p) => p.attr !== attr));
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isOpen || suggestions.length === 0) return;
@@ -125,7 +121,6 @@ export function NixPackagesSection({ value, onChange, readOnly, disabled }: NixP
           aria-haspopup="listbox"
           aria-activedescendant={isOpen ? `nix-opt-${activeIndex}` : undefined}
           aria-label="Search Nix packages"
-          disabled={!!readOnly || !!disabled}
         />
         {isOpen && (
           <ul
@@ -173,21 +168,10 @@ export function NixPackagesSection({ value, onChange, readOnly, disabled }: NixP
         ) : null;
       })()}
 
-      {value.length > 0 && (
+      {selected.length > 0 && (
         <ul className="space-y-2" aria-label="Selected Nix packages">
-          {value.map((p) => (
-            <SelectedPackageItem
-              key={p.attr}
-              pkg={p}
-              onRemove={() => removeSelected(p.attr)}
-              onChannelChange={(ch) => {
-                if (readOnly || disabled) return;
-                const next = value.map((x) => (x.attr === p.attr ? { ...x, channel: ch } : x));
-                onChange(next);
-              }}
-              readOnly={readOnly}
-              disabled={disabled}
-            />
+          {selected.map((p) => (
+            <SelectedPackageItem key={p.attr} pkg={p} onRemove={() => removeSelected(p.attr)} />
           ))}
         </ul>
       )}
@@ -195,20 +179,8 @@ export function NixPackagesSection({ value, onChange, readOnly, disabled }: NixP
   );
 }
 
-function SelectedPackageItem({
-  pkg,
-  onRemove,
-  onChannelChange,
-  readOnly,
-  disabled,
-}: {
-  pkg: { attr: string; pname?: string; channel?: NixChannel | null };
-  onRemove: () => void;
-  onChannelChange: (ch: NixChannel | '' | null) => void;
-  readOnly?: boolean;
-  disabled?: boolean;
-}) {
-  const [chosen, setChosen] = useState<NixChannel | ''>(pkg.channel ?? '');
+function SelectedPackageItem({ pkg, onRemove }: { pkg: { attr: string; pname?: string }; onRemove: () => void }) {
+  const [chosen, setChosen] = useState<NixChannel | ''>('');
   const qUnstable = useQuery({
     queryKey: ['nix', 'version', pkg.attr, 'nixpkgs-unstable'],
     queryFn: ({ signal }) => fetchPackageVersion({ attr: pkg.attr }, 'nixpkgs-unstable', signal),
@@ -240,11 +212,8 @@ function SelectedPackageItem({
         onChange={(e) => {
           const v = e.target.value;
           const isChannel = (x: string): x is NixChannel => (CHANNELS as readonly string[]).includes(x);
-          const next = v === '' ? '' : isChannel(v) ? v : '';
-          setChosen(next);
-          onChannelChange(next === '' ? null : next);
+          setChosen(v === '' ? '' : isChannel(v) ? v : '');
         }}
-        disabled={!!readOnly || !!disabled}
       >
         <option value="">Select version…</option>
         {options.map(({ ch, version, isLoading, isError }) => (
@@ -253,7 +222,7 @@ function SelectedPackageItem({
           </option>
         ))}
       </select>
-      <Button type="button" size="sm" variant="outline" className="text-destructive" aria-label={`Remove ${label}`} onClick={onRemove} disabled={!!readOnly || !!disabled}>
+      <Button type="button" size="sm" variant="outline" className="text-destructive" aria-label={`Remove ${label}`} onClick={onRemove}>
         ×
       </Button>
     </li>
