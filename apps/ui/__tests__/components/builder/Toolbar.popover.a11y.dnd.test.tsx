@@ -46,6 +46,7 @@ describe('Builder toolbar + popover + DnD', () => {
     // Content appears with data-state attributes driving classes (from @hautech/ui wrapper)
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toBeInTheDocument();
+    expect(dialog.getAttribute('data-state')).toBe('open');
   });
 
   it('supports keyboard navigation and insert on Enter', async () => {
@@ -56,10 +57,15 @@ describe('Builder toolbar + popover + DnD', () => {
       </TestProviders>,
     );
     fireEvent.click(await screen.findByTestId('add-node-button'));
-    const listbox = await screen.findByRole('listbox');
+    await screen.findByRole('dialog');
+    const options = await screen.findAllByRole('option');
+    // Ensure real focus is placed on the first option before keyboarding
+    const first = options[0] as HTMLElement;
+    first.focus();
+    expect(first).toHaveFocus();
     // ArrowDown then Enter
-    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
-    fireEvent.keyDown(listbox, { key: 'Enter' });
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    fireEvent.keyDown(first, { key: 'Enter' });
     // After insert, popover transitions to closed state (forceMounted)
     await waitFor(() => {
       const dlg = screen.getByRole('dialog');

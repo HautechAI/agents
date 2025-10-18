@@ -16,6 +16,7 @@ import 'reactflow/dist/style.css';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { DND_ITEM_NODE } from './dnd';
+import type { DragItem } from './dnd';
 import { makeNodeTypes } from './nodeTypes';
 import { TemplatesProvider } from './TemplatesProvider';
 import type { NodeTypes } from 'reactflow';
@@ -61,16 +62,16 @@ function CanvasArea({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [isAnyDragging, setIsAnyDragging] = useState(false);
 
-  const [{ isOver }, dropRef] = useDrop(
+  const [{ isOver }, dropRef] = useDrop<DragItem, { inserted: boolean }, { isOver: boolean }>(
     () => ({
       accept: DND_ITEM_NODE,
-      drop: (item: { template?: string; kind?: string; title?: string }, monitor) => {
+      drop: (item, monitor) => {
         const client = monitor.getClientOffset();
-        if (!client || !flowWrapper.current) return;
+        if (!client || !flowWrapper.current) return undefined;
         const bounds = flowWrapper.current.getBoundingClientRect();
         const position = reactFlow.project({ x: client.x - bounds.left, y: client.y - bounds.top });
-        const templateName = item.template || (item.kind as string);
-        if (!templateName) return;
+        const templateName = item.template; // always use item.template; no legacy fallback
+        if (!templateName) return undefined;
         addNode(templateName, position);
         return { inserted: true };
       },
@@ -188,6 +189,10 @@ function CanvasArea({
                 triggerRef.current?.focus();
               }}
               setAnyDragging={setIsAnyDragging}
+              onRequestClose={() => {
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
             />
           </PopoverContent>
         </Popover>
@@ -201,11 +206,13 @@ function PopoverList({
   onInsert,
   onDropSuccess,
   setAnyDragging,
+  onRequestClose,
 }: {
   templates: TemplateNodeSchema[];
   onInsert: (templateName: string) => void;
   onDropSuccess: () => void;
   setAnyDragging: (dragging: boolean) => void;
+  onRequestClose: () => void;
 }) {
   // Roving focus management
   const [activeIndex, setActiveIndex] = useState(0);
@@ -215,6 +222,12 @@ function PopoverList({
     // Keep refs array length in sync
     itemRefs.current = itemRefs.current.slice(0, templates.length);
   }, [templates.length]);
+
+  // Focus first option when the list appears
+  useEffect(() => {
+    itemRefs.current[activeIndex]?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -227,16 +240,19 @@ function PopoverList({
       const prev = (activeIndex - 1 + templates.length) % templates.length;
       setActiveIndex(prev);
       itemRefs.current[prev]?.focus();
-    } else if (e.key === 'Enter' || e.key === ' ') {
+    } else if (e.key === 'Enter' || e.key === ' ' || e.key === 'Space') {
       e.preventDefault();
       const tpl = templates[activeIndex];
       if (tpl) onInsert(tpl.name);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onRequestClose();
     }
   };
 
   return (
     <ScrollArea className="max-h-[60vh]">
-      <div role="listbox" aria-activedescendant={`tpl-opt-${activeIndex}`} className="flex flex-col gap-1 p-1" onKeyDown={onKeyDown}>
+      <div role="listbox" className="flex flex-col gap-1 p-1" onKeyDown={onKeyDown}>
         {templates.map((tpl, idx) => (
           <ForwardedPopoverListItem
             key={tpl.name}
@@ -247,6 +263,7 @@ function PopoverList({
             onInsert={() => onInsert(tpl.name)}
             onDragStateChange={setAnyDragging}
             onDropSuccess={onDropSuccess}
+            onFocus={() => setActiveIndex(idx)}
           />
         ))}
       </div>
@@ -254,35 +271,52 @@ function PopoverList({
   );
 }
 
+interface PopoverListItemProps {
+  template: TemplateNodeSchema;
+  active: boolean;
+  onInsert: () => void;
+  onDragStateChange: (dragging: boolean) => void;
+  id: string;
+  onDropSuccess: () => void;
+  onFocus?: () => void;
+}
+
+function mergeRefs<T>(...refs: Array<React.Ref<T> | undefined>) {
+  return (value: T) => {
+    for (const ref of refs) {
+      if (!ref) continue;
+      if (typeof ref === 'function') {
+        ref(value);
+      } else {
+        try {
+          // @ts-expect-error - React types allow this at runtime
+          (ref as React.MutableRefObject<T | null>).current = value;
+        } catch {
+          // ignore
+        }
+      }
+    }
+  };
+}
+
 const PopoverListItem = (
-  {
-    template,
-    active,
-    onInsert,
-    onDragStateChange,
-    id,
-  }: {
-    template: TemplateNodeSchema;
-    active: boolean;
-    onInsert: () => void;
-    onDragStateChange: (dragging: boolean) => void;
-    id: string;
-    onDropSuccess: () => void;
-  },
+  { template, active, onInsert, onDragStateChange, id, onDropSuccess, onFocus }: PopoverListItemProps,
   ref: React.Ref<HTMLButtonElement>,
 ) => {
-  const [{ isDragging }, dragRef, dragPreview] = useDrag(
+  const [{ isDragging }, dragRef, dragPreview] = useDrag<DragItem, { inserted: boolean }, { isDragging: boolean }>(
     () => ({
       type: DND_ITEM_NODE,
-      item: { type: 'node-template', template: template.name, title: template.title, kind: template.kind },
+      item: { template: template.name, title: template.title, kind: template.kind },
       collect: (monitor) => ({ isDragging: monitor.isDragging() }),
       end: (_item, monitor) => {
         onDragStateChange(false);
-        const result = monitor.getDropResult() as { inserted?: boolean } | null;
-        if (result?.inserted) onDropSuccess();
+        if (monitor.didDrop()) {
+          const result = monitor.getDropResult<{ inserted: boolean }>();
+          if (result?.inserted) onDropSuccess();
+        }
       },
     }),
-    [template, onDragStateChange],
+    [template, onDragStateChange, onDropSuccess],
   );
   // Report drag start using isDragging to avoid deprecated begin hook
   useEffect(() => {
@@ -300,18 +334,14 @@ const PopoverListItem = (
   }, [dragPreview]);
 
   // Lazy import to avoid top-level dependency; fallback if not available
-  function getEmptyImage(): any {
+  function getEmptyImage(): HTMLImageElement {
     // Minimal 1x1 transparent gif
     const img = new Image();
     img.src = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
     return img;
   }
 
-  const setRef = (el: HTMLButtonElement | null) => {
-    if (el) dragRef(el);
-    if (typeof ref === 'function') ref(el);
-    else if (ref && 'current' in (ref as any)) (ref as any).current = el;
-  };
+  const setRef = mergeRefs<HTMLButtonElement>(ref, dragRef);
 
   return (
     <Card className={`p-0 ${isDragging ? 'opacity-70' : ''}`}>
@@ -320,9 +350,11 @@ const PopoverListItem = (
         ref={setRef}
         role="option"
         aria-selected={active}
+        tabIndex={active ? 0 : -1}
         type="button"
         className="w-full rounded-lg px-3 py-2 text-left outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:border-ring hover:bg-accent hover:text-accent-foreground"
         onClick={onInsert}
+        onFocus={onFocus}
         data-testid={`template-${template.name}`}
       >
         <div className="flex items-center gap-2">
