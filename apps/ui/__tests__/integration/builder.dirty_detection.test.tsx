@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React, { useEffect } from 'react';
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render, waitFor, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './testUtils';
 import { useBuilderState } from '../../src/builder/hooks/useBuilderState';
@@ -51,7 +51,6 @@ describe('Builder dirty detection for graph edits', () => {
   }
 
   it('ignores selection-only changes (no autosave/version bump)', async () => {
-    vi.useFakeTimers();
     const counters = setupServerCounters();
     let api: ReturnType<typeof useBuilderState> | null = null;
 
@@ -61,23 +60,21 @@ describe('Builder dirty detection for graph edits', () => {
       </TestProviders>,
     );
 
-    await waitFor(() => {
-      if (!api) throw new Error('not ready');
-      expect(api.loading).toBe(false);
-    });
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('ready'));
+    // switch to fake timers after hydration only
+    vi.useFakeTimers();
 
     // programmatic selection should not trigger dirty
     const change: NodeChange = { id: 'n1', type: 'select', selected: true };
     api!.onNodesChange([change]);
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(300);
       await Promise.resolve();
     });
     expect(counters.posts).toBe(0);
   });
 
   it('position drag end with no delta is not dirty; real move is dirty', async () => {
-    vi.useFakeTimers();
     const counters = setupServerCounters();
     let api: ReturnType<typeof useBuilderState> | null = null;
 
@@ -87,16 +84,14 @@ describe('Builder dirty detection for graph edits', () => {
       </TestProviders>,
     );
 
-    await waitFor(() => {
-      if (!api) throw new Error('not ready');
-      expect(api.loading).toBe(false);
-    });
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('ready'));
+    vi.useFakeTimers();
 
     // Drag end with no delta
     const noMove: NodeChange = { id: 'n1', type: 'position', dragging: false, position: { x: 10, y: 10 } } as any;
     api!.onNodesChange([noMove]);
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(300);
       await Promise.resolve();
     });
     expect(counters.posts).toBe(0);
@@ -105,14 +100,13 @@ describe('Builder dirty detection for graph edits', () => {
     const move: NodeChange = { id: 'n1', type: 'position', dragging: false, position: { x: 20, y: 10 } } as any;
     api!.onNodesChange([move]);
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(300);
       await Promise.resolve();
     });
     expect(counters.posts).toBe(1);
   });
 
   it('node and edge add/remove mark dirty', async () => {
-    vi.useFakeTimers();
     const counters = setupServerCounters();
     let api: ReturnType<typeof useBuilderState> | null = null;
 
@@ -122,15 +116,13 @@ describe('Builder dirty detection for graph edits', () => {
       </TestProviders>,
     );
 
-    await waitFor(() => {
-      if (!api) throw new Error('not ready');
-      expect(api.loading).toBe(false);
-    });
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('ready'));
+    vi.useFakeTimers();
 
     // Node add
     api!.addNode('mock', { x: 0, y: 0 });
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(300);
       await Promise.resolve();
     });
     expect(counters.posts).toBe(1);
@@ -139,7 +131,7 @@ describe('Builder dirty detection for graph edits', () => {
     const conn: Parameters<OnConnect>[0] = { source: 'n1', sourceHandle: 'out', target: 'n2', targetHandle: 'in' };
     api!.onConnect(conn);
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(300);
       await Promise.resolve();
     });
     expect(counters.posts).toBe(2);
@@ -149,7 +141,7 @@ describe('Builder dirty detection for graph edits', () => {
     const erem: EdgeChange = { id: edgeId, type: 'remove' };
     api!.onEdgesChange([erem]);
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(300);
       await Promise.resolve();
     });
     expect(counters.posts).toBe(3);
@@ -158,7 +150,7 @@ describe('Builder dirty detection for graph edits', () => {
     const nrem: NodeChange = { id: 'n1', type: 'remove' };
     api!.onNodesChange([nrem]);
     await act(async () => {
-      vi.advanceTimersByTime(1200);
+      vi.advanceTimersByTime(300);
       await Promise.resolve();
     });
     expect(counters.posts).toBe(4);
