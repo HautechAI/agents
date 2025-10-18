@@ -62,6 +62,7 @@ describe('SimpleAgent summarization graph', () => {
       mongodbUrl: 'm',
     });
     const agent = new SimpleAgent(cfg, new LoggerService(), new CheckpointerService(new LoggerService()) as any, 'agent-1');
+    await agent.start();
     agent.setConfig({ summarizationKeepLast: 2, summarizationMaxTokens: 200 });
 
     // Use the agent wrapper to invoke

@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { EnforceRestrictionNode } from '../lgnodes/enforceRestriction.lgnode';
 import { stringify as toYaml } from 'yaml';
 import { buildMcpToolError } from '../mcp/errorUtils';
+import type { NodeLifecycle } from '../nodes/types';
 
 /**
  * Zod schema describing static configuration for SimpleAgent.
@@ -90,7 +91,7 @@ export const SimpleAgentStaticConfigSchema = z
   .strict();
 
 export type SimpleAgentStaticConfig = z.infer<typeof SimpleAgentStaticConfigSchema>;
-export class SimpleAgent extends BaseAgent {
+export class SimpleAgent extends BaseAgent implements NodeLifecycle<Partial<SimpleAgentStaticConfig>> {
   private callModelNode!: CallModelNode;
   private toolsNode!: ToolsNode;
   // Track tools registered per MCP server so we can remove them on detachment
@@ -109,6 +110,14 @@ export class SimpleAgent extends BaseAgent {
     "Do not produce a final answer directly. Before finishing, call a tool. If no tool is needed, call the 'finish' tool.";
   private restrictionMaxInjections: number = 0; // 0 = unlimited per turn
 
+  // Lifecycle state
+  private _started = false;
+  private _deleted = false;
+  private _configuredSnapshot: Record<string, unknown> | undefined;
+  // Buffers for pre-start wiring
+  private _pendingTools: BaseTool[] = [];
+  private _pendingMemoryConnector: MemoryConnector | undefined;
+
   constructor(
     private configService: ConfigService,
     private loggerService: LoggerService,
@@ -116,7 +125,7 @@ export class SimpleAgent extends BaseAgent {
     private agentId?: string,
   ) {
     super(loggerService);
-    this.init();
+    // DI-only constructor; no initialization here. Call configure()/start() explicitly.
   }
 
   // Expose nodeId for instrumentation (used by BaseAgent.withAgent wrapper)
@@ -149,18 +158,27 @@ export class SimpleAgent extends BaseAgent {
     });
   }
 
-  init(config: RunnableConfig = { recursionLimit: 2500 }) {
+  // NodeLifecycle: configure -> start -> stop -> delete
+  async configure(cfg: Partial<SimpleAgentStaticConfig>): Promise<void> {
+    // Store snapshot and apply immediately if started
+    this._staticConfig = { ...(cfg || {}) } as Record<string, unknown>;
+    const snap = JSON.stringify(this._staticConfig || {});
+    if (snap === JSON.stringify(this._configuredSnapshot || {})) return; // idempotent
+    this._configuredSnapshot = JSON.parse(snap);
+    // If already started, apply through setConfig for dynamic updates
+    if (this._started) this.setConfig(cfg as Record<string, unknown>);
+  }
+
+  async start(): Promise<void> {
+    if (this._started || this._deleted) return; // idempotent
     if (!this.agentId) throw new Error('agentId is required to initialize SimpleAgent');
 
-    this._config = config;
+    // Build runtime config
+    this._config = { recursionLimit: 2500 } satisfies RunnableConfig;
 
-    this.llm = new ChatOpenAI({
-      model: 'gpt-5',
-      apiKey: this.configService.openaiApiKey,
-    });
-
+    // Create LLM and nodes
+    this.llm = new ChatOpenAI({ model: 'gpt-5', apiKey: this.configService.openaiApiKey });
     this.callModelNode = new CallModelNode([], this.llm);
-    // Pass this agent's node id to ToolsNode for span attribution
     this.toolsNode = new ToolsNode([], this.agentId);
     this.summarizeNode = new SummarizationNode(this.llm, {
       keepTokens: this.summarizationKeepTokens ?? 0,
@@ -184,9 +202,7 @@ export class SimpleAgent extends BaseAgent {
     );
 
     const builder = new StateGraph(
-      {
-        stateSchema: this.state(),
-      },
+      { stateSchema: this.state() },
       this.configuration(),
     )
       .addNode('summarize', async (state: { messages: BaseMessage[]; summary?: string }) => {
@@ -202,10 +218,7 @@ export class SimpleAgent extends BaseAgent {
       .addConditionalEdges(
         'call_model',
         (state) => (last(state.messages as AIMessage[])?.tool_calls?.length ? 'tools' : 'enforce'),
-        {
-          tools: 'tools',
-          enforce: 'enforce',
-        },
+        { tools: 'tools', enforce: 'enforce' },
       )
       .addConditionalEdges('enforce', (state) => (state.restrictionInjected === true ? 'call_model' : END), {
         call_model: 'call_model',
@@ -216,21 +229,54 @@ export class SimpleAgent extends BaseAgent {
         summarize: 'summarize',
       });
 
-    // Compile with a plain MongoDBSaver; scoping is handled via configurable.checkpoint_ns
+    // Compile graph
     this._graph = builder.compile({
       checkpointer: this.checkpointerService.getCheckpointer(this.agentId),
     }) as CompiledStateGraph<unknown, unknown>;
 
     // Attach run service if runtime provided one via global. Best effort; no casts.
     try {
-      const runSvc = globalThis.__agentRunsService;
-      if (runSvc) {
-        this.setRunService(runSvc);
-      }
+      const runSvc = (globalThis as any).__agentRunsService;
+      if (runSvc) this.setRunService(runSvc);
     } catch {}
 
-    // Apply runtime scheduling defaults (debounce=0, whenBusy=wait) already set in BaseAgent; allow overrides from agentId namespace if needed later
-    return this;
+    // Apply any pre-start config via setConfig (scheduling, model, prompt, summarization)
+    if (this._staticConfig && Object.keys(this._staticConfig).length) {
+      this.setConfig(this._staticConfig);
+    }
+
+    // Apply pending memory connector and tools
+    if (this._pendingMemoryConnector) this.callModelNode.setMemoryConnector(this._pendingMemoryConnector);
+    if (this._pendingTools.length) {
+      for (const t of this._pendingTools) {
+        try { this.callModelNode.addTool(t); this.toolsNode.addTool(t); } catch {}
+      }
+      this._pendingTools = [];
+    }
+
+    this._started = true;
+  }
+
+  async stop(): Promise<void> {
+    if (!this._started) return; // idempotent
+    try {
+      await this.destroy();
+    } catch {}
+    // Drop references so a subsequent start() rebuilds cleanly
+    this._graph = undefined;
+    // keep _staticConfig for future restarts
+    this.llm = undefined as unknown as ChatOpenAI;
+    this.callModelNode = undefined as unknown as CallModelNode;
+    this.toolsNode = undefined as unknown as ToolsNode;
+    this.summarizeNode = undefined as unknown as SummarizationNode;
+    this.enforceNode = undefined as unknown as EnforceRestrictionNode;
+    this._started = false;
+  }
+
+  async delete(): Promise<void> {
+    if (this._deleted) return; // idempotent
+    try { await this.stop(); } catch {}
+    this._deleted = true;
   }
 
   // Attach/detach a memory connector into the underlying CallModel
@@ -250,24 +296,35 @@ export class SimpleAgent extends BaseAgent {
         connector = prov.createConnector();
       }
     }
-    this.callModelNode.setMemoryConnector(connector);
+    if (this._started) this.callModelNode.setMemoryConnector(connector);
+    else this._pendingMemoryConnector = connector;
     this.loggerService.info('SimpleAgent memory connector attached');
   }
   detachMemoryConnector() {
-    this.callModelNode.setMemoryConnector(undefined);
+    if (this._started) this.callModelNode.setMemoryConnector(undefined);
+    else this._pendingMemoryConnector = undefined;
     this.loggerService.info('SimpleAgent memory connector detached');
   }
 
   addTool(tool: BaseTool) {
     // using any to avoid circular import issues if BaseTool is extended differently later
-    this.callModelNode.addTool(tool);
-    this.toolsNode.addTool(tool);
+    if (this._started) {
+      this.callModelNode.addTool(tool);
+      this.toolsNode.addTool(tool);
+    } else {
+      // Buffer until start()
+      if (!this._pendingTools.includes(tool)) this._pendingTools.push(tool);
+    }
     this.loggerService.info(`Tool added to SimpleAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
   removeTool(tool: BaseTool) {
-    this.callModelNode.removeTool(tool);
-    this.toolsNode.removeTool(tool);
+    if (this._started) {
+      this.callModelNode.removeTool(tool);
+      this.toolsNode.removeTool(tool);
+    } else {
+      this._pendingTools = this._pendingTools.filter((t) => t !== tool);
+    }
     this.loggerService.info(`Tool removed from SimpleAgent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
@@ -322,7 +379,9 @@ export class SimpleAgent extends BaseAgent {
           );
           const adapted = new LangChainToolAdapter(dynamic, this.loggerService);
           // Defensive: skip if already present (e.g. if a dynamic sync slipped through).
-          const existingNames = new Set(this.toolsNode.listTools().map((tool) => tool.init().name));
+          const existingNames = new Set(
+            (this._started ? this.toolsNode.listTools() : this._pendingTools).map((tool) => tool.init().name),
+          );
           if (existingNames.has(dynamic.name)) {
             this.loggerService.debug?.(
               `Skipping duplicate MCP tool registration ${dynamic.name} (initial register phase)`,
@@ -333,7 +392,9 @@ export class SimpleAgent extends BaseAgent {
           }
         }
         this.loggerService.info(
-          `Registered ${tools.length} MCP tools for namespace ${namespace}. Total: ${this.toolsNode.listTools().length}`,
+          `Registered ${tools.length} MCP tools for namespace ${namespace}. Total: ${
+            this._started ? this.toolsNode.listTools().length : this._pendingTools.length
+          }`,
         );
         const existing = this.mcpServerTools.get(server) || [];
         this.mcpServerTools.set(server, existing.concat(registered));
@@ -461,13 +522,13 @@ export class SimpleAgent extends BaseAgent {
     this.applyRuntimeConfig(config);
 
     if (parsedConfig.systemPrompt !== undefined) {
-      this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
+      if (this._started) this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('SimpleAgent system prompt updated');
     }
 
     if (parsedConfig.model !== undefined) {
       // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
-      this.llm.model = parsedConfig.model;
+      if (this._started) this.llm.model = parsedConfig.model;
       this.loggerService.info(`SimpleAgent model updated to ${parsedConfig.model}`);
     }
 
@@ -498,7 +559,7 @@ export class SimpleAgent extends BaseAgent {
     }
 
     if (updates.keepTokens !== undefined || updates.maxTokens !== undefined) {
-      this.summarizeNode.setOptions(updates);
+      if (this._started) this.summarizeNode.setOptions(updates);
       this.loggerService.info('SimpleAgent summarization options updated');
     }
 
