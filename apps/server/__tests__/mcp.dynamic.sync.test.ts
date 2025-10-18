@@ -36,7 +36,6 @@ describe('MCP dynamic tool enable/disable sync', () => {
     const configService = new MockConfigService();
     const cps = new MockCheckpointerService();
     agent = new SimpleAgent(configService as any, logger as any, cps as any, 'agent1');
-    await agent.start();
     await server.provision();
     await agent.addMcpServer(server);
     // Manually emit ready since we bypassed real start events
