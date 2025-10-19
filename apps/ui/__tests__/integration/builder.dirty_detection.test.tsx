@@ -4,7 +4,7 @@ import { act, render, waitFor, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './testUtils';
 import { useBuilderState } from '../../src/builder/hooks/useBuilderState';
-import type { EdgeChange, NodeChange, OnConnect } from 'reactflow';
+import type { EdgeRemoveChange, NodePositionChange, NodeRemoveChange, NodeSelectionChange, OnConnect } from 'reactflow';
 
 function Harness({ expose, debounceMs = 80 }: { expose: (api: ReturnType<typeof useBuilderState>) => void; debounceMs?: number }) {
   const api = useBuilderState('http://localhost:3010', { debounceMs });
@@ -66,7 +66,7 @@ describe('Builder dirty detection for graph edits', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.now() });
 
     // programmatic selection should not trigger dirty
-    const change: NodeChange = { id: 'n1', type: 'select', selected: true };
+    const change: NodeSelectionChange = { id: 'n1', type: 'select', selected: true };
     await act(async () => {
       api!.onNodesChange([change]);
     });
@@ -92,17 +92,17 @@ describe('Builder dirty detection for graph edits', () => {
 
     // Drag end with no delta
     // Simulate drag start then drag end with same position (no delta)
-    const dragStart: NodeChange = { id: 'n1', type: 'position', dragging: true } as any;
-    const noMove: NodeChange = {
+    const dragStart: NodePositionChange = { id: 'n1', type: 'position', dragging: true };
+    const noMove: NodePositionChange = {
       id: 'n1',
       type: 'position',
       dragging: false,
       position: { x: 10, y: 10 },
       // Include absolute as some RF versions use this when applying
       // position changes internally
-      // @ts-expect-error positionAbsolute is allowed by RF runtime
+      // @ts-expect-error positionAbsolute exists at runtime in RF but is not typed
       positionAbsolute: { x: 10, y: 10 },
-    } as any;
+    };
     await act(async () => {
       api!.onNodesChange([dragStart]);
       api!.onNodesChange([noMove]);
@@ -114,15 +114,15 @@ describe('Builder dirty detection for graph edits', () => {
     expect(counters.posts).toBe(0);
 
     // Real move
-    const dragStart2: NodeChange = { id: 'n1', type: 'position', dragging: true } as any;
-    const move: NodeChange = {
+    const dragStart2: NodePositionChange = { id: 'n1', type: 'position', dragging: true };
+    const move: NodePositionChange = {
       id: 'n1',
       type: 'position',
       dragging: false,
       position: { x: 20, y: 10 },
-      // @ts-expect-error see note above
+      // @ts-expect-error positionAbsolute exists at runtime in RF but is not typed
       positionAbsolute: { x: 20, y: 10 },
-    } as any;
+    };
     await act(async () => {
       api!.onNodesChange([dragStart2]);
       api!.onNodesChange([move]);
@@ -173,7 +173,7 @@ describe('Builder dirty detection for graph edits', () => {
 
     // Edge remove
     const edgeId = 'n1-out__n2-in';
-    const erem: EdgeChange = { id: edgeId, type: 'remove' };
+    const erem: EdgeRemoveChange = { id: edgeId, type: 'remove' };
     await act(async () => {
       api!.onEdgesChange([erem]);
     });
@@ -184,7 +184,7 @@ describe('Builder dirty detection for graph edits', () => {
     await waitFor(() => expect(counters.posts).toBe(3));
 
     // Node remove
-    const nrem: NodeChange = { id: 'n1', type: 'remove' };
+    const nrem: NodeRemoveChange = { id: 'n1', type: 'remove' };
     await act(async () => {
       api!.onNodesChange([nrem]);
     });
