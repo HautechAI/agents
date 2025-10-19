@@ -56,7 +56,7 @@ function makeRuntime(db: Db, placement: 'after_system'|'last_message') {
   templates.register(
     'memory',
     async (ctx) => {
-      const mod = await import('../src/nodes/memory.connector.node');
+      const mod = await import('../src/nodes/memory-connector.node');
       const MemoryConnectorNode = mod.MemoryConnectorNode;
       const factory = (opts: { threadId?: string }) => new MemoryService(db, ctx.nodeId, opts.threadId ? 'perThread' : 'global', opts.threadId);
       const n = new MemoryConnectorNode(factory);
@@ -157,7 +157,7 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
     templates.register(
       'memory',
       async (ctx) => {
-        const mod = await import('../src/nodes/memory.connector.node');
+        const mod = await import('../src/nodes/memory-connector.node');
         const MemoryConnectorNode = mod.MemoryConnectorNode;
         const factory = (opts: { threadId?: string }) => new MemoryService(db, ctx.nodeId, opts.threadId ? 'perThread' : 'global', opts.threadId);
         const n = new MemoryConnectorNode(factory);
