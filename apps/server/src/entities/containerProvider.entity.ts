@@ -550,16 +550,18 @@ export class ContainerProviderEntity {
       let allOk = combinedRes.exitCode === 0;
       if (!allOk) {
         this.logger.error('Nix install (combined) failed container=%s', cid, { exitCode: combinedRes.exitCode });
-        // Fallback per package sequentially
-        for (const ref of refs) {
-          const cmd = `${PATH_PREFIX} && ${BASE} ${ref}`;
-          const r = await container.exec(['sh', '-lc', cmd], { timeoutMs: timeoutSec * 1000, idleTimeoutMs: 60_000 });
-          if (r.exitCode === 0) this.logger.info('Nix install succeeded for %s container=%s', ref, cid);
-          else {
-            this.logger.error('Nix install failed for %s container=%s', ref, cid, { exitCode: r.exitCode });
-            allOk = false;
-          }
-        }
+        // Fallback per package sequentially without await-in-loop; preserve order
+        await refs.reduce<Promise<void>>((prev, ref) => {
+          return prev.then(async () => {
+            const cmd = `${PATH_PREFIX} && ${BASE} ${ref}`;
+            const r = await container.exec(['sh', '-lc', cmd], { timeoutMs: timeoutSec * 1000, idleTimeoutMs: 60_000 });
+            if (r.exitCode === 0) this.logger.info('Nix install succeeded for %s container=%s', ref, cid);
+            else {
+              this.logger.error('Nix install failed for %s container=%s', ref, cid, { exitCode: r.exitCode });
+              allOk = false; // track any per-package failure
+            }
+          });
+        }, Promise.resolve());
       }
 
       // Write/update sentinel on full success
