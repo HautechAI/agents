@@ -80,7 +80,8 @@ const InternalNixConfigSchema = z
   .strict()
   .optional();
 
-export type InternalNixConfig = z.infer<NonNullable<typeof InternalNixConfigSchema>>;
+// Infer non-optional inner type (schema is optional); strip undefined from inference
+export type InternalNixConfig = NonNullable<z.infer<typeof InternalNixConfigSchema>>;
 
 export const ContainerProviderStaticConfigSchema = z
   .object({
