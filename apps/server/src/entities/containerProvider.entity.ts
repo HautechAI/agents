@@ -544,7 +544,7 @@ export class ContainerProviderEntity {
             if (r.exitCode === 0) this.logger.info('Nix install succeeded for %s container=%s', ref, cid);
             else {
               this.logger.error('Nix install failed for %s container=%s', ref, cid, { exitCode: r.exitCode });
-              allOk = false;
+              allOk = false; // track any per-package failure
             }
           });
         }, Promise.resolve());
