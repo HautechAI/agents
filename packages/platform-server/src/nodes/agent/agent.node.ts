@@ -2,6 +2,7 @@ import { AIMessage, BaseMessage } from '@langchain/core/messages';
 import { RunnableConfig } from '@langchain/core/runnables';
 import { tool as lcTool } from '@langchain/core/tools';
 import { Annotation, CompiledStateGraph, END, START, StateGraph } from '@langchain/langgraph';
+import type { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
 import { last } from 'lodash-es';
 import { McpServer, McpTool } from '../../mcp';
@@ -248,7 +249,7 @@ export class Agent extends BaseAgent {
 
     // Attach run service if runtime provided one via global. Best effort; no casts.
     try {
-      const runSvc = (globalThis as any).__agentRunsService;
+      const runSvc = globalThis.__agentRunsService;
       if (runSvc) {
         this.setRunService(runSvc);
       }
@@ -265,15 +266,26 @@ export class Agent extends BaseAgent {
       | { getConnector?: () => MemoryConnector | undefined; createConnector?: () => MemoryConnector },
   ) {
     // Accept either a connector-like object or a provider exposing getConnector/createConnector
+    type MemoryConnectorProvider = {
+      getConnector?: () => MemoryConnector | undefined;
+      createConnector?: () => MemoryConnector | undefined;
+    };
+    const isMemoryConnector = (obj: unknown): obj is MemoryConnector => {
+      if (!obj || typeof obj !== 'object') return false;
+      const rec = obj as Record<string, unknown>;
+      return typeof rec.renderMessage === 'function' && typeof rec.getPlacement === 'function';
+    };
+    const isProvider = (obj: unknown): obj is MemoryConnectorProvider => {
+      if (!obj || typeof obj !== 'object') return false;
+      const rec = obj as Record<string, unknown>;
+      return typeof rec.getConnector === 'function' || typeof rec.createConnector === 'function';
+    };
     let connector: MemoryConnector | undefined = undefined;
-    if (mem && typeof (mem as MemoryConnector).renderMessage === 'function') {
-      connector = mem as MemoryConnector;
-    } else if (mem && 'getConnector' in mem && typeof (mem as any).getConnector === 'function') {
-      const prov = mem as any;
-      connector = prov.getConnector?.();
-      if (!connector && 'createConnector' in prov && typeof prov.createConnector === 'function') {
-        connector = prov.createConnector();
-      }
+    if (isMemoryConnector(mem)) {
+      connector = mem;
+    } else if (isProvider(mem)) {
+      connector = mem.getConnector?.();
+      if (!connector) connector = mem.createConnector?.();
     }
     this.callModelNode.setMemoryConnector(connector);
     this.loggerService.info('Agent memory connector attached');
@@ -315,6 +327,13 @@ export class Agent extends BaseAgent {
 
     // Registration function now only invoked on explicit ready event to avoid triggering
     // duplicate discovery flows (removes eager listTools() call which previously raced with start()).
+    const getThreadId = (config?: LangGraphRunnableConfig): string | undefined => {
+      const cfg = config?.configurable;
+      if (!cfg || typeof cfg !== 'object') return undefined;
+      const tid = (cfg as Record<string, unknown>).thread_id;
+      return typeof tid === 'string' ? tid : undefined;
+    };
+
     const registerTools = async () => {
       try {
         const tools = await server.listTools();
@@ -325,11 +344,11 @@ export class Agent extends BaseAgent {
         for (const t of tools) {
           const schema = inferArgsSchema(t.inputSchema);
           const dynamic = lcTool(
-            async (raw, config) => {
+            async (raw, config?: LangGraphRunnableConfig) => {
               this.loggerService.info(
                 `Calling MCP tool ${t.name} in namespace ${namespace} with input: ${JSON.stringify(raw)}`,
               );
-              const threadId = (config as any)?.configurable?.thread_id;
+              const threadId = getThreadId(config);
               const res = await server.callTool(t.name, raw, { threadId });
               if (res.isError) {
                 const { message, cause } = buildMcpToolError(res);
@@ -421,11 +440,11 @@ export class Agent extends BaseAgent {
             if (!existingByName.has(toolName)) {
               const schema = inferArgsSchema(t.inputSchema);
               const dynamic = lcTool(
-                async (raw, config) => {
+                async (raw, config?: LangGraphRunnableConfig) => {
                   this.loggerService.info(
                     `Calling MCP tool ${t.name} in namespace ${namespace} with input: ${JSON.stringify(raw)}`,
                   );
-                  const threadId = (config as any)?.configurable?.thread_id;
+                  const threadId = getThreadId(config);
                   const res = await server.callTool(t.name, raw, { threadId });
                   if (res.isError) {
                     const { message, cause } = buildMcpToolError(res);
@@ -596,4 +615,3 @@ export class Agent extends BaseAgent {
     }
   }
 }
-
