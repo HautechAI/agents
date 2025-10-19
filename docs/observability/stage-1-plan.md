@@ -4,7 +4,7 @@ Authoritative scope for Issue #82. Dev/local only, no auth or rate limiting. Min
 
 Changes (update):
 - No Docker compose; run server from sources via pnpm scripts.
-- Example moved into its own package `@hautech/obs-examples`.
+- Example moved into its own package `@agyn/obs-examples`.
 
 Run server from sources
 - Prereqs: Node 20+, MongoDB available (default MONGO_URL=mongodb://localhost:27017/obs)
@@ -14,8 +14,8 @@ Run server from sources
 
 Example package
 - Example scripts are provided to exercise the observability APIs.
-- Dev: `pnpm --filter @hautech/obs-examples dev`
-- Build + run: `pnpm --filter @hautech/obs-examples build && pnpm --filter @hautech/obs-examples start`
+- Dev: `pnpm --filter @agyn/obs-examples dev`
+- Build + run: `pnpm --filter @agyn/obs-examples build && pnpm --filter @agyn/obs-examples start`
 - Env: `OBS_EXTENDED_ENDPOINT` (default http://localhost:4319)
 
 Linking from Builder UI (Activity panel)
