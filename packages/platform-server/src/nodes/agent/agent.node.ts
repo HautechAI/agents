@@ -111,8 +111,8 @@ export class Agent extends BaseAgent {
   private restrictionMaxInjections: number = 0; // 0 = unlimited per turn
 
   // Lifecycle/config propagation helpers
-  private lifecycleStarted = false;
   private lifecycleConfigSnapshot: Partial<AgentStaticConfig> = {};
+  private lifecycleState: 'created' | 'configured' | 'started' | 'stopped' | 'deleted' = 'created';
   // Allowed config keys for propagation; keep in sync with setConfig filtering
   private static readonly allowedConfigKeysArray = [
     'title',
@@ -138,7 +138,6 @@ export class Agent extends BaseAgent {
     private agentId?: string,
   ) {
     super(loggerService);
-    this.init();
   }
 
   // Expose nodeId for instrumentation (used by BaseAgent.withAgent wrapper)
@@ -171,7 +170,7 @@ export class Agent extends BaseAgent {
     });
   }
 
-  init(config: RunnableConfig = { recursionLimit: 2500 }) {
+  private buildGraph(config: RunnableConfig = { recursionLimit: 2500 }) {
     if (!this.agentId) throw new Error('agentId is required to initialize Agent');
 
     this._config = config;
@@ -255,8 +254,7 @@ export class Agent extends BaseAgent {
       }
     } catch {}
 
-    // Apply runtime scheduling defaults (debounce=0, whenBusy=wait) already set in BaseAgent; allow overrides from agentId namespace if needed later
-    return this;
+    // graph built
   }
 
   // Attach/detach a memory connector into the underlying CallModel
@@ -481,33 +479,35 @@ export class Agent extends BaseAgent {
   // Overload preserves BaseAgent signature while exposing a more precise config shape for callers.
   setConfig(config: Partial<AgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
+    if (this.lifecycleState === 'deleted') throw new Error('Cannot setConfig on deleted Agent');
+    const preStart = this.lifecycleState !== 'started';
     // Filter to known keys and validate without letting defaults write missing keys
     const filteredEntries = Object.entries(config).filter(([k]) =>
       Agent.allowedConfigKeys.has(k as (typeof Agent.allowedConfigKeysArray)[number]),
     );
     const filtered = Object.fromEntries(filteredEntries) as Partial<AgentStaticConfig> & Record<string, unknown>;
     const parsedConfig = AgentStaticConfigSchema.partial().parse(filtered) as Partial<AgentStaticConfig>;
+    // Always update local snapshot for later restarts
+    this.lifecycleConfigSnapshot = { ...this.lifecycleConfigSnapshot, ...filtered };
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
     // Only update fields that were explicitly provided by caller
-    if (Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
+    if (!preStart && Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('Agent system prompt updated');
     }
 
-    if (Object.prototype.hasOwnProperty.call(filtered, 'model') && typeof parsedConfig.model === 'string') {
+    if (!preStart && Object.prototype.hasOwnProperty.call(filtered, 'model') && typeof parsedConfig.model === 'string') {
       // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
       this.llm.model = parsedConfig.model;
       this.loggerService.info(`Agent model updated to ${parsedConfig.model}`);
     }
 
-    // Extend to accept summarization options
-    // Accept both new (summarizationKeepTokens) and legacy (summarizationKeepLast) keys.
+    // Extend to accept summarization options (new keys only)
     const cfgObj = config as Record<string, unknown>;
-    const keepTokensRaw =
-      cfgObj.summarizationKeepTokens !== undefined ? cfgObj.summarizationKeepTokens : cfgObj.summarizationKeepLast; // legacy fallback
+    const keepTokensRaw = cfgObj.summarizationKeepTokens;
     const maxTokensRaw = cfgObj.summarizationMaxTokens;
     const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
 
@@ -529,7 +529,7 @@ export class Agent extends BaseAgent {
       }
     }
 
-    if (updates.keepTokens !== undefined || updates.maxTokens !== undefined) {
+    if (!preStart && (updates.keepTokens !== undefined || updates.maxTokens !== undefined)) {
       this.summarizeNode.setOptions(updates);
       this.loggerService.info('Agent summarization options updated');
     }
@@ -547,15 +547,17 @@ export class Agent extends BaseAgent {
 
   // ----- Node: configure/start/stop/delete -----
   configure(cfg: Record<string, unknown>): void {
+    if (this.lifecycleState === 'deleted') throw new Error('Cannot configure a deleted Agent');
     // Keep only allowed keys; do not inject defaults; store snapshot for start() and diff updates
     const incoming = Object.fromEntries(
       Object.entries(cfg || {}).filter(([k]) =>
         Agent.allowedConfigKeys.has(k as (typeof Agent.allowedConfigKeysArray)[number]),
       ),
     ) as Partial<AgentStaticConfig> & Record<string, unknown>;
-    if (!this.lifecycleStarted) {
-      // Before start: replace snapshot
-      this.lifecycleConfigSnapshot = { ...incoming };
+    if (this.lifecycleState === 'created' || this.lifecycleState === 'configured' || this.lifecycleState === 'stopped') {
+      // Before start or after stop: merge snapshot and mark configured
+      this.lifecycleConfigSnapshot = { ...this.lifecycleConfigSnapshot, ...incoming };
+      if (this.lifecycleState === 'created') this.lifecycleState = 'configured';
       return;
     }
     // After start: compute delta and apply only changed keys to avoid resetting unspecified fields
@@ -576,21 +578,34 @@ export class Agent extends BaseAgent {
   }
 
   async start(): Promise<void> {
-    if (this.lifecycleStarted) return; // idempotent
-    this.lifecycleStarted = true;
+    if (this.lifecycleState === 'deleted') throw new Error('Cannot start a deleted Agent');
+    if (this.lifecycleState === 'started') return; // idempotent
+    this.buildGraph({ recursionLimit: 2500 });
     const cfg = this.lifecycleConfigSnapshot;
-    if (cfg && Object.keys(cfg).length > 0) {
-      // Propagate all stored keys immediately
-      this.setConfig(cfg);
-    }
+    if (cfg && Object.keys(cfg).length > 0) this.setConfig(cfg);
+    this.lifecycleState = 'started';
   }
 
   async stop(): Promise<void> {
-    // no-op for now
+    if (this.lifecycleState === 'deleted') return;
+    if (this.lifecycleState !== 'started') return; // idempotent
+    this._graph = undefined as any;
+    this.llm = undefined as any;
+    this.callModelNode = undefined as any;
+    this.toolsNode = undefined as any;
+    this.summarizeNode = undefined as any;
+    this.enforceNode = undefined as any;
+    this.lifecycleState = 'stopped';
   }
 
   async delete(): Promise<void> {
+    if (this.lifecycleState === 'deleted') return;
+    try { await this.stop(); } catch {}
+    for (const server of Array.from(this.mcpServerTools.keys())) {
+      try { await this.removeMcpServer(server); } catch {}
+    }
     await this.destroy();
+    this.lifecycleState = 'deleted';
   }
 
   /**

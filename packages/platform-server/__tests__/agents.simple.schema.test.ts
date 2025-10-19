@@ -15,7 +15,7 @@ describe('BaseAgent.getConfigSchema / Agent.setConfig', () => {
     const schema = (a as unknown as BaseAgent).getConfigSchema() as any;
     expect(schema.type).toBe('object');
     expect(schema.properties.systemPrompt).toMatchObject({ type: 'string' });
-  // Legacy key summarizationKeepLast intentionally not present in schema anymore; we accept it leniently at runtime.
+    // Legacy key summarizationKeepLast intentionally not present anymore; only summarizationKeepTokens is supported.
     expect(schema.properties.summarizationMaxTokens).toMatchObject({ type: 'integer', minimum: 1 });
   });
 
@@ -26,21 +26,28 @@ describe('BaseAgent.getConfigSchema / Agent.setConfig', () => {
     anyA.callModelNode = { setSystemPrompt: vi.fn(), addTool: vi.fn(), removeTool: vi.fn() };
     anyA.summarizeNode = { setOptions: vi.fn() };
 
+    // Pre-start setConfig should only update snapshot; no node calls
+    a.setConfig({ systemPrompt: 'You are helpful.' });
+    expect(anyA.callModelNode.setSystemPrompt).not.toHaveBeenCalled();
+    // Simulate started runtime and call setConfig again
+    anyA.lifecycleState = 'started';
     a.setConfig({ systemPrompt: 'You are helpful.' });
     expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledWith('You are helpful.');
 
-    a.setConfig({ summarizationKeepLast: 5, summarizationMaxTokens: 100 });
+    a.setConfig({ summarizationKeepTokens: 5, summarizationMaxTokens: 100 });
     expect(anyA.summarizeNode.setOptions).toHaveBeenCalledWith({ keepTokens: 5, maxTokens: 100 });
   });
 
   it('supports model override via setConfig', () => {
     const a = makeAgent();
     const anyA: any = a as any;
-  const originalLLM = (anyA.llm);
-  a.setConfig({ model: 'override-model' });
-  // Expect underlying llm object mutated, not replaced with a new node
-  expect(anyA.llm).toBe(originalLLM);
-  expect((anyA.llm as any).model).toBe('override-model');
-  expect(anyA.loggerService.info).toHaveBeenCalledWith('Agent model updated to override-model');
+    anyA.lifecycleState = 'started';
+    anyA.llm = { model: 'gpt-5' };
+    const originalLLM = anyA.llm;
+    a.setConfig({ model: 'override-model' });
+    // Expect underlying llm object mutated, not replaced with a new node
+    expect(anyA.llm).toBe(originalLLM);
+    expect((anyA.llm as any).model).toBe('override-model');
+    expect(anyA.loggerService.info).toHaveBeenCalledWith('Agent model updated to override-model');
   });
 });

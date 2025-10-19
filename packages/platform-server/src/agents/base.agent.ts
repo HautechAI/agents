@@ -106,7 +106,7 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
     const schema = z
       .object({
         systemPrompt: z.string().optional(),
-        summarizationKeepLast: z.number().int().min(0).optional(),
+        summarizationKeepTokens: z.number().int().min(0).optional(),
         summarizationMaxTokens: z.number().int().min(1).optional(),
         debounceMs: z.number().int().min(0).default(0).describe('Debounce window for agent-side buffer.'),
         whenBusy: z
