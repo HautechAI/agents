@@ -107,6 +107,64 @@ export class ContainerProviderEntity {
     this.envService = new EnvService(vaultService);
   }
 
+  // In-memory cache for ncps keys per URL with TTL and in-flight coalescing
+  private static ncpsKeyCache: Map<string, { value: string; expires: number }> = new Map();
+  private static ncpsInFlight: Map<string, Promise<string | undefined>> = new Map();
+
+  private isValidNcpsKey(key: string): boolean {
+    if (typeof key !== 'string') return false;
+    if (key.length === 0 || key.length > 1024) return false;
+    if (key.includes('\n') || key.includes('\r')) return false;
+    const idx = key.indexOf(':');
+    if (idx <= 0 || idx === key.length - 1) return false;
+    const suffix = key.slice(idx + 1);
+    if (!/^[A-Za-z0-9+/=]+$/.test(suffix)) return false;
+    return true;
+  }
+
+  private async getNcpsPublicKey(ncpsUrl: string, timeoutMs: number, ttlMs: number): Promise<string | undefined> {
+    const now = Date.now();
+    const cached = ContainerProviderEntity.ncpsKeyCache.get(ncpsUrl);
+    if (cached && cached.expires > now && cached.value) return cached.value;
+    const inflight = ContainerProviderEntity.ncpsInFlight.get(ncpsUrl);
+    if (inflight) return inflight;
+    const doFetch = async (): Promise<string | undefined> => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs || 5000);
+      try {
+        const res = await fetch(`${ncpsUrl.replace(/\/$/, '')}/pubkey`, { method: 'GET', headers: { Accept: 'text/plain' }, signal: controller.signal });
+        if (!res.ok) return undefined;
+        const txt = (await res.text()).trim();
+        if (!this.isValidNcpsKey(txt)) return undefined;
+        return txt;
+      } catch {
+        return undefined;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const p = (async () => {
+      try {
+        let key: string | undefined;
+        for (let i = 0; i < 3; i++) {
+          key = await doFetch();
+          if (key) break;
+          if (i < 2) await new Promise((r) => setTimeout(r, i === 0 ? 150 : 300));
+        }
+        if (key) {
+          const prev = ContainerProviderEntity.ncpsKeyCache.get(ncpsUrl)?.value;
+          if (prev && prev !== key) this.logger.info('NCPS public key rotated for %s', ncpsUrl);
+          ContainerProviderEntity.ncpsKeyCache.set(ncpsUrl, { value: key, expires: Date.now() + (ttlMs || 600_000) });
+        }
+        return key;
+      } finally {
+        ContainerProviderEntity.ncpsInFlight.delete(ncpsUrl);
+      }
+    })();
+    ContainerProviderEntity.ncpsInFlight.set(ncpsUrl, p);
+    return p;
+  }
+
   // Allow tests to inject a mock logger
   setLogger(logger: LoggerService) {
     this.logger = logger || this.logger;
@@ -250,10 +308,16 @@ export class ContainerProviderEntity {
         !!envMerged && typeof envMerged === 'object' && 'NIX_CONFIG' in (envMerged as Record<string, string>);
       const ncpsEnabled = this.configService?.ncpsEnabled === true;
       const ncpsUrl = this.configService?.ncpsUrl;
-      const ncpsPub = this.configService?.ncpsPublicKey;
-      if (!hasNixConfig && ncpsEnabled && !!ncpsUrl && !!ncpsPub) {
-        const nixConfig = `substituters = ${ncpsUrl} https://cache.nixos.org\ntrusted-public-keys = ${ncpsPub} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=`;
-        envMerged = { ...(envMerged || {}), NIX_CONFIG: nixConfig } as Record<string, string>;
+      if (!hasNixConfig && ncpsEnabled && !!ncpsUrl) {
+        const ttl = this.configService?.ncpsKeyTtlMs ?? 600_000;
+        const to = this.configService?.nixHttpTimeoutMs ?? 5000;
+        const k = await this.getNcpsPublicKey(ncpsUrl, to, ttl);
+        if (k) {
+          const nixConfig = `substituters = ${ncpsUrl} https://cache.nixos.org\ntrusted-public-keys = ${k} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=`;
+          envMerged = { ...(envMerged || {}), NIX_CONFIG: nixConfig } as Record<string, string>;
+        } else {
+          this.logger.warn('NCPS enabled but pubkey fetch failed; skipping NIX_CONFIG injection');
+        }
       }
 
       const normalizedEnv: Record<string, string> | undefined = envMerged;

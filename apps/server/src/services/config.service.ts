@@ -57,7 +57,11 @@ export const configSchema = z.object({
     .default('false')
     .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
   ncpsUrl: z.string().min(1).default('http://ncps:8501'),
-  ncpsPublicKey: z.string().optional(),
+  // NCPS public key TTL for runtime fetch (ms)
+  ncpsKeyTtlMs: z
+    .union([z.string(), z.number()])
+    .default(String(10 * 60_000))
+    .transform((v) => Number(v) || 10 * 60_000),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -145,8 +149,8 @@ export class ConfigService implements Config {
   get ncpsUrl(): string {
     return this.params.ncpsUrl;
   }
-  get ncpsPublicKey(): string | undefined {
-    return this.params.ncpsPublicKey;
+  get ncpsKeyTtlMs(): number {
+    return this.params.ncpsKeyTtlMs;
   }
 
   static fromEnv(): ConfigService {
@@ -174,7 +178,7 @@ export class ConfigService implements Config {
       mcpToolsStaleTimeoutMs: process.env.MCP_TOOLS_STALE_TIMEOUT_MS,
       ncpsEnabled: process.env.NCPS_ENABLED,
       ncpsUrl: process.env.NCPS_URL,
-      ncpsPublicKey: process.env.NCPS_PUBLIC_KEY,
+      ncpsKeyTtlMs: process.env.NCPS_KEY_TTL_MS,
     });
     return new ConfigService(parsed);
   }

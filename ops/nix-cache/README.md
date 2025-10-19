@@ -19,7 +19,8 @@ Configure env
 ```sh
 export NCPS_ENABLED=true
 export NCPS_URL=http://ncps:8501
-export NCPS_PUBLIC_KEY=$(docker compose exec ncps sh -lc 'wget -qO- http://localhost:8501/pubkey')
+# Optional: control pubkey cache TTL (ms); default 600000 (10m)
+export NCPS_KEY_TTL_MS=600000
 ```
 
 Injection behavior
@@ -27,8 +28,10 @@ Injection behavior
 - The server injects NIX_CONFIG into workspace containers only when all conditions are met:
   - NCPS_ENABLED=true
   - NCPS_URL is set
-  - NCPS_PUBLIC_KEY is set
   - NIX_CONFIG is not already present in the container env
+
+The server fetches the public key at runtime from `${NCPS_URL}/pubkey` with timeout, retry, and in-memory caching.
+Failures to fetch or validate the key do not prevent container creation; NIX_CONFIG injection is skipped with a warning.
 
 Verify inside a workspace container:
 

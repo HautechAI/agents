@@ -153,6 +153,7 @@ services:
       - /bin/ncps
       - serve
       - --server-addr=0.0.0.0:8501
+      - --prometheus-enabled
       - --cache-hostname=ncps
       - --cache-data-path=/storage
       - --cache-database-url=sqlite:/storage/var/ncps/db/db.sqlite
@@ -163,6 +164,10 @@ services:
     networks:
       - agents_net
     restart: unless-stopped
+    labels:
+      com.prometheus.scrape: "true"
+      com.prometheus.port: "8501"
+      com.prometheus.path: "/metrics"
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:8501/nix-cache-info']
       interval: 30s

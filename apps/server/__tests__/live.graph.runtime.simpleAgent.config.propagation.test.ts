@@ -39,7 +39,7 @@ describe('LiveGraphRuntime -> SimpleAgent config propagation', () => {
       mcpToolsStaleTimeoutMs: 0,
       ncpsEnabled: false,
       ncpsUrl: 'http://ncps:8501',
-      ncpsPublicKey: undefined,
+      ncpsKeyTtlMs: 600000,
     };
     const configService = new ConfigService(cfg);
     const checkpointerService = new CheckpointerService(logger);
