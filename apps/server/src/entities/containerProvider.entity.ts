@@ -1,6 +1,7 @@
 import { ContainerOpts, ContainerService } from '../services/container.service';
 import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
+import { createHash } from 'crypto';
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../constants.js';
 import { VaultService } from '../services/vault.service';
 import { ConfigService } from '../services/config.service';
@@ -62,6 +63,25 @@ const RichNixPackageItemSchema = z
   })
   .strict();
 
+// Authoritative internal Nix config shape (used internally; external config remains opaque)
+const InternalNixConfigSchema = z
+  .object({
+    packages: z
+      .array(ResolvedNixPackageItemSchema)
+      .optional()
+      .describe('List of resolved nixpkgs refs to install.'),
+    timeoutSeconds: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe('Execution timeout in seconds for combined and per-package installs.'),
+  })
+  .strict()
+  .optional();
+
+export type InternalNixConfig = z.infer<NonNullable<typeof InternalNixConfigSchema>>;
+
 export const ContainerProviderStaticConfigSchema = z
   .object({
     image: z.string().min(1).optional().describe('Optional container image override.'),
@@ -85,7 +105,7 @@ export const ContainerProviderStaticConfigSchema = z
       .int()
       .default(86400)
       .describe('Idle TTL (seconds) before workspace cleanup; <=0 disables cleanup.'),
-    // Optional Nix metadata (opaque to server; UI manages shape)
+    // Keep nix opaque for external configs; internal code derives a typed subset lazily
     nix: z.unknown().optional(),
   })
   .strict();
@@ -155,6 +175,23 @@ export class ContainerProviderEntity {
   // Allow tests to inject a mock logger
   setLogger(logger: LoggerService) {
     this.logger = logger || this.logger;
+  }
+
+  // Internal reader: project cfg.nix into a typed subset used for installs
+  private readNixInternal(): InternalNixConfig {
+    const n = this.cfg && (this.cfg as Record<string, unknown>).nix;
+    const out: InternalNixConfig = {};
+    if (n && typeof n === 'object') {
+      // timeoutSeconds
+      const ts = (n as Record<string, unknown>)['timeoutSeconds'];
+      if (typeof ts === 'number' && Number.isInteger(ts) && ts > 0) out.timeoutSeconds = ts;
+      // packages
+      const pkgsUnknown = (n as Record<string, unknown>)['packages'];
+      if (Array.isArray(pkgsUnknown)) {
+        out.packages = this.normalizeToInstallSpecs(pkgsUnknown);
+      }
+    }
+    return out;
   }
 
   // Accept static configuration (image/env/initialScript). Validation performed via zod schema.
@@ -321,12 +358,13 @@ export class ContainerProviderEntity {
       // This lets the script prepare environment (e.g., user/profile) before installing packages.
       // Install Nix packages when resolved specs are provided (best-effort)
       try {
-        const nixAny = (this.cfg?.nix as any) as { packages?: unknown } | undefined;
-        const pkgsUnknown = nixAny && (nixAny as any).packages;
-        const pkgsArr: unknown[] = Array.isArray(pkgsUnknown) ? (pkgsUnknown as unknown[]) : [];
-        const specs = this.normalizeToInstallSpecs(pkgsArr);
-        const originalCount = Array.isArray(pkgsUnknown) ? pkgsArr.length : 0;
-        await this.ensureNixPackages(container, specs, originalCount);
+        const rawNix = this.readNixInternal();
+        const rawArr = (() => {
+          const n = this.cfg && (this.cfg as Record<string, unknown>).nix;
+          const p = n && typeof n === 'object' ? (n as Record<string, unknown>)['packages'] : undefined;
+          return Array.isArray(p) ? p : [];
+        })();
+        await this.ensureNixPackages(container, rawNix.packages ?? [], rawArr.length, rawNix.timeoutSeconds);
       } catch (e) {
         // Do not fail startup on install errors; logs provide context
         this.logger.error('Nix install step failed (post-start)', e);
@@ -336,12 +374,13 @@ export class ContainerProviderEntity {
       if (this.cfg?.enableDinD && container) await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
       // Also attempt install on reuse (idempotent)
       try {
-        const nixAny = (this.cfg?.nix as any) as { packages?: unknown } | undefined;
-        const pkgsUnknown = nixAny && (nixAny as any).packages;
-        const pkgsArr: unknown[] = Array.isArray(pkgsUnknown) ? (pkgsUnknown as unknown[]) : [];
-        const specs = this.normalizeToInstallSpecs(pkgsArr);
-        const originalCount = Array.isArray(pkgsUnknown) ? pkgsArr.length : 0;
-        await this.ensureNixPackages(container, specs, originalCount);
+        const rawNix = this.readNixInternal();
+        const rawArr = (() => {
+          const n = this.cfg && (this.cfg as Record<string, unknown>).nix;
+          const p = n && typeof n === 'object' ? (n as Record<string, unknown>)['packages'] : undefined;
+          return Array.isArray(p) ? p : [];
+        })();
+        await this.ensureNixPackages(container, rawNix.packages ?? [], rawArr.length, rawNix.timeoutSeconds);
       } catch (e) {
         this.logger.error('Nix install step failed (reuse)', e);
       }
@@ -349,61 +388,7 @@ export class ContainerProviderEntity {
     try { await this.containerService.touchLastUsed(container.id); } catch {}
     return container;
   }
-
-
-  /**
-   * Install Nix packages inside the workspace container based on cfg.nix.packages.
-   * Supports package entries that provide commit and attribute path information.
-   * Silently skips when Nix is not present in the container.
-   */
-  private async installNixPackages(container: ContainerEntity) {
-    const pkgsRaw = (this.cfg as unknown as { nix?: { packages?: unknown[] } } | undefined)?.nix?.packages;
-    if (!Array.isArray(pkgsRaw) || pkgsRaw.length === 0) return;
-
-    // Normalize package specs from assorted shapes.
-    type AnyPkg = Record<string, unknown>;
-    const toStr = (v: unknown) => (typeof v === 'string' ? v : undefined);
-    const specs: string[] = [];
-    for (const item of pkgsRaw as AnyPkg[]) {
-      if (!item || typeof item !== 'object') continue;
-      const commit = toStr((item as AnyPkg)['commit']) || toStr((item as AnyPkg)['commitHash']) || toStr((item as AnyPkg)['rev']);
-      const attr =
-        toStr((item as AnyPkg)['attributePath']) ||
-        toStr((item as AnyPkg)['attrPath']) ||
-        toStr((item as AnyPkg)['attr']) ||
-        toStr((item as AnyPkg)['name']);
-      if (commit && attr) {
-        specs.push(`'github:NixOS/nixpkgs/${commit}#${attr}'`);
-      }
-    }
-
-    if (specs.length === 0) return; // nothing usable to install
-
-    // Check that nix binary exists in the container
-    try {
-      const { exitCode } = await container.exec(['sh', '-lc', 'command -v nix >/dev/null 2>&1']);
-      if (exitCode !== 0) {
-        try {
-          console.error(
-            `[ContainerProviderEntity] nix is not installed in workspace container ${container.id.substring(0, 12)}; skipping Nix packages install (${specs.length} items)`,
-          );
-        } catch {}
-        return;
-      }
-    } catch {
-      // If exec fails unexpectedly, skip quietly
-      return;
-    }
-
-    const cmd = `nix profile install ${specs.join(' ')}`;
-    const { exitCode, stderr } = await container.exec(cmd, { tty: false, timeoutMs: 15 * 60_000 });
-    if (exitCode !== 0) {
-      const msg = stderr?.trim()?.slice(0, 800) || `exitCode=${exitCode}`;
-      try { console.error(`[ContainerProviderEntity] Nix install error: ${msg}`); } catch {}
-    } else {
-      try { console.debug(`[ContainerProviderEntity] Installed ${specs.length} Nix packages`); } catch {}
-    }
-  }
+  // Legacy installNixPackages helper removed (obsolete). ensureNixPackages is the single source of truth.
 
   private async ensureDinD(workspace: ContainerEntity, baseLabels: Record<string, string>, mirrorUrl: string) {
     // Check existing
@@ -490,6 +475,7 @@ export class ContainerProviderEntity {
   // Install Nix packages in the container profile using combined install with per-package fallback
   private async ensureNixPackages(container: ContainerEntity, specs: NixInstallSpec[], originalCount: number): Promise<void> {
     try {
+      const t0 = Date.now();
       if (!Array.isArray(specs) || specs.length === 0) {
         // If original config had entries but none were resolved, log once
         if ((originalCount || 0) > 0) {
@@ -503,31 +489,69 @@ export class ContainerProviderEntity {
         this.logger.info('%d nix.packages item(s) missing commitHash/attributePath; ignored', ignored);
       }
       // Detect Nix presence quickly
-      const detect = await container.exec('command -v nix >/dev/null 2>&1 && nix --version', { timeoutMs: 5000, idleTimeoutMs: 0 });
+      const detect = await container.exec(['sh', '-lc', 'command -v nix >/dev/null 2>&1 && nix --version'], { timeoutMs: 5000, idleTimeoutMs: 0 });
       if (detect.exitCode !== 0) {
-        this.logger.info('Nix not present; skipping install');
+        this.logger.info('Nix not present; skipping install (container=%s)', container.id.substring(0, 12));
         return;
       }
       const refs = specs.map((s) => `github:NixOS/nixpkgs/${s.commitHash}#${s.attributePath}`);
       const PATH_PREFIX = 'export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"';
       const BASE = "nix profile install --accept-flake-config --extra-experimental-features 'nix-command flakes' --no-write-lock-file";
+
+      // Idempotency via sentinel digest and per-container lock directory
+      const cid = container.id.substring(0, 12);
+      const lockDir = `/var/lock/hautech-nix-${cid}`;
+      const sentDir = `/var/lib/hautech/${cid}`;
+      const sentFile = `${sentDir}/nix-specs.sha256`;
+      const digest = createHash('sha256').update(refs.join('\n')).digest('hex');
+
+      // Attempt to acquire lock and check sentinel
+      const precheckScript = [
+        `mkdir -p ${sentDir} /var/lock || true`,
+        `if ! mkdir ${lockDir} 2>/dev/null; then exit 43; fi`,
+        `if [ -f ${sentFile} ] && grep -qx '${digest}' ${sentFile}; then exit 42; fi`,
+        'exit 0',
+      ].join(' && ');
+      const pre = await container.exec(['sh', '-lc', precheckScript], { timeoutMs: 10_000, idleTimeoutMs: 0 });
+      if (pre.exitCode === 43) {
+        this.logger.info('Nix install already in progress; skipping (container=%s)', cid);
+        return;
+      }
+      if (pre.exitCode === 42) {
+        // release lock acquired during precheck
+        await container.exec(['sh', '-lc', `rmdir ${lockDir} || true`], { timeoutMs: 10_000, idleTimeoutMs: 0 });
+        this.logger.info('Nix packages unchanged; skip install (container=%s, specs=%d)', cid, refs.length);
+        return;
+      }
+
+      const timeoutSec = this.cfg?.nix?.timeoutSeconds ?? 900; // default 15m
       const combined = `${PATH_PREFIX} && ${BASE} ${refs.join(' ')}`;
-      this.logger.info('Nix install: %d packages (combined)', refs.length);
-      const combinedRes = await container.exec(combined, { timeoutMs: 10 * 60_000, idleTimeoutMs: 60_000 });
-      if (combinedRes.exitCode === 0) return;
-      // Fallback per package
-      this.logger.error('Nix install (combined) failed', { exitCode: combinedRes.exitCode });
-      const cmdFor = (ref: string) => `${PATH_PREFIX} && ${BASE} ${ref}`;
-      const timeoutOpts = { timeoutMs: 3 * 60_000, idleTimeoutMs: 60_000 } as const;
-      await refs.reduce<Promise<void>>(
-        (p, ref) =>
-          p.then(async () => {
-            const r = await container.exec(cmdFor(ref), timeoutOpts);
-            if (r.exitCode === 0) this.logger.info('Nix install succeeded for %s', ref);
-            else this.logger.error('Nix install failed for %s', ref, { exitCode: r.exitCode });
-          }),
-        Promise.resolve(),
-      );
+      this.logger.info('Nix install: %d packages (combined) container=%s', refs.length, cid);
+      const combinedRes = await container.exec(['sh', '-lc', combined], { timeoutMs: timeoutSec * 1000, idleTimeoutMs: 60_000 });
+      let allOk = combinedRes.exitCode === 0;
+      if (!allOk) {
+        this.logger.error('Nix install (combined) failed container=%s', cid, { exitCode: combinedRes.exitCode });
+        // Fallback per package sequentially
+        for (const ref of refs) {
+          const cmd = `${PATH_PREFIX} && ${BASE} ${ref}`;
+          const r = await container.exec(['sh', '-lc', cmd], { timeoutMs: timeoutSec * 1000, idleTimeoutMs: 60_000 });
+          if (r.exitCode === 0) this.logger.info('Nix install succeeded for %s container=%s', ref, cid);
+          else {
+            this.logger.error('Nix install failed for %s container=%s', ref, cid, { exitCode: r.exitCode });
+            allOk = false;
+          }
+        }
+      }
+
+      // Write/update sentinel on full success
+      if (allOk) {
+        await container.exec(['sh', '-lc', `printf '${digest}\n' > ${sentFile}`], { timeoutMs: 10_000, idleTimeoutMs: 0 });
+      }
+      // Always release lock
+      await container.exec(['sh', '-lc', `rmdir ${lockDir} || true`], { timeoutMs: 10_000, idleTimeoutMs: 0 });
+
+      const durMs = Date.now() - t0;
+      this.logger.info('Nix install finished container=%s specs=%d success=%s duration_ms=%d', cid, refs.length, String(allOk), durMs);
     } catch (e) {
       // Surface via logger; caller swallows to avoid failing startup
       this.logger.error('Nix install threw', e);
