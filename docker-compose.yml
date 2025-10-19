@@ -185,6 +185,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      # Allow time for initial database startup & init
+      start_period: 20s
     networks:
       - agents_net
 
@@ -205,7 +207,21 @@ services:
       litellm-db:
         condition: service_healthy
     ports:
-      - "4000:4000"
+      # Bind to loopback in dev to avoid exposing externally.
+      # Change to "0.0.0.0:4000:4000" or "4000:4000" to expose on LAN.
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      # Prefer HTTP health endpoint; fall back to UI or root if /health absent.
+      # If wget/curl are unavailable in the image, fall back to a TCP check via nc.
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:4000/health || wget -qO- http://localhost:4000/ui || wget -qO- http://localhost:4000/ || (command -v curl >/dev/null 2>&1 && curl -fsS http://localhost:4000/health) || (command -v nc >/dev/null 2>&1 && nc -z localhost 4000)"
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     networks:
       - agents_net
 
@@ -218,9 +234,6 @@ volumes:
   ncps-storage:
     driver: local
   litellm_pgdata:
-    driver: local
-  # Optional: retained for future LiteLLM config mounting (not used by default)
-  litellm_config:
     driver: local
 
 networks:

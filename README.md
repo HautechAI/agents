@@ -67,7 +67,7 @@ LiteLLM proxy (optional)
 - Toggle for local dev:
   - Route via LiteLLM:
     - OPENAI_API_KEY=sk-<virtual-key>
-    - OPENAI_BASE_URL=http://localhost:4000/v1
+    - OPENAI_BASE_URL=http://localhost:4000/v1  # note: /v1 suffix is required
   - Direct to OpenAI:
     - unset OPENAI_BASE_URL
     - OPENAI_API_KEY=sk-<real-openai-key>

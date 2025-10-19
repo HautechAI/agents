@@ -1,5 +1,8 @@
 LiteLLM setup (local)
 
+Tip
+- Run `docker compose pull` before the first start to ensure you have the latest images.
+
 Prerequisites
 - Docker and Docker Compose
 - agents repo checked out locally
@@ -13,6 +16,10 @@ UI access
   - UI_USERNAME: admin
   - UI_PASSWORD: admin
 
+Networking and ports
+- By default in development, LiteLLM binds to 127.0.0.1:4000 on the host to avoid exposing externally.
+- To expose on your LAN (not recommended without auth/TLS), edit docker-compose.yml and change the litellm ports mapping to either `0.0.0.0:4000:4000` or just `4000:4000`.
+
 Initial configuration (via UI)
 - Create a provider key: add your real OpenAI (or other) API key under Providers.
 - Create a virtual key: generate a key to hand to applications.
@@ -22,6 +29,7 @@ Initial configuration (via UI)
   - Save. The app defaults to model "gpt-5" and will resolve to this alias.
 
 Route app traffic via LiteLLM
+- Important: OPENAI_BASE_URL must include the `/v1` suffix.
 - Host machine usage (outside containers):
   - OPENAI_API_KEY=sk-<virtual-key>
   - OPENAI_BASE_URL=http://localhost:4000/v1
@@ -40,7 +48,7 @@ Persistence verification
 Troubleshooting
 - litellm-db healthcheck: ensure it is healthy before litellm starts.
 - If UI is unreachable, verify port 4000 is exposed and service is running.
-- Check logs: docker compose logs -f litellm litellm-db
+- Check logs: `docker compose logs -f litellm litellm-db`
 - Verify DATABASE_URL points to litellm-db and credentials match.
 
 Security notes (important for production)
