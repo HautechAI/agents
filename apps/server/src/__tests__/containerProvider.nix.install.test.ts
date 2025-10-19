@@ -12,7 +12,11 @@ class StubLogger extends LoggerService {
 
 class FakeContainer extends ContainerEntity {
   private calls: { cmd: string; opts?: any; rc: number }[] = [];
-  constructor(svc: ContainerService, id: string, private execPlan: ((cmd: string) => { rc: number }) | null) {
+  constructor(
+    svc: ContainerService,
+    id: string,
+    private execPlan: ((cmd: string) => { rc: number }) | null,
+  ) {
     super(svc, id);
   }
   override async exec(
@@ -160,5 +164,69 @@ describe('ContainerProviderEntity nix install', () => {
     // No detection nor install
     expect(calls.length).toBe(0);
     expect((logger.info as unknown as { mock: { calls: unknown[][] } }).mock.calls.some((c) => String(c[0]).includes('unresolved'))).toBe(true);
+  });
+
+  it('skips install when sentinel digest unchanged', async () => {
+    // Simulate: first run writes sentinel; second run sees unchanged and exits 42
+    let sentinelWritten = false;
+    const plan = (cmd: string) => {
+      if (cmd.includes('command -v nix') || cmd.includes('nix --version')) return { rc: 0 };
+      if (cmd.includes('mkdir') && cmd.includes('hautech-nix-')) {
+        if (sentinelWritten) return { rc: 42 }; // unchanged
+        return { rc: 0 }; // acquire lock
+      }
+      if (cmd.includes('nix profile install')) return { rc: 0 };
+      if (cmd.includes('printf') && cmd.includes('nix-specs.sha256')) { sentinelWritten = true; return { rc: 0 }; }
+      if (cmd.includes('rmdir') && cmd.includes('hautech-nix-')) return { rc: 0 };
+      return { rc: 0 };
+    };
+    const { provider, svc, logger } = makeProvider(plan);
+    const cfg = { image: 'alpine:3', nix: { timeoutSeconds: 5, packages: [ { commitHash: 'f'.repeat(40), attributePath: 'htop' } ] } } as unknown as ContainerProviderStaticConfig;
+    provider.setConfig(cfg);
+    await provider.provide('t');
+    // Second call should skip without install
+    await provider.provide('t');
+    const calls = (svc.created as FakeContainer).getExecCalls();
+    const installs = calls.filter((c) => String(c.cmd).includes('nix profile install'));
+    expect(installs.length).toBe(1);
+    expect((logger.info as any).mock.calls.some((c: unknown[]) => String(c[0]).includes('unchanged; skip install'))).toBe(true);
+  });
+
+  it('enforces per-container lock: concurrent provide results in one install', async () => {
+    let locked = false;
+    const plan = (cmd: string) => {
+      if (cmd.includes('command -v nix') || cmd.includes('nix --version')) return { rc: 0 };
+      if (cmd.includes('mkdir') && cmd.includes('hautech-nix-')) {
+        if (locked) return { rc: 43 }; // already locked
+        locked = true; return { rc: 0 };
+      }
+      if (cmd.includes('nix profile install')) return { rc: 0 };
+      if (cmd.includes('printf') && cmd.includes('nix-specs.sha256')) return { rc: 0 };
+      if (cmd.includes('rmdir') && cmd.includes('hautech-nix-')) { locked = false; return { rc: 0 }; }
+      return { rc: 0 };
+    };
+    const { provider, svc } = makeProvider(plan);
+    provider.setConfig({ image: 'alpine:3', nix: { packages: [ { commitHash: 'a'.repeat(40), attributePath: 'htop' } ] } } as unknown as ContainerProviderStaticConfig);
+    await Promise.all([provider.provide('t'), provider.provide('t')]);
+    const calls = (svc.created as FakeContainer).getExecCalls();
+    const installs = calls.filter((c) => String(c.cmd).includes('nix profile install'));
+    expect(installs.length).toBe(1);
+  });
+
+  it('honors cfg.nix.timeoutSeconds for exec timeouts', async () => {
+    const plan = (cmd: string) => {
+      if (cmd.includes('nix --version')) return { rc: 0 };
+      if (cmd.includes('mkdir') && cmd.includes('hautech-nix-')) return { rc: 0 };
+      if (cmd.includes('nix profile install')) return { rc: 0 };
+      if (cmd.includes('printf') && cmd.includes('nix-specs.sha256')) return { rc: 0 };
+      if (cmd.includes('rmdir') && cmd.includes('hautech-nix-')) return { rc: 0 };
+      return { rc: 0 };
+    };
+    const { provider, svc } = makeProvider(plan);
+    provider.setConfig({ image: 'alpine:3', nix: { timeoutSeconds: 7, packages: [ { commitHash: 'a'.repeat(40), attributePath: 'htop' } ] } } as unknown as ContainerProviderStaticConfig);
+    await provider.provide('t');
+    const calls = (svc.created as FakeContainer).getExecCalls();
+    const combined = calls.find((c) => String(c.cmd).includes('nix profile install')) as { opts?: any } | undefined;
+    expect(combined?.opts?.timeoutMs).toBe(7000);
   });
 });
