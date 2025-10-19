@@ -170,6 +170,45 @@ services:
       retries: 5
       start_period: 20s
 
+  # LiteLLM Postgres database
+  litellm-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: change-me
+    volumes:
+      - litellm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agents_net
+
+  # LiteLLM server and UI
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.77.5-stable
+    restart: unless-stopped
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-dev-master-1234}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-sk-dev-salt-1234}
+      DATABASE_URL: postgresql://litellm:change-me@litellm-db:5432/litellm
+      STORE_MODEL_IN_DB: "True"
+      UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
+      UI_PASSWORD: ${LITELLM_UI_PASSWORD:-admin}
+      PORT: "4000"
+      HOST: "0.0.0.0"
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    networks:
+      - agents_net
+
 volumes:
   mongo1_data:
     driver: local
@@ -177,6 +216,11 @@ volumes:
     driver: local
   pgdata:
   ncps-storage:
+    driver: local
+  litellm_pgdata:
+    driver: local
+  # Optional: retained for future LiteLLM config mounting (not used by default)
+  litellm_config:
     driver: local
 
 networks:
