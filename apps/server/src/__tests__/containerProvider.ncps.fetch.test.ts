@@ -61,12 +61,11 @@ describe('ContainerProviderEntity NCPS pubkey runtime fetch', () => {
 
     let calls = 0;
     let value = 'pub:key1';
-    type TimeoutId = ReturnType<typeof setTimeout>;
-    const timers: { timeouts: Array<[fn: (...args: unknown[]) => void, delay?: number]>; now: number } = { timeouts: [], now: 0 };
+    const timers: { timeouts: Array<[fn: () => void, delay?: number]>; now: number } = { timeouts: [], now: 0 };
     ContainerProviderEntity.setNcpsHttpClient({
       fetch: (async () => { calls++; return new Response(value, { status: 200, headers: { 'content-type': 'text/plain' } }); }) as typeof fetch,
-      setTimeout: ((handler: (...args: unknown[]) => void, timeout?: number, ...args: unknown[]) => { timers.timeouts.push([handler, timeout]); try { handler(...args); } catch {} return {} as unknown as TimeoutId; }),
-      clearTimeout: ((_id: TimeoutId) => {}),
+      setTimeout: ((callback: () => void, delay?: number) => { timers.timeouts.push([callback, delay]); try { callback(); } catch {} return {} as unknown as ReturnType<typeof setTimeout>; }),
+      clearTimeout: ((_id: ReturnType<typeof setTimeout>) => {}),
       now: () => timers.now,
     });
 
@@ -106,8 +105,8 @@ describe('ContainerProviderEntity NCPS pubkey runtime fetch', () => {
     // invalid value (no colon)
     ContainerProviderEntity.setNcpsHttpClient({
       fetch: (async () => new Response('invalid', { status: 200, headers: { 'content-type': 'text/plain' } })) as typeof fetch,
-      setTimeout: ((h: (...args: unknown[]) => void) => { try { h(); } catch {} return {} as unknown as TimeoutId; }),
-      clearTimeout: ((_id: TimeoutId) => {}),
+      setTimeout: ((callback: () => void) => { try { callback(); } catch {} return {} as unknown as ReturnType<typeof setTimeout>; }),
+      clearTimeout: ((_id: ReturnType<typeof setTimeout>) => {}),
       now: () => 0,
     });
     ent.setConfig({});

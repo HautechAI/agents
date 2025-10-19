@@ -114,12 +114,13 @@ export class ContainerProviderEntity {
   // Lightweight HTTP/timer seam for tests
   private static ncpsHttpClient: {
     fetch: typeof fetch;
-    setTimeout: (...args: Parameters<typeof setTimeout>) => ReturnType<typeof setTimeout>;
+    // Align with Node timer types to simplify stubbing in tests
+    setTimeout: (callback: () => void, delay?: number) => ReturnType<typeof setTimeout>;
     clearTimeout: (id: ReturnType<typeof setTimeout>) => void;
     now: () => number;
   } = {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
-    setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+    setTimeout: (cb: () => void, delay?: number) => setTimeout(cb, delay),
     clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
     now: () => Date.now(),
   };
@@ -129,7 +130,7 @@ export class ContainerProviderEntity {
       // reset to defaults
       ContainerProviderEntity.ncpsHttpClient = {
         fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
-        setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+        setTimeout: (cb: () => void, delay?: number) => setTimeout(cb, delay),
         clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
         now: () => Date.now(),
       };
@@ -200,7 +201,7 @@ export class ContainerProviderEntity {
           if (i < maxAttempts - 1) {
             const delay = i === 0 ? 150 : 300;
             this.logger.debug('NCPS pubkey fetch retrying in %dms for %s', delay, ncpsUrl);
-            await new Promise((r) => ContainerProviderEntity.ncpsHttpClient.setTimeout(r, delay));
+            await new Promise<void>((resolve) => ContainerProviderEntity.ncpsHttpClient.setTimeout(() => resolve(), delay));
           }
         }
         if (key) {
