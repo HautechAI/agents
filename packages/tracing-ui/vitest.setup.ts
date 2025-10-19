@@ -27,3 +27,16 @@ try {
 } catch {
   // ignore
 }
+
+// Lightweight mock for @agyn/ui components used in tests to avoid cross-package JSX runtime issues
+vi.mock('@agyn/ui', async () => {
+  const React = await import('react');
+  const Table = (props: any) => React.createElement('table', { ...props });
+  const Thead = (props: any) => React.createElement('thead', { ...props });
+  const Tbody = (props: any) => React.createElement('tbody', { ...props });
+  const Tr = (props: any) => React.createElement('tr', { ...props });
+  const Th = (props: any) => React.createElement('th', { ...props });
+  const Td = (props: any) => React.createElement('td', { ...props });
+  const Button = ({ children, ...rest }: any) => React.createElement('button', { ...rest }, children);
+  return { Table, Thead, Tbody, Tr, Th, Td, Button } as any;
+});

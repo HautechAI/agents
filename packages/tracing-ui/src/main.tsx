@@ -8,13 +8,14 @@ import { ThreadPage } from './pages/ThreadPage';
 import { ErrorsByToolPage } from './pages/ErrorsByToolPage';
 import { ToolErrorsPage } from './pages/ToolErrorsPage';
 import { EntryLayout } from './components/EntryLayout';
+import { ObsUiProvider } from './context/ObsUiProvider';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* Routes with shared top navigation */}
-        <Route element={<EntryLayout />}>
+        <Route element={<EntryLayout />}> 
           <Route path="/" element={<TracesListPage />} />
           <Route path="/errors/tools" element={<ErrorsByToolPage />} />
           <Route path="/errors/tools/:label" element={<ToolErrorsPage />} />
@@ -26,5 +27,9 @@ function App() {
     </BrowserRouter>
   );
 }
-
-createRoot(document.getElementById('root')!).render(<App />);
+const serverUrl = import.meta.env?.VITE_OBS_SERVER_URL as string;
+createRoot(document.getElementById('root')!).render(
+  <ObsUiProvider serverUrl={serverUrl}>
+    <App />
+  </ObsUiProvider>
+);

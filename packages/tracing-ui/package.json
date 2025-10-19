@@ -1,8 +1,9 @@
 {
-  "name": "@agyn/tracing-ui",
+  "name": "@agyn/obs-ui",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -11,8 +12,23 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./styles.css"
+  },
+  "sideEffects": [
+    "./styles.css"
+  ],
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-router-dom": ">=6",
+    "@agyn/ui": "workspace:*"
+  },
   "dependencies": {
-    "@agyn/ui": "workspace:*",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.6",
     "class-variance-authority": "^0.7.1",
@@ -22,11 +38,8 @@
     "@monaco-editor/react": "^4.7.0",
     "tailwindcss": "^4.1.13",
     "monaco-editor": "^0.53.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
     "react-hotkeys-hook": "^5.1.0",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^6.22.3",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1"
   },
@@ -34,6 +47,10 @@
     "@tailwindcss/vite": "^4.1.13",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^14.0.0",
+    "@agyn/ui": "workspace:*",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^6.22.3",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
