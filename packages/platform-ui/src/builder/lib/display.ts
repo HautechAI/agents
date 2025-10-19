@@ -1,4 +1,4 @@
-import type { TemplateNodeSchema } from 'shared';
+import type { TemplateNodeSchema } from '@agyn/shared';
 
 export function getTemplateSchema(templates: TemplateNodeSchema[], templateName: string | undefined) {
   if (!templateName) return undefined;

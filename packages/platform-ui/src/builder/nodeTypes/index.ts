@@ -1,6 +1,6 @@
 // Generic template-driven node implementation
 import { TemplateNode } from './TemplateNode';
-import type { TemplateNodeSchema } from 'shared';
+import type { TemplateNodeSchema } from '@agyn/shared';
 import type { NodeTypes } from 'reactflow';
 
 export function makeNodeTypes(templates: TemplateNodeSchema[]): NodeTypes {
@@ -8,4 +8,3 @@ export function makeNodeTypes(templates: TemplateNodeSchema[]): NodeTypes {
   for (const t of templates) map[t.name] = TemplateNode;
   return map;
 }
-

@@ -1,6 +1,6 @@
 // React import not required with automatic JSX runtime
 import { Save as SaveIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@hautech/ui';
+import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@agyn/ui';
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 

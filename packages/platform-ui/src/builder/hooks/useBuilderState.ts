@@ -12,7 +12,7 @@ import {
 } from 'reactflow';
 import { v4 as uuid } from 'uuid';
 import { getApiBase } from '../../lib/apiClient';
-import type { TemplateNodeSchema, PersistedGraph } from 'shared';
+import type { TemplateNodeSchema, PersistedGraph } from '@agyn/shared';
 import { deepEqual } from '../../lib/utils';
 
 interface BuilderNodeData {

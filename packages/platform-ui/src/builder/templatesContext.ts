@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { TemplateNodeSchema } from 'shared';
+import type { TemplateNodeSchema } from '@agyn/shared';
 
 export interface TemplatesContextValue {
   templates: TemplateNodeSchema[];

@@ -1,4 +1,4 @@
-import { Button, Input } from '@hautech/ui';
+import { Button, Input } from '@agyn/ui';
 
 export interface KeyValueEditorProps {
   value: Record<string, string> | undefined;

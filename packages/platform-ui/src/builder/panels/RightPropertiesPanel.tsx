@@ -1,6 +1,6 @@
 import type { Node } from 'reactflow';
 import { useCallback, useEffect, useState } from 'react';
-import type { TemplateNodeSchema } from 'shared';
+import type { TemplateNodeSchema } from '@agyn/shared';
 import { useTemplates } from '../useTemplates';
 // Runtime graph components & hooks
 // Removed NodeDetailsPanel wrapper; using granular components directly

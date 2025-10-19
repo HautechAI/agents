@@ -1,5 +1,5 @@
 {
-  "name": "@hautech/obs-sdk",
+  "name": "@agyn/obs-sdk",
   "version": "0.1.0",
   "private": false,
   "type": "module",

@@ -1,11 +1,11 @@
-# @hautech/obs-ui
+# @agyn/obs-ui
 
 Minimal Observability UI (Stage 1)
 
 ## Dev
 
 ```
-pnpm --filter @hautech/obs-ui dev
+pnpm --filter @agyn/obs-ui dev
 ```
 
 Env variables:

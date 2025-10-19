@@ -3,7 +3,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { BaseTool } from '../tools/base.tool';
 import { BaseNode } from './base.lgnode';
 import { NodeOutput } from '../types';
-import { ChatMessageInput, LLMResponse, withLLM } from '@hautech/obs-sdk';
+import { ChatMessageInput, LLMResponse, withLLM } from '@agyn/obs-sdk';
 
 // Minimal connector contract used by CallModelNode for memory injection
 export interface MemoryConnector {

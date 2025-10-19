@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Input } from '@hautech/ui';
+import { Input } from '@agyn/ui';
 import type { StaticConfigViewProps } from './types';
 import ReferenceField, { type ReferenceValue } from './shared/ReferenceField';
 

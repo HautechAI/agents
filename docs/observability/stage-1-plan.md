@@ -8,8 +8,8 @@ Changes (update):
 
 Run server from sources
 - Prereqs: Node 20+, MongoDB available (default MONGO_URL=mongodb://localhost:27017/obs)
-- Dev: `pnpm --filter @hautech/obs-server dev`
-- Build + start: `pnpm --filter @hautech/obs-server build && pnpm --filter @hautech/obs-server start`
+- Dev: `pnpm --filter @agyn/obs-server dev`
+- Build + start: `pnpm --filter @agyn/obs-server build && pnpm --filter @agyn/obs-server start`
 - Endpoints: /healthz, /readyz, POST /v1/spans/upsert, GET /v1/spans, GET /v1/spans/:id, POST /v1/traces (JSON placeholder in Stage 1)
 
 Example package

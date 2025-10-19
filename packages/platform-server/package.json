@@ -1,5 +1,5 @@
 {
-  "name": "server",
+  "name": "@agyn/platform-server",
   "version": "1.0.0",
   "main": "src/index.ts",
   "type": "module",
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
-    "@hautech/obs-sdk": "workspace:*",
+    "@agyn/obs-sdk": "workspace:*",
     "@langchain/core": "^0.3.73",
     "@langchain/langgraph": "^0.4.9",
     "@langchain/langgraph-checkpoint": "^0.1.1",

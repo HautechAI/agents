@@ -1,5 +1,5 @@
 import React from 'react';
-import type { TemplateNodeSchema } from 'shared';
+import type { TemplateNodeSchema } from '@agyn/shared';
 import { TemplatesContext } from './templatesContext';
 
 export function TemplatesProvider({ templates, children }: { templates: TemplateNodeSchema[]; children: React.ReactNode }) {

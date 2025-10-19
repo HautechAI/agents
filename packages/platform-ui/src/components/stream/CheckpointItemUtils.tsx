@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, cn } from '@hautech/ui';
+import { Button, cn } from '@agyn/ui';
 
 // Re-export types for consumers if needed (placeholder to satisfy TS resolution in strict setups)
 export type { };

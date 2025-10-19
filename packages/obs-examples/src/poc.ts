@@ -9,7 +9,7 @@ import {
   withSummarize,
   withSystem,
   withToolCall,
-} from '@hautech/obs-sdk';
+} from '@agyn/obs-sdk';
 
 async function main() {
   const endpoint = process.env.OBS_EXTENDED_ENDPOINT || 'http://localhost:4319';

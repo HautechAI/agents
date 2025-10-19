@@ -11,7 +11,7 @@ import {
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-} from '@hautech/ui';
+} from '@agyn/ui';
 import { Brackets, Lock, X } from 'lucide-react';
 
 export type EnvItem = { key: string; value: string; source?: 'static' | 'vault' };

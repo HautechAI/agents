@@ -1,5 +1,5 @@
 {
-  "name": "@hautech/obs-examples",
+  "name": "@agyn/obs-examples",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,11 +8,11 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "dev": "tsx src/poc.ts",
-    "build": "rimraf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/poc.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.cjs --external:@hautech/obs-sdk && esbuild src/poc.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.mjs --external:@hautech/obs-sdk",
+    "build": "rimraf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/poc.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.cjs --external:@agyn/obs-sdk && esbuild src/poc.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.mjs --external:@agyn/obs-sdk",
     "start": "node dist/index.cjs"
   },
   "dependencies": {
-    "@hautech/obs-sdk": "workspace:*"
+    "@agyn/obs-sdk": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.23.1",

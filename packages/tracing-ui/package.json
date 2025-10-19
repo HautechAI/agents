@@ -1,5 +1,5 @@
 {
-  "name": "@hautech/obs-ui",
+  "name": "@agyn/obs-ui",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@hautech/ui": "workspace:*",
+    "@agyn/ui": "workspace:*",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.6",
     "class-variance-authority": "^0.7.1",

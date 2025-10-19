@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Table, Thead, Tbody, Tr, Th, Td } from '@hautech/ui';
+import { Button, Table, Thead, Tbody, Tr, Th, Td } from '@agyn/ui';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TimeRangeSelector, defaultLast6h } from '../components/TimeRangeSelector';
 import { fetchSpansInRange } from '../services/api';

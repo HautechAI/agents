@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Input, Label } from '@hautech/ui';
+import { Input, Label } from '@agyn/ui';
 
 export type ReferenceValue = { value: string; source?: 'static' | 'vault' };
 
@@ -61,4 +61,3 @@ export default function ReferenceField({ label, value, onChange, readOnly, disab
     </div>
   );
 }
-

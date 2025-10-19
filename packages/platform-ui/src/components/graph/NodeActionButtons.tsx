@@ -1,5 +1,5 @@
 
-import { Button } from '@hautech/ui';
+import { Button } from '@agyn/ui';
 
 export interface NodeActionButtonsProps {
   provisionable: boolean;

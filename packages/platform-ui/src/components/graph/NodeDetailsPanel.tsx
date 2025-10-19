@@ -1,5 +1,5 @@
 // React import not needed with react-jsx runtime
-import { Button, Badge } from '@hautech/ui';
+import { Button, Badge } from '@agyn/ui';
 import { useNodeStatus, useNodeAction } from '../../lib/graph/hooks';
 import { useTemplatesCache } from '../../lib/graph/templates.provider';
 

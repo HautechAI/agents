@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Input } from '@hautech/ui';
+import { Input } from '@agyn/ui';
 import type { StaticConfigViewProps } from './types';
 
 export default function FinishToolConfigView({ value, onChange, readOnly, disabled }: StaticConfigViewProps) {

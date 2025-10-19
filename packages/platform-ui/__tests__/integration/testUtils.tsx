@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TemplatesProvider } from '../../src/lib/graph/templates.provider';
 import * as socketModule from '../../src/lib/graph/socket';
 import type { NodeStatusEvent, TemplateSchema } from '../../src/lib/graph/types';
-import { TooltipProvider } from '@hautech/ui';
+import { TooltipProvider } from '@agyn/ui';
 
 // Mock socket emitter
 export const emitted: Array<NodeStatusEvent> = [];

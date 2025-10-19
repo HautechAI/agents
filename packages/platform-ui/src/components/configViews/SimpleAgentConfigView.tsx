@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { StaticConfigViewProps } from './types';
 // Use shared UI lib components; do not import from app alias paths.
-import { Label } from '@hautech/ui';
+import { Label } from '@agyn/ui';
 
 const MODELS = ['gpt-5', 'gpt-4o-mini', 'o3-mini'];
 

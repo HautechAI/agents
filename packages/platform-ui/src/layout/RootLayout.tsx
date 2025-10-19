@@ -21,8 +21,8 @@ import {
   AvatarImage,
   AvatarFallback,
   Separator
-} from '@hautech/ui';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@hautech/ui';
+} from '@agyn/ui';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agyn/ui';
 import {
   Bot,
   Activity,
