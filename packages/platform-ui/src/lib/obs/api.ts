@@ -1,5 +1,5 @@
-// Minimal OBS API client for platform-ui
-// Defaults: VITE_OBS_SERVER_URL=http://localhost:4319
+// Minimal tracing API client for platform-ui
+// Defaults: VITE_TRACING_SERVER_URL=http://localhost:4319
 
 export interface SpanDoc {
   _id?: string;
@@ -22,10 +22,11 @@ export interface SpanDoc {
   threadId?: string;
 }
 
-const OBS_BASE: string = import.meta.env.VITE_OBS_SERVER_URL || 'http://localhost:4319';
+const TRACING_BASE: string = import.meta.env.VITE_TRACING_SERVER_URL || 'http://localhost:4319';
 
 export function getObsBaseUrl(): string {
-  return OBS_BASE;
+  // Keep function name for compatibility; returns tracing base
+  return TRACING_BASE;
 }
 
 export async function fetchSpansInRange(params: { from: string; to: string; label?: string; limit?: number; cursor?: string; sort?: 'lastUpdate' | 'startTime' } ): Promise<{ items: SpanDoc[]; nextCursor?: string }> {
@@ -36,8 +37,8 @@ export async function fetchSpansInRange(params: { from: string; to: string; labe
   usp.set('limit', String(params.limit ?? 500));
   if (params.cursor) usp.set('cursor', params.cursor);
   if (params.sort) usp.set('sort', params.sort);
-  const res = await fetch(`${OBS_BASE}/v1/spans?${usp.toString()}`);
-  if (!res.ok) throw new Error('Failed to fetch OBS spans');
+  const res = await fetch(`${TRACING_BASE}/v1/spans?${usp.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch tracing spans');
   return res.json();
 }
 
@@ -49,7 +50,7 @@ export async function fetchRunningSpansFromTo(from: string, to: string): Promise
   usp.set('to', to);
   usp.set('sort', 'lastUpdate');
   usp.set('limit', '5000');
-  const res = await fetch(`${OBS_BASE}/v1/spans?${usp.toString()}`);
+  const res = await fetch(`${TRACING_BASE}/v1/spans?${usp.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch running spans');
   const body = (await res.json()) as { items: SpanDoc[] };
   return body.items || [];

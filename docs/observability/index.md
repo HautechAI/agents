@@ -4,7 +4,7 @@ Scope
 - Spans and traces for model calls, tool calls, and system operations.
 - Storage notes and suggested indices.
 - Links to detailed docs in docs/observability/.
-- UI linkage via VITE_OBS_UI_BASE.
+- UI linkage via VITE_TRACING_UI_BASE.
 
 Spans and traces
 - The server initializes the observability SDK at startup with default attributes and endpoints.
@@ -19,7 +19,7 @@ Storage and indices
   
 
 UI linkage
-- The graph UI can link to a trace in the Observability UI via the base configured in `VITE_OBS_UI_BASE` (default http://localhost:4320). Set this in the UI environment.
+- The graph UI can link to a trace in the Observability UI via the base configured in `VITE_TRACING_UI_BASE` (default http://localhost:4320). Set this in the UI environment.
 
 Related docs
 - docs/observability/heartbeats-and-sweeper.md

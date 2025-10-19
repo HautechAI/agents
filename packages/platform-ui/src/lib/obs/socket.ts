@@ -1,8 +1,8 @@
-// Minimal obs realtime socket client (span_upsert events)
+// Minimal tracing realtime socket client (span_upsert events)
 import { io, Socket } from 'socket.io-client';
 import type { SpanDoc } from './api';
 
-const OBS_BASE: string = import.meta.env.VITE_OBS_SERVER_URL || 'http://localhost:4319';
+const TRACING_BASE: string = import.meta.env.VITE_TRACING_SERVER_URL || 'http://localhost:4319';
 
 export type SpanUpsertHandler = (span: SpanDoc) => void;
 
@@ -29,7 +29,7 @@ class ObsRealtime {
 
   private ensure() {
     if (this.socket) return;
-    this.socket = io(OBS_BASE, { path: '/socket.io', transports: ['websocket'], timeout: 10000, autoConnect: true });
+    this.socket = io(TRACING_BASE, { path: '/socket.io', transports: ['websocket'], timeout: 10000, autoConnect: true });
     this.socket.on('span_upsert', (payload: unknown) => {
       if (isSpanDoc(payload)) {
         this.handlers.forEach((h) => h(payload));

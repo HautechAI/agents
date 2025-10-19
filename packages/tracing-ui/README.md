@@ -8,8 +8,8 @@ Minimal Observability UI (Stage 1)
 pnpm --filter @agyn/obs-ui dev
 ```
 
-Env variables:
-- `VITE_OBS_SERVER_URL` (default `http://localhost:4319`)
+Env variables (dev preview only):
+- `VITE_TRACING_SERVER_URL` (default `http://localhost:4319`)
 
 ## Pages
 - `/` traces list (derived from spans)
