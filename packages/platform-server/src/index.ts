@@ -57,10 +57,6 @@ async function bootstrap() {
     logger.error('NcpsKeyService init failed: %s', (e as Error)?.message || String(e));
     process.exit(1);
   }
-<<<<<<< HEAD
-=======
-
->>>>>>> 5dacab4 (fix(server): merge ncps init with LiteLLM provisioning at startup and resolve index.ts conflicts)
   // Attempt to auto-provision a LiteLLM virtual key if not configured with OPENAI_API_KEY
   try {
     const provisioned = await maybeProvisionLiteLLMKey(config, logger);
