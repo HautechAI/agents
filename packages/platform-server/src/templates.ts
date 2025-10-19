@@ -22,7 +22,7 @@ import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
 import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
 import { MongoService } from './services/mongo.service';
 import { MemoryNode, MemoryNodeStaticConfigSchema } from './nodes/memory.node';
-import { MemoryConnectorNode, MemoryConnectorStaticConfigSchema } from './nodes/memory.connector.node';
+import { MemoryConnectorNode, MemoryConnectorStaticConfigSchema } from './nodes/memory-connector.node';
 // Unified Memory tool
 import { UnifiedMemoryTool, UnifiedMemoryToolNodeStaticConfigSchema } from './tools/memory/memory.tool';
 
