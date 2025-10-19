@@ -19,49 +19,6 @@ const EnvItemSchema = z
   .strict()
   .describe('Environment variable entry. When source=vault, value is "<MOUNT>/<PATH>/<KEY>".');
 
-// Internal schema (legacy envRefs removed)
-// Resolved Nix package item accepted at runtime for installation
-const ResolvedNixPackageItemSchema = z
-  .object({
-    commitHash: z
-      .string()
-      .regex(/^[0-9a-f]{40}$/)
-      .describe('Pinned nixpkgs commit hash (40-hex).'),
-    attributePath: z
-      .string()
-      .regex(/^[A-Za-z0-9_.+\-]+$/)
-      .min(1)
-      .describe('Attribute path, e.g., htop or python312Packages.retry'),
-  })
-  .strict();
-
-// Legacy item (kept for backward compatibility; ignored for installation)
-const LegacyNixPackageItemSchema = z
-  .object({
-    attr: z.string(),
-    pname: z.string().optional(),
-    channel: z.string().nullable().optional(),
-  })
-  .strict();
-
-// UI item legacy shape (kept for compatibility; ignored for installation without resolver)
-const UiNixPackageItemSchema = z
-  .object({
-    name: z.string(),
-    version: z.string().nullable().optional(),
-  })
-  .strict();
-
-// New rich UI+resolved shape from #305: include name, version, and resolved fields
-const RichNixPackageItemSchema = z
-  .object({
-    name: z.string(),
-    version: z.string(),
-    commitHash: z.string().regex(/^[0-9a-f]{40}$/),
-    attributePath: z.string().regex(/^[A-Za-z0-9_.+\-]+$/).min(1),
-  })
-  .strict();
-
 export const ContainerProviderStaticConfigSchema = z
   .object({
     image: z.string().min(1).optional().describe('Optional container image override.'),
@@ -125,8 +82,6 @@ export const ContainerProviderExposedStaticConfigSchema = z
 
 export type ContainerProviderStaticConfig = z.infer<typeof ContainerProviderStaticConfigSchema>;
 
-type NewEnvItem = EnvItem;
-
 export class ContainerProviderEntity {
   // Keep cfg loosely typed; normalize before use to ContainerOpts at boundaries
   private cfg?: ContainerProviderStaticConfig;
@@ -170,12 +125,16 @@ export class ContainerProviderEntity {
     // Primary lookup: thread-scoped workspace container only
     // Debug note: ContainerService logs the exact filters as well.
     // Optional local debug:
-    try { console.debug('[ContainerProviderEntity] lookup labels (workspace)', workspaceLabels); } catch {}
+    try {
+      console.debug('[ContainerProviderEntity] lookup labels (workspace)', workspaceLabels);
+    } catch {}
     let container: ContainerEntity | undefined = await this.containerService.findContainerByLabels(workspaceLabels);
 
     // Typed fallback: retry by thread_id only and exclude DinD sidecars.
     if (!container) {
-      try { console.debug('[ContainerProviderEntity] fallback lookup by thread_id only', labels); } catch {}
+      try {
+        console.debug('[ContainerProviderEntity] fallback lookup by thread_id only', labels);
+      } catch {}
       const candidates = await this.containerService.findContainersByLabels(labels);
       if (Array.isArray(candidates) && candidates.length) {
         const results = await Promise.all(
@@ -195,8 +154,6 @@ export class ContainerProviderEntity {
         }
       }
     }
-    const DOCKER_HOST_ENV = 'tcp://localhost:2375';
-    const DOCKER_MIRROR_URL = this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
     const enableDinD = this.cfg?.enableDinD ?? false;
 
     // Enforce non-reuse on platform mismatch if a platform is requested now
@@ -270,7 +227,8 @@ export class ContainerProviderEntity {
 
     if (!container) {
       const DOCKER_HOST_ENV = 'tcp://localhost:2375';
-      const DOCKER_MIRROR_URL = this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
+      const DOCKER_MIRROR_URL =
+        this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
       const enableDinD = this.cfg?.enableDinD ?? false;
       let envMerged: Record<string, string> | undefined = await (async () => {
         const base: Record<string, string> = Array.isArray(this.opts.env)
@@ -287,16 +245,17 @@ export class ContainerProviderEntity {
         return this.envService.resolveProviderEnv(cfgEnv, undefined, base);
       })();
       // Inject NIX_CONFIG only when not present and ncps is explicitly enabled and fully configured
-      try {
-        const hasNixConfig = !!envMerged && typeof envMerged === 'object' && 'NIX_CONFIG' in (envMerged as Record<string, string>);
-        const ncpsEnabled = this.configService?.ncpsEnabled === true;
-        const ncpsUrl = this.configService?.ncpsUrl;
-        const ncpsPub = this.configService?.ncpsPublicKey;
-        if (!hasNixConfig && ncpsEnabled && !!ncpsUrl && !!ncpsPub) {
-          const nixConfig = `substituters = ${ncpsUrl} https://cache.nixos.org\ntrusted-public-keys = ${ncpsPub} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=`;
-          envMerged = { ...(envMerged || {}), NIX_CONFIG: nixConfig } as Record<string, string>;
-        }
-      } catch {}
+
+      const hasNixConfig =
+        !!envMerged && typeof envMerged === 'object' && 'NIX_CONFIG' in (envMerged as Record<string, string>);
+      const ncpsEnabled = this.configService?.ncpsEnabled === true;
+      const ncpsUrl = this.configService?.ncpsUrl;
+      const ncpsPub = this.configService?.ncpsPublicKey;
+      if (!hasNixConfig && ncpsEnabled && !!ncpsUrl && !!ncpsPub) {
+        const nixConfig = `substituters = ${ncpsUrl} https://cache.nixos.org\ntrusted-public-keys = ${ncpsPub} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=`;
+        envMerged = { ...(envMerged || {}), NIX_CONFIG: nixConfig } as Record<string, string>;
+      }
+
       const normalizedEnv: Record<string, string> | undefined = envMerged;
       container = await this.containerService.start({
         ...this.opts,
@@ -308,20 +267,20 @@ export class ContainerProviderEntity {
         ttlSeconds: this.cfg?.ttlSeconds ?? 86400,
       });
       if (enableDinD) await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
+
       if (this.cfg?.initialScript) {
         const script = this.cfg.initialScript;
         const { exitCode, stderr } = await container.exec(script, { tty: false });
-        if (exitCode !== 0) {
-          throw new Error(
-            `Initial script failed (exitCode=${exitCode}) for container ${container.id.substring(0, 12)}${stderr ? ` stderr: ${stderr}` : ''}`,
-          );
-        }
+        this.logger.error(
+          `Initial script failed (exitCode=${exitCode}) for container ${container.id.substring(0, 12)}${stderr ? ` stderr: ${stderr}` : ''}`,
+        );
       }
+
       // Intentional ordering: run initialScript first, then Nix install.
       // This lets the script prepare environment (e.g., user/profile) before installing packages.
       // Install Nix packages when resolved specs are provided (best-effort)
       try {
-        const nixAny = (this.cfg?.nix as any) as { packages?: unknown } | undefined;
+        const nixAny = this.cfg?.nix as any as { packages?: unknown } | undefined;
         const pkgsUnknown = nixAny && (nixAny as any).packages;
         const pkgsArr: unknown[] = Array.isArray(pkgsUnknown) ? (pkgsUnknown as unknown[]) : [];
         const specs = this.normalizeToInstallSpecs(pkgsArr);
@@ -332,11 +291,12 @@ export class ContainerProviderEntity {
         this.logger.error('Nix install step failed (post-start)', e);
       }
     } else {
-      const DOCKER_MIRROR_URL = this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
+      const DOCKER_MIRROR_URL =
+        this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
       if (this.cfg?.enableDinD && container) await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
       // Also attempt install on reuse (idempotent)
       try {
-        const nixAny = (this.cfg?.nix as any) as { packages?: unknown } | undefined;
+        const nixAny = this.cfg?.nix as any as { packages?: unknown } | undefined;
         const pkgsUnknown = nixAny && (nixAny as any).packages;
         const pkgsArr: unknown[] = Array.isArray(pkgsUnknown) ? (pkgsUnknown as unknown[]) : [];
         const specs = this.normalizeToInstallSpecs(pkgsArr);
@@ -346,7 +306,9 @@ export class ContainerProviderEntity {
         this.logger.error('Nix install step failed (reuse)', e);
       }
     }
-    try { await this.containerService.touchLastUsed(container.id); } catch {}
+    try {
+      await this.containerService.touchLastUsed(container.id);
+    } catch {}
     return container;
   }
 
@@ -383,21 +345,33 @@ export class ContainerProviderEntity {
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     while (Date.now() < deadline) {
       try {
-        const { exitCode } = await this.containerService.execContainer(dind.id, ['sh', '-lc', 'docker -H tcp://0.0.0.0:2375 info >/dev/null 2>&1']);
+        const { exitCode } = await this.containerService.execContainer(dind.id, [
+          'sh',
+          '-lc',
+          'docker -H tcp://0.0.0.0:2375 info >/dev/null 2>&1',
+        ]);
         if (exitCode === 0) return;
       } catch {}
       // Early fail if DinD exited unexpectedly (best-effort; skip if low-level client not available)
       try {
         const maybeSvc: unknown = this.containerService;
         // Minimal interfaces to avoid any-casts
-        interface DockerLike { getContainer(id: string): { inspect(): Promise<unknown> } }
-        interface DockerProvider { getDocker(): DockerLike }
+        interface DockerLike {
+          getContainer(id: string): { inspect(): Promise<unknown> };
+        }
+        interface DockerProvider {
+          getDocker(): DockerLike;
+        }
         const hasGetDocker =
-          typeof maybeSvc === 'object' && maybeSvc !== null && 'getDocker' in maybeSvc &&
+          typeof maybeSvc === 'object' &&
+          maybeSvc !== null &&
+          'getDocker' in maybeSvc &&
           typeof (maybeSvc as { getDocker?: unknown }).getDocker === 'function';
         if (hasGetDocker) {
           const docker = (maybeSvc as DockerProvider).getDocker();
-          const inspect = (await docker.getContainer(dind.id).inspect()) as { State?: { Running?: boolean; Status?: string } };
+          const inspect = (await docker.getContainer(dind.id).inspect()) as {
+            State?: { Running?: boolean; Status?: string };
+          };
           const state = inspect?.State;
           if (state && state.Running === false) {
             throw new Error(`DinD sidecar exited unexpectedly: status=${state.Status}`);
@@ -425,7 +399,13 @@ export class ContainerProviderEntity {
       const o = it as Record<string, unknown>;
       const ch = o['commitHash'];
       const ap = o['attributePath'];
-      if (typeof ch === 'string' && /^[0-9a-f]{40}$/.test(ch) && typeof ap === 'string' && /^[A-Za-z0-9_.+\-]+$/.test(ap) && ap.length > 0) {
+      if (
+        typeof ch === 'string' &&
+        /^[0-9a-f]{40}$/.test(ch) &&
+        typeof ap === 'string' &&
+        /^[A-Za-z0-9_.+\-]+$/.test(ap) &&
+        ap.length > 0
+      ) {
         specs.push({ commitHash: ch, attributePath: ap });
       }
     }
@@ -433,7 +413,11 @@ export class ContainerProviderEntity {
   }
 
   // Install Nix packages in the container profile using combined install with per-package fallback
-  private async ensureNixPackages(container: ContainerEntity, specs: NixInstallSpec[], originalCount: number): Promise<void> {
+  private async ensureNixPackages(
+    container: ContainerEntity,
+    specs: NixInstallSpec[],
+    originalCount: number,
+  ): Promise<void> {
     try {
       if (!Array.isArray(specs) || specs.length === 0) {
         // If original config had entries but none were resolved, log once
@@ -448,14 +432,18 @@ export class ContainerProviderEntity {
         this.logger.info('%d nix.packages item(s) missing commitHash/attributePath; ignored', ignored);
       }
       // Detect Nix presence quickly
-      const detect = await container.exec('command -v nix >/dev/null 2>&1 && nix --version', { timeoutMs: 5000, idleTimeoutMs: 0 });
+      const detect = await container.exec('command -v nix >/dev/null 2>&1 && nix --version', {
+        timeoutMs: 5000,
+        idleTimeoutMs: 0,
+      });
       if (detect.exitCode !== 0) {
         this.logger.info('Nix not present; skipping install');
         return;
       }
       const refs = specs.map((s) => `github:NixOS/nixpkgs/${s.commitHash}#${s.attributePath}`);
       const PATH_PREFIX = 'export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"';
-      const BASE = "nix profile install --accept-flake-config --extra-experimental-features 'nix-command flakes' --no-write-lock-file";
+      const BASE =
+        "nix profile install --accept-flake-config --extra-experimental-features 'nix-command flakes' --no-write-lock-file";
       const combined = `${PATH_PREFIX} && ${BASE} ${refs.join(' ')}`;
       this.logger.info('Nix install: %d packages (combined)', refs.length);
       const combinedRes = await container.exec(combined, { timeoutMs: 10 * 60_000, idleTimeoutMs: 60_000 });
