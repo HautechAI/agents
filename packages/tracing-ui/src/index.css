@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Map CSS variables from @hautech/ui into Tailwind v4 theme keys */
+/* Map CSS variables from @agyn/ui into Tailwind v4 theme keys */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
