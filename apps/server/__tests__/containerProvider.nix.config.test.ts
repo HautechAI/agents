@@ -65,7 +65,7 @@ describe('containerProvider nix config acceptance', () => {
             template: 'containerProvider',
             config: {
               image: 'alpine:3',
-              nix: { packages: [{ attr: 'htop', pname: 'htop', channel: 'nixpkgs' }] },
+              nix: { packages: [{ commitHash: 'a'.repeat(40), attributePath: 'htop' }] },
             },
           },
         },
@@ -77,7 +77,7 @@ describe('containerProvider nix config acceptance', () => {
     const live = runtime.getNodes().find((n) => n.id === 'ws');
     const cfg = live?.config as Partial<ContainerProviderStaticConfig> | undefined;
     expect(cfg?.nix?.packages?.length).toBe(1);
-    expect(cfg?.nix?.packages?.[0]).toEqual({ attr: 'htop', pname: 'htop', channel: 'nixpkgs' });
+    expect(cfg?.nix?.packages?.[0]).toEqual({ commitHash: 'a'.repeat(40), attributePath: 'htop' });
   });
 
   it('defaults nix.packages to [] when nix present without packages and strips unknown top-level keys', async () => {
@@ -112,7 +112,7 @@ describe('containerProvider nix config acceptance', () => {
     expect((live?.config as Record<string, unknown> | undefined)?.bogusTopLevelKey).toBeUndefined();
   });
 
-  it('allows extended nix items without rejection', async () => {
+  it('accepts resolved nix items without rejection', async () => {
     const { runtime } = makeRuntime();
     const graph: GraphDefinition = {
       nodes: [
@@ -122,7 +122,7 @@ describe('containerProvider nix config acceptance', () => {
             template: 'containerProvider',
             config: {
               image: 'alpine:3',
-              nix: { packages: [{ name: 'git', version: '2.44.0', attribute_path: 'pkgs/git', commit_hash: 'abc123' }] },
+              nix: { packages: [{ commitHash: 'b'.repeat(40), attributePath: 'curl' }] },
             },
           },
         },
