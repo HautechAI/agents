@@ -114,13 +114,13 @@ export class ContainerProviderEntity {
   // Lightweight HTTP/timer seam for tests
   private static ncpsHttpClient: {
     fetch: typeof fetch;
-    setTimeout: (handler: (...args: any[]) => void, timeout?: number, ...args: any[]) => any;
-    clearTimeout: (id: any) => void;
+    setTimeout: (...args: Parameters<typeof setTimeout>) => ReturnType<typeof setTimeout>;
+    clearTimeout: (id: ReturnType<typeof setTimeout>) => void;
     now: () => number;
   } = {
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
-    setTimeout: (handler: (...args: any[]) => void, timeout?: number, ...args: any[]) => setTimeout(handler as any, timeout as any, ...args as any[]),
-    clearTimeout: (id: any) => clearTimeout(id as any),
+    setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+    clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
     now: () => Date.now(),
   };
 
@@ -129,13 +129,13 @@ export class ContainerProviderEntity {
       // reset to defaults
       ContainerProviderEntity.ncpsHttpClient = {
         fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
-        setTimeout: (handler: (...args: any[]) => void, timeout?: number, ...args: any[]) => setTimeout(handler as any, timeout as any, ...args as any[]),
-        clearTimeout: (id: any) => clearTimeout(id as any),
+        setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+        clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
         now: () => Date.now(),
       };
       return;
     }
-    ContainerProviderEntity.ncpsHttpClient = { ...ContainerProviderEntity.ncpsHttpClient, ...overrides } as any;
+    ContainerProviderEntity.ncpsHttpClient = { ...ContainerProviderEntity.ncpsHttpClient, ...overrides };
   }
 
   static resetNcpsCaches() {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { parseVaultRef } from '../utils/refs';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
 import { ConfigService, configSchema } from '../services/config.service';
@@ -41,6 +41,15 @@ class FakeVaultService extends VaultService {
 }
 
 describe('ContainerProviderEntity parseVaultRef', () => {
+  beforeEach(() => {
+    // Ensure deterministic behavior for NCPS seam and caches
+    ContainerProviderEntity.setNcpsHttpClient();
+    ContainerProviderEntity.resetNcpsCaches();
+  });
+
+  afterEach(() => {
+    ContainerProviderEntity.setNcpsHttpClient();
+  });
   it('parses valid refs', () => {
     expect(parseVaultRef('secret/github/GH_TOKEN')).toEqual({ mount: 'secret', path: 'github', key: 'GH_TOKEN' });
     expect(parseVaultRef('a/b/c/d')).toEqual({ mount: 'a', path: 'b/c', key: 'd' });
@@ -102,12 +111,21 @@ describe('ContainerProviderEntity parseVaultRef', () => {
         mcpToolsStaleTimeoutMs: '0', ncpsEnabled: 'true', ncpsUrl: 'http://ncps:8501',
       }),
     );
+    // Force fetch failure deterministically
+    ContainerProviderEntity.setNcpsHttpClient({
+      fetch: async () => new Response('invalid', { status: 200, headers: { 'content-type': 'text/plain' } }),
+      now: () => Date.now(),
+    });
     const ent2 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgMissingKey);
     ent2.setConfig({});
     const c2 = (await ent2.provide('t4')) as TestContainerEntity;
     expect(c2.env?.['NIX_CONFIG']).toBeUndefined();
 
     // Case 3: enabled=true and runtime fetch returns key -> inject
+    ContainerProviderEntity.setNcpsHttpClient({
+      fetch: async () => new Response('pub:key', { status: 200, headers: { 'content-type': 'text/plain' } }),
+      now: () => Date.now(),
+    });
     const cfgTrue = new ConfigService(
       configSchema.parse({
         githubAppId: 'x', githubAppPrivateKey: 'x', githubInstallationId: 'x', openaiApiKey: 'x', githubToken: 'x', mongodbUrl: 'x',
@@ -118,8 +136,6 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     );
     const ent3 = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfgTrue);
     ent3.setConfig({});
-    // Patch private method for success (test-only); cast to access private
-    (ent3 as unknown as { getNcpsPublicKey: () => Promise<string> }).getNcpsPublicKey = async () => 'pub:key';
     const c3 = (await ent3.provide('t5')) as TestContainerEntity;
     expect(c3.env?.['NIX_CONFIG']).toContain('substituters = http://ncps:8501');
     expect(c3.env?.['NIX_CONFIG']).toContain('trusted-public-keys = pub:key');

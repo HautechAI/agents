@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
 import { ContainerService, type ContainerOpts } from '../services/container.service';
 import { LoggerService } from '../services/logger.service';
@@ -61,11 +61,12 @@ describe('ContainerProviderEntity NCPS pubkey runtime fetch', () => {
 
     let calls = 0;
     let value = 'pub:key1';
-    const timers: { timeouts: Array<[fn: (...args: any[]) => void, delay?: number]>; now: number } = { timeouts: [], now: 0 };
+    type TimeoutId = ReturnType<typeof setTimeout>;
+    const timers: { timeouts: Array<[fn: (...args: unknown[]) => void, delay?: number]>; now: number } = { timeouts: [], now: 0 };
     ContainerProviderEntity.setNcpsHttpClient({
-      fetch: (async () => { calls++; return { ok: true, text: async () => value } as any; }) as any,
-      setTimeout: ((handler: (...args: any[]) => void, timeout?: number, ...args: any[]) => { timers.timeouts.push([handler, timeout]); try { handler(...args); } catch {} return 1 as any; }) as any,
-      clearTimeout: ((_id: any) => {}) as any,
+      fetch: (async () => { calls++; return new Response(value, { status: 200, headers: { 'content-type': 'text/plain' } }); }) as typeof fetch,
+      setTimeout: ((handler: (...args: unknown[]) => void, timeout?: number, ...args: unknown[]) => { timers.timeouts.push([handler, timeout]); try { handler(...args); } catch {} return {} as unknown as TimeoutId; }),
+      clearTimeout: ((_id: TimeoutId) => {}),
       now: () => timers.now,
     });
 
@@ -104,9 +105,9 @@ describe('ContainerProviderEntity NCPS pubkey runtime fetch', () => {
     ent.setLogger(logger);
     // invalid value (no colon)
     ContainerProviderEntity.setNcpsHttpClient({
-      fetch: (async () => ({ ok: true, text: async () => 'invalid' } as any)) as any,
-      setTimeout: ((h: (...args: any[]) => void) => { try { h(); } catch {} return 1 as any; }) as any,
-      clearTimeout: ((_id: any) => {}) as any,
+      fetch: (async () => new Response('invalid', { status: 200, headers: { 'content-type': 'text/plain' } })) as typeof fetch,
+      setTimeout: ((h: (...args: unknown[]) => void) => { try { h(); } catch {} return {} as unknown as TimeoutId; }),
+      clearTimeout: ((_id: TimeoutId) => {}),
       now: () => 0,
     });
     ent.setConfig({});
@@ -114,6 +115,24 @@ describe('ContainerProviderEntity NCPS pubkey runtime fetch', () => {
     expect(c.env['NIX_CONFIG']).toBeUndefined();
     const warned = logger.logs.some((l) => l.level === 'warn' && l.msg.includes('pubkey fetch failed'));
     expect(warned).toBe(true);
+  });
+
+  it('validates ncpsUrl scheme and skips fetch when invalid', async () => {
+    const cfg = new ConfigService(
+      configSchema.parse({
+        ...baseCfg,
+        ncpsUrl: 'ftp://ncps:8501',
+      } as any),
+    );
+    const ent = new ContainerProviderEntity(svc, undefined, {}, () => ({}), cfg);
+    let fetchCalled = 0;
+    ContainerProviderEntity.setNcpsHttpClient({
+      fetch: (async (..._args) => { fetchCalled++; return new Response('pub:key', { status: 200 }); }) as typeof fetch,
+    });
+    ent.setConfig({});
+    const c = (await ent.provide('t6')) as TestContainerEntity;
+    expect(c.env['NIX_CONFIG']).toBeUndefined();
+    expect(fetchCalled).toBe(0);
   });
 
   afterEach(() => {
