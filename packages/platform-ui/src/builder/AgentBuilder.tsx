@@ -461,7 +461,7 @@ export function AgentBuilder() {
         <div className="flex-1 overflow-y-auto p-4">
           {rightTab === 'activity' && activityEligible && selectedNode ? (
             <div className="space-y-4">
-              {/* Show OBS spans for agent/tool nodes */}
+              {/* Show tracing spans for agent/tool nodes */}
               <NodeObsSidebar node={selectedNode} />
             </div>
           ) : (

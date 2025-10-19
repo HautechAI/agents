@@ -13,7 +13,7 @@ Configuration
   2) API_BASE_URL (Node env)
   3) VITEST: '' (tests use relative URLs)
   4) default http://localhost:3010
-- Observability deep links: set `VITE_OBS_UI_BASE` (default http://localhost:4320) to enable trace links.
+- Observability deep links: set `VITE_TRACING_UI_BASE` (default http://localhost:4320) to enable trace links.
 
 Related docs
 - docs/ui/config-views.md (custom config view registry)

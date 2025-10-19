@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Node } from 'reactflow';
-import type { SpanDoc } from '@/lib/obs/api';
-import { fetchSpansInRange } from '@/lib/obs/api';
+import type { SpanDoc } from '@/lib/tracing/api';
+import { fetchSpansInRange } from '@/lib/tracing/api';
 import { obsRealtime } from '@/lib/obs/socket';
 import { useTemplatesCache } from '@/lib/graph/templates.provider';
 import { useNodeReminders } from '@/lib/graph/hooks';
@@ -15,7 +15,7 @@ type BuilderPanelNodeData = {
   dynamicConfig?: Record<string, unknown>;
 };
 
-const OBS_UI_BASE: string = import.meta.env.VITE_OBS_UI_BASE || 'http://localhost:4320';
+const TRACING_UI_BASE: string = import.meta.env.VITE_TRACING_UI_BASE || 'http://localhost:4320';
 
   function spanMatchesContext(span: SpanDoc, node: Node<BuilderPanelNodeData>, kind: 'agent' | 'tool') {
   const attrs = (span.attributes || {}) as Record<string, unknown>;
@@ -53,7 +53,7 @@ function NodeObsSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) {
   const kind: 'agent' | 'tool' | 'other' = (tmpl?.kind === 'agent' || /agent/i.test(node.data.template)) ? 'agent' : (tmpl?.kind === 'tool' ? 'tool' : 'other');
   const reminders = useNodeReminders(node.id, node.data.template === 'remindMeTool');
 
-  // Seed: last 24 hours from obs-server, optionally by label
+  // Seed: last 24 hours from tracing-server, optionally by label
   useEffect(() => {
     if (kind === 'other') return;
     let cancelled = false;
@@ -73,7 +73,7 @@ function NodeObsSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) {
         setSpans(sorted);
       })
       .catch((err) => {
-        console.warn('Failed to seed OBS spans', err);
+        console.warn('Failed to seed tracing spans', err);
       });
     return () => { cancelled = true; };
   }, [node, kind]);
@@ -134,7 +134,7 @@ function NodeObsSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) {
 
   const items = useMemo(() => spans.map((s: SpanDoc) => ({
     span: s,
-    link: `${OBS_UI_BASE}/trace/${encodeURIComponent(s.traceId)}`,
+    link: `${TRACING_UI_BASE}/trace/${encodeURIComponent(s.traceId)}`,
   })), [spans]);
 
   const title = kind === 'agent' ? 'Agent Activity' : kind === 'tool' ? 'Tool Spans (24h)' : 'Spans';

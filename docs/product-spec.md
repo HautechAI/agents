@@ -121,7 +121,7 @@ Configuration matrix (server env vars)
   - LANGGRAPH_CHECKPOINTER: mongo|postgres (default mongo)
   - POSTGRES_URL (postgres connection string)
   - NIX_* (if Nix proxy enabled)
-  - Observability vars in obs-server (e.g., OBS_STALE_TTL_MS)
+  - Observability vars in tracing-server (e.g., TRACING_STALE_TTL_MS)
 - Derived/labels
   - hautech.ai/role=workspace, hautech.ai/thread_id, optional hautech.ai/platform
   - Optional DOCKER_HOST=tcp://localhost:2375 for DinD
@@ -141,8 +141,8 @@ Runbooks
  - Docker Compose stack
   - Services: mongo, mongo-express, vault (auto-init), postgres, registry-mirror.
   - Observability: This repo does not include Jaeger in compose. Use the provided observability services (ports 4319 and 4320) for storage and UI. Quickstart:
-    - `pnpm --filter @agyn/obs-server dev` (or build+start)
-    - `pnpm --filter @agyn/obs-ui dev` (or build+start)
+    - `pnpm --filter @agyn/tracing-server dev` (or build+start)
+    - `pnpm --filter @agyn/tracing-ui dev` (or build+start)
   - Vault init: vault/auto-init.sh populates root token/unseal keys; set VAULT_ENABLED=true and VAULT_ADDR/VAULT_TOKEN.
   - Postgres checkpointer: set LANGGRAPH_CHECKPOINTER=postgres and POSTGRES_URL; UI stream caveat remains.
 
@@ -161,7 +161,7 @@ Release qualification plan
   - Verify TTL and cleanup job removes expired containers; simulate removal error and observe backoff.
   - Verify platform-aware reuse and relabeling.
 - Observability
-  - Confirm spans for model/tool calls; UI links to obs-ui via VITE_OBS_UI_BASE.
+  - Confirm spans for model/tool calls; UI links to tracing-ui via VITE_TRACING_UI_BASE.
 
 Glossary and templates
 - Glossary: docs/glossary.md
