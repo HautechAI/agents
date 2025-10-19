@@ -33,8 +33,8 @@ To temporarily disable hooks: `LEFTHOOK=0 git push`.
 
 ## Languages and frameworks
 Our repo currently uses:
-- TypeScript (Node.js server in `apps/server`)
-- React + Vite + Tailwind v4 (UI in `apps/ui`)
+- TypeScript (Node.js server in `packages/platform-server`)
+- React + Vite + Tailwind v4 (UI in `packages/platform-ui`)
 - Shared TypeScript package (in `packages/shared`)
 
 ## TypeScript Style

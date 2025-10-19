@@ -1,6 +1,7 @@
 {
   "name": "@agyn/platform-server",
   "version": "1.0.0",
+  "private": true,
   "main": "src/index.ts",
   "type": "module",
   "scripts": {

@@ -73,5 +73,5 @@ Defaults and toggles
 
 How to Develop & Test
 - Prereqs: Node.js 20+, pnpm 9+, Docker, MongoDB
-- Run server: pnpm --filter server dev
-- Tests: pnpm --filter server test
+- Run server: pnpm --filter @agyn/platform-server dev
+- Tests: pnpm --filter @agyn/platform-server test
