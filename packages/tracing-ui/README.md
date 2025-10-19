@@ -9,8 +9,8 @@ Key concepts
 
 Usage
 ```
-import { ObsUiProvider, TracingTracesView } from '@agyn/obs-ui';
-import '@agyn/obs-ui/styles.css';
+import { ObsUiProvider, TracingTracesView } from '@agyn/tracing-ui';
+import '@agyn/tracing-ui/styles.css';
 
 <ObsUiProvider serverUrl={process.env.MY_OBS_URL!}>
   <TracingTracesView basePaths={{ trace: '/tracing/trace', thread: '/tracing/thread' }} />
@@ -46,4 +46,4 @@ Env variables (dev preview only):
 - Dark mode
 Provider and styles
 - Provider is required: <ObsUiProvider serverUrl="..." />
-- Styles: import '@agyn/obs-ui/styles.css' to get .obs-md and .obs-terminal class rules.
+- Styles: import '@agyn/tracing-ui/styles.css' to get .obs-md and .obs-terminal class rules.

@@ -12,7 +12,7 @@ import { RootLayout } from './layout/RootLayout';
 import { AgentsChat } from './pages/AgentsChat';
 import { TracingTraces } from './pages/TracingTraces';
 import { TracingErrors } from './pages/TracingErrors';
-import { ObsUiProvider, TraceDetailView, ThreadView, ToolErrorsView } from '@agyn/obs-ui';
+import { ObsUiProvider, TraceDetailView, ThreadView, ToolErrorsView } from '@agyn/tracing-ui';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { MonitoringContainers } from './pages/MonitoringContainers';
 import { MonitoringResources } from './pages/MonitoringResources';

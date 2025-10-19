@@ -124,8 +124,8 @@ jobs:
       - name: Run SDK tests (@agyn/tracing)
         run: pnpm --filter @agyn/tracing test
 
-      - name: Type-check tracing UI (@agyn/obs-ui)
-        run: pnpm --filter @agyn/obs-ui run typecheck
+      - name: Type-check tracing UI (@agyn/tracing-ui)
+        run: pnpm --filter @agyn/tracing-ui run typecheck
 
   build-server:
     name: Build Server
