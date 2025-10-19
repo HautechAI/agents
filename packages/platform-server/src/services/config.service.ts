@@ -37,20 +37,32 @@ export const configSchema = z.object({
   nixHttpTimeoutMs: z
     .union([z.string(), z.number()])
     .default('5000')
-    .transform((v) => Number(v) || 5000),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 5000;
+    }),
   nixCacheTtlMs: z
     .union([z.string(), z.number()])
     .default(String(5 * 60_000))
-    .transform((v) => Number(v) || 5 * 60_000),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 5 * 60_000;
+    }),
   nixCacheMax: z
     .union([z.string(), z.number()])
     .default('500')
-    .transform((v) => Number(v) || 500),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 500;
+    }),
   // Global MCP tools cache staleness timeout (ms). 0 => never stale by time.
   mcpToolsStaleTimeoutMs: z
     .union([z.string(), z.number()])
     .default('0')
-    .transform((v) => Number(v) || 0),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 0;
+    }),
   // NCPS (Nix Cache Proxy Server) settings
   ncpsEnabled: z
     .union([z.boolean(), z.string()])
@@ -61,23 +73,38 @@ export const configSchema = z.object({
   ncpsFetchTimeoutMs: z
     .union([z.string(), z.number()])
     .default('3000')
-    .transform((v) => Number(v) || 3000),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 3000;
+    }),
   ncpsRefreshIntervalMs: z
     .union([z.string(), z.number()])
     .default(String(10 * 60_000))
-    .transform((v) => Number(v) || 10 * 60_000),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 10 * 60_000;
+    }),
   ncpsStartupMaxRetries: z
     .union([z.string(), z.number()])
     .default('8')
-    .transform((v) => Number(v) || 8),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 8;
+    }),
   ncpsRetryBackoffMs: z
     .union([z.string(), z.number()])
     .default('500')
-    .transform((v) => Number(v) || 500),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 500;
+    }),
   ncpsRetryBackoffFactor: z
     .union([z.string(), z.number()])
     .default('2')
-    .transform((v) => Number(v) || 2),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 2;
+    }),
   ncpsAllowStartWithoutKey: z
     .union([z.boolean(), z.string()])
     .default('true')
@@ -86,7 +113,10 @@ export const configSchema = z.object({
   ncpsRotationGraceMinutes: z
     .union([z.string(), z.number()])
     .default('0')
-    .transform((v) => Number(v) || 0),
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 0;
+    }),
   ncpsAuthHeader: z.string().optional(),
   ncpsAuthToken: z.string().optional(),
 });
@@ -147,7 +177,8 @@ export class ConfigService implements Config {
   }
 
   get dockerMirrorUrl(): string {
-    return this.params.dockerMirrorUrl || 'http://registry-mirror:5000';
+    // schema provides default; avoid falsy fallback that breaks zero-value semantics
+    return this.params.dockerMirrorUrl;
   }
 
   // Nix proxy getters

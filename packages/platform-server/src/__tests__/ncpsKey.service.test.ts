@@ -73,11 +73,33 @@ describe('NcpsKeyService', () => {
     // Next refresh returns different key
     scope.get('/pubkey').reply(200, 'rot2:DDDDDD=');
     // Manually trigger fetch (avoid waiting interval)
-    await (svc as any).fetchWithRetries();
+    await svc.triggerRefreshOnce();
     const keys = svc.getKeysForInjection();
     expect(keys.includes('rot1:CCCCCC=')).toBe(true);
     expect(keys.includes('rot2:DDDDDD=')).toBe(true);
     svc.stop();
   });
-});
 
+  it('uses undici dispatcher with custom CA for https', async () => {
+    const fs = await import('node:fs/promises');
+    const caPath = '/tmp/mock-ca.pem';
+    await fs.writeFile(caPath, '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n');
+    const cfg = new ConfigService(
+      configSchema.parse({
+        ...baseEnv,
+        ncpsUrl: 'https://ncps:8501',
+        ncpsCaBundle: caPath,
+        ncpsRefreshIntervalMs: '0',
+      })
+    );
+    const svc = new NcpsKeyService(cfg);
+    let seenDispatcher: any;
+    svc.setFetchImpl(async (input: any, init?: any) => {
+      seenDispatcher = init?.dispatcher;
+      return new Response('cache:ZZZZZZZ=', { status: 200, headers: { 'Content-Type': 'text/plain' } });
+    });
+    await svc.init();
+    expect(seenDispatcher).toBeTruthy();
+    expect(svc.getCurrentKey()).toBe('cache:ZZZZZZZ=');
+  });
+});

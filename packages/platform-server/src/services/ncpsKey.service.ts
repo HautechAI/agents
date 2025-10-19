@@ -1,6 +1,7 @@
-import { readFile } from 'node:fs/promises';
 import { LoggerService } from './logger.service';
 import { ConfigService } from './config.service';
+import type { Dispatcher } from 'undici';
+import { Agent } from 'undici';
 
 const KEY_RE = /^[A-Za-z0-9._-]+:[A-Za-z0-9+/=]+$/;
 
@@ -10,6 +11,8 @@ export class NcpsKeyService {
   private prevUntil?: number; // epoch ms when dual-key grace ends
   private timer?: NodeJS.Timeout;
   private inited = false;
+  private isRefreshing = false;
+  private _fetch: typeof fetch = (...args: Parameters<typeof fetch>) => fetch(...args);
 
   constructor(private cfg: ConfigService, private logger = new LoggerService()) {}
 
@@ -58,16 +61,18 @@ export class NcpsKeyService {
     if (!Number.isFinite(interval) || interval <= 0) return;
     if (this.timer) clearInterval(this.timer);
     this.timer = setInterval(() => {
-      this.fetchWithRetries().catch((e) =>
-        this.logger.error('NcpsKeyService refresh error: %s', (e as Error)?.message || String(e)),
-      );
+      if (this.isRefreshing) return;
+      this.isRefreshing = true;
+      this.fetchWithRetries()
+        .catch((e) => this.logger.error('NcpsKeyService refresh error: %s', (e as Error)?.message || String(e)))
+        .finally(() => { this.isRefreshing = false; });
     }, interval).unref?.();
   }
 
   private async fetchWithRetries(): Promise<boolean> {
-    const maxRetries = Math.max(0, Number(this.cfg.ncpsStartupMaxRetries) || 0);
-    const base = Math.max(1, Number(this.cfg.ncpsRetryBackoffMs) || 500);
-    const factor = Math.max(1, Number(this.cfg.ncpsRetryBackoffFactor) || 2);
+    const maxRetries = Math.max(0, this.cfg.ncpsStartupMaxRetries);
+    const base = Math.max(1, this.cfg.ncpsRetryBackoffMs);
+    const factor = Math.max(1, this.cfg.ncpsRetryBackoffFactor);
     let attempt = 0;
     while (true) {
       attempt++;
@@ -77,7 +82,7 @@ export class NcpsKeyService {
           // rotate
           if (this.currentKey) {
             this.previousKey = this.currentKey;
-            const minutes = Math.max(0, Number(this.cfg.ncpsRotationGraceMinutes) || 0);
+            const minutes = Math.max(0, this.cfg.ncpsRotationGraceMinutes);
             this.prevUntil = minutes > 0 ? Date.now() + minutes * 60_000 : 0;
           }
           this.currentKey = key;
@@ -97,6 +102,26 @@ export class NcpsKeyService {
     }
   }
 
+  setFetchImpl(fn: typeof fetch) { this._fetch = fn; }
+  async triggerRefreshOnce(): Promise<boolean> {
+    if (this.isRefreshing) return false;
+    this.isRefreshing = true;
+    try {
+      return await this.fetchWithRetries();
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+  seedKeyForTest(key: string) { this.currentKey = key; }
+
+  private buildDispatcher(url: string, caPath?: string): Dispatcher | undefined {
+    if (!/^https:/i.test(url)) return undefined;
+    if (!caPath) return undefined;
+    const fs = require('node:fs');
+    const pem = fs.readFileSync(caPath, 'utf8');
+    return new Agent({ connect: { ca: pem } });
+  }
+
   private async fetchOnce(): Promise<string> {
     const url = `${this.cfg.ncpsUrl}${this.cfg.ncpsPubkeyPath}`;
     const ac = new AbortController();
@@ -108,19 +133,11 @@ export class NcpsKeyService {
         headers[this.cfg.ncpsAuthHeader] = this.cfg.ncpsAuthToken;
       }
 
-      // Optional custom CA bundle for https
-      let agent: any = undefined;
-      if (/^https:/i.test(url) && this.cfg.ncpsCaBundle) {
-        const pem = await readFile(this.cfg.ncpsCaBundle, 'utf8');
-        const https = await import('node:https');
-        agent = new https.Agent({ ca: pem });
-      }
-
-      const res = await fetch(url, { signal: ac.signal, headers, // @ts-ignore node-fetch supports agent
-        agent });
+      const dispatcher = this.buildDispatcher(url, this.cfg.ncpsCaBundle);
+      const res = await this._fetch(url, { signal: ac.signal, headers, dispatcher } as any);
       if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`http_${res.status}:${txt.slice(0, 200)}`);
+        // Do not include response body in error to avoid leaking
+        throw new Error(`http_${res.status}`);
       }
       const text = (await res.text()).trim();
       // Validate
@@ -133,4 +150,3 @@ export class NcpsKeyService {
     }
   }
 }
-
