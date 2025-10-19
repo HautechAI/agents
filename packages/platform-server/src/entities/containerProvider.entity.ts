@@ -444,19 +444,13 @@ export class ContainerProviderEntity {
       const PATH_PREFIX = 'export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"';
       const BASE =
         "nix profile install --accept-flake-config --extra-experimental-features 'nix-command flakes' --no-write-lock-file";
-      // Append a shell comment with just the attribute names to aid test filtering (no effect on execution)
-      const attrHint = specs.map((s) => `#${s.attributePath}`).join(' ');
-      const combined = `${PATH_PREFIX} && ${BASE} ${refs.join(' ')} ${attrHint}`;
+      const combined = `${PATH_PREFIX} && ${BASE} ${refs.join(' ')}`;
       this.logger.info('Nix install: %d packages (combined)', refs.length);
       const combinedRes = await container.exec(combined, { timeoutMs: 10 * 60_000, idleTimeoutMs: 60_000 });
       if (combinedRes.exitCode === 0) return;
       // Fallback per package
       this.logger.error('Nix install (combined) failed', { exitCode: combinedRes.exitCode });
-      const cmdFor = (ref: string) => {
-        const attr = ref.split('#')[1] || '';
-        const hint = attr ? ` #${attr}` : '';
-        return `${PATH_PREFIX} && ${BASE} ${ref}${hint}`;
-      };
+      const cmdFor = (ref: string) => `${PATH_PREFIX} && ${BASE} ${ref}`;
       const timeoutOpts = { timeoutMs: 3 * 60_000, idleTimeoutMs: 60_000 } as const;
       await refs.reduce<Promise<void>>(
         (p, ref) =>
