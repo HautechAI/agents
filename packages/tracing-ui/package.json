@@ -11,6 +11,13 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./styles.css"
+  },
   "dependencies": {
     "@agyn/ui": "workspace:*",
     "@radix-ui/react-slot": "^1.2.3",

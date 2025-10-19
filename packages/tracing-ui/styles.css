@@ -1,0 +1,13 @@
+/* Minimal styles shipped by @agyn/obs-ui. */
+/* Do not import Tailwind or other packages here. */
+.obs-md {
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+.obs-md code, .obs-terminal code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.95em;
+}
+.obs-terminal {
+  white-space: pre-wrap;
+}

@@ -1,9 +1,23 @@
 # @agyn/tracing-ui
 
-Minimal Observability UI (Stage 1)
+React component library for Observability UI.
 
-## Dev
+Key concepts
+- Library exports React views and a provider. The library must not read import.meta.env directly.
+- Use ObsUiProvider to pass serverUrl at runtime. Only the dev preview app may read env.
+- Import styles for markdown/log rendering from './styles.css'.
 
+Usage
+```
+import { ObsUiProvider, TracingTracesView } from '@agyn/obs-ui';
+import '@agyn/obs-ui/styles.css';
+
+<ObsUiProvider serverUrl={process.env.MY_OBS_URL!}>
+  <TracingTracesView basePaths={{ trace: '/tracing/trace', thread: '/tracing/thread' }} />
+</ObsUiProvider>
+```
+
+Development
 ```
 pnpm --filter @agyn/tracing-ui dev
 ```
@@ -30,3 +44,6 @@ Env variables (dev preview only):
 - Live updates via polling / SSE
 - Search & filters
 - Dark mode
+Provider and styles
+- Provider is required: <ObsUiProvider serverUrl="..." />
+- Styles: import '@agyn/obs-ui/styles.css' to get .obs-md and .obs-terminal class rules.

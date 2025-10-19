@@ -206,6 +206,9 @@ importers:
 
   packages/platform-ui:
     dependencies:
+      '@agyn/obs-ui':
+        specifier: workspace:*
+        version: link:../tracing-ui
       '@agyn/shared':
         specifier: workspace:*
         version: link:../shared

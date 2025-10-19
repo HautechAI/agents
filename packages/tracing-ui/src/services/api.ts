@@ -1,7 +1,6 @@
 import { SpanDoc, LogDoc } from '../types';
 import type { TimeRange } from '../components/TimeRangeSelector';
-
-const BASE_URL = import.meta.env?.VITE_TRACING_SERVER_URL || 'http://localhost:4319';
+import { getServerUrl } from '../config';
 
 export async function fetchTraces(): Promise<Array<{ traceId: string; root?: SpanDoc; spanCount: number; failedCount: number; lastUpdate: string }>> {
   // We only have spans endpoint; derive traces by grouping spans.latest
@@ -51,7 +50,7 @@ export async function fetchSpans(opts: { limit?: number; cursor?: string } = {})
   // Default to large limit (5000) now that server supports it, unless caller overrides
   usp.set('limit', String(opts.limit ?? 5000));
   if (opts.cursor) usp.set('cursor', opts.cursor);
-  const r = await fetch(BASE_URL + '/v1/spans' + (usp.toString() ? `?${usp.toString()}` : ''));
+  const r = await fetch(getServerUrl() + '/v1/spans' + (usp.toString() ? `?${usp.toString()}` : ''));
   if (!r.ok) throw new Error('Failed to fetch spans');
   const data = await r.json();
   return data.items || [];
@@ -62,7 +61,7 @@ export async function fetchLogs(params: { traceId?: string; spanId?: string; lim
   if (params.traceId) usp.set('traceId', params.traceId);
   if (params.spanId) usp.set('spanId', params.spanId);
   if (params.limit) usp.set('limit', String(params.limit));
-  const r = await fetch(BASE_URL + '/v1/logs' + (usp.toString() ? '?' + usp.toString() : ''));
+  const r = await fetch(getServerUrl() + '/v1/logs' + (usp.toString() ? '?' + usp.toString() : ''));
   if (!r.ok) throw new Error('Failed to fetch logs');
   const data = await r.json();
   return data.items || [];
@@ -76,7 +75,7 @@ export async function fetchErrorsByTool(range: TimeRange, opts: { field?: 'lastU
   usp.set('to', range.to);
   if (opts.field) usp.set('field', opts.field);
   if (opts.limit) usp.set('limit', String(opts.limit));
-  const url = BASE_URL + '/v1/metrics/errors-by-tool' + (usp.toString() ? `?${usp}` : '');
+  const url = getServerUrl() + '/v1/metrics/errors-by-tool' + (usp.toString() ? `?${usp}` : '');
   const r = await fetch(url);
   if (r.status === 404) {
     // Fallback: client-side aggregation using /v1/spans
@@ -112,7 +111,7 @@ export async function fetchSpansInRange(range: TimeRange, params: { status?: 'ru
   if (params.label) usp.set('label', params.label);
   if (params.cursor) usp.set('cursor', params.cursor);
   if (params.sort) usp.set('sort', params.sort);
-  const r = await fetch(BASE_URL + '/v1/spans' + (usp.toString() ? `?${usp.toString()}` : ''));
+  const r = await fetch(getServerUrl() + '/v1/spans' + (usp.toString() ? `?${usp.toString()}` : ''));
   if (!r.ok) throw new Error('Failed to fetch spans');
   const data = await r.json();
   return data;

@@ -12,6 +12,8 @@ import { RootLayout } from './layout/RootLayout';
 import { AgentsChat } from './pages/AgentsChat';
 import { TracingTraces } from './pages/TracingTraces';
 import { TracingErrors } from './pages/TracingErrors';
+import { ObsUiProvider, TraceDetailView, ThreadView, ToolErrorsView } from '@agyn/obs-ui';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { MonitoringContainers } from './pages/MonitoringContainers';
 import { MonitoringResources } from './pages/MonitoringResources';
 import { SettingsSecrets } from './pages/SettingsSecrets';
@@ -36,6 +38,9 @@ function App() {
             {/* Tracing */}
             <Route path="/tracing/traces" element={<TracingTraces />} />
             <Route path="/tracing/errors" element={<TracingErrors />} />
+            <Route path="/tracing/trace/:traceId" element={<TraceDetailRoute />} />
+            <Route path="/tracing/thread/:threadId" element={<ThreadRoute />} />
+            <Route path="/tracing/errors/tools/:label" element={<ToolErrorsRoute />} />
 
             {/* Monitoring */}
             <Route path="/monitoring/containers" element={<MonitoringContainers />} />
@@ -51,3 +56,35 @@ function App() {
 }
 
 export default App;
+
+const serverUrl = import.meta.env.VITE_OBS_SERVER_URL as string;
+
+function TraceDetailRoute() {
+  const params = useParams();
+  return (
+    <ObsUiProvider serverUrl={serverUrl}>
+      <TraceDetailView traceId={params.traceId!} />
+    </ObsUiProvider>
+  );
+}
+
+function ThreadRoute() {
+  const params = useParams();
+  return (
+    <ObsUiProvider serverUrl={serverUrl}>
+      <ThreadView threadId={params.threadId!} />
+    </ObsUiProvider>
+  );
+}
+
+function ToolErrorsRoute() {
+  const params = useParams();
+  const [sp] = useSearchParams();
+  const from = sp.get('from') || new Date(Date.now() - 6 * 3600_000).toISOString();
+  const to = sp.get('to') || new Date().toISOString();
+  return (
+    <ObsUiProvider serverUrl={serverUrl}>
+      <ToolErrorsView label={decodeURIComponent(params.label!)} range={{ from, to }} />
+    </ObsUiProvider>
+  );
+}

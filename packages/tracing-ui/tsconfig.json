@@ -4,7 +4,9 @@
     "jsx": "react-jsx",
     "rootDir": ".",
     "outDir": "dist",
-    "types": ["vitest", "node"]
+    "types": ["vitest", "node"],
+    "declaration": true,
+    "declarationDir": "dist"
   },
   "include": ["src", "vite.config.ts", "vitest.setup.ts"],
   "exclude": ["dist", "node_modules", "src/__tests__"],

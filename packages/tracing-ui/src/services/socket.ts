@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { SpanDoc, LogDoc } from '../types';
 import { isBrowser, isTest } from '../utils/env';
+import { getServerUrl } from '../config';
 
 // Lightweight singleton socket for span realtime events.
 // Stage 1: global subscription to all span_upsert events.
@@ -55,7 +56,8 @@ class SpanRealtime {
     if (isTest || !isBrowser) return;
     if (this.socket || this.connecting) return;
     this.connecting = true;
-    const url = 'http://localhost:4319'; // Hardcoded dev endpoint
+    const base = getServerUrl();
+    const url = base; // serverUrl should include protocol/host
     console.info('[obs-realtime] connecting to', url);
     const s = io(url, { path: '/socket.io', transports: ['websocket'], timeout: 10000 });
     this.socket = s;
