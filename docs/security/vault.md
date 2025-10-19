@@ -10,7 +10,7 @@ Dev setup
    - docker compose up -d vault vault-init
    - Vault UI/API available at http://localhost:8200 (token: dev-root)
    - KV v2 is enabled at mount `secret/` and an example token is seeded at `secret/github` with key `GH_TOKEN`.
-2) Configure server env (apps/server/.env):
+2) Configure server env (packages/platform-server/.env):
    - VAULT_ENABLED=true
    - VAULT_ADDR=http://localhost:8200
    - VAULT_TOKEN=dev-root

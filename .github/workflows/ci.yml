@@ -81,7 +81,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run server tests
-        run: pnpm --filter server test
+        run: pnpm --filter @agyn/platform-server test
 
   test-ui:
     name: Test UI
@@ -118,11 +118,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run UI tests (apps/ui)
-        run: pnpm --filter ui test
+      - name: Run UI tests (@agyn/platform-ui)
+        run: pnpm --filter @agyn/platform-ui test
 
-      - name: Run UI tests (@hautech/obs-ui)
-        run: pnpm --filter @hautech/obs-ui test
+      - name: Run SDK tests (@agyn/obs-sdk)
+        run: pnpm --filter @agyn/obs-sdk test
+
+      - name: Type-check tracing UI (@agyn/obs-ui)
+        run: pnpm --filter @agyn/obs-ui run typecheck
 
   build-server:
     name: Build Server
@@ -161,7 +164,7 @@ jobs:
 
       # No explicit build script for server; perform type-check as build-equivalent
       - name: Type-check server (noEmit)
-        run: pnpm --filter server exec tsc -p tsconfig.json --noEmit
+        run: pnpm --filter @agyn/platform-server exec tsc -p tsconfig.json --noEmit
 
   build-ui:
     name: Build UI
@@ -198,8 +201,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build apps/ui
-        run: pnpm --filter ui build
+      - name: Build @agyn/platform-ui
+        run: pnpm --filter @agyn/platform-ui build
 
-      - name: Build @hautech/obs-ui
-        run: pnpm --filter @hautech/obs-ui build
+      - name: Build @agyn/obs-ui
+        run: pnpm --filter @agyn/obs-ui build

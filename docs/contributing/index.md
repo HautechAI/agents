@@ -19,15 +19,15 @@ Thank you for taking the time to contribute! This document explains how to set u
    pnpm install
    ```
 2. Copy environment file(s) and set required variables:
-   - Server app: `apps/server/.env.example` -> `apps/server/.env`
+  - Server app: `packages/platform-server/.env.example` -> `packages/platform-server/.env`
 3. Optional: start MongoDB replica set for real-time checkpoint stream:
    ```bash
    docker compose up -d mongo
    ```
 
 ## Common Scripts
-- Run UI in dev: `pnpm --filter ui dev`
-- Run Server in dev: `pnpm --filter server dev`
+- Run UI in dev: `pnpm --filter @agyn/platform-ui dev`
+- Run Server in dev: `pnpm --filter @agyn/platform-server dev`
 - Test all packages: `pnpm test`
 
 Tip: Use `pnpm -w run <script>` for workspace-wide scripts, or `pnpm --filter <pkg>` to scope.
@@ -78,7 +78,7 @@ This keeps history readable and enables future automation.
 
 ## Directory Structure (high level)
 ```
-apps/
+packages/
   server/      # Node.js/TS server
   ui/          # React + Vite UI
 packages/

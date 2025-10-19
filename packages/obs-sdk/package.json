@@ -1,7 +1,7 @@
 {
-  "name": "@hautech/obs-sdk",
+  "name": "@agyn/obs-sdk",
   "version": "0.1.0",
-  "private": false,
+  "private": true,
   "type": "module",
   "main": "src/index.ts",
   "scripts": {

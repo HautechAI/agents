@@ -4,18 +4,18 @@ Authoritative scope for Issue #82. Dev/local only, no auth or rate limiting. Min
 
 Changes (update):
 - No Docker compose; run server from sources via pnpm scripts.
-- Example moved into its own package `@hautech/obs-examples`.
+- Example moved into its own package `@agyn/obs-examples`.
 
 Run server from sources
 - Prereqs: Node 20+, MongoDB available (default MONGO_URL=mongodb://localhost:27017/obs)
-- Dev: `pnpm --filter @hautech/obs-server dev`
-- Build + start: `pnpm --filter @hautech/obs-server build && pnpm --filter @hautech/obs-server start`
+- Dev: `pnpm --filter @agyn/obs-server dev`
+- Build + start: `pnpm --filter @agyn/obs-server build && pnpm --filter @agyn/obs-server start`
 - Endpoints: /healthz, /readyz, POST /v1/spans/upsert, GET /v1/spans, GET /v1/spans/:id, POST /v1/traces (JSON placeholder in Stage 1)
 
 Example package
 - Example scripts are provided to exercise the observability APIs.
-- Dev: `pnpm --filter @hautech/obs-examples dev`
-- Build + run: `pnpm --filter @hautech/obs-examples build && pnpm --filter @hautech/obs-examples start`
+- Dev: `pnpm --filter @agyn/obs-examples dev`
+- Build + run: `pnpm --filter @agyn/obs-examples build && pnpm --filter @agyn/obs-examples start`
 - Env: `OBS_EXTENDED_ENDPOINT` (default http://localhost:4319)
 
 Linking from Builder UI (Activity panel)

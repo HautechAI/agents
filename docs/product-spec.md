@@ -135,14 +135,14 @@ Runbooks
   - Prereqs: Node 18+, pnpm, Docker, Mongo.
   - Set: MONGODB_URL, OPENAI_API_KEY, GITHUB_*, GH_TOKEN. Optional VAULT_* and DOCKER_MIRROR_URL.
   - Start deps (compose or local Mongo)
-  - Server: pnpm -w -F server dev
-  - UI: pnpm -w -F ui dev
+  - Server: pnpm -w -F @agyn/platform-server dev
+  - UI: pnpm -w -F @agyn/platform-ui dev
   - Verify: curl http://localhost:3010/api/templates; open UI; connect socket to observe node_status when provisioning.
  - Docker Compose stack
   - Services: mongo, mongo-express, vault (auto-init), postgres, registry-mirror.
   - Observability: This repo does not include Jaeger in compose. Use the provided observability services (ports 4319 and 4320) for storage and UI. Quickstart:
-    - `pnpm --filter @hautech/obs-server dev` (or build+start)
-    - `pnpm --filter @hautech/obs-ui dev` (or build+start)
+    - `pnpm --filter @agyn/obs-server dev` (or build+start)
+    - `pnpm --filter @agyn/obs-ui dev` (or build+start)
   - Vault init: vault/auto-init.sh populates root token/unseal keys; set VAULT_ENABLED=true and VAULT_ADDR/VAULT_TOKEN.
   - Postgres checkpointer: set LANGGRAPH_CHECKPOINTER=postgres and POSTGRES_URL; UI stream caveat remains.
 

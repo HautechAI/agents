@@ -1,11 +1,11 @@
-# @hautech/obs-sdk
+# @agyn/obs-sdk
 
 Stage 1 observability SDK for Node 18+. See docs in repo root for full scope.
 
 Quick start:
 
 ```ts
-import { init, withSpan, withAgent, withLLM, withToolCall, withSummarize, withSystem, SummarizeResponse } from '@hautech/obs-sdk';
+import { init, withSpan, withAgent, withLLM, withToolCall, withSummarize, withSystem, SummarizeResponse } from '@agyn/obs-sdk';
 
 init({
   mode: 'extended',
@@ -77,7 +77,7 @@ The SDK provides a contextual logger bound to the active span via `AsyncLocalSto
 Usage:
 
 ```ts
-import { logger, withToolCall } from '@hautech/obs-sdk';
+import { logger, withToolCall } from '@agyn/obs-sdk';
 
 await withToolCall({ name: 'work', input: {} }, async () => {
   const log = logger();

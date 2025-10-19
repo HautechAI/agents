@@ -4,12 +4,12 @@ Overview
 - SDK sends periodic heartbeats for running spans.
 - Server reconciles and cancels spans that miss heartbeats.
 
-SDK Behavior (@hautech/obs-sdk)
+SDK Behavior (@agyn/obs-sdk)
 - On span start, the SDK begins a timer.
 - Every OBS_HEARTBEAT_MS (default 60s) it POSTs `{ state: 'updated', traceId, spanId }` to `/v1/spans/upsert`.
 - On completion or error, the SDK sends `{ state: 'completed', ... }` and stops the timer.
 
-Server Behavior (@hautech/obs-server)
+Server Behavior (@agyn/obs-server)
 - Creates an index: `{ completed: 1, lastUpdate: -1 }` (partial on completed=false).
 - Sweeper runs every OBS_SWEEP_INTERVAL_MS (default 60s) and applies:
   - Filter: `{ completed: false, lastUpdate: { $lt: now - OBS_STALE_TTL_MS } }` (default TTL 5m)
