@@ -43,6 +43,10 @@ Model naming guidance
 - Aliases are supported; enter the alias in the UI if you created one (e.g., gpt-5).
 - The UI does not enforce a list of models; it accepts any non-empty string. Validation occurs at runtime when calling the provider.
 
+Agent configuration behavior
+- Agents respect the configured model end-to-end. If you set a model in the Agent configuration, the runtime binds that model to both the CallModel and Summarization nodes and will not silently fall back to the default (gpt-5).
+- Ensure the chosen model or alias exists in LiteLLM; misconfigured names will surface as runtime errors from the provider.
+
 Fallback to direct OpenAI
 - Unset LITELLM_* envs and set OPENAI_API_KEY to your real OpenAI key.
 

@@ -24,6 +24,11 @@ export class CallModelNode extends BaseNode {
     this.tools = [...tools];
   }
 
+  // Rebind the ChatOpenAI instance used for invocations. Called by Agent when model changes.
+  setLLM(newLLM: ChatOpenAI) {
+    this.llm = newLLM;
+  }
+
   addTool(tool: BaseTool) {
     if (!this.tools.includes(tool)) this.tools.push(tool);
   }

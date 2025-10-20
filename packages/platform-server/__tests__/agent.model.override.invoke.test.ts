@@ -1,21 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AIMessage, BaseMessage } from '@langchain/core/messages';
+import { AIMessage } from '@langchain/core/messages';
 import { LoggerService } from '../src/services/logger.service';
 import { ConfigService } from '../src/services/config.service';
 import { CheckpointerService } from '../src/services/checkpointer.service';
 
-// Mock ChatOpenAI to avoid network; must be declared before importing Agent
+// Mock ChatOpenAI to capture the model used at invoke time
 vi.mock('@langchain/openai', async (importOriginal) => {
   const mod = await importOriginal();
   class MockChatOpenAI extends mod.ChatOpenAI {
+    public model: string;
     constructor(config: any) {
-      super({ ...config, apiKey: 'mock' });
+      super(config);
+      this.model = config?.model || 'unknown';
     }
     withConfig(_cfg: any) {
-      return { invoke: async () => new AIMessage('ok') } as any;
+      const self = this;
+      return { invoke: async () => new AIMessage(`model:${self.model}`) } as any;
     }
-    async invoke(_msgs: BaseMessage[], _opts?: any) {
-      return new AIMessage('ok');
+    async invoke(_msgs: any[]) {
+      return new AIMessage(`model:${this.model}`);
     }
     async getNumTokens(text: string): Promise<number> {
       return text.length;
@@ -24,7 +27,7 @@ vi.mock('@langchain/openai', async (importOriginal) => {
   return { ...mod, ChatOpenAI: MockChatOpenAI };
 });
 
-// Mock CheckpointerService to avoid needing Mongo
+// Mock CheckpointerService to avoid Mongo dependency
 vi.mock('../src/services/checkpointer.service', async (importOriginal) => {
   const mod = await importOriginal();
   class Fake extends mod.CheckpointerService {
@@ -33,9 +36,7 @@ vi.mock('../src/services/checkpointer.service', async (importOriginal) => {
         async getTuple() {
           return undefined;
         },
-        async *list() {
-          // empty iterator
-        },
+        async *list() {},
         async put(_config: any, _checkpoint: any, _metadata: any) {
           return { configurable: { thread_id: 't', checkpoint_ns: '', checkpoint_id: '1' } } as any;
         },
@@ -51,8 +52,8 @@ vi.mock('../src/services/checkpointer.service', async (importOriginal) => {
 
 import { Agent } from '../src/nodes/agent/agent.node';
 
-describe('Agent summarization graph', () => {
-  it('invokes successfully over several turns with summarization configured', async () => {
+describe('Agent model override at runtime', () => {
+  it('uses override model at invoke after setConfig', async () => {
     const cfg = new ConfigService({
       githubAppId: '1',
       githubAppPrivateKey: 'k',
@@ -62,15 +63,14 @@ describe('Agent summarization graph', () => {
       mongodbUrl: 'm',
     });
     const agent = new Agent(cfg, new LoggerService(), new CheckpointerService(new LoggerService()) as any, 'agent-1');
-    agent.setConfig({ summarizationKeepTokens: 2, summarizationMaxTokens: 200 });
+    // Initial default should be gpt-5
+    const anyA: any = agent as any;
+    expect(anyA.llm.model).toBe('gpt-5');
 
-    // Use the agent wrapper to invoke
-    const r1 = await agent.invoke('t', { content: 'hi', info: {} } as any);
-    const r2 = await agent.invoke('t', { content: 'there', info: {} } as any);
-    const r3 = await agent.invoke('t', { content: 'friend', info: {} } as any);
+    agent.setConfig({ model: 'override-model' });
 
-    expect(r1).toBeDefined();
-    expect(r2).toBeDefined();
-    expect(r3).toBeDefined();
+    const res = await agent.invoke('thread-1', { content: 'hello', info: {} } as any);
+    expect(res?.content).toBe(`model:override-model`);
   });
 });
+

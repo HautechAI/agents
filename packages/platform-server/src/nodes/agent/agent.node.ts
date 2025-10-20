@@ -141,6 +141,17 @@ export class Agent extends BaseAgent {
     this.init();
   }
 
+  // Centralized ChatOpenAI instantiation to avoid duplication and env fallbacks
+  private createLLM(model: string): ChatOpenAI {
+    const apiKey = this.configService.openaiApiKey;
+    const baseURL = this.configService.openaiBaseUrl;
+    return new ChatOpenAI({
+      model,
+      apiKey,
+      ...(baseURL ? { baseURL } : {}),
+    });
+  }
+
   // Expose nodeId for instrumentation (used by BaseAgent.withAgent wrapper)
   protected override getNodeId(): string | undefined {
     return this.agentId;
@@ -176,14 +187,8 @@ export class Agent extends BaseAgent {
 
     this._config = config;
 
-    // Support env/auto-provisioned credentials. Base URL can be provided via env or config passthrough.
-    const apiKey = this.configService.openaiApiKey || process.env.OPENAI_API_KEY;
-    const baseURL = this.configService.openaiBaseUrl || process.env.OPENAI_BASE_URL;
-    this.llm = new ChatOpenAI({
-      model: 'gpt-5',
-      apiKey,
-      ...(baseURL ? { baseURL } : {}),
-    });
+    // Instantiate ChatOpenAI via factory; rely solely on ConfigService for credentials/base URL.
+    this.llm = this.createLLM('gpt-5');
 
     this.callModelNode = new CallModelNode([], this.llm);
     // Pass this agent's node id to ToolsNode for span attribution
@@ -481,65 +486,55 @@ export class Agent extends BaseAgent {
   // Overload preserves BaseAgent signature while exposing a more precise config shape for callers.
   setConfig(config: Partial<AgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
-    // Filter to known keys and validate without letting defaults write missing keys
-    const filteredEntries = Object.entries(config).filter(([k]) =>
-      Agent.allowedConfigKeys.has(k as (typeof Agent.allowedConfigKeysArray)[number]),
-    );
-    const filtered = Object.fromEntries(filteredEntries) as Partial<AgentStaticConfig> & Record<string, unknown>;
-    const parsedConfig = AgentStaticConfigSchema.partial().parse(filtered) as Partial<AgentStaticConfig>;
+    // Validate using strict partial schema against provided config; throws ZodError on unknown keys or invalid input
+    const parsedConfig = AgentStaticConfigSchema.partial().strict().parse(config) as Partial<AgentStaticConfig>;
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
-    // Only update fields that were explicitly provided by caller
-    if (Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
+    // Only update fields explicitly provided by caller; rely on Zod-parsed values for type safety
+    if (Object.prototype.hasOwnProperty.call(config, 'systemPrompt') && parsedConfig.systemPrompt !== undefined) {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('Agent system prompt updated');
     }
 
-    if (Object.prototype.hasOwnProperty.call(filtered, 'model') && typeof parsedConfig.model === 'string') {
-      // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
-      this.llm.model = parsedConfig.model;
+    if (Object.prototype.hasOwnProperty.call(config, 'model') && parsedConfig.model) {
+      // Recreate ChatOpenAI via factory with provided model, then rebind
+      const newLLM = this.createLLM(parsedConfig.model);
+      this.llm = newLLM;
+      this.callModelNode.setLLM(newLLM);
+      this.summarizeNode.setLLM(newLLM);
       this.loggerService.info(`Agent model updated to ${parsedConfig.model}`);
     }
 
-    // Extend to accept summarization options
-    // Accept both new (summarizationKeepTokens) and legacy (summarizationKeepLast) keys.
-    const cfgObj = config as Record<string, unknown>;
-    const keepTokensRaw =
-      cfgObj.summarizationKeepTokens !== undefined ? cfgObj.summarizationKeepTokens : cfgObj.summarizationKeepLast; // legacy fallback
-    const maxTokensRaw = cfgObj.summarizationMaxTokens;
-    const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
-
+    // Summarization options: rely on Zod validation and apply only provided fields
     const updates: { keepTokens?: number; maxTokens?: number } = {};
-    if (keepTokensRaw !== undefined && keepTokensRaw !== null) {
-      if (!(isInt(keepTokensRaw) && (keepTokensRaw as number) >= 0)) {
-        this.loggerService.error('summarizationKeepTokens must be an integer >= 0');
-      } else {
-        this.summarizationKeepTokens = keepTokensRaw as number;
-        updates.keepTokens = keepTokensRaw as number;
-      }
+    if (
+      Object.prototype.hasOwnProperty.call(config, 'summarizationKeepTokens') &&
+      parsedConfig.summarizationKeepTokens !== undefined
+    ) {
+      this.summarizationKeepTokens = parsedConfig.summarizationKeepTokens;
+      updates.keepTokens = parsedConfig.summarizationKeepTokens;
     }
-    if (maxTokensRaw !== undefined && maxTokensRaw !== null) {
-      if (!(isInt(maxTokensRaw) && (maxTokensRaw as number) > 0)) {
-        this.loggerService.error('summarizationMaxTokens must be an integer > 0');
-      } else {
-        this.summarizationMaxTokens = maxTokensRaw as number;
-        updates.maxTokens = maxTokensRaw as number;
-      }
+    if (
+      Object.prototype.hasOwnProperty.call(config, 'summarizationMaxTokens') &&
+      parsedConfig.summarizationMaxTokens !== undefined
+    ) {
+      this.summarizationMaxTokens = parsedConfig.summarizationMaxTokens;
+      updates.maxTokens = parsedConfig.summarizationMaxTokens;
     }
-
     if (updates.keepTokens !== undefined || updates.maxTokens !== undefined) {
       this.summarizeNode.setOptions(updates);
       this.loggerService.info('Agent summarization options updated');
     }
 
     // Apply restriction-related config without altering system prompt
-    if (Object.prototype.hasOwnProperty.call(filtered, 'restrictOutput')) this.restrictOutput = !!parsedConfig.restrictOutput;
-    if (Object.prototype.hasOwnProperty.call(filtered, 'restrictionMessage') && parsedConfig.restrictionMessage !== undefined)
+    if (Object.prototype.hasOwnProperty.call(config, 'restrictOutput') && parsedConfig.restrictOutput !== undefined)
+      this.restrictOutput = !!parsedConfig.restrictOutput;
+    if (Object.prototype.hasOwnProperty.call(config, 'restrictionMessage') && parsedConfig.restrictionMessage !== undefined)
       this.restrictionMessage = parsedConfig.restrictionMessage;
     if (
-      Object.prototype.hasOwnProperty.call(filtered, 'restrictionMaxInjections') &&
+      Object.prototype.hasOwnProperty.call(config, 'restrictionMaxInjections') &&
       parsedConfig.restrictionMaxInjections !== undefined
     )
       this.restrictionMaxInjections = parsedConfig.restrictionMaxInjections;
