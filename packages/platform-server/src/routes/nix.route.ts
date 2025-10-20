@@ -58,6 +58,7 @@ const NixhubSearchSchema = z.object({
 });
 type NixhubSearchJSON = z.infer<typeof NixhubSearchSchema>;
 
+// Tolerant upstream package schema: accept minimal fields we use
 const NixhubPackageSchema = z.object({
   name: z.string(),
   summary: z.string().optional(),
@@ -65,15 +66,18 @@ const NixhubPackageSchema = z.object({
     .array(
       z.object({
         version: z.union([z.string(), z.number()]).optional(),
+        commit_hash: z.string().optional(),
         last_updated: z.string().optional(),
         platforms_summary: z.string().optional(),
         outputs_summary: z.string().optional(),
-        platforms: z.array(
-          z.object({
-            commit_hash: z.string(),
-            attribute_path: z.string(),
-          }),
-        ),
+        platforms: z
+          .array(
+            z.object({
+              system: z.string().optional(),
+              attribute_path: z.string().optional(),
+            }),
+          )
+          .optional(),
       }),
     )
     .optional(),
@@ -189,8 +193,10 @@ export function registerNixRoutes(
       try {
         const json = (await fetchJson(url, ac.signal)) as unknown;
         const upstream = NixhubPackageSchema.safeParse(json);
-        const rels: NonNullable<NixhubPackageJSON['releases']> =
-          upstream.success && Array.isArray(upstream.data.releases) ? upstream.data.releases : [];
+        const dataAny: any = upstream.success ? upstream.data : (json as any);
+        const rels: NonNullable<NixhubPackageJSON['releases']> = Array.isArray(dataAny?.releases)
+          ? (dataAny.releases as any[])
+          : [];
         const seen = new Set<string>();
         const withValid: string[] = [];
         const withInvalid: string[] = [];
@@ -237,9 +243,17 @@ export function registerNixRoutes(
       });
     const rel = parsed.data.releases.find((r) => String(r.version ?? '') === version);
     if (!rel) throw Object.assign(new Error('release_not_found'), { code: 'release_not_found' });
-    const { commit_hash, attribute_path } = rel.platforms[0];
-
-    return { commitHash: commit_hash, attributePath: attribute_path };
+    const commitHash = rel.commit_hash;
+    if (!commitHash) throw Object.assign(new Error('missing commit_hash'), { code: 'missing_commit_hash' });
+    const plats = Array.isArray(rel.platforms) ? rel.platforms : [];
+    // Prefer x86_64-linux, then any *-linux, then first with attribute_path
+    const preferred =
+      plats.find((p) => p?.system === 'x86_64-linux' && typeof p?.attribute_path === 'string') ||
+      plats.find((p) => (p?.system || '').includes('linux') && typeof p?.attribute_path === 'string') ||
+      plats.find((p) => typeof p?.attribute_path === 'string');
+    const attributePath = preferred?.attribute_path;
+    if (!attributePath) throw Object.assign(new Error('missing attribute_path'), { code: 'missing_attribute_path' });
+    return { commitHash, attributePath };
   }
 
   // GET /api/nix/resolve

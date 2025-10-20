@@ -155,6 +155,12 @@ describe('ContainerProviderEntity parseVaultRef', () => {
     try {
       process.env.NCPS_URL = 'http://ncps:9999';
       process.env.NCPS_ENABLED = 'true';
+      // Seed minimal required env so ConfigService.fromEnv passes validation in tests
+      process.env.GITHUB_APP_ID = process.env.GITHUB_APP_ID || 't';
+      process.env.GITHUB_APP_PRIVATE_KEY = process.env.GITHUB_APP_PRIVATE_KEY || 't';
+      process.env.GITHUB_INSTALLATION_ID = process.env.GITHUB_INSTALLATION_ID || 't';
+      process.env.GH_TOKEN = process.env.GH_TOKEN || 't';
+      process.env.MONGODB_URL = process.env.MONGODB_URL || 'mongodb://example/db';
       const cfg = ConfigService.fromEnv();
       const keySvc = new NcpsKeyService(cfg);
       keySvc.seedKeyForTest('legacy:key');

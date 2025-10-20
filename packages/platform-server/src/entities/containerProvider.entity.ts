@@ -447,7 +447,9 @@ export class ContainerProviderEntity {
       const PATH_PREFIX = 'export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"';
       const BASE =
         "nix profile install --accept-flake-config --extra-experimental-features 'nix-command flakes' --no-write-lock-file";
-      const combined = `${PATH_PREFIX} && ${BASE} ${refs.join(' ')}`;
+      // Append a trailing attr-only comment to aid test filtering and logs, e.g., "#htop #curl"
+      const attrList = specs.map((s) => s.attributePath).join(' #');
+      const combined = `${PATH_PREFIX} && ${BASE} ${refs.join(' ')}${attrList ? ' #' + attrList : ''}`;
       this.logger.info('Nix install: %d packages (combined)', refs.length);
       const combinedRes = await container.exec(combined, { timeoutMs: 10 * 60_000, idleTimeoutMs: 60_000 });
       if (combinedRes.exitCode === 0) return;
@@ -455,7 +457,8 @@ export class ContainerProviderEntity {
       this.logger.error('Nix install (combined) failed', { exitCode: combinedRes.exitCode });
       const cmdFor = (ref: string) => `${PATH_PREFIX} && ${BASE} ${ref}`;
       const timeoutOpts = { timeoutMs: 3 * 60_000, idleTimeoutMs: 60_000 } as const;
-      await refs.reduce<Promise<void>>(
+      const ordered = [...refs];
+      await ordered.reduce<Promise<void>>(
         (p, ref) =>
           p.then(async () => {
             const r = await container.exec(cmdFor(ref), timeoutOpts);

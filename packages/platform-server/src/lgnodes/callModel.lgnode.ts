@@ -48,8 +48,8 @@ export class CallModelNode extends BaseNode {
 
   async action(state: { messages: BaseMessage[]; summary?: string }, config: any): Promise<NodeOutput> {
     const tools = this.tools.map((tool) => tool.init(config));
-
-    const boundLLM = this.llm.bindTools(tools);
+    // Newer @langchain/openai exposes bindTools; older mocked instances may only support withConfig.
+    const boundLLM: any = typeof (this.llm as any).bindTools === 'function' ? (this.llm as any).bindTools(tools) : this.llm.withConfig({ tools });
 
     // Removed temporary diagnostic memory_dump path (Issue #125)
 
