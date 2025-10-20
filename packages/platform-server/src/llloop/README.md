@@ -35,8 +35,8 @@ const messages: Message[] = [
 
 const logger: Logger = console;
 const llloop = new LLLoop(logger, { openai, tools: registry });
-const resultState = await llloop.invoke({ state: { model: 'gpt-5', messages }, ctx: { summarizerConfig: { keepTokens: 512, maxTokens: 8192 } } });
-console.log(resultState.messages.at(-1)?.contentText);
+const { state, appended } = await llloop.invoke({ state: { model: 'gpt-5', messages }, ctx: { summarizerConfig: { keepTokens: 512, maxTokens: 8192 } } });
+console.log('appended:', appended.map(m => m.contentText));
 
 console.log(result.messages[0]?.contentText);
 ```
@@ -52,3 +52,4 @@ Reducer architecture
 - Operational dependencies (OpenAI client, ToolRegistry, Logger) are injected into reducer constructors by LLLoop when wiring.
 - Dispatcher signature: invoke({ reducers, state, ctx, logger }).
 - LoopState carries no routing flags; routing is solely via ReduceResult.next.
+- Replace-only semantics: reducers must return the full messages array; the engine computes a diff (appended messages) to persist and emit events.
