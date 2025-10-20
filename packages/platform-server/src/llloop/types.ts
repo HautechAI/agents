@@ -26,6 +26,7 @@ export interface ToolDef {
 export interface ToolContext {
   signal?: AbortSignal;
   logger?: import('../types/logger.js').Logger;
+  threadId?: string;
 }
 
 export interface Tool {

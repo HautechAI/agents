@@ -6,6 +6,7 @@ import { CallModelReducer } from './reducers/call_model.reducer.js';
 import { ToolsReducer } from './reducers/tools.reducer.js';
 import { EnforceReducer } from './reducers/enforce.reducer.js';
 import { RouteReducer } from './reducers/route.reducer.js';
+import { SnapshotStore } from '../services/snapshot.service.js';
 
 export class LLLoop {
   constructor(
@@ -28,12 +29,19 @@ export class LLLoop {
   }
 
   async invoke(args: {
+    nodeId?: string;
+    threadId?: string;
     state: LoopState;
-    ctx?: { summarizerConfig?: { keepTokens: number; maxTokens: number; note?: string } };
+    ctx?: { summarizerConfig?: { keepTokens: number; maxTokens: number; note?: string }; abortSignal?: AbortSignal; maxIterations?: number };
+    snapshotStore?: SnapshotStore;
   }): Promise<{ state: LoopState; appended: Message[] }> {
-    const ctx: LeanCtx = {
+    const ctx: LeanCtx & { abortSignal?: AbortSignal; maxIterations?: number } = {
       summarizerConfig: args.ctx?.summarizerConfig,
       memory: this.deps.memory,
+      threadId: args.threadId,
+      runId: undefined,
+      abortSignal: args.ctx?.abortSignal,
+      maxIterations: args.ctx?.maxIterations,
     };
     const reducers = [
       new SummarizeReducer(this.logger),
@@ -42,8 +50,19 @@ export class LLLoop {
       new EnforceReducer(this.logger),
       new RouteReducer(this.logger),
     ];
-    const before = args.state.messages;
-    const finalState = await dispatchInvoke({ reducers, state: args.state, ctx, logger: this.logger });
+    // Load snapshot and merge inbound messages (replace-only)
+    let baseState = args.state;
+    if (args.snapshotStore && args.nodeId && args.threadId) {
+      const snap = await args.snapshotStore.getSnapshot(args.nodeId, args.threadId);
+      if (snap) {
+        baseState = { ...snap, model: args.state.model, messages: [...snap.messages, ...args.state.messages] };
+      }
+    }
+    const before = baseState.messages;
+    const finalState = await dispatchInvoke({ reducers, state: baseState, ctx, logger: this.logger });
+    if (args.snapshotStore && args.nodeId && args.threadId) {
+      await args.snapshotStore.upsertSnapshot(args.nodeId, args.threadId, finalState);
+    }
     const appended = this.diffAppended(before, finalState.messages);
     return { state: finalState, appended };
   }

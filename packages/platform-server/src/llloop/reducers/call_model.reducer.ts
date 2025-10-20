@@ -8,8 +8,8 @@ export class CallModelReducer implements Reducer {
     return 'call_model';
   }
 
-  async reduce(state: LoopState, _ctx: LeanCtx): Promise<ReduceResult> {
-    const res = await callModel({ client: this.openai, model: state.model, messages: state.messages, tools: undefined });
+  async reduce(state: LoopState, ctx: LeanCtx & { abortSignal?: AbortSignal }): Promise<ReduceResult> {
+    const res = await callModel({ client: this.openai, model: state.model, messages: state.messages, tools: undefined, signal: ctx.abortSignal });
     const nextState: LoopState = { ...state, messages: [...state.messages, res.assistant], pendingToolCalls: res.toolCalls };
     return { state: nextState, next: 'route' };
   }
