@@ -27,6 +27,12 @@ import { withAgent } from '@agyn/tracing';
 import { MessagesBuffer, ProcessBuffer } from '../../agents/messagesBuffer';
 import type { AgentRunService } from '../../services/run.service';
 
+// Ambient declaration for optional global run service
+declare global {
+  // eslint-disable-next-line no-var
+  var __agentRunsService: import('../../services/run.service').AgentRunService | undefined;
+}
+
 // Inlined BaseAgent and related types (moved from previous base.agent.ts)
 
 export type WhenBusyMode = 'wait' | 'injectAfterTools';
@@ -42,7 +48,7 @@ type InvocationToken = {
   id: string;
   total: number; // number of messages contributed by this invocation
   resolve: (m: BaseMessage | undefined) => void;
-  reject: (e: any) => void;
+  reject: (e: unknown) => void;
 };
 
 type ThreadState = {
@@ -266,7 +272,7 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
       const last = await this.runGraph(thread, batch, runId, ac.signal);
       // Success: resolve tokens fully included in this run
       const resolved: string[] = [];
-      const inflight = s.inFlight as { includedCounts: Map<string, number> } | undefined;
+      const inflight = s.inFlight;
       for (const [tokenId, included] of (inflight?.includedCounts || new Map<string, number>()).entries()) {
         const token = s.tokens.get(tokenId);
         if (!token) continue;
@@ -279,16 +285,17 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
         }
       }
       this.logger.info(`Completed run ${runId}; resolved tokens: [${resolved.join(', ')}]`);
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Failure: reject awaiters for tokens tied to this run; leave others pending
-        const run = s.inFlight as { includedCounts?: Map<string, number>; runId?: string } | undefined;
+        const run = s.inFlight;
         const affected = run?.includedCounts ? Array.from(run.includedCounts.keys()) : [];
-        this.logger.error(`Run ${(run && run.runId) || 'unknown'} failed for thread ${thread}: ${e?.message || e}`);
+        const err = e instanceof Error ? e : new Error(String(e));
+        this.logger.error(`Run ${(run && run.runId) || 'unknown'} failed for thread ${thread}: ${err.message}`);
       for (const tokenId of affected) {
         const token = s.tokens.get(tokenId);
         if (!token) continue;
         try {
-          token.reject(e);
+          token.reject(err);
         } catch {}
         s.tokens.delete(tokenId);
       }
@@ -298,7 +305,8 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
       // Persist termination (best-effort)
       try {
         const nodeId = this.getNodeId();
-        if (nodeId && this.runService) await this.runService.markTerminated(nodeId, (s.inFlight && (s.inFlight as any).runId) || runId);
+        const currentRunId = s.inFlight?.runId ?? runId;
+        if (nodeId && this.runService) await this.runService.markTerminated(nodeId, currentRunId);
       } catch {}
       s.inFlight = undefined;
       s.running = false;
@@ -388,7 +396,8 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
       s.inFlight.abortController.abort();
       // Persist transition best-effort
       const nodeId = this.getNodeId();
-      void (async () => { try { if (nodeId && this.runService) await this.runService.markTerminating(nodeId, s.inFlight!.runId); } catch {} })();
+      const rid = s.inFlight?.runId;
+      void (async () => { try { if (nodeId && this.runService && rid) await this.runService.markTerminating(nodeId, rid); } catch {} })();
       return 'ok';
     } catch {
       return 'not_running';
@@ -974,13 +983,16 @@ export class Agent extends BaseAgent {
       }
     }
     this.mcpServerTools.delete(server);
-    // Attempt to call stop/destroy lifecycle if available
-    const anyServer: any = server;
+    // Attempt to call stop/destroy lifecycle if available using type guards
     try {
-      if (typeof anyServer.destroy === 'function') await anyServer.destroy();
-      else if (typeof anyServer.stop === 'function') await anyServer.stop();
-    } catch (e) {
-      const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      if ('destroy' in server && typeof (server as any).destroy === 'function') {
+        await (server as any).destroy();
+      } else if ('stop' in server && typeof (server as any).stop === 'function') {
+        await (server as any).stop();
+      }
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      const msg = `${err.name}: ${err.message}`;
       this.loggerService.error(`Error destroying MCP server ${server.namespace}: ${msg}`);
     }
   }
