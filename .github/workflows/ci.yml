@@ -106,8 +106,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: pnpm --filter @agyn/platform-server test
 
-      - name: Lint llloop package
-        run: pnpm --filter @agyn/llloop lint
+      - name: Lint platform-server (includes llloop)
+        run: pnpm --filter @agyn/platform-server lint
 
   test-ui:
     name: Test UI

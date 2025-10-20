@@ -8,14 +8,14 @@ const tsconfigRootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default [
   {
-    files: ['**/*.ts', '**/*.tsx'],
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
     ignores: ['dist/**', 'node_modules/**'],
     languageOptions: {
       parser: tseslint.parser,
       // Explicitly set tsconfigRootDir (must be a string) to disambiguate multiple tsconfig roots in the monorepo
       parserOptions: {
         tsconfigRootDir,
-        project: ['./tsconfig.json'], // ensure type-aware rules (even if many are off) use the local server tsconfig
+        project: ['./tsconfig.json'],
       },
     },
     plugins: { '@typescript-eslint': tseslint.plugin },
@@ -47,6 +47,31 @@ export default [
     plugins: { '@typescript-eslint': tseslint.plugin },
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'error',
+    },
+  },
+  // Strict rules for llloop folder
+  {
+    files: ['src/llloop/**/*.ts'],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        tsconfigRootDir,
+        project: ['./tsconfig.json'],
+      },
+    },
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: {
+      'max-depth': ['error', 3],
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' }],
+      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { attributes: false } }],
+      'no-void': ['error', { allowAsStatement: true }],
     },
   },
 ];
