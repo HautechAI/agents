@@ -1,4 +1,3 @@
-import type OpenAI from 'openai';
 import { callModel } from './openai/client.js';
 import type {
   EngineEvents,
@@ -32,7 +31,7 @@ export async function runTurn(
 
   // Initial scaffolding: single call_model step only
   const res = await callModel({
-    client: (deps.openai as unknown as OpenAI),
+    client: deps.openai,
     model,
     messages: allMessages,
     tools,
@@ -45,4 +44,3 @@ export async function runTurn(
 
   return { messages: [res.assistant], toolCalls: res.toolCalls, rawRequest: res.rawRequest, rawResponse: res.rawResponse };
 }
-

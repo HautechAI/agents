@@ -1,5 +1,3 @@
-import type OpenAI from 'openai';
-
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface Message {
@@ -62,6 +60,15 @@ export interface Logger {
 }
 
 export interface OpenAIClient {
-  responses: OpenAI['responses'];
+  responses: {
+    create: (
+      body: { model: string; input: ResponseInput; tools?: ToolWire[] },
+      options?: { signal?: AbortSignal },
+    ) => Promise<unknown>;
+  };
 }
 
+// Shared wire-level shapes used by the OpenAI Responses API adapter
+export type ResponseInputItem = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string; name?: string };
+export type ResponseInput = ResponseInputItem[];
+export type ToolWire = { type: 'function'; function: { name: string; description?: string; parameters: object } };

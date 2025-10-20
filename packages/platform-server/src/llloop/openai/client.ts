@@ -1,8 +1,7 @@
-import type OpenAI from 'openai';
-import { type Message } from '../types.js';
+import { type Message, type ResponseInput, type ToolWire, type OpenAIClient } from '../types.js';
 
 export interface CallModelParams {
-  client: OpenAI;
+  client: OpenAIClient;
   model: string;
   messages: Message[];
   tools?: Array<{ name: string; description?: string; schema: object }>;
@@ -17,10 +16,7 @@ export type CallModelResult = {
   rawResponse?: unknown;
 };
 
-// Local narrow types to avoid relying on possibly-any SDK internals
-type ResponseInputItem = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string; name?: string };
-type ResponseInput = ResponseInputItem[];
-type ToolWire = { type: 'function'; function: { name: string; description?: string; parameters: object } };
+// Wire type used for OpenAI Responses API create
 type ResponseCreateWire = { model: string; input: ResponseInput; tools?: ToolWire[] };
 
 // Minimal transforms from internal message format to OpenAI Responses API input
@@ -39,10 +35,9 @@ const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 
 function getFirstOutputChunk(resp: unknown): Record<string, unknown> | undefined {
   if (!isRecord(resp)) return undefined;
-  const output = (resp as Record<string, unknown>).output;
+  const output = resp.output;
   if (!Array.isArray(output) || output.length === 0) return undefined;
-  const outputArr: unknown[] = output as unknown[];
-  const first: unknown = outputArr[0];
+  const first: unknown = output[0];
   return isRecord(first) ? first : undefined;
 }
 
@@ -96,7 +91,9 @@ export async function callModel(params: CallModelParams): Promise<CallModelResul
   if (toolDefs) reqWire.tools = toolDefs;
 
   // For initial scaffolding, use non-streaming path; streaming wired later
-  const response = await client.responses.create(reqWire as unknown as OpenAI.ResponseCreateParams, { signal });
+  const req: ResponseCreateWire = { model, input };
+  if (toolDefs) req.tools = toolDefs;
+  const response = await client.responses.create(req, { signal });
   let assistant: Message = { role: 'assistant', contentText: '' };
   const toolCalls: { id: string; name: string; input: unknown }[] = [];
 
@@ -109,4 +106,3 @@ export async function callModel(params: CallModelParams): Promise<CallModelResul
 
   return { assistant, toolCalls, rawRequest: reqWire, rawResponse: response };
 }
-
