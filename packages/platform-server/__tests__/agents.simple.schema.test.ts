@@ -15,7 +15,7 @@ describe('BaseAgent.getConfigSchema / Agent.setConfig', () => {
     const schema = (a as unknown as BaseAgent).getConfigSchema() as any;
     expect(schema.type).toBe('object');
     expect(schema.properties.systemPrompt).toMatchObject({ type: 'string' });
-  // Legacy key summarizationKeepLast intentionally not present in schema anymore; we accept it leniently at runtime.
+    // Unknown keys should be rejected by strict parsing; legacy aliases are not supported.
     expect(schema.properties.summarizationMaxTokens).toMatchObject({ type: 'integer', minimum: 1 });
   });
 
@@ -29,7 +29,7 @@ describe('BaseAgent.getConfigSchema / Agent.setConfig', () => {
     a.setConfig({ systemPrompt: 'You are helpful.' });
     expect(anyA.callModelNode.setSystemPrompt).toHaveBeenCalledWith('You are helpful.');
 
-    a.setConfig({ summarizationKeepLast: 5, summarizationMaxTokens: 100 });
+    a.setConfig({ summarizationKeepTokens: 5, summarizationMaxTokens: 100 });
     expect(anyA.summarizeNode.setOptions).toHaveBeenCalledWith({ keepTokens: 5, maxTokens: 100 });
   });
 
@@ -44,5 +44,11 @@ describe('BaseAgent.getConfigSchema / Agent.setConfig', () => {
     expect(anyA.callModelNode.llm).toBe(anyA.llm);
     expect(anyA.summarizeNode.llm).toBe(anyA.llm);
     expect(anyA.loggerService.info).toHaveBeenCalledWith('Agent model updated to override-model');
+  });
+
+  it('rejects legacy summarizationKeepLast key via setConfig', () => {
+    const a = makeAgent();
+    // Providing an unknown key should cause strict schema parse to throw
+    expect(() => a.setConfig({ summarizationKeepLast: 1 } as any)).toThrowError();
   });
 });

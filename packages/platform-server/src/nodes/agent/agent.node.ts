@@ -481,38 +481,19 @@ export class Agent extends BaseAgent {
   // Overload preserves BaseAgent signature while exposing a more precise config shape for callers.
   setConfig(config: Partial<AgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
-    // Filter to known keys only; preserve partial update semantics
-    const filteredEntries = Object.entries(config).filter(([k]) =>
-      Agent.allowedConfigKeys.has(k as (typeof Agent.allowedConfigKeysArray)[number]),
-    );
-    const filtered = Object.fromEntries(filteredEntries) as Partial<AgentStaticConfig> & Record<string, unknown>;
-
-    // Legacy alias: map summarizationKeepLast -> summarizationKeepTokens if present in input and keepTokens not provided
-    if (
-      Object.prototype.hasOwnProperty.call(config, 'summarizationKeepLast') &&
-      !Object.prototype.hasOwnProperty.call(config, 'summarizationKeepTokens')
-    ) {
-      // Narrow types without any casts using a keyed subset
-      const cfgWithAlias = config as Record<string, unknown>;
-      const val = cfgWithAlias['summarizationKeepLast'];
-      if (typeof val === 'number') {
-        (filtered as Partial<AgentStaticConfig>)['summarizationKeepTokens'] = val;
-      }
-    }
-
-    // Validate using strict partial schema; throws ZodError on invalid input
-    const parsedConfig = AgentStaticConfigSchema.partial().strict().parse(filtered) as Partial<AgentStaticConfig>;
+    // Validate using strict partial schema against provided config; throws ZodError on unknown keys or invalid input
+    const parsedConfig = AgentStaticConfigSchema.partial().strict().parse(config) as Partial<AgentStaticConfig>;
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
     // Only update fields explicitly provided by caller
-    if (Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
+    if (Object.prototype.hasOwnProperty.call(config, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('Agent system prompt updated');
     }
 
-    if (Object.prototype.hasOwnProperty.call(filtered, 'model') && typeof parsedConfig.model === 'string') {
+    if (Object.prototype.hasOwnProperty.call(config, 'model') && typeof parsedConfig.model === 'string') {
       // Recreate ChatOpenAI with the same apiKey/baseURL and provided model, then rebind
       const apiKey = this.configService.openaiApiKey || process.env.OPENAI_API_KEY;
       const baseURL = this.configService.openaiBaseUrl || process.env.OPENAI_BASE_URL;
@@ -525,11 +506,11 @@ export class Agent extends BaseAgent {
 
     // Summarization options: rely on Zod validation and apply only provided fields
     const updates: { keepTokens?: number; maxTokens?: number } = {};
-    if (Object.prototype.hasOwnProperty.call(filtered, 'summarizationKeepTokens') && typeof parsedConfig.summarizationKeepTokens === 'number') {
+    if (Object.prototype.hasOwnProperty.call(config, 'summarizationKeepTokens') && typeof parsedConfig.summarizationKeepTokens === 'number') {
       this.summarizationKeepTokens = parsedConfig.summarizationKeepTokens;
       updates.keepTokens = parsedConfig.summarizationKeepTokens;
     }
-    if (Object.prototype.hasOwnProperty.call(filtered, 'summarizationMaxTokens') && typeof parsedConfig.summarizationMaxTokens === 'number') {
+    if (Object.prototype.hasOwnProperty.call(config, 'summarizationMaxTokens') && typeof parsedConfig.summarizationMaxTokens === 'number') {
       this.summarizationMaxTokens = parsedConfig.summarizationMaxTokens;
       updates.maxTokens = parsedConfig.summarizationMaxTokens;
     }
@@ -539,11 +520,11 @@ export class Agent extends BaseAgent {
     }
 
     // Apply restriction-related config without altering system prompt
-    if (Object.prototype.hasOwnProperty.call(filtered, 'restrictOutput')) this.restrictOutput = !!parsedConfig.restrictOutput;
-    if (Object.prototype.hasOwnProperty.call(filtered, 'restrictionMessage') && parsedConfig.restrictionMessage !== undefined)
+    if (Object.prototype.hasOwnProperty.call(config, 'restrictOutput')) this.restrictOutput = !!parsedConfig.restrictOutput;
+    if (Object.prototype.hasOwnProperty.call(config, 'restrictionMessage') && parsedConfig.restrictionMessage !== undefined)
       this.restrictionMessage = parsedConfig.restrictionMessage;
     if (
-      Object.prototype.hasOwnProperty.call(filtered, 'restrictionMaxInjections') &&
+      Object.prototype.hasOwnProperty.call(config, 'restrictionMaxInjections') &&
       parsedConfig.restrictionMaxInjections !== undefined
     )
       this.restrictionMaxInjections = parsedConfig.restrictionMaxInjections;
