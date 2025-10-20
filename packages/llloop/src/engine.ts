@@ -21,7 +21,7 @@ export interface RunTurnParams {
 
 export async function runTurn(
   params: RunTurnParams,
-  deps: { openai: OpenAIClient; tools: ToolRegistry; logger?: { info: Function; error: Function; debug?: Function } },
+  deps: { openai: OpenAIClient; tools: ToolRegistry; logger?: { info: (...a: unknown[]) => void; error: (...a: unknown[]) => void; debug?: (...a: unknown[]) => void } },
   events?: EngineEvents,
 ): Promise<EngineRunResult> {
   const { model, messages, tools, memoryMessage, streaming, signal } = params;
@@ -38,11 +38,10 @@ export async function runTurn(
     tools,
     stream: streaming,
     signal,
-  } as any);
+  });
 
   events?.onMessage?.(res.assistant);
   for (const tc of res.toolCalls) events?.onToolCall?.(tc);
 
   return { messages: [res.assistant], toolCalls: res.toolCalls, rawRequest: res.rawRequest, rawResponse: res.rawResponse };
 }
-

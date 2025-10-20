@@ -70,4 +70,3 @@ export interface Logger {
 export interface OpenAIClient {
   responses: OpenAI['responses'];
 }
-

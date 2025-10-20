@@ -10,8 +10,11 @@
     "module": "ESNext",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true
   },
   "include": ["src/**/*"]
 }
-
