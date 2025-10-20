@@ -1,6 +1,4 @@
-import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { BaseTool } from './base.tool';
 import { LoggerService } from '../services/logger.service';
 import { BaseAgent } from '../agents/base.agent';
@@ -21,7 +19,7 @@ export const ManageToolStaticConfigSchema = z
   })
   .strict();
 
-type WithRuntime = LangGraphRunnableConfig & { configurable?: { thread_id?: string } };
+type WithRuntime = { configurable?: { thread_id?: string } };
 
 type Worker = { name: string; agent: BaseAgent };
 
@@ -60,13 +58,13 @@ export class ManageTool extends BaseTool {
     this.name = parsed.data.name ?? this.name;
   }
 
-  init(config?: LangGraphRunnableConfig): DynamicStructuredTool {
-    return tool(
-      async (raw, runtimeCfg) => {
+  name(): string { return this.name || 'Manage'; }
+  description(): string { return this.description; }
+  inputSchema() { return invocationSchema; }
+  async invoke(raw: unknown, runtimeCfg?: WithRuntime): Promise<unknown> {
         const parsed = invocationSchema.parse(raw);
         const parentThreadId =
-          (runtimeCfg as WithRuntime | undefined)?.configurable?.thread_id ||
-          (config as WithRuntime | undefined)?.configurable?.thread_id;
+          (runtimeCfg as WithRuntime | undefined)?.configurable?.thread_id;
         if (!parentThreadId) throw new Error('thread_id is required');
 
         // Commands behavior
@@ -113,12 +111,5 @@ export class ManageTool extends BaseTool {
 
         // Should not reach
         return '';
-      },
-      {
-        name: this.name || 'Manage',
-        description: this.description,
-        schema: invocationSchema,
-      },
-    );
   }
 }

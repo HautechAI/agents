@@ -1,4 +1,3 @@
-import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { BaseTool } from './base.tool';
 import { TerminateResponse } from './terminateResponse';
@@ -8,20 +7,10 @@ const finishSchema = z.object({ note: z.string().optional() });
 
 export class FinishTool extends BaseTool {
   constructor(logger: LoggerService) { super(logger); }
-  init(): DynamicStructuredTool {
-    return tool(
-      async (raw) => {
-        const { note } = finishSchema.parse(raw);
-        return new TerminateResponse(note);
-      },
-      {
-        name: 'finish',
-        description:
-          'finish marks the completion of the tool sequence without ending the conversation. It signals that the agent has completed all necessary actions for now and is waiting for further input (e.g., user message or reminder trigger).',
-        schema: finishSchema,
-      },
-    );
-  }
+  name(): string { return 'finish'; }
+  description(): string { return 'Signal end of tool sequence for now; agent waits for future input.'; }
+  inputSchema() { return finishSchema; }
+  async invoke(raw: unknown): Promise<unknown> { const { note } = finishSchema.parse(raw); return new TerminateResponse(note); }
 }
 
 export const FinishToolStaticConfigSchema = z.object({}).strict();

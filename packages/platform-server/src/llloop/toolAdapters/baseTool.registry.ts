@@ -14,6 +14,8 @@ export class BaseToolRegistry implements ToolRegistry {
   register(name: string, base: BaseTool): void {
     const tool: Tool = {
       name,
+      description: base?.constructor?.name || name,
+      schema: (base as any)?.schema || {},
       call: async (args: unknown, ctx: ToolContext) => {
         // Delegate to BaseTool.init().invoke() path; BaseTool decides how to run with its own config
         // We implement large-output saving here when output is a string exceeding MAX.
@@ -73,4 +75,3 @@ export class BaseToolRegistry implements ToolRegistry {
     }
   }
 }
-

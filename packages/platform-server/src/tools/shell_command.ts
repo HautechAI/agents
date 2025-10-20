@@ -3,7 +3,6 @@ import { LoggerService } from '../services/logger.service';
 import { VaultService } from '../services/vault.service';
 import { EnvService, type EnvItem } from '../services/env.service';
 import { isExecTimeoutError, ExecTimeoutError, ExecIdleTimeoutError, isExecIdleTimeoutError } from '../utils/execTimeout';
-import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { BaseTool } from './base.tool';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
 
@@ -64,11 +63,14 @@ export class ShellTool extends BaseTool {
     return input.replace(ANSI_REGEX, '');
   }
 
-  init(): DynamicStructuredTool {
-    return tool(
-      async (input, config) => {
-        const { thread_id, abort_signal } = (config?.configurable || {}) as { thread_id?: string; abort_signal?: AbortSignal };
-        if (!thread_id) throw new Error('thread_id is required in configurable to use shell_command tool');
+  name(): string { return 'shell_command'; }
+  description(): string {
+    return 'Execute a shell command and return the output. No TTY/stdin; avoid interactive or watch commands. Always use single quotes. Executed with /bin/sh -lc.';
+  }
+  inputSchema() { return bashCommandSchema; }
+  async invoke(input: unknown, ctx?: { thread_id?: string; abort_signal?: AbortSignal }): Promise<unknown> {
+        const { thread_id, abort_signal } = ctx || {};
+        if (!thread_id) throw new Error('thread_id is required to use shell_command tool');
 
         if (!this.containerProvider) {
           throw new Error('ShellTool: containerProvider not set. Connect via graph edge before use.');
@@ -117,13 +119,6 @@ export class ShellTool extends BaseTool {
           return `Error (exit code ${response.exitCode}):\n${cleanedStdout}\n${cleanedStderr}`;
         }
         return cleanedStdout;
-      },
-      {
-        name: 'shell_command',
-        description: 'Execute a shell command and return the output. There is no TTY/stdin, so avoid commands requiring user inputs or running in watch mode. Always use single quotes in the command to avoid variable interpolation. The command is executed with /bin/sh -lc.',
-        schema: bashCommandSchema,
-      },
-    );
   }
 
   async setConfig(_cfg: Record<string, unknown>): Promise<void> {

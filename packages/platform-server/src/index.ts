@@ -13,8 +13,9 @@ import { Server } from 'socket.io';
 import { ConfigService } from './services/config.service.js';
 import { LoggerService } from './services/logger.service.js';
 import { MongoService } from './services/mongo.service.js';
-import { CheckpointerService } from './services/checkpointer.service.js';
+// Removed CheckpointerService (LangGraph). SocketService now uses checkpoint_writes writer directly.
 import { SocketService } from './services/socket.service.js';
+import { CheckpointWritesService } from './services/checkpointWrites.service.js';
 import { buildTemplateRegistry } from './templates';
 import { LiveGraphRuntime } from './graph/liveGraph.manager.js';
 import { GraphService } from './services/graph.service.js';
@@ -36,7 +37,6 @@ import { maybeProvisionLiteLLMKey } from './services/litellm.provision.js';
 const logger = new LoggerService();
 const config = ConfigService.fromEnv();
 const mongo = new MongoService(config, logger);
-const checkpointer = new CheckpointerService(logger);
 const containerService = new ContainerService(logger);
 const vaultService = new VaultService(
   VaultConfigSchema.parse({
@@ -72,15 +72,7 @@ async function bootstrap() {
     throw e;
   }
   await mongo.connect();
-  checkpointer.attachMongoClient(mongo.getClient());
-  checkpointer.bindDb(mongo.getDb());
-  // Initialize checkpointer (optional Postgres mode)
-  try {
-    await checkpointer.initIfNeeded();
-  } catch (e) {
-    logger.error('Checkpointer init failed: %s', (e as Error)?.message || String(e));
-    process.exit(1);
-  }
+  // No LangGraph checkpointer initialization
 
   // Initialize container registry and cleanup services
   const registry = new ContainerRegistryService(mongo.getDb(), logger);
@@ -90,14 +82,9 @@ async function bootstrap() {
   const cleanup = new ContainerCleanupService(registry, containerService, logger);
   cleanup.start();
 
-  const templateRegistry = buildTemplateRegistry({
-    logger,
-    containerService: containerService,
-    configService: config,
-    checkpointerService: checkpointer,
-    mongoService: mongo,
-    ncpsKeyService,
-  });
+  const templateRegistry = buildTemplateRegistry({ logger, containerService, configService: config, mongoService: mongo, ncpsKeyService });
+  // Expose checkpoint_writes service globally for LLLoop to emit events
+  (globalThis as any).__checkpointWrites = new CheckpointWritesService(mongo.getDb(), logger);
 
   const runtime = new LiveGraphRuntime(logger, templateRegistry);
   const runsService = new AgentRunService(mongo.getDb(), logger);
@@ -424,7 +411,7 @@ async function bootstrap() {
   logger.info(`HTTP server listening on :${PORT}`);
 
   const io = new Server(fastify.server, { cors: { origin: '*' } });
-  const socketService = new SocketService(io, logger, checkpointer);
+  const socketService = new SocketService(io, logger, mongo.getDb());
   socketService.register();
 
   function emitStatus(nodeId: string) {

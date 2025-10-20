@@ -1,16 +1,32 @@
-import { DynamicStructuredTool } from "@langchain/core/tools";
-import { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { LoggerService } from "../services/logger.service";
+import { z } from 'zod';
+import { LoggerService } from '../services/logger.service';
+import type { ContainerEntity } from '../entities/container.entity';
+import type { Tool } from '../llloop/types';
+
+export type ToolInvokeCtx = { thread_id?: string; abort_signal?: AbortSignal; caller_agent?: unknown };
 
 export abstract class BaseTool {
-  // Require explicit logger injection for tools
   constructor(protected readonly logger: LoggerService) {}
-  // Tools must call super(logger) in subclass constructors to standardize logger injection.
-  abstract init(config?: LangGraphRunnableConfig): DynamicStructuredTool;
-  async destroy(): Promise<void> { /* default no-op */ }
+  // LLLoop-native shape: implement invoke + metadata
+  abstract name(): string;
+  abstract description(): string;
+  abstract inputSchema(): z.ZodTypeAny;
+  abstract invoke(input: unknown, ctx?: ToolInvokeCtx): Promise<unknown>;
+  async destroy(): Promise<void> { /* no-op */ }
+  // Optional: for container-backed tools
+  getContainerForThread?(threadId: string): Promise<ContainerEntity | undefined>;
 
-  // Optional hook: return the container associated with the thread id, if any
-  // Tools that are container-backed can override this to enable cross-tool behaviors.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  getContainerForThread?(threadId: string): Promise<import('../entities/container.entity').ContainerEntity | undefined>;
+  // Helper to expose as LLLoop Tool
+  toLLLoopTool(): Tool {
+    return {
+      name: this.name(),
+      description: this.description(),
+      schema: this.inputSchema().toJSON(),
+      call: async (args, ctx) => {
+        const res = await this.invoke(args, { thread_id: ctx.threadId, abort_signal: ctx.signal });
+        if (typeof res === 'string') return { outputText: res };
+        return { outputJson: res };
+      },
+    };
+  }
 }

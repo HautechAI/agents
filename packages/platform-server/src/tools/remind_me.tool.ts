@@ -1,4 +1,3 @@
-import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { BaseTool } from './base.tool';
 import { LoggerService } from '../services/logger.service';
@@ -42,9 +41,10 @@ export class RemindMeTool extends BaseTool {
     }
   }
 
-  init(): DynamicStructuredTool {
-    return tool(
-      async (raw, config) => {
+  name(): string { return 'remindMeTool'; }
+  description(): string { return 'Schedule a reminder message to self after a delay; returns immediately with schedule info.'; }
+  inputSchema() { return remindMeSchema; }
+  async invoke(raw: unknown, config?: { configurable?: Record<string, unknown> }): Promise<unknown> {
         const { delayMs, note } = remindMeSchema.parse(raw);
         // Clamp excessive delays to avoid long-lived timers retaining memory
         const boundedDelay = Math.min(delayMs, MAX_DELAY_MS);
@@ -110,14 +110,6 @@ export class RemindMeTool extends BaseTool {
         this.active.set(id, { timer, reminder: { id, threadId, note, at: eta } });
 
         return { status: 'scheduled', etaMs: boundedDelay, at: eta };
-      },
-      {
-        name: 'remindMeTool',
-        description:
-          'Schedule a reminder message to self after a delay. Useful for time-based follow-ups. Async-only; returns immediately with schedule info.',
-        schema: remindMeSchema,
-      },
-    );
   }
 }
 

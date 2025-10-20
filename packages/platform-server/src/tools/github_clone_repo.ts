@@ -1,4 +1,3 @@
-import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
 import { ConfigService } from '../services/config.service';
@@ -60,9 +59,10 @@ export class GithubCloneRepoTool extends BaseTool {
     this.containerProvider = provider;
   }
 
-  init(): DynamicStructuredTool {
-    return tool(
-      async (rawInput, config) => {
+  name(): string { return 'github_clone_repo'; }
+  description(): string { return 'Clone a GitHub repository into the running container at the specified path using authenticated HTTPS.'; }
+  inputSchema() { return githubCloneSchema; }
+  async invoke(rawInput: unknown, config: { configurable: { thread_id?: string } } = { configurable: {} }): Promise<unknown> {
         const input = githubCloneSchema.parse(rawInput);
         const { thread_id } = config.configurable;
         if (!thread_id) throw new Error('thread_id is required in config.configurable');
@@ -120,14 +120,6 @@ export class GithubCloneRepoTool extends BaseTool {
           message: `Cloned ${owner}/${repo} into ${path}`,
           stdout: result.stdout,
         };
-      },
-      {
-        name: 'github_clone_repo',
-        description:
-          'Clone a GitHub repository into the running container at the specified path using authenticated HTTPS.',
-        schema: githubCloneSchema,
-      },
-    );
   }
 
   async setConfig(_cfg: Record<string, unknown>): Promise<void> {

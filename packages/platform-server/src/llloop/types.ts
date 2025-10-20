@@ -31,6 +31,9 @@ export interface ToolContext {
 
 export interface Tool {
   name: string;
+  description?: string;
+  // JSON Schema object
+  schema: object;
   call(args: unknown, ctx: ToolContext): Promise<{ outputText?: string; outputJson?: unknown } | string>;
 }
 

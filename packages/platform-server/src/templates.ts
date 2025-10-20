@@ -3,7 +3,7 @@ import { Agent, AgentStaticConfigSchema } from './nodes/agent/agent.node';
 import { ContainerProviderEntity, ContainerProviderExposedStaticConfigSchema } from './entities/containerProvider.entity';
 import { TemplateRegistry } from './graph';
 import { LocalMCPServer } from './mcp';
-import { CheckpointerService } from './services/checkpointer.service';
+// Removed CheckpointerService (LangGraph); using LLLoop snapshots + checkpoint-writes bridge
 import { ConfigService } from './services/config.service';
 import { ContainerService } from './services/container.service';
 import { LoggerService } from './services/logger.service';
@@ -31,13 +31,13 @@ export interface TemplateRegistryDeps {
   logger: LoggerService;
   containerService: ContainerService;
   configService: ConfigService;
-  checkpointerService: CheckpointerService;
+  // no checkpointer
   mongoService: MongoService; // required for memory nodes
   ncpsKeyService?: NcpsKeyService;
 }
 
 export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
-  const { logger, containerService, configService, checkpointerService, mongoService, ncpsKeyService } = deps;
+  const { logger, containerService, configService, mongoService, ncpsKeyService } = deps;
 
   // Initialize Vault service from config (optional)
   const vault = new VaultService(
@@ -216,7 +216,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'agent',
-        (ctx) => new Agent(configService, logger, checkpointerService, ctx.nodeId),
+        (ctx) => new Agent(configService, logger, /* nodeId: */ ctx.nodeId, mongoService.getDb()),
         {
           sourcePorts: {
             tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
