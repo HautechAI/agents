@@ -1,4 +1,4 @@
-import { useCallback, useRef, useMemo, useState, useEffect, forwardRef } from 'react';
+import { useCallback, useRef, useMemo, useState, useEffect, forwardRef, memo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -383,6 +383,51 @@ function KindIcon({ kind }: { kind?: TemplateNodeSchema['kind'] }) {
   return <Zap className={cls} />;
 }
 
+// Hoisted RightPanelContent to keep identity stable across AgentBuilder re-renders
+const RightPanelContent = memo(function RightPanelContent({
+  rightTab,
+  setRightTab,
+  activityEligible,
+  selectedDisplayTitle,
+  selectedNode,
+  updateNodeData,
+}: {
+  rightTab: 'properties' | 'activity';
+  setRightTab: (tab: 'properties' | 'activity') => void;
+  activityEligible: boolean;
+  selectedDisplayTitle: string;
+  selectedNode: RFNode | null;
+  updateNodeData: (nodeId: string, data: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden">
+      <div className="border-b flex items-center gap-2 px-4 h-10 shrink-0">
+        <div className="text-xs font-semibold tracking-wide truncate" title={selectedDisplayTitle}>{selectedDisplayTitle}</div>
+        {activityEligible && (
+          <div className="ml-auto flex gap-1">
+            <Button type="button" size="sm" variant={rightTab === 'properties' ? 'default' : 'secondary'} onClick={() => setRightTab('properties')}>
+              Props
+            </Button>
+            <Button type="button" size="sm" variant={rightTab === 'activity' ? 'default' : 'secondary'} onClick={() => setRightTab('activity')}>
+              Activity
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        {rightTab === 'activity' && activityEligible && selectedNode ? (
+          <div className="space-y-4">
+            {/* Show tracing spans for agent/tool nodes */}
+            <NodeObsSidebar node={selectedNode} />
+          </div>
+        ) : (
+          <RightPropertiesPanel node={selectedNode} onChange={updateNodeData} />
+        )}
+      </div>
+    </div>
+  );
+});
+
 export function AgentBuilder() {
   const {
     nodes,
@@ -427,50 +472,6 @@ export function AgentBuilder() {
   const selectedDisplayTitle = selectedNode
     ? getDisplayTitle(templates, selectedNode.data.template, selectedNode.data.config)
     : 'No Selection';
-
-  function RightPanelContent({
-    rightTab,
-    setRightTab,
-    activityEligible,
-    selectedDisplayTitle,
-    selectedNode,
-    updateNodeData,
-  }: {
-    rightTab: 'properties' | 'activity';
-    setRightTab: (tab: 'properties' | 'activity') => void;
-    activityEligible: boolean;
-    selectedDisplayTitle: string;
-    selectedNode: RFNode | null;
-    updateNodeData: (nodeId: string, data: Record<string, unknown>) => void;
-  }) {
-    return (
-      <div className="flex h-full w-full flex-col overflow-hidden">
-        <div className="border-b flex items-center gap-2 px-4 h-10 shrink-0">
-          <div className="text-xs font-semibold tracking-wide truncate" title={selectedDisplayTitle}>{selectedDisplayTitle}</div>
-          {activityEligible && (
-            <div className="ml-auto flex gap-1">
-              <Button type="button" size="sm" variant={rightTab === 'properties' ? 'default' : 'secondary'} onClick={() => setRightTab('properties')}>
-                Props
-              </Button>
-              <Button type="button" size="sm" variant={rightTab === 'activity' ? 'default' : 'secondary'} onClick={() => setRightTab('activity')}>
-                Activity
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          {rightTab === 'activity' && activityEligible && selectedNode ? (
-            <div className="space-y-4">
-              {/* Show tracing spans for agent/tool nodes */}
-              <NodeObsSidebar node={selectedNode} />
-            </div>
-          ) : (
-            <RightPropertiesPanel node={selectedNode} onChange={updateNodeData} />
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <DndProvider backend={HTML5Backend}>
