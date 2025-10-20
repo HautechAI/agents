@@ -1,5 +1,5 @@
 import type { Node } from 'reactflow';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, memo } from 'react';
 import type { TemplateNodeSchema } from '@agyn/shared';
 import { useTemplates } from '../useTemplates';
 // Runtime graph components & hooks
@@ -26,7 +26,7 @@ interface Props {
   onChange: (id: string, data: Partial<BuilderPanelNodeData>) => void;
 }
 
-export function RightPropertiesPanel({ node, onChange }: Props) {
+function RightPropertiesPanel({ node, onChange }: Props) {
   // Wrapper delegates to body to avoid conditional hooks
   if (!node) {
     return <div className="text-xs text-muted-foreground">Select a node to edit its properties.</div>;
@@ -188,3 +188,7 @@ function RightPropertiesPanelBody({ node, onChange }: { node: Node<BuilderPanelN
     </div>
   );
 }
+
+// Memoize to avoid unnecessary re-renders on unrelated state updates
+export const RightPropertiesPanelMemo = memo(RightPropertiesPanel);
+export { RightPropertiesPanelMemo as RightPropertiesPanel };
