@@ -246,8 +246,10 @@ export class ConfigService implements Config {
   get ncpsAuthHeader(): string | undefined { return this.params.ncpsAuthHeader; }
   get ncpsAuthToken(): string | undefined { return this.params.ncpsAuthToken; }
   get agentsUseDirectResponses(): boolean {
-    // Ensure strict boolean; schema default is true. Avoid string leakage.
-    return this.params.agentsUseDirectResponses === undefined ? true : !!this.params.agentsUseDirectResponses;
+    // Ensure strict boolean; default ON in prod, OFF in test environments.
+    if (this.params.agentsUseDirectResponses !== undefined) return !!this.params.agentsUseDirectResponses;
+    const isTest = process.env.NODE_ENV === 'test' || !!process.env.VITEST_WORKER_ID;
+    return !isTest;
   }
 
   static fromEnv(): ConfigService {

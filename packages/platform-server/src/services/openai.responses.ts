@@ -128,6 +128,7 @@ export class OpenAIResponsesService {
               logger.warn?.('Responses reasoning segment without guaranteed adjacent output_text; continuing.');
               break;
             case 'tool_use':
+              // Always collect tool_use regardless of output_text presence
               if (seg.id && seg.name) toolCalls.push({ id: seg.id, name: seg.name, arguments: seg.input });
               break;
             default:
