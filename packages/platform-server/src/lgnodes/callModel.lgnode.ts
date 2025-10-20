@@ -71,8 +71,9 @@ export class CallModelNode extends BaseNode {
       }
       const abortSignal: AbortSignal | undefined = config?.configurable?.abort_signal;
       const svc = new OpenAIResponsesService();
-      // Map messages/tools to Responses format
-      const { messages: respMsgs, tools: respTools } = OpenAIResponsesService.toResponsesPayload(finalMessages, tools as any);
+      // Map messages/tools to Responses format (avoid any by adapting tool fields)
+      const simpleTools = tools.map((t: any) => ({ name: t.name, description: t.description, schema: t.schema }));
+      const { messages: respMsgs, tools: respTools } = OpenAIResponsesService.toResponsesPayload(finalMessages, simpleTools);
       const model: string = (this.llm as any)?.modelName || (this.llm as any)?.model || 'gpt-4o-mini';
       const req = { model, messages: respMsgs, tools: respTools } as any;
       const context: ChatMessageInput[] = finalMessages.slice(-10).map((m) => {

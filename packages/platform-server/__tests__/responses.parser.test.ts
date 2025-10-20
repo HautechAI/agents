@@ -53,11 +53,13 @@ describe('Responses parser', () => {
   it('Round-trip mapping: AIMessage tool_calls -> Responses payload -> parse back toolCalls', () => {
     const ai = new (require('@langchain/core/messages').AIMessage)({
       content: 'x',
+      // Simulate LangChain placing tool_calls under both top-level and additional_kwargs
       tool_calls: [
         { id: 'a1', name: 'sum', args: { a: 1 } },
         { id: 'a2', name: 'sub', args: { b: 2 } },
       ],
     });
+    (ai as any).additional_kwargs = { tool_calls: [ { id: 'a1', name: 'sum', args: { a: 1 } }, { id: 'a2', name: 'sub', args: { b: 2 } } ] };
     const { messages } = OpenAIResponsesService.toResponsesPayload([ai], [] as any);
     // Simulate a minimal response echoing back tool_use items
     const raw = { id: 'r', output: [{ type: 'message', role: 'assistant', content: messages[0].content }] } as any;
@@ -66,6 +68,26 @@ describe('Responses parser', () => {
       { id: 'a1', name: 'sum', arguments: { a: 1 } },
       { id: 'a2', name: 'sub', arguments: { b: 2 } },
     ]);
+  });
+
+  it('warns once for multiple reasoning segments', () => {
+    const raw = make([
+      { type: 'reasoning', text: 'a' },
+      { type: 'reasoning', text: 'b' },
+      { type: 'reasoning', text: 'c' },
+    ]);
+    const logger = { warn: vi.fn(), debug: vi.fn() } as any;
+    const res = OpenAIResponsesService.parseResponse(raw, logger);
+    expect(res.content).toBe('');
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips ToolMessage mapping when tool_call_id is missing', () => {
+    // Build a tool role output with missing tool_use_id equivalent; should be skipped (parser ignores non-assistant top-level)
+    const raw = { id: 'x', output: [{ type: 'message', role: 'tool', content: [{ type: 'tool_result', tool_use_id: '', content: 'x' }] }] } as any;
+    const res = OpenAIResponsesService.parseResponse(raw);
+    // No effect on assistant content/toolCalls
+    expect(res.toolCalls).toEqual([]);
   });
 
   it('parses tool_use only', () => {
