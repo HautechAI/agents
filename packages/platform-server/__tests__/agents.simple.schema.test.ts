@@ -36,11 +36,13 @@ describe('BaseAgent.getConfigSchema / Agent.setConfig', () => {
   it('supports model override via setConfig', () => {
     const a = makeAgent();
     const anyA: any = a as any;
-  const originalLLM = (anyA.llm);
-  a.setConfig({ model: 'override-model' });
-  // Expect underlying llm object mutated, not replaced with a new node
-  expect(anyA.llm).toBe(originalLLM);
-  expect((anyA.llm as any).model).toBe('override-model');
-  expect(anyA.loggerService.info).toHaveBeenCalledWith('Agent model updated to override-model');
+    const originalLLM = anyA.llm;
+    a.setConfig({ model: 'override-model' });
+    // Expect underlying llm object replaced and nodes rebound to the new instance
+    expect(anyA.llm).not.toBe(originalLLM);
+    expect((anyA.llm as any).model).toBe('override-model');
+    expect(anyA.callModelNode.llm).toBe(anyA.llm);
+    expect(anyA.summarizeNode.llm).toBe(anyA.llm);
+    expect(anyA.loggerService.info).toHaveBeenCalledWith('Agent model updated to override-model');
   });
 });

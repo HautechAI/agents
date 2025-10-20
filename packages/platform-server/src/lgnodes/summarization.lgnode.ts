@@ -28,6 +28,11 @@ export class SummarizationNode {
     this.summarySystemNote = opts.summarySystemNote;
   }
 
+  // Allow rebinding of the underlying ChatOpenAI instance at runtime
+  setLLM(newLLM: ChatOpenAI) {
+    this.llm = newLLM;
+  }
+
   setOptions(opts: Partial<{ keepTokens: number; maxTokens: number; summarySystemNote: string }>): void {
     if (opts.keepTokens !== undefined) this.keepTokens = opts.keepTokens;
     if (opts.maxTokens !== undefined) this.maxTokens = opts.maxTokens;

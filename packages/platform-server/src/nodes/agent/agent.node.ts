@@ -481,54 +481,53 @@ export class Agent extends BaseAgent {
   // Overload preserves BaseAgent signature while exposing a more precise config shape for callers.
   setConfig(config: Partial<AgentStaticConfig> & Record<string, unknown>): void;
   setConfig(config: Record<string, unknown>): void {
-    // Filter to known keys and validate without letting defaults write missing keys
+    // Filter to known keys only; preserve partial update semantics
     const filteredEntries = Object.entries(config).filter(([k]) =>
       Agent.allowedConfigKeys.has(k as (typeof Agent.allowedConfigKeysArray)[number]),
     );
     const filtered = Object.fromEntries(filteredEntries) as Partial<AgentStaticConfig> & Record<string, unknown>;
-    const parsedConfig = AgentStaticConfigSchema.partial().parse(filtered) as Partial<AgentStaticConfig>;
+
+    // Legacy alias: map summarizationKeepLast -> summarizationKeepTokens if present in input and keepTokens not provided
+    if (
+      Object.prototype.hasOwnProperty.call(config, 'summarizationKeepLast') &&
+      !Object.prototype.hasOwnProperty.call(config, 'summarizationKeepTokens')
+    ) {
+      (filtered as any).summarizationKeepTokens = (config as any).summarizationKeepLast;
+    }
+
+    // Validate using strict partial schema; throws ZodError on invalid input
+    const parsedConfig = AgentStaticConfigSchema.partial().strict().parse(filtered) as Partial<AgentStaticConfig>;
 
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
-    // Only update fields that were explicitly provided by caller
+    // Only update fields explicitly provided by caller
     if (Object.prototype.hasOwnProperty.call(filtered, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('Agent system prompt updated');
     }
 
     if (Object.prototype.hasOwnProperty.call(filtered, 'model') && typeof parsedConfig.model === 'string') {
-      // Update model on stored llm instance (lightweight change similar to systemPrompt logic)
-      this.llm.model = parsedConfig.model;
+      // Recreate ChatOpenAI with the same apiKey/baseURL and provided model, then rebind
+      const apiKey = this.configService.openaiApiKey || process.env.OPENAI_API_KEY;
+      const baseURL = this.configService.openaiBaseUrl || process.env.OPENAI_BASE_URL;
+      const newLLM = new ChatOpenAI({ model: parsedConfig.model, apiKey, ...(baseURL ? { baseURL } : {}) });
+      this.llm = newLLM;
+      this.callModelNode.setLLM(newLLM);
+      this.summarizeNode.setLLM(newLLM);
       this.loggerService.info(`Agent model updated to ${parsedConfig.model}`);
     }
 
-    // Extend to accept summarization options
-    // Accept both new (summarizationKeepTokens) and legacy (summarizationKeepLast) keys.
-    const cfgObj = config as Record<string, unknown>;
-    const keepTokensRaw =
-      cfgObj.summarizationKeepTokens !== undefined ? cfgObj.summarizationKeepTokens : cfgObj.summarizationKeepLast; // legacy fallback
-    const maxTokensRaw = cfgObj.summarizationMaxTokens;
-    const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
-
+    // Summarization options: rely on Zod validation and apply only provided fields
     const updates: { keepTokens?: number; maxTokens?: number } = {};
-    if (keepTokensRaw !== undefined && keepTokensRaw !== null) {
-      if (!(isInt(keepTokensRaw) && (keepTokensRaw as number) >= 0)) {
-        this.loggerService.error('summarizationKeepTokens must be an integer >= 0');
-      } else {
-        this.summarizationKeepTokens = keepTokensRaw as number;
-        updates.keepTokens = keepTokensRaw as number;
-      }
+    if (Object.prototype.hasOwnProperty.call(filtered, 'summarizationKeepTokens') && typeof parsedConfig.summarizationKeepTokens === 'number') {
+      this.summarizationKeepTokens = parsedConfig.summarizationKeepTokens;
+      updates.keepTokens = parsedConfig.summarizationKeepTokens;
     }
-    if (maxTokensRaw !== undefined && maxTokensRaw !== null) {
-      if (!(isInt(maxTokensRaw) && (maxTokensRaw as number) > 0)) {
-        this.loggerService.error('summarizationMaxTokens must be an integer > 0');
-      } else {
-        this.summarizationMaxTokens = maxTokensRaw as number;
-        updates.maxTokens = maxTokensRaw as number;
-      }
+    if (Object.prototype.hasOwnProperty.call(filtered, 'summarizationMaxTokens') && typeof parsedConfig.summarizationMaxTokens === 'number') {
+      this.summarizationMaxTokens = parsedConfig.summarizationMaxTokens;
+      updates.maxTokens = parsedConfig.summarizationMaxTokens;
     }
-
     if (updates.keepTokens !== undefined || updates.maxTokens !== undefined) {
       this.summarizeNode.setOptions(updates);
       this.loggerService.info('Agent summarization options updated');
