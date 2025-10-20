@@ -148,6 +148,7 @@ export class Agent extends BaseAgent {
     return new ChatOpenAI({
       model,
       apiKey,
+      useResponsesApi: true,
       ...(baseURL ? { baseURL } : {}),
     });
   }

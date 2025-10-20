@@ -49,10 +49,7 @@ export class CallModelNode extends BaseNode {
   async action(state: { messages: BaseMessage[]; summary?: string }, config: any): Promise<NodeOutput> {
     const tools = this.tools.map((tool) => tool.init(config));
 
-    const boundLLM = this.llm.withConfig({
-      tools: tools,
-      tool_choice: 'auto',
-    });
+    const boundLLM = this.llm.bindTools(tools);
 
     // Removed temporary diagnostic memory_dump path (Issue #125)
 
