@@ -27,7 +27,7 @@ export async function maybeProvisionLiteLLMKey(cfg: ConfigService, logger: Logge
   const master = cfg.litellmMasterKey;
   if (!base || !master) return {};
 
-  const models = toList(process.env.LITELLM_MODELS, ['gpt-5']);
+  const models = toList(process.env.LITELLM_MODELS, ['all-team-models']);
   const duration = process.env.LITELLM_KEY_DURATION || '30d';
   const keyAlias = process.env.LITELLM_KEY_ALIAS || `agents-${process.pid}`;
   const maxBudget = process.env.LITELLM_MAX_BUDGET;
