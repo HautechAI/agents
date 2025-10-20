@@ -18,6 +18,7 @@ export default [
     },
     plugins: { '@typescript-eslint': tseslint.plugin },
     rules: {
+      'max-depth': ['error', 3],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unsafe-assignment': 'error',
       '@typescript-eslint/no-unsafe-call': 'error',
