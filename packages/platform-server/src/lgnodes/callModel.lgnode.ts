@@ -4,6 +4,8 @@ import { BaseTool } from '../tools/base.tool';
 import { BaseNode } from './base.lgnode';
 import { NodeOutput } from '../types';
 import { ChatMessageInput, LLMResponse, withLLM } from '@agyn/tracing';
+import { OpenAIResponsesService } from '../services/openai.responses';
+import { ConfigService } from '../services/config.service';
 
 // Minimal connector contract used by CallModelNode for memory injection
 export interface MemoryConnector {
@@ -18,6 +20,7 @@ export class CallModelNode extends BaseNode {
   constructor(
     private tools: BaseTool[],
     private llm: ChatOpenAI,
+    private cfg?: ConfigService,
   ) {
     super();
     // Copy to decouple from external array literal; we manage our own list.
@@ -48,6 +51,48 @@ export class CallModelNode extends BaseNode {
 
   async action(state: { messages: BaseMessage[]; summary?: string }, config: any): Promise<NodeOutput> {
     const tools = this.tools.map((tool) => tool.init(config));
+    const useResponses = this.cfg?.agentsUseDirectResponses ?? (process.env.AGENTS_USE_DIRECT_RESPONSES ? process.env.AGENTS_USE_DIRECT_RESPONSES !== 'false' : false);
+    // If using direct Responses API, bypass LangChain and call our client
+    if (useResponses) {
+      const finalMessages: BaseMessage[] = [
+        new SystemMessage(this.systemPrompt),
+        ...(state.summary ? [new SystemMessage(`Summary of the previous conversation:\n${state.summary}`)] : []),
+        ...(state.messages as BaseMessage[]),
+      ];
+      // Optional memory injection
+      if (this.memoryConnector) {
+        const threadId = config?.configurable?.thread_id;
+        const memMsg = await this.memoryConnector.renderMessage({ threadId });
+        if (memMsg) {
+          if (this.memoryConnector.getPlacement() === 'after_system') finalMessages.splice(1, 0, memMsg);
+          else finalMessages.push(memMsg);
+        }
+      }
+      const abortSignal: AbortSignal | undefined = config?.configurable?.abort_signal;
+      const svc = new OpenAIResponsesService();
+      // Map messages/tools to Responses format
+      const { messages: respMsgs, tools: respTools } = OpenAIResponsesService.toResponsesPayload(finalMessages, tools as any);
+      const model: string = (this.llm as any)?.modelName || (this.llm as any)?.model || 'gpt-4o-mini';
+      const req = { model, messages: respMsgs, tools: respTools } as any;
+      const context: ChatMessageInput[] = finalMessages.slice(-10).map((m) => {
+        if (m instanceof SystemMessage) return { role: 'system', content: String((m as any).content ?? '') };
+        if (m instanceof HumanMessage) return { role: 'human', content: String((m as any).content ?? '') };
+        if (m instanceof AIMessage) {
+          const content = String((m as any).content ?? '');
+          const toolCalls = (m as any).toolCalls || (m as any).tool_calls;
+          return { role: 'ai', content, toolCalls } as ChatMessageInput;
+        }
+        const role = (m as any).role || (m as any)._getType?.() || 'system';
+        return { role, content: String((m as any).content ?? '') } as ChatMessageInput;
+      });
+      const result = await withLLM({ context }, async () => {
+        const rawParsed = await svc.createResponse(req);
+        return new LLMResponse({ raw: rawParsed.raw, content: rawParsed.content, toolCalls: rawParsed.toolCalls });
+      });
+      return { messages: { method: 'append', items: [result] } };
+    }
+
+    // Fallback: LangChain ChatOpenAI path
     // Newer @langchain/openai exposes bindTools; older mocked instances may only support withConfig.
     const boundLLM: any = typeof (this.llm as any).bindTools === 'function' ? (this.llm as any).bindTools(tools) : this.llm.withConfig({ tools });
 

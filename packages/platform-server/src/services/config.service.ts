@@ -129,6 +129,11 @@ export const configSchema = z.object({
     }),
   ncpsAuthHeader: z.string().optional(),
   ncpsAuthToken: z.string().optional(),
+  // Feature flag: use OpenAI Responses API directly in CallModelNode
+  agentsUseDirectResponses: z
+    .union([z.boolean(), z.string()])
+    .default('true')
+    .transform((v) => (typeof v === 'string' ? v.toLowerCase() !== 'false' : !!v)),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -240,6 +245,7 @@ export class ConfigService implements Config {
   get ncpsRotationGraceMinutes(): number { return this.params.ncpsRotationGraceMinutes; }
   get ncpsAuthHeader(): string | undefined { return this.params.ncpsAuthHeader; }
   get ncpsAuthToken(): string | undefined { return this.params.ncpsAuthToken; }
+  get agentsUseDirectResponses(): boolean { return this.params.agentsUseDirectResponses as unknown as boolean; }
 
   static fromEnv(): ConfigService {
     const legacy = process.env.NCPS_URL;
@@ -288,6 +294,7 @@ export class ConfigService implements Config {
       ncpsRotationGraceMinutes: process.env.NCPS_ROTATION_GRACE_MINUTES,
       ncpsAuthHeader: process.env.NCPS_AUTH_HEADER,
       ncpsAuthToken: process.env.NCPS_AUTH_TOKEN,
+      agentsUseDirectResponses: process.env.AGENTS_USE_DIRECT_RESPONSES,
     });
     return new ConfigService(parsed);
   }
