@@ -52,4 +52,9 @@ Reducer architecture
 - Operational dependencies (OpenAI client, ToolRegistry, Logger) are injected into reducer constructors by LLLoop when wiring.
 - Dispatcher signature: invoke({ reducers, state, ctx, logger }).
 - LoopState carries no routing flags; routing is solely via ReduceResult.next.
-- Replace-only semantics: reducers must return the full messages array; the engine computes a diff (appended messages) to persist and emit events.
+- Replace-only semantics: reducers must return the full messages array; the engine computes a diff (appended messages) to emit events in-memory (no per-message persistence).
+
+Snapshot persistence
+- LLLoop uses a snapshot-only persistence model. A SnapshotStore upserts the full LoopState per (nodeId, threadId).
+- Before invoke: load existing snapshot and merge with incoming messages if needed; after invoke: upsert the new state.
+- Run entities (if enabled) may track lifecycle only; ConversationSnapshot is the authoritative state.

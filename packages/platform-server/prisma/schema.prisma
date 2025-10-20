@@ -16,8 +16,7 @@ model Conversation {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   runs       Run[]
-  messages   Message[]
-  toolCalls  ToolCall[]
+  snapshots  ConversationSnapshot[]
 
   @@index([nodeId, updatedAt])
 }
@@ -31,46 +30,24 @@ model Run {
   startedAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   expiresAt      DateTime?
-  messages       Message[]
-  toolCalls      ToolCall[]
 
   @@index([nodeId, status, updatedAt])
   @@index([conversationId, startedAt])
   @@index([expiresAt])
 }
 
-model Message {
+model ConversationSnapshot {
   id             String   @id @default(cuid())
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   conversationId String
-  run            Run?        @relation(fields: [runId], references: [id])
-  runId          String?
-  role           String
-  content        Json?
-  toolCall       ToolCall?   @relation(fields: [toolCallId], references: [id])
-  toolCallId     String?
-  name           String?
-  seq            Int
-  createdAt      DateTime @default(now())
+  nodeId         String
+  version        Int      @default(0)
+  summaryText    String?
+  stateJson      Json
+  updatedAt      DateTime @updatedAt
 
-  @@index([conversationId, seq])
-  @@index([runId, seq])
-}
-
-model ToolCall {
-  id             String   @id @default(cuid())
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-  conversationId String
-  run            Run?        @relation(fields: [runId], references: [id])
-  runId          String?
-  name           String
-  input          Json
-  output         Json?
-  status         ToolCallStatus
-  createdAt      DateTime @default(now())
-
-  @@index([conversationId, createdAt])
-  @@index([runId, createdAt])
+  @@unique([nodeId, conversationId])
+  @@index([updatedAt])
 }
 
 model NodeState {
@@ -92,9 +69,4 @@ enum RunStatus {
   canceled
 }
 
-enum ToolCallStatus {
-  queued
-  running
-  succeeded
-  failed
-}
+// Removed Message/ToolCall persistence in favor of snapshot-only model
