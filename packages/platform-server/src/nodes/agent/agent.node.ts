@@ -141,6 +141,17 @@ export class Agent extends BaseAgent {
     this.init();
   }
 
+  // Centralized ChatOpenAI instantiation to avoid duplication and env fallbacks
+  private createLLM(model: string): ChatOpenAI {
+    const apiKey = this.configService.openaiApiKey;
+    const baseURL = this.configService.openaiBaseUrl;
+    return new ChatOpenAI({
+      model,
+      apiKey,
+      ...(baseURL ? { baseURL } : {}),
+    });
+  }
+
   // Expose nodeId for instrumentation (used by BaseAgent.withAgent wrapper)
   protected override getNodeId(): string | undefined {
     return this.agentId;
@@ -176,14 +187,8 @@ export class Agent extends BaseAgent {
 
     this._config = config;
 
-    // Support env/auto-provisioned credentials. Base URL can be provided via env or config passthrough.
-    const apiKey = this.configService.openaiApiKey || process.env.OPENAI_API_KEY;
-    const baseURL = this.configService.openaiBaseUrl || process.env.OPENAI_BASE_URL;
-    this.llm = new ChatOpenAI({
-      model: 'gpt-5',
-      apiKey,
-      ...(baseURL ? { baseURL } : {}),
-    });
+    // Instantiate ChatOpenAI via factory; rely solely on ConfigService for credentials/base URL.
+    this.llm = this.createLLM('gpt-5');
 
     this.callModelNode = new CallModelNode([], this.llm);
     // Pass this agent's node id to ToolsNode for span attribution
@@ -487,17 +492,15 @@ export class Agent extends BaseAgent {
     // Apply agent-side scheduling config
     this.applyRuntimeConfig(config);
 
-    // Only update fields explicitly provided by caller
-    if (Object.prototype.hasOwnProperty.call(config, 'systemPrompt') && typeof parsedConfig.systemPrompt === 'string') {
+    // Only update fields explicitly provided by caller; rely on Zod-parsed values for type safety
+    if (Object.prototype.hasOwnProperty.call(config, 'systemPrompt') && parsedConfig.systemPrompt !== undefined) {
       this.callModelNode.setSystemPrompt(parsedConfig.systemPrompt);
       this.loggerService.info('Agent system prompt updated');
     }
 
-    if (Object.prototype.hasOwnProperty.call(config, 'model') && typeof parsedConfig.model === 'string') {
-      // Recreate ChatOpenAI with the same apiKey/baseURL and provided model, then rebind
-      const apiKey = this.configService.openaiApiKey || process.env.OPENAI_API_KEY;
-      const baseURL = this.configService.openaiBaseUrl || process.env.OPENAI_BASE_URL;
-      const newLLM = new ChatOpenAI({ model: parsedConfig.model, apiKey, ...(baseURL ? { baseURL } : {}) });
+    if (Object.prototype.hasOwnProperty.call(config, 'model') && parsedConfig.model) {
+      // Recreate ChatOpenAI via factory with provided model, then rebind
+      const newLLM = this.createLLM(parsedConfig.model);
       this.llm = newLLM;
       this.callModelNode.setLLM(newLLM);
       this.summarizeNode.setLLM(newLLM);
@@ -506,11 +509,17 @@ export class Agent extends BaseAgent {
 
     // Summarization options: rely on Zod validation and apply only provided fields
     const updates: { keepTokens?: number; maxTokens?: number } = {};
-    if (Object.prototype.hasOwnProperty.call(config, 'summarizationKeepTokens') && typeof parsedConfig.summarizationKeepTokens === 'number') {
+    if (
+      Object.prototype.hasOwnProperty.call(config, 'summarizationKeepTokens') &&
+      parsedConfig.summarizationKeepTokens !== undefined
+    ) {
       this.summarizationKeepTokens = parsedConfig.summarizationKeepTokens;
       updates.keepTokens = parsedConfig.summarizationKeepTokens;
     }
-    if (Object.prototype.hasOwnProperty.call(config, 'summarizationMaxTokens') && typeof parsedConfig.summarizationMaxTokens === 'number') {
+    if (
+      Object.prototype.hasOwnProperty.call(config, 'summarizationMaxTokens') &&
+      parsedConfig.summarizationMaxTokens !== undefined
+    ) {
       this.summarizationMaxTokens = parsedConfig.summarizationMaxTokens;
       updates.maxTokens = parsedConfig.summarizationMaxTokens;
     }
@@ -520,7 +529,8 @@ export class Agent extends BaseAgent {
     }
 
     // Apply restriction-related config without altering system prompt
-    if (Object.prototype.hasOwnProperty.call(config, 'restrictOutput')) this.restrictOutput = !!parsedConfig.restrictOutput;
+    if (Object.prototype.hasOwnProperty.call(config, 'restrictOutput') && parsedConfig.restrictOutput !== undefined)
+      this.restrictOutput = !!parsedConfig.restrictOutput;
     if (Object.prototype.hasOwnProperty.call(config, 'restrictionMessage') && parsedConfig.restrictionMessage !== undefined)
       this.restrictionMessage = parsedConfig.restrictionMessage;
     if (
