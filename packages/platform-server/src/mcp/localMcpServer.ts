@@ -297,7 +297,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       } catch (e) {
         this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Error cleaning up temp container`, e);
       }
-      await this.cleanupDinDSidecars(tempContainerId, discoveryId);
+      await this.cleanupDinDSidecars(tempContainerId, String(discoveryId));
     }
 
     return this.toolsCache ?? [];

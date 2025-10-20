@@ -22,24 +22,30 @@ export class ToolsNode extends BaseNode {
     this.tools = [...tools];
   }
 
-  private async handleOversizedOutput(content: string, config: WithRuntime | undefined, pair: { base: BaseTool } | undefined) {
+  private async handleOversizedOutput(
+    content: string,
+    config: WithRuntime | undefined,
+    pair: { base: BaseTool } | undefined,
+    toolCallId: string,
+    toolName: string,
+  ) {
     const threadId = config?.configurable?.thread_id;
     const baseTool = pair?.base;
     const canSave = threadId && baseTool && typeof (baseTool as any).getContainerForThread === 'function';
-    if (!canSave) return new ToolCallResponse({ raw: new ToolMessage({ content: '' }), output: `Error (output too long: ${content.length} characters).`, status: 'error' });
+    if (!canSave) return new ToolCallResponse({ raw: new ToolMessage({ tool_call_id: toolCallId, name: toolName, content: '' }), output: `Error (output too long: ${content.length} characters).`, status: 'error' });
     try {
       const container = await (baseTool as any).getContainerForThread(threadId);
       const hasPut = !!container && typeof container.putArchive === 'function';
-      if (!hasPut) return new ToolCallResponse({ raw: new ToolMessage({ content: '' }), output: `Error (output too long: ${content.length} characters).`, status: 'error' });
+      if (!hasPut) return new ToolCallResponse({ raw: new ToolMessage({ tool_call_id: toolCallId, name: toolName, content: '' }), output: `Error (output too long: ${content.length} characters).`, status: 'error' });
       const uuid = randomUUID();
       const filename = `${uuid}.txt`;
       const tarBuf = await createSingleFileTar(filename, content);
       await container.putArchive(tarBuf, { path: '/tmp' });
       const msg = `Error: output is too long (${content.length} characters). The output has been saved to /tmp/${filename}`;
-      return new ToolCallResponse({ raw: new ToolMessage({ content: msg }), output: msg, status: 'error' });
+      return new ToolCallResponse({ raw: new ToolMessage({ tool_call_id: toolCallId, name: toolName, content: msg }), output: msg, status: 'error' });
     } catch {
       const msg = `Error (output too long: ${content.length} characters).`;
-      return new ToolCallResponse({ raw: new ToolMessage({ content: msg }), output: msg, status: 'error' });
+      return new ToolCallResponse({ raw: new ToolMessage({ tool_call_id: toolCallId, name: toolName, content: msg }), output: msg, status: 'error' });
     }
   }
 
@@ -112,7 +118,7 @@ export class ToolsNode extends BaseNode {
             }
             const content = typeof output === 'string' ? output : JSON.stringify(output);
             const MAX_TOOL_OUTPUT = 50_000;
-            if (content.length > MAX_TOOL_OUTPUT) return await this.handleOversizedOutput(content, config, pair);
+            if (content.length > MAX_TOOL_OUTPUT) return await this.handleOversizedOutput(content, config, pair, callId, tc.name);
             return createMessage(content);
           } catch (e: unknown) {
             // Prefer readable error strings to avoid "[object Object]"; don't interpolate objects directly

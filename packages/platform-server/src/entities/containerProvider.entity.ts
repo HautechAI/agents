@@ -388,6 +388,73 @@ export class ContainerProviderEntity {
       this.logger.error('Nix install threw', e);
     }
   }
+
+  // ---- Private helpers (instance methods) ----
+  private async isPlatformReusable(containerId: string, requestedPlatform: string): Promise<boolean> {
+    try {
+      const containerLabels = (await this.containerService.getContainerLabels(containerId)) as
+        | Record<string, string>
+        | undefined;
+      const existingPlatform = containerLabels?.[PLATFORM_LABEL];
+      return !!existingPlatform && existingPlatform === requestedPlatform;
+    } catch {
+      return false;
+    }
+  }
+
+  private async stopAndRemoveDinD(labels: Record<string, string>, parentId: string): Promise<void> {
+    try {
+      const dinds = await this.containerService.findContainersByLabels({
+        ...labels,
+        'hautech.ai/role': 'dind',
+        'hautech.ai/parent_cid': parentId,
+      });
+      await Promise.all(
+        dinds.map(async (d) => {
+          try {
+            await d.stop(5);
+          } catch (e: unknown) {
+            const sc = getStatusCode(e);
+            if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
+          }
+          try {
+            await d.remove(true);
+          } catch (e: unknown) {
+            const sc = getStatusCode(e);
+            if (sc !== 404 && sc !== 409) throw e;
+          }
+        }),
+      );
+    } catch {}
+  }
+
+  private async safeStop(container: ContainerEntity): Promise<void> {
+    try {
+      await container.stop();
+    } catch (e: unknown) {
+      const sc = getStatusCode(e);
+      if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
+    }
+  }
+
+  private async safeRemove(container: ContainerEntity): Promise<void> {
+    try {
+      await container.remove(true);
+    } catch (e: unknown) {
+      const sc = getStatusCode(e);
+      if (sc !== 404 && sc !== 409) throw e;
+    }
+  }
+
+  private async runInitialScript(container: ContainerEntity, script: string): Promise<void> {
+    const { exitCode, stderr } = await container.exec(script, { tty: false });
+    if (exitCode !== 0)
+      this.logger.error(
+        `Initial script failed (exitCode=${exitCode}) for container ${container.id.substring(0, 12)}${
+          stderr ? ` stderr: ${stderr}` : ''
+        }`,
+      );
+  }
 }
 
 // Helper: safely read statusCode from unknown error values
