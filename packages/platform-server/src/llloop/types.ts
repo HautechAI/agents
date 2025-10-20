@@ -69,3 +69,48 @@ export interface OpenAIClient {
 export type ResponseInputItem = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string; name?: string };
 export type ResponseInput = ResponseInputItem[];
 export type ToolWire = { type: 'function'; function: { name: string; description?: string; parameters: object } };
+
+// Summarizer and Memory
+export type Summarizer = {
+  summarize: (
+    messages: Message[],
+    opts: { keepTokens: number; maxTokens: number; note?: string },
+  ) => Promise<{ summary?: string; messages: Message[] }>;
+};
+
+export type MemoryConnector = {
+  getMemoryMessage?: (threadId: string) => Promise<Message | null>;
+  updateSummary?: (threadId: string, summary: string) => Promise<void>;
+};
+
+// Tool finish signal shape and shared reducer state/context
+export type ToolFinishSignal = { finish: true; reason?: string; data?: unknown };
+
+export type LoopContext = { threadId?: string; runId?: string; abortSignal?: AbortSignal };
+
+export type RestrictionConfig = { enabled: boolean; message: string; maxInjections?: number; injections?: number };
+
+export type LoopState = {
+  model: string;
+  messages: Message[];
+  pendingToolCalls?: ToolCall[];
+  finish?: boolean;
+  finishReason?: string;
+  finishData?: unknown;
+  restriction?: RestrictionConfig;
+  summary?: string;
+  rawRequest?: unknown;
+  rawResponse?: unknown;
+  next?: string | null;
+};
+
+export type ReduceResult = { state: LoopState; next: string | null };
+
+export interface Reducer {
+  name(): string;
+  reduce(
+    state: LoopState,
+    ctx: LoopContext,
+    deps: { llm: OpenAIClient; tools: ToolRegistry | undefined; logger: Logger; summarizer?: Summarizer; memory?: MemoryConnector },
+  ): Promise<ReduceResult>;
+}

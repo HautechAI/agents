@@ -35,7 +35,8 @@ const messages: Message[] = [
 
 const logger: Logger = console;
 const llloop = new LLLoop(logger, { openai, tools: registry });
-const result = await llloop.invoke({ model: 'gpt-5', messages, streaming: false });
+const resultState = await llloop.invoke({ state: { model: 'gpt-5', messages } });
+console.log(resultState.messages.at(-1)?.contentText);
 
 console.log(result.messages[0]?.contentText);
 ```
@@ -43,3 +44,8 @@ console.log(result.messages[0]?.contentText);
 Notes
 - No DB writes here; platform-server services handle persistence.
 - Only message-level events initially; hooks for streaming can be added later.
+
+Reducer architecture
+- LLLoop runs an internal dispatcher over reducers: summarize -> call_model -> tools -> enforce -> route.
+- Each reducer has a single responsibility and returns the next step.
+- LLLoop.invoke wires a fixed reducer sequence and returns the final LoopState.

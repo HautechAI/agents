@@ -1,0 +1,26 @@
+import type { Reducer, ReduceResult, LoopState, LoopContext } from '../types.js';
+
+export class RouteReducer implements Reducer {
+  name(): string {
+    return 'route';
+  }
+
+  async reduce(state: LoopState, _ctx: LoopContext, _deps: Parameters<Reducer['reduce']>[2]): Promise<ReduceResult> {
+    // Termination if finish signaled
+    if (state.finish) return { state: { ...state, next: null }, next: null };
+
+    // If there are tool calls, go run tools
+    if (state.pendingToolCalls && state.pendingToolCalls.length > 0) {
+      return { state: { ...state, next: 'tools' }, next: 'tools' };
+    }
+
+    // If restriction enabled and last assistant had no tool calls (detected because pendingToolCalls empty), enforce
+    if (state.restriction?.enabled) {
+      return { state: { ...state, next: 'enforce' }, next: 'enforce' };
+    }
+
+    // Otherwise, call model again to continue dialog
+    return { state: { ...state, next: 'call_model' }, next: 'call_model' };
+  }
+}
+
