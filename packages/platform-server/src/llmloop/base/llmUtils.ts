@@ -10,17 +10,26 @@ import {
   ResponseOutputText,
   ResponseReasoningItem,
 } from 'openai/resources/responses/responses.mjs';
+import { LLMMessage } from './types';
 
 export class LLMUtils {
-  static isMessageOutput(output: ResponseOutputItem): output is ResponseOutputMessage {
+  static isMessage(
+    output: ResponseOutputItem | LLMMessage,
+  ): output is EasyInputMessage | ResponseInputItem.Message | ResponseOutputMessage {
     return output.type === 'message';
   }
 
-  static isFunctionToolCall(output: ResponseOutputItem): output is ResponseFunctionToolCall {
+  static isFunctionToolCall(output: ResponseOutputItem | LLMMessage): output is ResponseFunctionToolCall {
     return output.type === 'function_call';
   }
 
-  static isReasoningItem(output: ResponseOutputItem): output is ResponseReasoningItem {
+  static isFunctionToolCallOutput(
+    output: ResponseOutputItem | LLMMessage,
+  ): output is ResponseInputItem.FunctionCallOutput {
+    return output.type === 'function_call_output';
+  }
+
+  static isReasoningItem(output: ResponseOutputItem | LLMMessage): output is ResponseReasoningItem {
     return output.type === 'reasoning';
   }
 

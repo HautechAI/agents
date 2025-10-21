@@ -22,7 +22,7 @@ export class CallModelLLMReducer extends LLMReducer {
   filterSupportedOutput(output: OpenAI.Responses.ResponseOutputItem[]) {
     const result: (ResponseOutputMessage | ResponseFunctionToolCall | ResponseReasoningItem)[] = [];
     output.forEach((o) => {
-      if (LLMUtils.isMessageOutput(o)) {
+      if (LLMUtils.isMessage(o)) {
         result.push(LLMUtils.outputMessage(o.id, o.content, o.status));
         return;
       }

@@ -4,6 +4,7 @@ import { ResponseFunctionToolCall } from 'openai/resources/responses/responses.m
 import { LLMReducer } from '../base/llmReducer';
 import { LLMUtils } from '../base/llmUtils';
 import { LLMLoopContext, LLMLoopState, LLMMessage } from '../base/types';
+import { ToolCallResponse, withToolCall } from '@agyn/tracing';
 
 export class CallToolsLLMReducer extends LLMReducer {
   constructor(private tools: LLMFunctionTool[]) {
@@ -40,7 +41,23 @@ export class CallToolsLLMReducer extends LLMReducer {
       toolsToCall.map(async (t) => {
         const tool = toolsMap.get(t.name);
         if (!tool) throw new Error(`Unknown tool called: ${t.name}`);
-        const response = await tool.execute(tool.schema.parse(JSON.parse(t.arguments)), ctx);
+        const input = tool.schema.parse(JSON.parse(t.arguments));
+
+        const response = await withToolCall(
+          {
+            name: tool.name,
+            toolCallId: t.call_id,
+            input,
+          },
+          async () => {
+            const raw = await tool.execute(input, ctx);
+            return new ToolCallResponse({
+              raw,
+              status: 'success',
+            });
+          },
+        );
+
         return LLMUtils.functionToolCallOutput(t.call_id, response);
       }),
     );

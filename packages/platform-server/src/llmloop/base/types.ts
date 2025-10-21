@@ -59,4 +59,6 @@ export type LLMLoopState = {
   summary?: string;
 };
 
-export type LLMLoopContext = unknown;
+export type LLMLoopContext = {
+  threadId: string;
+};

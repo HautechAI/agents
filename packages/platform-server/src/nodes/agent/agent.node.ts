@@ -1,31 +1,25 @@
-import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { RunnableConfig } from '@langchain/core/runnables';
-import { tool as lcTool } from '@langchain/core/tools';
 import { Annotation, AnnotationRoot, CompiledStateGraph, END, START, StateGraph } from '@langchain/langgraph';
-import type { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { ChatOpenAI } from '@langchain/openai';
+
 import { last } from 'lodash-es';
-import { McpServer, McpTool } from '../../mcp';
+import { McpServer, McpTool } from '../mcp';
 import { isDynamicConfigurable, type StaticConfigurable } from '../../graph/capabilities';
-import { inferArgsSchema } from '../../mcp/jsonSchemaToZod';
-import { CallModelNode, type MemoryConnector } from '../../lgnodes/callModel.lgnode';
-import { ToolsNode } from '../../lgnodes/tools.lgnode';
+import { inferArgsSchema } from '../mcp/jsonSchemaToZod';
+
 import { CheckpointerService } from '../../services/checkpointer.service';
 import { ConfigService } from '../../services/config.service';
 import { LoggerService } from '../../services/logger.service';
-import { BaseTool } from '../../tools/base.tool';
-import { LangChainToolAdapter } from '../../tools/langchainTool.adapter';
-import { SummarizationNode } from '../../lgnodes/summarization.lgnode';
+
 import { NodeOutput } from '../../types';
 import { z } from 'zod';
 import type { JSONSchema } from 'zod/v4/core';
-import { EnforceRestrictionNode } from '../../lgnodes/enforceRestriction.lgnode';
+
 import { stringify as toYaml } from 'yaml';
-import { buildMcpToolError } from '../../mcp/errorUtils';
-import { TriggerListener, TriggerMessage, isSystemTrigger } from '../../triggers/base.trigger';
+import { buildMcpToolError } from '../mcp/errorUtils';
+import { TriggerListener, TriggerMessage, isSystemTrigger } from '../slackTrigger';
 import { withAgent } from '@agyn/tracing';
-import { MessagesBuffer, ProcessBuffer } from '../../agents/messagesBuffer';
+import { MessagesBuffer, ProcessBuffer } from './messagesBuffer';
 import type { AgentRunService } from '../../services/run.service';
+import { LLMFunctionTool } from '../../llmloop/base/llmFunctionTool';
 
 // Ambient declaration for optional global run service
 declare global {
@@ -36,28 +30,6 @@ declare global {
 // Inlined BaseAgent and related types (moved from previous base.agent.ts)
 
 export type WhenBusyMode = 'wait' | 'injectAfterTools';
-
-// Minimal interface exposed to nodes to request agent-controlled injections.
-export interface InjectionProvider {
-  // Nodes call this during a run to request agent-controlled injection. Returns only messages;
-  // the agent tracks token associations internally for proper awaiter resolution.
-  getInjectedMessages(thread: string): BaseMessage[];
-}
-
-type InvocationToken = {
-  id: string;
-  total: number; // number of messages contributed by this invocation
-  resolve: (m: BaseMessage | undefined) => void;
-  reject: (e: unknown) => void;
-};
-
-type ThreadState = {
-  running: boolean;
-  seq: number;
-  tokens: Map<string, InvocationToken>;
-  inFlight?: { runId: string; includedCounts: Map<string, number>; abortController: AbortController; status: 'running' | 'terminating' };
-  timer?: NodeJS.Timeout;
-};
 
 export abstract class BaseAgent implements TriggerListener, StaticConfigurable, InjectionProvider {
   protected _graph: CompiledStateGraph<unknown, unknown> | undefined;
@@ -166,53 +138,56 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
   }
 
   async invoke(thread: string, messages: TriggerMessage[] | TriggerMessage): Promise<BaseMessage | undefined> {
-    return await withAgent({ threadId: thread, nodeId: this.getNodeId(), inputParameters: [{ thread }, { messages }] }, async () => {
-      const batch = Array.isArray(messages) ? messages : [messages];
-      // Log minimal, non-sensitive metadata about the batch
-      const kinds = batch.reduce(
-        (acc, m) => {
-          if (isSystemTrigger(m)) acc.system += 1;
-          else acc.human += 1;
-          return acc;
-        },
-        { human: 0, system: 0 },
-      );
-      this.logger.info(
-        `New trigger event in thread ${thread} (messages=${batch.length}, human=${kinds.human}, system=${kinds.system})`,
-      );
-      const s = this.ensureThread(thread);
+    return await withAgent(
+      { threadId: thread, nodeId: this.getNodeId(), inputParameters: [{ thread }, { messages }] },
+      async () => {
+        const batch = Array.isArray(messages) ? messages : [messages];
+        // Log minimal, non-sensitive metadata about the batch
+        const kinds = batch.reduce(
+          (acc, m) => {
+            if (isSystemTrigger(m)) acc.system += 1;
+            else acc.human += 1;
+            return acc;
+          },
+          { human: 0, system: 0 },
+        );
+        this.logger.info(
+          `New trigger event in thread ${thread} (messages=${batch.length}, human=${kinds.human}, system=${kinds.system})`,
+        );
+        const s = this.ensureThread(thread);
 
-      // Edge case: If OneByOne mode and caller enqueued multiple messages, split into per-message tokens.
-      if (this.processBuffer === ProcessBuffer.OneByOne && batch.length > 1) {
-        const promises: Promise<BaseMessage | undefined>[] = [];
-        for (const msg of batch) {
-          const tid = `${thread}:${++s.seq}`;
-          this.buffer.enqueueWithToken(thread, tid, [msg]);
-          promises.push(
-            new Promise<BaseMessage | undefined>((resolve, reject) => {
-              s.tokens.set(tid, { id: tid, total: 1, resolve, reject });
-            }),
-          );
+        // Edge case: If OneByOne mode and caller enqueued multiple messages, split into per-message tokens.
+        if (this.processBuffer === ProcessBuffer.OneByOne && batch.length > 1) {
+          const promises: Promise<BaseMessage | undefined>[] = [];
+          for (const msg of batch) {
+            const tid = `${thread}:${++s.seq}`;
+            this.buffer.enqueueWithToken(thread, tid, [msg]);
+            promises.push(
+              new Promise<BaseMessage | undefined>((resolve, reject) => {
+                s.tokens.set(tid, { id: tid, total: 1, resolve, reject });
+              }),
+            );
+          }
+          this.maybeStart(thread);
+          const results = await Promise.all(promises);
+          const last = results[results.length - 1];
+          this.logger.info(`Agent response in thread ${thread}: ${last?.text}`);
+          return last;
         }
-        this.maybeStart(thread);
-        const results = await Promise.all(promises);
-        const last = results[results.length - 1];
-        this.logger.info(`Agent response in thread ${thread}: ${last?.text}`);
-        return last;
-      }
 
-      const tokenId = `${thread}:${++s.seq}`;
-      // Tag queued messages with this invocation's token id for later resolution
-      this.buffer.enqueueWithToken(thread, tokenId, batch);
-      // Return a promise that resolves/rejects when the run that processes these messages completes
-      const p = new Promise<BaseMessage | undefined>((resolve, reject) => {
-        s.tokens.set(tokenId, { id: tokenId, total: batch.length, resolve, reject });
-      });
-      this.maybeStart(thread);
-      const result = await p;
-      this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
-      return result;
-    });
+        const tokenId = `${thread}:${++s.seq}`;
+        // Tag queued messages with this invocation's token id for later resolution
+        this.buffer.enqueueWithToken(thread, tokenId, batch);
+        // Return a promise that resolves/rejects when the run that processes these messages completes
+        const p = new Promise<BaseMessage | undefined>((resolve, reject) => {
+          s.tokens.set(tokenId, { id: tokenId, total: batch.length, resolve, reject });
+        });
+        this.maybeStart(thread);
+        const result = await p;
+        this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
+        return result;
+      },
+    );
   }
 
   // Scheduling helpers
@@ -261,7 +236,12 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
     s.running = true;
     const runId = `${thread}/run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const ac = new AbortController();
-    s.inFlight = { runId, includedCounts: new Map(tokenParts.map((p) => [p.tokenId, p.count])), abortController: ac, status: 'running' };
+    s.inFlight = {
+      runId,
+      includedCounts: new Map(tokenParts.map((p) => [p.tokenId, p.count])),
+      abortController: ac,
+      status: 'running',
+    };
     this.logger.info(`Starting run ${runId} with ${batch.length} message(s)`);
     // Persist start (best-effort)
     try {
@@ -285,12 +265,12 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
         }
       }
       this.logger.info(`Completed run ${runId}; resolved tokens: [${resolved.join(', ')}]`);
-      } catch (e: unknown) {
-        // Failure: reject awaiters for tokens tied to this run; leave others pending
-        const run = s.inFlight;
-        const affected = run?.includedCounts ? Array.from(run.includedCounts.keys()) : [];
-        const err = e instanceof Error ? e : new Error(String(e));
-        this.logger.error(`Run ${(run && run.runId) || 'unknown'} failed for thread ${thread}: ${err.message}`);
+    } catch (e: unknown) {
+      // Failure: reject awaiters for tokens tied to this run; leave others pending
+      const run = s.inFlight;
+      const affected = run?.includedCounts ? Array.from(run.includedCounts.keys()) : [];
+      const err = e instanceof Error ? e : new Error(String(e));
+      this.logger.error(`Run ${(run && run.runId) || 'unknown'} failed for thread ${thread}: ${err.message}`);
       for (const tokenId of affected) {
         const token = s.tokens.get(tokenId);
         if (!token) continue;
@@ -314,7 +294,12 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
     }
   }
 
-  private async runGraph(thread: string, batch: TriggerMessage[], runId: string, abortSignal?: AbortSignal): Promise<BaseMessage | undefined> {
+  private async runGraph(
+    thread: string,
+    batch: TriggerMessage[],
+    runId: string,
+    abortSignal?: AbortSignal,
+  ): Promise<BaseMessage | undefined> {
     // Preserve system vs human message kind when serializing for the model
     const items = batch.map((msg) =>
       isSystemTrigger(msg) ? new SystemMessage(JSON.stringify(msg)) : new HumanMessage(JSON.stringify(msg)),
@@ -397,7 +382,11 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
       // Persist transition best-effort
       const nodeId = this.getNodeId();
       const rid = s.inFlight?.runId;
-      void (async () => { try { if (nodeId && this.runService && rid) await this.runService.markTerminating(nodeId, rid); } catch {} })();
+      void (async () => {
+        try {
+          if (nodeId && this.runService && rid) await this.runService.markTerminating(nodeId, rid);
+        } catch {}
+      })();
       return 'ok';
     } catch {
       return 'not_running';
@@ -413,10 +402,7 @@ export abstract class BaseAgent implements TriggerListener, StaticConfigurable, 
  */
 export const AgentStaticConfigSchema = z
   .object({
-    title: z
-      .string()
-      .optional()
-      .describe('Display name for this agent (UI only).'),
+    title: z.string().optional().describe('Display name for this agent (UI only).'),
     model: z.string().default('gpt-5').describe('LLM model identifier to use for this agent (provider-specific name).'),
     systemPrompt: z
       .string()
@@ -424,12 +410,7 @@ export const AgentStaticConfigSchema = z
       .describe('System prompt injected at the start of each conversation turn.')
       .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
     // Agent-side message buffer handling (exposed for Agent static config)
-    debounceMs: z
-      .number()
-      .int()
-      .min(0)
-      .default(0)
-      .describe('Debounce window (ms) for agent-side message buffer.'),
+    debounceMs: z.number().int().min(0).default(0).describe('Debounce window (ms) for agent-side message buffer.'),
     whenBusy: z
       .enum(['wait', 'injectAfterTools'])
       .default('wait')
@@ -454,10 +435,7 @@ export const AgentStaticConfigSchema = z
       .min(1)
       .default(512)
       .describe('Maximum token budget for generated summaries.'),
-    restrictOutput: z
-      .boolean()
-      .default(false)
-      .describe('When true, enforce calling a tool before finishing the turn.'),
+    restrictOutput: z.boolean().default(false).describe('When true, enforce calling a tool before finishing the turn.'),
     restrictionMessage: z
       .string()
       .default(
@@ -476,17 +454,13 @@ export const AgentStaticConfigSchema = z
 
 export type AgentStaticConfig = z.infer<typeof AgentStaticConfigSchema>;
 export class Agent extends BaseAgent {
-  private callModelNode!: CallModelNode;
-  private toolsNode!: ToolsNode;
   // Track tools registered per MCP server so we can remove them on detachment
-  private mcpServerTools: Map<McpServer, BaseTool[]> = new Map();
+  private mcpServerTools: Map<McpServer, LLMFunctionTool[]> = new Map();
   // Persist the underlying ChatOpenAI instance so we can update its model dynamically
   private llm!: ChatOpenAI;
 
   private summarizationKeepTokens?: number; // token budget for verbatim tail
   private summarizationMaxTokens?: number;
-  private summarizeNode!: SummarizationNode;
-  private enforceNode!: EnforceRestrictionNode;
 
   // Restriction config (static-config driven)
   private restrictOutput: boolean = false;
@@ -511,7 +485,7 @@ export class Agent extends BaseAgent {
     'restrictionMessage',
     'restrictionMaxInjections',
   ] as const satisfies readonly (keyof AgentStaticConfig)[];
-  private static readonly allowedConfigKeys = new Set<typeof Agent.allowedConfigKeysArray[number]>(
+  private static readonly allowedConfigKeys = new Set<(typeof Agent.allowedConfigKeysArray)[number]>(
     Agent.allowedConfigKeysArray,
   );
 
@@ -584,8 +558,7 @@ export class Agent extends BaseAgent {
 
     // Read restriction config from static config and store locally for closures
     const cfgUnknown = this._staticConfig;
-    const cfg =
-      cfgUnknown && typeof cfgUnknown === 'object' ? (cfgUnknown as Partial<AgentStaticConfig>) : undefined;
+    const cfg = cfgUnknown && typeof cfgUnknown === 'object' ? (cfgUnknown as Partial<AgentStaticConfig>) : undefined;
     this.restrictOutput = !!cfg?.restrictOutput;
     this.restrictionMessage =
       cfg?.restrictionMessage ||
@@ -684,14 +657,14 @@ export class Agent extends BaseAgent {
     this.loggerService.info('Agent memory connector detached');
   }
 
-  addTool(tool: BaseTool) {
+  addTool(tool: LLMFunctionTool) {
     // using any to avoid circular import issues if BaseTool is extended differently later
     this.callModelNode.addTool(tool);
     this.toolsNode.addTool(tool);
     this.loggerService.info(`Tool added to Agent: ${tool?.constructor?.name || 'UnknownTool'}`);
   }
 
-  removeTool(tool: BaseTool) {
+  removeTool(tool: LLMFunctionTool) {
     this.callModelNode.removeTool(tool);
     this.toolsNode.removeTool(tool);
     this.loggerService.info(`Tool removed from Agent: ${tool?.constructor?.name || 'UnknownTool'}`);
@@ -729,7 +702,7 @@ export class Agent extends BaseAgent {
         if (!tools.length) {
           this.loggerService.info(`No MCP tools discovered for namespace ${namespace}`);
         }
-        const registered: BaseTool[] = [];
+        const registered: LLMFunctionTool[] = [];
         for (const t of tools) {
           const schema = inferArgsSchema(t.inputSchema);
           const dynamic = lcTool(
@@ -915,7 +888,10 @@ export class Agent extends BaseAgent {
     // Apply restriction-related config without altering system prompt
     if (Object.prototype.hasOwnProperty.call(config, 'restrictOutput') && parsedConfig.restrictOutput !== undefined)
       this.restrictOutput = !!parsedConfig.restrictOutput;
-    if (Object.prototype.hasOwnProperty.call(config, 'restrictionMessage') && parsedConfig.restrictionMessage !== undefined)
+    if (
+      Object.prototype.hasOwnProperty.call(config, 'restrictionMessage') &&
+      parsedConfig.restrictionMessage !== undefined
+    )
       this.restrictionMessage = parsedConfig.restrictionMessage;
     if (
       Object.prototype.hasOwnProperty.call(config, 'restrictionMaxInjections') &&

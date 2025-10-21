@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ToolsNode } from '../../lgnodes/tools.lgnode';
 import { AIMessage } from '@langchain/core/messages';
-import { ShellTool } from '../../tools/shell_command';
+import { ShellTool } from '../../nodes/tools/shell_command/shell_command.node';
 import { LoggerService } from '../../services/logger.service';
 
 describe('shell_command oversize output e2e (mocked putArchive)', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LoggerService } from '../../services/logger.service';
-import { ShellTool } from '../../tools/shell_command';
+import { ShellTool } from '../../nodes/tools/shell_command/shell_command.node';
 import { ContainerService } from '../../services/container.service';
 import { isExecTimeoutError, ExecIdleTimeoutError } from '../../utils/execTimeout';
 import { ContainerProviderEntity } from '../../entities/containerProvider.entity';

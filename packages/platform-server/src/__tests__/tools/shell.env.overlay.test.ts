@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LoggerService } from '../../services/logger.service';
-import { ShellTool } from '../../tools/shell_command';
+import { ShellTool } from '../../nodes/tools/shell_command/shell_command.node';
 
 class FakeContainer {
   public lastExec: { cmd: string; env?: Record<string, string>; workdir?: string } | null = null;

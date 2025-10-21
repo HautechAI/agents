@@ -1,0 +1,72 @@
+import { BaseMessage } from '@langchain/core/messages';
+import z from 'zod';
+import { LLMFunctionTool } from '../../../llmloop/base/llmFunctionTool';
+import { LoggerService } from '../../../services/logger.service';
+import { BaseAgent } from '../../agent/agent.node';
+import { TriggerMessage } from '../../slackTrigger';
+import { CallAgentToolStaticConfigSchema } from './call_agent.node';
+
+export const callAgentInvocationSchema = z.object({
+  input: z.string().min(1).describe('Message to forward to the target agent.'),
+  context: z.any().optional().describe('Optional structured metadata; forwarded into TriggerMessage.info'),
+  parentThreadId: z.string().min(1).describe('Parent thread id owning the child conversation.'),
+  childThreadId: z
+    .string()
+    .min(1)
+    .describe('Child thread suffix. Effective child thread = `${parentThreadId}__${childThreadId}`.'),
+});
+
+interface CallAgentFunctionToolDeps {
+  getTargetAgent: () => BaseAgent | undefined;
+  getDescription: () => string;
+  getName: () => string;
+  getResponseMode: () => 'sync' | 'async' | 'ignore';
+  logger: LoggerService;
+}
+
+export class CallAgentFunctionTool extends LLMFunctionTool<typeof callAgentInvocationSchema> {
+  constructor(private deps: CallAgentFunctionToolDeps) {
+    super();
+  }
+  get name() {
+    return this.deps.getName();
+  }
+  get schema() {
+    return callAgentInvocationSchema;
+  }
+  get description() {
+    return this.deps.getDescription();
+  }
+
+  async execute(args: z.infer<typeof callAgentInvocationSchema>): Promise<string> {
+    const { input, context, parentThreadId, childThreadId } = args;
+    const targetAgent = this.deps.getTargetAgent();
+    const responseMode = this.deps.getResponseMode();
+    const logger = this.deps.logger;
+    const hasContext = !!context;
+    logger.info('call_agent invoked', { targetAttached: !!targetAgent, hasContext, responseMode });
+    if (!targetAgent) return 'Target agent is not connected';
+
+    const targetThreadId = `${parentThreadId}__${childThreadId}`;
+    const info =
+      context && typeof context === 'object' && !Array.isArray(context) ? (context as Record<string, unknown>) : {};
+    const triggerMessage: TriggerMessage = { content: input, info };
+    try {
+      if (responseMode === 'sync') {
+        const res: BaseMessage | undefined = await targetAgent.invoke(targetThreadId, [triggerMessage]);
+        if (!res) return '';
+        return res.text ?? '';
+      }
+      // async / ignore: fire and forget
+      void targetAgent.invoke(targetThreadId, [triggerMessage]).catch((err: any) => {
+        logger.error('Error calling agent (async/ignore mode)', err?.message || err, err?.stack);
+      });
+      return JSON.stringify({ status: 'sent' });
+    } catch (err: any) {
+      logger.error('Error calling agent', err?.message || err, err?.stack);
+      return `Error calling agent: ${err?.message || String(err)}`;
+    }
+  }
+}
+
+export { CallAgentToolStaticConfigSchema };
