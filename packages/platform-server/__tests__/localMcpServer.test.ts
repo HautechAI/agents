@@ -4,6 +4,7 @@ import { McpServerConfig } from '../src/mcp/types.js';
 import { LoggerService } from '../src/services/logger.service.js';
 import { PassThrough } from 'node:stream';
 import { ContainerService } from '../src/services/container.service.js';
+// no extra imports
 
 /**
  * In-process mock MCP server (no subprocess) using PassThrough streams.
@@ -143,12 +144,30 @@ describe('LocalMCPServer (mock)', () => {
   });
 
   it('lists tools', async () => {
-    const tools = await server.listTools();
+    const tools = server.listTools();
     expect(tools.find((t) => t.name === 'echo')).toBeTruthy();
   });
 
   it('calls tool', async () => {
     const result = await server.callTool('echo', { text: 'hello' }, { threadId: 'test-thread' });
     expect(result.content).toContain('echo:hello');
+  });
+
+  it('emits unified tools_updated events', async () => {
+    let lastPayload: { tools: any[]; updatedAt: number } | null = null;
+    (server as any).on('mcp.tools_updated', (p: { tools: any[]; updatedAt: number }) => {
+      lastPayload = p;
+    });
+    // Preload cached tools -> should emit tools_updated
+    (server as any).preloadCachedTools([{ name: 'pre' }], Date.now());
+    expect(lastPayload).toBeTruthy();
+    expect(Array.isArray(lastPayload!.tools)).toBe(true);
+    // Apply dynamic config -> should emit tools_updated
+    (server as any).setDynamicConfig?.({ echo: true });
+    expect(lastPayload).toBeTruthy();
+    // Re-discovery via manual call -> should emit tools_updated
+    await (server as any).discoverTools();
+    expect(lastPayload).toBeTruthy();
+    expect(typeof lastPayload!.updatedAt).toBe('number');
   });
 });
