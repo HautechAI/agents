@@ -95,6 +95,7 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
     if (response.exitCode !== 0) {
       return `Error (exit code ${response.exitCode}):\n${cleanedStdout}\n${cleanedStderr}`;
     }
+
     return cleanedStdout;
   }
 }

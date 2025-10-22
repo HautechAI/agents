@@ -46,12 +46,25 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
             input,
           },
           async () => {
-            const raw = await tool.execute(input, ctx);
-            return new ToolCallResponse({
-              raw,
-              output: raw,
-              status: 'success',
-            });
+            try {
+              const raw = await tool.execute(input, ctx);
+
+              if (raw.length > 50000) {
+                throw new Error('Tool output exceeds maximum allowed length of 50000 characters.');
+              }
+
+              return new ToolCallResponse({
+                raw,
+                output: raw,
+                status: 'success',
+              });
+            } catch (err: unknown) {
+              return new ToolCallResponse({
+                raw: JSON.stringify(err),
+                output: JSON.stringify(err),
+                status: 'error',
+              });
+            }
           },
         );
 
