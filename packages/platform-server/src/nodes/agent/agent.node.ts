@@ -148,7 +148,7 @@ export class AgentNode implements TriggerListener {
 
     routers.set(
       'call_tools', //
-      new ConditionalLLMRouter(new CallToolsLLMReducer(tools), (_, ctx) =>
+      new ConditionalLLMRouter(new CallToolsLLMReducer(this.logger, tools), (_, ctx) =>
         ctx.finishSignal.isActive ? null : 'summarize',
       ),
     );
@@ -172,7 +172,7 @@ export class AgentNode implements TriggerListener {
 
         const newState = await loop.invoke(
           { messages: history },
-          { threadId: 'test', finishSignal },
+          { threadId: thread, finishSignal, callerAgent: this },
           {
             route: 'summarize',
           },

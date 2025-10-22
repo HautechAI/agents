@@ -413,11 +413,11 @@ export function withLLM<T>(
     }
     const content = result.content;
     const toolCalls = result.toolCalls?.map((t) => messageToAttributes(t));
-    const attr: Record<string, unknown> = {
+    const output = {
       content,
       toolCalls,
     };
-    return { attributes: attr };
+    return { attributes: { output } };
   }).then((res) => (res as LLMResponse<T>).raw);
 }
 

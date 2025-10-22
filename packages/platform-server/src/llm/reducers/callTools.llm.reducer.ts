@@ -2,9 +2,13 @@ import { ToolCallResponse, withToolCall } from '@agyn/tracing';
 
 import { LLMContext, LLMMessage, LLMState } from '../types';
 import { FunctionTool, Reducer, ResponseMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
+import { LoggerService } from '../../services/logger.service';
 
 export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
-  constructor(private tools: FunctionTool[]) {
+  constructor(
+    private logger: LoggerService,
+    private tools: FunctionTool[],
+  ) {
     super();
   }
 
@@ -59,6 +63,8 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
                 status: 'success',
               });
             } catch (err: unknown) {
+              this.logger.error('Error occurred while executing tool', err);
+
               return new ToolCallResponse({
                 raw: JSON.stringify(err),
                 output: JSON.stringify(err),

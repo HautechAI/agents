@@ -30,6 +30,7 @@ import {
   ToolCallOutputMessage,
 } from '@agyn/llm';
 import { Signal } from '../signal';
+import { AgentNode } from '../nodes/agent/agent.node';
 
 // export type ResponseOutputItem =
 //   | ResponseOutputMessage
@@ -58,4 +59,5 @@ export type LLMState = {
 export type LLMContext = {
   threadId: string;
   finishSignal: Signal;
+  callerAgent: AgentNode;
 };

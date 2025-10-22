@@ -1,12 +1,12 @@
 import z from 'zod';
 
 import { FunctionTool } from '@agyn/llm';
-import { ContainerProviderEntity } from '../../../entities/containerProvider.entity';
+import { LLMContext } from '../../../llm/types';
 import { ConfigService } from '../../../services/config.service';
 import { LoggerService } from '../../../services/logger.service';
 import { VaultService, type VaultRef } from '../../../services/vault.service';
 import { parseVaultRef } from '../../../utils/refs';
-import { LLMContext } from '../../../llm/types';
+import { GithubCloneRepoNode } from './github_clone_repo.node';
 
 export const githubCloneSchema = z
   .object({
@@ -18,16 +18,13 @@ export const githubCloneSchema = z
   })
   .strict();
 
-interface GithubCloneFunctionToolDeps {
-  containerProvider?: ContainerProviderEntity;
-  logger: LoggerService;
-  config: ConfigService;
-  vault?: VaultService;
-  getStaticConfig: () => any;
-}
-
 export class GithubCloneRepoFunctionTool extends FunctionTool<typeof githubCloneSchema> {
-  constructor(private deps: GithubCloneFunctionToolDeps) {
+  constructor(
+    private logger: LoggerService,
+    private configService: ConfigService,
+    private vault: VaultService | undefined,
+    private node: GithubCloneRepoNode,
+  ) {
     super();
   }
   get name() {
@@ -41,13 +38,13 @@ export class GithubCloneRepoFunctionTool extends FunctionTool<typeof githubClone
   }
 
   private async resolveToken(): Promise<string> {
-    const staticCfg = this.deps.getStaticConfig();
+    const staticCfg = this.node.config();
     const tokenRef = staticCfg?.token;
     const authRef = staticCfg?.authRef as any; // legacy optional
     // Preferred new token field
     if (tokenRef) {
       if (tokenRef.source === 'vault') {
-        const vlt = this.deps.vault;
+        const vlt = this.vault;
         if (vlt?.isEnabled()) {
           try {
             const vr = parseVaultRef(tokenRef.value);
@@ -64,7 +61,7 @@ export class GithubCloneRepoFunctionTool extends FunctionTool<typeof githubClone
         const v = process.env[name] || '';
         if (v) return v;
       } else {
-        const vlt = this.deps.vault;
+        const vlt = this.vault;
         if (vlt?.isEnabled()) {
           const vr: VaultRef = {
             mount: (authRef.mount || 'secret').replace(/\/$/, ''),
@@ -79,16 +76,16 @@ export class GithubCloneRepoFunctionTool extends FunctionTool<typeof githubClone
       }
     }
     // Fallback to config service
-    return this.deps.config.githubToken;
+    return this.configService.githubToken;
   }
 
   async execute(args: z.infer<typeof githubCloneSchema>, ctx: LLMContext): Promise<string> {
     const { owner, repo, path, branch, depth } = args;
-    const provider = this.deps.containerProvider;
+    const provider = this.node.containerProvider();
     if (!provider)
       throw new Error('GithubCloneRepoTool: containerProvider not set. Connect via graph edge before use.');
     const container = await provider.provide(ctx.threadId);
-    this.deps.logger.info('Tool called', 'github_clone_repo', { owner, repo, path, branch, depth });
+    this.logger.info('Tool called', 'github_clone_repo', { owner, repo, path, branch, depth });
     const token = await this.resolveToken();
     const username = 'oauth2';
     const encodedUser = encodeURIComponent(username);

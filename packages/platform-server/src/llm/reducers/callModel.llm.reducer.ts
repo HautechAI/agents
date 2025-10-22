@@ -17,7 +17,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       ...state.messages,
     ];
 
-    const response = await withLLM({ context: input }, async () => {
+    const response = await withLLM({ context: input.slice(-10) }, async () => {
       try {
         const raw = await this.llm.call({
           model: this.params.model,

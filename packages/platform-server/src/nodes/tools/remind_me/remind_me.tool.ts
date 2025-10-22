@@ -3,7 +3,7 @@ import z from 'zod';
 import { FunctionTool } from '@agyn/llm';
 import { v4 as uuidv4 } from 'uuid';
 import { LoggerService } from '../../../services/logger.service';
-import { AgentNode } from '../../agent/agent.node';
+import { LLMContext } from '../../../llm/types';
 
 export const remindMeInvocationSchema = z
   .object({
@@ -19,18 +19,13 @@ export const remindMeInvocationSchema = z
 
 export const RemindMeToolStaticConfigSchema = z.object({}).strict();
 
-interface RemindMeDeps {
-  getCallerAgent: () => AgentNode | undefined;
-  logger: LoggerService;
-}
-
 type ActiveReminder = { id: string; threadId: string; note: string; at: string };
 
 export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocationSchema> {
   private active: Map<string, { timer: ReturnType<typeof setTimeout>; reminder: ActiveReminder }> = new Map();
   private destroyed = false;
   private maxActive = 1000;
-  constructor(private deps: RemindMeDeps) {
+  constructor(private logger: LoggerService) {
     super();
   }
   get name() {
@@ -50,22 +45,23 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     for (const rec of this.active.values()) clearTimeout(rec.timer);
     this.active.clear();
   }
-  async execute(args: z.infer<typeof remindMeInvocationSchema>): Promise<string> {
+  async execute(args: z.infer<typeof remindMeInvocationSchema>, ctx: LLMContext): Promise<string> {
     const { delayMs, note, parentThreadId } = args;
-    const agent = this.deps.getCallerAgent();
-    if (!agent) throw new Error('Caller agent not connected');
+
     if (this.destroyed) throw new Error('RemindMe tool destroyed');
     if (this.active.size >= this.maxActive) throw new Error(`Too many active reminders (max ${this.maxActive})`);
     const boundedDelay = delayMs; // already clamped by schema max
     const eta = new Date(Date.now() + boundedDelay).toISOString();
     const id = `${parentThreadId}:${uuidv4()}`;
-    const logger = this.deps.logger;
+    const logger = this.logger;
     const timer = setTimeout(async () => {
       const exists = this.active.has(id);
       if (!exists) return;
       this.active.delete(id);
       try {
-        await agent.invoke(parentThreadId, [{ kind: 'system', content: note, info: { reason: 'reminded' } }] as any);
+        await ctx.callerAgent.invoke(parentThreadId, [
+          { kind: 'system', content: note, info: { reason: 'reminded' } },
+        ] as any);
       } catch (e: any) {
         logger.error('RemindMe scheduled invoke error', e?.message || String(e));
       }

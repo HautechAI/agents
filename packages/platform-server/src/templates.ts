@@ -13,12 +13,14 @@ import { SlackTrigger, SlackTriggerExposedStaticConfigSchema } from './nodes/sla
 import { CallAgentTool, CallAgentToolStaticConfigSchema } from './nodes/tools/call_agent/call_agent.node';
 import { FinishTool, FinishToolStaticConfigSchema } from './nodes/tools/finish/finish.node';
 import {
-  GithubCloneRepoTool,
+  GithubCloneRepoNode,
   GithubCloneRepoToolExposedStaticConfigSchema,
 } from './nodes/tools/github_clone_repo/github_clone_repo.node';
 import { ManageTool, ManageToolStaticConfigSchema } from './nodes/tools/manage/manage.node';
 import { MemoryToolNode, MemoryToolNodeStaticConfigSchema } from './nodes/tools/memory/memory.node';
-import { RemindMeTool, RemindMeToolStaticConfigSchema } from './nodes/tools/remind_me/remind_me.node';
+
+import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
+import { RemindMeToolStaticConfigSchema } from './nodes/tools/remind_me/remind_me.tool';
 import {
   SendSlackMessageTool,
   SendSlackMessageToolExposedStaticConfigSchema,
@@ -27,11 +29,11 @@ import { ShellCommandNode, ShellToolStaticConfigSchema } from './nodes/tools/she
 import { ConfigService } from './services/config.service';
 import { ContainerService } from './services/container.service';
 import { EnvService } from './services/env.service';
+import { LLMFactoryService } from './services/llmFactory.service';
 import { LoggerService } from './services/logger.service';
 import { MongoService } from './services/mongo.service';
 import { NcpsKeyService } from './services/ncpsKey.service';
 import { VaultConfigSchema, VaultService } from './services/vault.service';
-import { LLMFactoryService } from './services/llmFactory.service';
 // Unified Memory tool
 
 export interface TemplateRegistryDeps {
@@ -112,7 +114,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'githubCloneRepoTool',
-        () => new GithubCloneRepoTool(configService, vault, logger),
+        () => new GithubCloneRepoNode(configService, vault, logger),
         {
           targetPorts: {
             $self: { kind: 'instance' },
@@ -182,7 +184,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'remindMeTool',
-        () => new RemindMeTool(logger) as unknown as import('./graph/types').Configurable,
+        () => new RemindMeNode(logger) as unknown as import('./graph/types').Configurable,
         {
           targetPorts: { $self: { kind: 'instance' } },
           sourcePorts: { caller: { kind: 'method', create: 'setCallerAgent' } },

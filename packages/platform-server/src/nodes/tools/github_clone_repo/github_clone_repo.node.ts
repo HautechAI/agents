@@ -31,25 +31,34 @@ export const GithubCloneRepoToolExposedStaticConfigSchema = z
   .strict();
 
 export class GithubCloneRepoNode extends BaseToolNode {
-  private containerProvider?: ContainerProviderEntity;
-  private staticCfg?: z.infer<typeof GithubCloneRepoToolStaticConfigSchema>;
+  private _containerProvider?: ContainerProviderEntity;
+  private _config?: z.infer<typeof GithubCloneRepoToolStaticConfigSchema>;
   private toolInstance?: GithubCloneRepoFunctionTool;
-  constructor(private config: ConfigService, private vault: VaultService | undefined, private logger: LoggerService) { super(); }
-  setContainerProvider(provider: ContainerProviderEntity | undefined) { this.containerProvider = provider; }
-  async setConfig(cfg: Record<string, unknown>): Promise<void> { this.staticCfg = GithubCloneRepoToolStaticConfigSchema.parse(cfg || {}); }
+  constructor(
+    private configService: ConfigService,
+    private vault: VaultService | undefined,
+    private logger: LoggerService,
+  ) {
+    super();
+  }
+  setContainerProvider(provider: ContainerProviderEntity | undefined) {
+    this._containerProvider = provider;
+  }
+  containerProvider() {
+    return this._containerProvider;
+  }
+
+  async setConfig(cfg: Record<string, unknown>): Promise<void> {
+    this._config = GithubCloneRepoToolStaticConfigSchema.parse(cfg || {});
+  }
+  config() {
+    return this._config;
+  }
+
   getTool(): GithubCloneRepoFunctionTool {
     if (!this.toolInstance) {
-      this.toolInstance = new GithubCloneRepoFunctionTool({
-        containerProvider: this.containerProvider,
-        logger: this.logger,
-        config: this.config,
-        vault: this.vault,
-        getStaticConfig: () => this.staticCfg,
-      });
+      this.toolInstance = new GithubCloneRepoFunctionTool(this.logger, this.configService, this.vault, this);
     }
     return this.toolInstance;
   }
 }
-
-// Backwards compatibility export
-export { GithubCloneRepoNode as GithubCloneRepoTool };
