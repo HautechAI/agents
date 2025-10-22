@@ -13,7 +13,7 @@ import { Server } from 'socket.io';
 import { ConfigService } from './services/config.service.js';
 import { LoggerService } from './services/logger.service.js';
 import { MongoService } from './services/mongo.service.js';
-import { buildTemplateRegistry } from './templates';
+import { buildTemplateRegistry } from './templates.js';
 import { LiveGraphRuntime } from './graph/liveGraph.manager.js';
 import { GraphService } from './services/graph.service.js';
 import { GitGraphService } from './services/gitGraph.service.js';
@@ -31,22 +31,16 @@ import { registerNixRoutes } from './routes/nix.route.js';
 import { NcpsKeyService } from './services/ncpsKey.service.js';
 import { maybeProvisionLiteLLMKey } from './services/litellm.provision.js';
 import { LLMFactoryService } from './services/llmFactory.service.js';
+import { initDI, resolve, closeDI } from './bootstrap/di.js';
 
-const logger = new LoggerService();
-const config = ConfigService.fromEnv();
-const mongo = new MongoService(config, logger);
-const containerService = new ContainerService(logger);
-const vaultService = new VaultService(
-  VaultConfigSchema.parse({
-    enabled: config.vaultEnabled,
-    addr: config.vaultAddr,
-    token: config.vaultToken,
-    defaultMounts: ['secret'],
-  }),
-  logger,
-);
-const ncpsKeyService = new NcpsKeyService(config, logger);
-const llmFactoryService = new LLMFactoryService(config);
+await initDI();
+const logger = await resolve<LoggerService>(LoggerService);
+const config = await resolve<ConfigService>(ConfigService);
+const mongo = await resolve<MongoService>(MongoService);
+const containerService = await resolve<ContainerService>(ContainerService);
+const vaultService = await resolve<VaultService>(VaultService);
+const ncpsKeyService = await resolve<NcpsKeyService>(NcpsKeyService);
+const llmFactoryService = await resolve<LLMFactoryService>(LLMFactoryService);
 
 async function bootstrap() {
   // Initialize Ncps key service early
@@ -459,6 +453,7 @@ async function bootstrap() {
     try {
       await fastify.close();
     } catch {}
+    try { await closeDI(); } catch {}
     process.exit(0);
   };
   process.on('SIGINT', shutdown);
