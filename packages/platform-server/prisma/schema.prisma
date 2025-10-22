@@ -13,11 +13,10 @@ datasource db {
 model ConversationState {
   id        Int      @id @default(autoincrement())
   threadId  String
-  nodeId    String?
+  nodeId    String
   state     Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([threadId, nodeId])
 }
-
