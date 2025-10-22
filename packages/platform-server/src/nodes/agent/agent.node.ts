@@ -5,14 +5,7 @@ import { LoggerService } from '../../services/logger.service';
 
 import { z } from 'zod';
 
-import {
-  FunctionTool,
-  HumanMessage,
-  Loop,
-  ResponseMessage,
-  ToolCallMessage,
-  ToolCallOutputMessage
-} from '@agyn/llm';
+import { FunctionTool, HumanMessage, Loop, ResponseMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { withAgent } from '@agyn/tracing';
 
 import { CallModelLLMReducer } from '../../llm/reducers/callModel.llm.reducer';
@@ -224,9 +217,7 @@ export class AgentNode implements TriggerListener {
     this.mcpServerTools.set(server, []);
 
     const sync = () => {
-      void this.syncMcpToolsFromServer(server).catch((e) => {
-        this.logger.error?.(`Agent: failed to sync MCP tools from ${namespace}`, e);
-      });
+      void this.syncMcpToolsFromServer(server);
     };
 
     // Subscribe to server lifecycle and unified MCP tools update event

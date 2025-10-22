@@ -249,12 +249,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       .register(
         'mcpServer',
         () => {
-          const server = new LocalMCPServer(containerService, logger);
-          server.setEnvService(envService);
-          server.setVault(vault);
-          // Wire global stale timeout and state persistor for cache persistence
-          server.setGlobalStaleTimeoutMs(configService.mcpToolsStaleTimeoutMs);
-          server.setStatePersistor((state) => deps.graphStateService.upsertNodeState(ctx.nodeId, state));
+          const server = new LocalMCPServer(containerService, logger, vault, envService, configService);
           void server.start();
           return server;
         },

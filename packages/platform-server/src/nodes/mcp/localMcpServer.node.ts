@@ -12,6 +12,8 @@ import { LocalMCPServerTool, GenericMcpInvocationSchema } from './localMcpServer
 import { VaultService } from '../../services/vault.service.js';
 import { EnvService, type EnvItem } from '../../services/env.service.js';
 import { JSONSchema } from 'zod/v4/core';
+import { ConfigService } from '../../services/config.service.js';
+import { GraphService } from '../../services/graph.service.js';
 
 const EnvItemSchema = z
   .object({
@@ -50,16 +52,6 @@ export const LocalMcpServerStaticConfigSchema = z.object({
 // .strict();
 
 export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigurable<Record<string, boolean>> {
-  private envService?: EnvService;
-  private vault?: VaultService;
-
-  setEnvService(svc?: EnvService): void {
-    this.envService = svc;
-  }
-  setVault(vault?: VaultService): void {
-    this.vault = vault;
-  }
-
   private async resolveEnvOverlay(): Promise<Record<string, string> | undefined> {
     const items: EnvItem[] = (this.cfg?.env || []) as EnvItem[];
     if (!items.length) return undefined;
@@ -147,16 +139,40 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   constructor(
     private containerService: ContainerService,
     private logger: LoggerService,
+    private vault: VaultService,
+    private envService: EnvService,
+    private configService: ConfigService,
   ) {}
 
-  // Hooks for state preload/persist
-  private statePersistor?: (state: Record<string, unknown>) => Promise<void> | void;
-  setStatePersistor(fn?: (state: Record<string, unknown>) => Promise<void> | void) {
-    this.statePersistor = fn;
+  /**
+   * Create a LocalMCPServerTool instance from a McpTool.
+   * If a delegate is provided, it is used (for discovered tools); otherwise, a fallback delegate is used (for preloaded tools).
+   */
+  private createLocalTool(tool: McpTool): LocalMCPServerTool {
+    return new LocalMCPServerTool(
+      {
+        getName: () => tool.name,
+        getDescription: () => tool.description || 'MCP tool',
+        getDelegate: () => ({
+          callTool: async (name: string, args: any) => {
+            const res = await this.callTool(name, args, { threadId: '__mcp_exec__' });
+            return {
+              isError: res.isError,
+              content: res.content,
+              structuredContent: res.structuredContent,
+              raw: res.raw,
+            };
+          },
+          getLogger: () => this.logger,
+        }),
+      },
+      GenericMcpInvocationSchema,
+    );
   }
-  preloadCachedTools(tools: LocalMCPServerTool[] | undefined | null, updatedAt?: number | string | Date): void {
+
+  preloadCachedTools(tools: McpTool[] | undefined | null, updatedAt?: number | string | Date): void {
     if (tools && Array.isArray(tools) && tools.length > 0) {
-      this.toolsCache = tools;
+      this.toolsCache = tools.map((t) => this.createLocalTool(t));
       this.toolsDiscovered = true; // consider discovered for initial dynamic schema availability
     }
     if (updatedAt !== undefined) {
@@ -170,10 +186,6 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     }
     // Notify listeners with unified tools update event
     this.notifyToolsUpdated(Date.now());
-  }
-
-  setGlobalStaleTimeoutMs(ms: number) {
-    this._globalStaleTimeoutMs = Number.isFinite(ms) && ms >= 0 ? ms : 0;
   }
 
   /**
@@ -251,30 +263,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       // Fetch tools
       const result = await tempClient.listTools({}, { timeout: cfg.requestTimeoutMs ?? 15000 });
       this.logger.debug(`[MCP:${this.namespace}] Discovered tools: ${JSON.stringify(result.tools.map((t) => t.name))}`);
-      this.toolsCache = result.tools.map((t) => {
-        // Attempt minimal zod conversion: if JSONSchema has properties, treat as open object.
-        let zodSchema = GenericMcpInvocationSchema; // fallback
-        // Keep generic schema for now; JSONSchema->zod conversion deferred
-        return new LocalMCPServerTool(
-          {
-            getName: () => t.name,
-            getDescription: () => t.description || 'MCP tool',
-            getDelegate: () => ({
-              callTool: async (name: string, args: any) => {
-                const res = await this.callTool(name, args, { threadId: '__mcp_exec__' });
-                return {
-                  isError: res.isError,
-                  content: res.content,
-                  structuredContent: res.structuredContent,
-                  raw: res.raw,
-                };
-              },
-              getLogger: () => this.logger,
-            }),
-          },
-          zodSchema,
-        );
-      });
+      this.toolsCache = result.tools.map((t) => this.createLocalTool(t));
 
       this.logger.info(`[MCP:${this.namespace}] [disc:${discoveryId}] Discovered ${this.toolsCache.length} tools`);
       this.toolsDiscovered = true;
@@ -297,7 +286,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
           this.emitDynamicConfigChanged();
         }
       }
-      // Persist state if persistor provided
+      // Persist state using graphService
       try {
         const state: { mcp: PersistedMcpState } = {
           mcp: {
@@ -305,9 +294,13 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
             toolsUpdatedAt: this.lastToolsUpdatedAt,
           },
         };
-        await this.statePersistor?.(state as unknown as Record<string, unknown>);
+
+        const nodeId = this.namespace;
+
+        // TODO: fix persistency
+        // await this.graphStateService.upsertNodeState(this.namespace, nodeId, state);
       } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] Failed to persist state`, e);
+        this.logger.error(`[MCP:${this.namespace}] Failed to persist state via graphService`, e);
       }
       // Notify listeners with unified tools update event
       this.notifyToolsUpdated(this.lastToolsUpdatedAt || Date.now());
@@ -591,15 +584,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   }
 
   // Unified event subscription supporting core and MCP-specific events
-  on(
-    event:
-      | 'ready'
-      | 'exit'
-      | 'error'
-      | 'restarted'
-      | 'mcp.tools_updated',
-    handler: (...a: any[]) => void,
-  ): this {
+  on(event: 'ready' | 'exit' | 'error' | 'restarted' | 'mcp.tools_updated', handler: (...a: any[]) => void): this {
     this.emitter.on(event, handler);
     return this;
   }
@@ -885,7 +870,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       try {
         // SINGLE DISCOVERY PATH: Only perform tool discovery here during the resilient start sequence.
         // listTools() no longer triggers discovery; SimpleAgent waits for 'ready'.
-        const staleTimeout = (this.cfg?.staleTimeoutMs ?? this._globalStaleTimeoutMs ?? 0) as number;
+        const staleTimeout = (this.cfg?.staleTimeoutMs ?? this.configService.mcpToolsStaleTimeoutMs ?? 0) as number;
         const isStale = (() => {
           if (!staleTimeout) return false;
           const last = this.lastToolsUpdatedAt || 0;

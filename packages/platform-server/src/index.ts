@@ -113,8 +113,8 @@ async function bootstrap() {
       // Centralized per-node state upsert helper
       upsertNodeState: async (nodeId: string, state: Record<string, unknown>) => {
         try {
-          if ('upsertNodeState' in graphService && typeof (graphService as any).upsertNodeState === 'function') {
-            await (graphService as any).upsertNodeState('main', nodeId, state);
+          if ('upsertNodeState' in graphService && typeof graphService.upsertNodeState === 'function') {
+            await graphService.upsertNodeState('main', nodeId, state);
           } else {
             // Fallback if not implemented
             const current = await graphService.get('main');
@@ -127,8 +127,8 @@ async function bootstrap() {
             };
             const nodes = Array.from(base.nodes || []);
             const idx = nodes.findIndex((n) => n.id === nodeId);
-            if (idx >= 0) nodes[idx] = { ...nodes[idx], state } as any;
-            else nodes.push({ id: nodeId, template: 'unknown', state } as any);
+            if (idx >= 0) nodes[idx] = { ...nodes[idx], state };
+            else nodes.push({ id: nodeId, template: 'unknown', state });
             await (graphService instanceof GitGraphService
               ? graphService.upsert({ name: 'main', version: base.version, nodes, edges: base.edges })
               : (graphService as GraphService).upsert({
@@ -139,13 +139,13 @@ async function bootstrap() {
                 }));
           }
           // Also update live runtime snapshot
-          const last = (runtime as any)?.state?.lastGraph as GraphDefinition | undefined;
+          const last = runtime?.state?.lastGraph as GraphDefinition | undefined;
           if (last) {
             const ln = last.nodes.find((n) => n.id === nodeId);
-            if (ln) ln.data.state = state as any;
+            if (ln) ln.data.state = state;
           }
-        } catch (e) {
-          logger.error('Failed to upsert node state for %s: %s', nodeId, (e as any)?.message || e);
+        } catch (e: unknown) {
+          logger.error('Failed to upsert node state for %s: %s', nodeId, JSON.stringify(e));
         }
       },
     },
@@ -272,12 +272,12 @@ async function bootstrap() {
       try {
         const { enforceMcpCommandMutationGuard } = await import('./services/graph.guard');
         enforceMcpCommandMutationGuard(before, parsed, runtime);
-      } catch (e) {
-        const err = e as any;
-        if (err?.code === GraphErrorCode.McpCommandMutationForbidden) {
+      } catch (e: unknown) {
+        if (e instanceof GraphError && e?.code === GraphErrorCode.McpCommandMutationForbidden) {
           reply.code(409);
           return { error: GraphErrorCode.McpCommandMutationForbidden };
         }
+        throw e;
       }
 
       // Support both GraphService and GitGraphService signatures

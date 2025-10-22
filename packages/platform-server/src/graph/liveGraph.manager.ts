@@ -6,17 +6,18 @@ import {
   LiveNode,
   edgeKey,
 } from './liveGraph.types';
-import { EdgeDef, GraphDefinition, GraphError, NodeDef, DependencyBag } from './types';
+import { DependencyBag, EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
 // Ports based reversible universal edges
+import { ZodError } from 'zod';
+import { LocalMCPServer } from '../nodes/mcp';
+import type { PersistedMcpState } from '../nodes/mcp/types';
+import { isNodeLifecycle } from '../nodes/types';
 import { LoggerService } from '../services/logger.service';
+import type { DynamicConfigurable, Pausable, ProvisionStatus, Provisionable } from './capabilities';
+import { hasSetConfig, hasSetDynamicConfig, isDynamicConfigurable } from './capabilities';
 import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
 import { TemplateRegistry } from './templateRegistry';
-import type { Pausable, ProvisionStatus, Provisionable, DynamicConfigurable } from './capabilities';
-import type { FunctionTool } from '@agyn/llm';
-import type { PersistedMcpState } from '../nodes/mcp/types';
-import { hasSetConfig, hasSetDynamicConfig, isDynamicConfigurable } from './capabilities';
-import { ZodError } from 'zod';
 
 const configsEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b); // unchanged
 
@@ -326,7 +327,6 @@ export class LiveGraphRuntime {
       const live: LiveNode = { id: node.id, template: node.data.template, instance: created, config: node.data.config };
       this.state.nodes.set(node.id, live);
 
-      const { isNodeLifecycle } = await import('../nodes/types');
       if (!isNodeLifecycle(created) && node.data.config) {
         if (hasSetConfig(created)) {
           try {
@@ -353,20 +353,22 @@ export class LiveGraphRuntime {
           throw Errors.nodeInitFailure(node.id, err);
         }
       }
-      // Preload cached MCP tools with strong typing (if instance supports it)
-      const state = node.data.state as { mcp?: PersistedMcpState } | undefined;
-      if (state?.mcp) {
-        const preloadable = this.isMcpCachePreloadable(created);
-        if (preloadable) {
-          const tools = Array.isArray(state.mcp.tools) ? (state.mcp.tools as FunctionTool[]) : ([] as FunctionTool[]);
+
+      // Fix: Create LocalMCPServerTool instances from McpTool if present in state.mcp.tools
+      if (created instanceof LocalMCPServer) {
+        const state = node.data.state as { mcp?: PersistedMcpState } | undefined;
+
+        if (state?.mcp && state.mcp.tools) {
+          const tools = state.mcp.tools;
           const updatedAt = state.mcp.toolsUpdatedAt;
           try {
-            preloadable.preloadCachedTools(tools, updatedAt);
+            created.preloadCachedTools(tools, updatedAt);
           } catch (e) {
             this.logger.error('Error during MCP cache preload for node %s', node.id, e);
           }
         }
       }
+
       if (node.data.dynamicConfig) {
         if (hasSetDynamicConfig(created)) {
           try {
@@ -600,12 +602,5 @@ export class LiveGraphRuntime {
       }),
     );
     this.state.executedEdges.clear();
-  }
-
-  // Minimal interface/type guard for MCP cache preload capability
-  private isMcpCachePreloadable(
-    o: unknown,
-  ): o is { preloadCachedTools: (tools: FunctionTool[], updatedAt?: number | string | Date) => void } {
-    return !!o && typeof (o as { preloadCachedTools?: unknown }).preloadCachedTools === 'function';
   }
 }
