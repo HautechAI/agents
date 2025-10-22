@@ -230,19 +230,9 @@ export class AgentNode implements TriggerListener {
       });
     };
 
-    // Subscribe to server lifecycle and MCP-specific events
+    // Subscribe to server lifecycle and unified MCP tools update event
     server.on('ready', sync);
-    server.on('mcp.tools_cache_loaded', sync);
-    server.on('mcp.tools_discovered', sync);
-    // Dynamic config updates may enable/disable tools
-    const anyServer = server as unknown as {
-      onDynamicConfigChanged?: (l: (cfg: Record<string, boolean>) => void) => () => void;
-    };
-    if (typeof anyServer.onDynamicConfigChanged === 'function') {
-      anyServer.onDynamicConfigChanged?.(() => sync());
-    } else {
-      server.on('mcp.tools_dynamic_config_changed', sync);
-    }
+    server.on('mcp.tools_updated', sync);
 
     // Trigger initial sync so agent catches up if server is already ready/cached
     sync();

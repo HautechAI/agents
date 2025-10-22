@@ -55,9 +55,7 @@ export interface McpServer {
   on(event: 'exit', handler: (...a: any[]) => void): this;
   on(event: 'error', handler: (...a: any[]) => void): this;
   on(event: 'restarted', handler: (...a: any[]) => void): this;
-  on(event: 'mcp.tools_cache_loaded', handler: (payload: { tools: FunctionTool[]; updatedAt?: number; source: 'cache' }) => void): this;
-  on(event: 'mcp.tools_discovered', handler: (payload: { tools: FunctionTool[]; updatedAt?: number; source: 'discovery' }) => void): this;
-  on(event: 'mcp.tools_dynamic_config_changed', handler: (payload: { enabled: Record<string, boolean>; updatedAt: number }) => void): this;
+  on(event: 'mcp.tools_updated', handler: (payload: { tools: FunctionTool[]; updatedAt: number }) => void): this;
 }
 
 export interface DockerExecStreams {

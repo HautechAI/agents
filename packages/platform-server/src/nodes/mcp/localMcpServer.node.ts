@@ -168,11 +168,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
             : Date.parse(String(updatedAt));
       if (Number.isFinite(ts)) this.lastToolsUpdatedAt = ts;
     }
-    // Emit cache loaded event for listeners
-    const payload = { tools: this.toolsCache || [], updatedAt: this.lastToolsUpdatedAt, source: 'cache' } as const;
-    try {
-      this.emitter.emit('mcp.tools_cache_loaded', payload);
-    } catch {}
+    // Notify listeners with unified tools update event
+    this.notifyToolsUpdated(Date.now());
   }
 
   setGlobalStaleTimeoutMs(ms: number) {
@@ -312,11 +309,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       } catch (e) {
         this.logger.error(`[MCP:${this.namespace}] Failed to persist state`, e);
       }
-      // Emit tools discovered event
-      try {
-        const payload = { tools: this.toolsCache || [], updatedAt: this.lastToolsUpdatedAt, source: 'discovery' } as const;
-        this.emitter.emit('mcp.tools_discovered', payload);
-      } catch {}
+      // Notify listeners with unified tools update event
+      this.notifyToolsUpdated(this.lastToolsUpdatedAt || Date.now());
     } catch (err) {
       this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Tool discovery failed`, err);
     } finally {
@@ -605,9 +599,7 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       | 'exit'
       | 'error'
       | 'restarted'
-      | 'mcp.tools_cache_loaded'
-      | 'mcp.tools_discovered'
-      | 'mcp.tools_dynamic_config_changed',
+      | 'mcp.tools_updated',
     handler: (...a: any[]) => void,
   ): this {
     this.emitter.on(event, handler);
@@ -780,13 +772,27 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
         this.logger.error(`[MCP:${this.namespace}] dynamic config listener error`, e);
       }
     }
-    // Emit event for external listeners (agent) as well
+    // Notify external listeners to reconcile current enabled tools
+    this.notifyToolsUpdated(Date.now());
+  }
+
+  // Build an authoritative list of currently enabled tool instances
+  private getEnabledToolsSnapshot(): LocalMCPServerTool[] {
+    const all = this.toolsCache ? [...this.toolsCache] : [];
+    if (!this._enabledTools) return all;
+    const enabled = this._enabledTools;
+    return all.filter((t) => enabled.has(t.name));
+  }
+
+  // Emit the unified tools update event with typed payload
+  private notifyToolsUpdated(updatedAt: number): void {
+    const tools = this.getEnabledToolsSnapshot();
+    const ts = Number.isFinite(updatedAt) ? updatedAt : Date.now();
     try {
-      this.emitter.emit('mcp.tools_dynamic_config_changed', {
-        enabled: cfg,
-        updatedAt: Date.now(),
-      } as const);
-    } catch {}
+      this.emitter.emit('mcp.tools_updated', { tools, updatedAt: ts });
+    } catch (e) {
+      this.logger.error(`[MCP:${this.namespace}] Error emitting tools_updated`, e);
+    }
   }
 
   private currentNormalizedDynamicConfig(): Record<string, boolean> {
