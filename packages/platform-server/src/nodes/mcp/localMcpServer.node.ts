@@ -168,6 +168,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
             : Date.parse(String(updatedAt));
       if (Number.isFinite(ts)) this.lastToolsUpdatedAt = ts;
     }
+    // Notify listeners with unified tools update event
+    this.notifyToolsUpdated(Date.now());
   }
 
   setGlobalStaleTimeoutMs(ms: number) {
@@ -307,6 +309,8 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       } catch (e) {
         this.logger.error(`[MCP:${this.namespace}] Failed to persist state`, e);
       }
+      // Notify listeners with unified tools update event
+      this.notifyToolsUpdated(this.lastToolsUpdatedAt || Date.now());
     } catch (err) {
       this.logger.error(`[MCP:${this.namespace}] [disc:${discoveryId}] Tool discovery failed`, err);
     } finally {
@@ -413,12 +417,10 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
   }
 
   // Return legacy McpTool shape for interface compliance; callers needing function tools can access toolsCache directly.
-  async listTools(_force = false): Promise<LocalMCPServerTool[]> {
+  listTools(_force = false): LocalMCPServerTool[] {
     // Passive: Only return cached tools. `force` no longer changes discovery behavior post-refactor.
     const allTools: LocalMCPServerTool[] = this.toolsCache ? [...this.toolsCache] : [];
-    // If no dynamic config applied, return all tool instances directly.
     if (!this._enabledTools) return allTools;
-    // Filter by enabled set and return actual instances (not metadata shims).
     const enabled = this._enabledTools;
     return allTools.filter((t) => enabled.has(t.name));
   }
@@ -588,7 +590,16 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
     this.pendingStart = undefined;
   }
 
-  on(event: 'ready' | 'exit' | 'error' | 'restarted', handler: (...a: any[]) => void): this {
+  // Unified event subscription supporting core and MCP-specific events
+  on(
+    event:
+      | 'ready'
+      | 'exit'
+      | 'error'
+      | 'restarted'
+      | 'mcp.tools_updated',
+    handler: (...a: any[]) => void,
+  ): this {
     this.emitter.on(event, handler);
     return this;
   }
@@ -758,6 +769,27 @@ export class LocalMCPServer implements McpServer, Provisionable, DynamicConfigur
       } catch (e) {
         this.logger.error(`[MCP:${this.namespace}] dynamic config listener error`, e);
       }
+    }
+    // Notify external listeners to reconcile current enabled tools
+    this.notifyToolsUpdated(Date.now());
+  }
+
+  // Build an authoritative list of currently enabled tool instances
+  private getEnabledToolsSnapshot(): LocalMCPServerTool[] {
+    const all = this.toolsCache ? [...this.toolsCache] : [];
+    if (!this._enabledTools) return all;
+    const enabled = this._enabledTools;
+    return all.filter((t) => enabled.has(t.name));
+  }
+
+  // Emit the unified tools update event with typed payload
+  private notifyToolsUpdated(updatedAt: number): void {
+    const tools = this.getEnabledToolsSnapshot();
+    const ts = Number.isFinite(updatedAt) ? updatedAt : Date.now();
+    try {
+      this.emitter.emit('mcp.tools_updated', { tools, updatedAt: ts });
+    } catch (e) {
+      this.logger.error(`[MCP:${this.namespace}] Error emitting tools_updated`, e);
     }
   }
 

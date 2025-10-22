@@ -221,11 +221,21 @@ export class AgentNode implements TriggerListener {
       this.logger.debug?.(`MCP server ${namespace} already added; skipping duplicate add.`);
       return;
     }
-    const tools = await server.listTools();
-    this.mcpServerTools.set(server, tools);
-    tools.forEach((tool) => {
-      this.tools.add(tool);
-    });
+    // Track server with empty tools initially; sync on events
+    this.mcpServerTools.set(server, []);
+
+    const sync = () => {
+      void this.syncMcpToolsFromServer(server).catch((e) => {
+        this.logger.error?.(`Agent: failed to sync MCP tools from ${namespace}`, e);
+      });
+    };
+
+    // Subscribe to server lifecycle and unified MCP tools update event
+    server.on('ready', sync);
+    server.on('mcp.tools_updated', sync);
+
+    // Trigger initial sync so agent catches up if server is already ready/cached
+    sync();
   }
 
   async removeMcpServer(server: McpServer): Promise<void> {
@@ -240,4 +250,36 @@ export class AgentNode implements TriggerListener {
   }
 
   async delete(): Promise<void> {}
+
+  // Sync MCP tools from the given server and reconcile add/remove
+  private syncMcpToolsFromServer(server: McpServer): void {
+    try {
+      const namespace = server.namespace;
+      const latest: FunctionTool[] = server.listTools();
+      const prev: FunctionTool[] = this.mcpServerTools.get(server) || [];
+
+      const latestNames = new Set(latest.map((t) => t.name));
+      // Remove tools no longer present
+      for (const t of prev) {
+        if (!latestNames.has(t.name)) {
+          this.tools.delete(t);
+          this.logger.debug?.(`Agent: MCP tool removed (${namespace}/${t.name})`);
+        }
+      }
+
+      const prevNames = new Set(prev.map((t) => t.name));
+      // Add new tools
+      for (const t of latest) {
+        if (!prevNames.has(t.name)) {
+          this.tools.add(t);
+          this.logger.debug?.(`Agent: MCP tool added (${namespace}/${t.name})`);
+        }
+      }
+
+      // Update snapshot
+      this.mcpServerTools.set(server, latest);
+    } catch (e) {
+      this.logger.error?.('Agent: syncMcpToolsFromServer error', e);
+    }
+  }
 }

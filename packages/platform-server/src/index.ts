@@ -357,6 +357,32 @@ async function bootstrap() {
           // Stop any watcher if node is deprovisioned
           readinessWatcher?.stop(nodeId);
           break;
+        case 'refresh_mcp_tools': {
+          // Manual refresh: re-run discovery regardless of staleness
+          const inst = runtime.getNodeInstance<unknown>(nodeId);
+          const hasDiscover = !!inst && typeof (inst as Record<string, unknown>)['discoverTools'] === 'function';
+          if (!hasDiscover) {
+            reply.code(400);
+            return { error: 'not_mcp_node' };
+          }
+          // Avoid refresh if discovery/start is in-flight
+          const inFlight = !!inst && typeof (inst as Record<string, unknown>)['pendingStart'] !== 'undefined';
+          if (inFlight) {
+            reply.code(409);
+            return { error: 'discovery_in_flight' };
+          }
+          try {
+            const fn = (inst as Record<string, unknown>)['discoverTools'] as () => Promise<unknown>;
+            await fn.call(inst);
+            // Emit ready to trigger agent resyncs if applicable
+            const onFn = (inst as Record<string, unknown>)['on'];
+            if (typeof onFn === 'function') (onFn as Function).call(inst, 'ready', () => {});
+          } catch (e: any) {
+            reply.code(500);
+            return { error: e?.message || 'refresh_failed' };
+          }
+          break;
+        }
         default:
           reply.code(400);
           return { error: 'unknown_action' };
