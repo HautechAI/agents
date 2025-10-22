@@ -11,6 +11,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@agyn/llm": "workspace:*",
     "@agyn/tracing": "workspace:*",
     "@fastify/cors": "^11.1.0",
     "@langchain/core": "1.0.1",
@@ -31,13 +32,15 @@
     "lodash-es": "^4.17.21",
     "md5": "^2.3.0",
     "mongodb": "^6.20.0",
+    "openai": "^6.6.0",
     "p-limit": "^3.1.0",
     "semver": "^7.6.3",
     "tar-stream": "^3.1.7",
     "undici": "^6.19.8",
     "uuid": "^13.0.0",
     "yaml": "^2.8.1",
-    "zod": "^4.1.9"
+    "zod": "^4.1.9",
+    "zod-from-json-schema": "^0.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

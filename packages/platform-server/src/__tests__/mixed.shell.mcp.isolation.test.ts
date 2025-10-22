@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LoggerService } from '../services/logger.service';
-import { ShellTool } from '../tools/shell_command';
-import { LocalMCPServer } from '../mcp/localMcpServer';
+import { ShellTool } from '../nodes/tools/shell_command/shell_command.node';
+import { LocalMCPServer } from '../mcp/localMcpServer.node';
 
 class FakeContainer {
   last: any;

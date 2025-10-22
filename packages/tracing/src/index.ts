@@ -1,3 +1,4 @@
+import { HumanMessage, ResponseMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 
@@ -179,6 +180,46 @@ function now() {
   return new Date().toISOString();
 }
 
+function messageToAttributes(msg: ContextMessage | ToolCallMessage): Record<string, unknown> {
+  if (msg instanceof HumanMessage || msg instanceof SystemMessage) {
+    return {
+      role: msg.role,
+      content: msg.text,
+    };
+  }
+
+  if (msg instanceof ResponseMessage) {
+    return {
+      role: 'ai',
+      content: msg.text,
+      toolCalls: msg.output
+        .filter((m) => m instanceof ToolCallMessage)
+        .map((m) => ({
+          id: m.callId,
+          name: m.name,
+          arguments: m.args,
+        })),
+    };
+  }
+
+  if (msg instanceof ToolCallOutputMessage) {
+    return {
+      role: 'tool',
+      content: msg.text,
+    };
+  }
+
+  if (msg instanceof ToolCallMessage) {
+    return {
+      id: msg.callId,
+      name: msg.name,
+      arguments: msg.args,
+    };
+  }
+
+  return { unknownMessageType: true };
+}
+
 // Internal low-level span creator. Accepts optional computeEndAttrs to add attributes/status at completion.
 export async function withSpan<T>(
   input: SpanInput,
@@ -354,7 +395,7 @@ export function withAgent<T>(
 }
 
 export function withLLM<T>(
-  attributes: { context: Array<ChatMessageInput>; [k: string]: unknown },
+  attributes: { context: Array<ContextMessage>; [k: string]: unknown },
   fn: () => Promise<LLMResponse<T>> | LLMResponse<T>,
 ) {
   /**
@@ -364,28 +405,31 @@ export function withLLM<T>(
    * and the raw value is still passed through (but instrumentation data for content/toolCalls will be absent).
    */
   const { context: rawContext, ...rest } = attributes;
-  const context = rawContext.map(BaseMessage.fromLangChain).map((m) => m.toJSON());
+  const context = rawContext.map(messageToAttributes);
+
   return withSpan({ label: 'llm', kind: 'llm', attributes: { kind: 'llm', context, ...rest } }, fn, (result) => {
     if (!(result instanceof LLMResponse)) {
       return { attributes: { error: 'llm.response.missingWrapper' }, status: 'error' };
     }
     const content = result.content;
-    const toolCalls = result.toolCalls;
-    const attr: Record<string, unknown> = {};
-    if (content !== undefined) {
-      attr.output = { ...(attr.output as any), content };
-      attr['llm.content'] = content;
-    }
-    if (toolCalls && toolCalls.length) {
-      attr.output = { ...(attr.output as any), toolCalls };
-      attr['llm.toolCalls'] = toolCalls;
-    }
-    return { attributes: attr };
+    const toolCalls = result.toolCalls?.map((t) => messageToAttributes(t));
+    const output = {
+      content,
+      toolCalls,
+    };
+    return { attributes: { output } };
   }).then((res) => (res as LLMResponse<T>).raw);
 }
 
 export function withToolCall<TOutput = unknown, TRaw = unknown>(
-  attributes: { toolCallId: string; name: string; input: unknown; nodeId?: string; toolNodeId?: string; [k: string]: unknown },
+  attributes: {
+    toolCallId: string;
+    name: string;
+    input: unknown;
+    nodeId?: string;
+    toolNodeId?: string;
+    [k: string]: unknown;
+  },
   fn: () => Promise<ToolCallResponse<TRaw, TOutput>> | ToolCallResponse<TRaw, TOutput>,
 ): Promise<TRaw> {
   const { toolCallId, name, input, nodeId, toolNodeId, ...rest } = attributes;
@@ -394,7 +438,15 @@ export function withToolCall<TOutput = unknown, TRaw = unknown>(
       label: `tool:${name}`,
       kind: 'tool_call',
       nodeId,
-      attributes: { kind: 'tool_call', toolCallId, name, input, ...(nodeId ? { nodeId } : {}), ...(toolNodeId ? { toolNodeId } : {}), ...rest },
+      attributes: {
+        kind: 'tool_call',
+        toolCallId,
+        name,
+        input,
+        ...(nodeId ? { nodeId } : {}),
+        ...(toolNodeId ? { toolNodeId } : {}),
+        ...rest,
+      },
     },
     fn,
     (result, err) => {
@@ -411,7 +463,7 @@ export function withToolCall<TOutput = unknown, TRaw = unknown>(
 }
 
 export function withSummarize<TRaw = unknown>(
-  attributes: { oldContext: Array<ChatMessageInput>; [k: string]: unknown },
+  attributes: { oldContext: Array<ContextMessage>; [k: string]: unknown },
   fn: () => Promise<SummarizeResponse<TRaw>> | SummarizeResponse<TRaw>,
 ) {
   /**
@@ -419,7 +471,7 @@ export function withSummarize<TRaw = unknown>(
    * This mirrors withLLM to keep instrumentation deterministic.
    */
   const { oldContext: rawOldContext, ...rest } = attributes;
-  const oldContext = rawOldContext.map(BaseMessage.fromLangChain).map((m) => m.toJSON());
+  const oldContext = rawOldContext.map(messageToAttributes);
   return withSpan(
     { label: 'summarize', kind: 'summarize', attributes: { kind: 'summarize', oldContext, ...rest } },
     fn,
@@ -444,105 +496,18 @@ export function withSystem<T>(attributes: { label: string; [k: string]: unknown 
 // New message & response types (Stage 1 API evolution)
 // ---------------------------------------------------------------------------
 
-// Tool call descriptor used within AIMessage toolCalls
-export type ToolCall = {
-  id: string;
-  name: string;
-  arguments: unknown;
-};
-
-// Input union accepted by fromLangChain for convenience/backward compat
-export type ChatMessageInput =
-  | BaseMessage
-  | { role: 'system'; content: string }
-  | { role: 'human'; content: string }
-  | { role: 'ai'; content: string; toolCalls?: ToolCall[]; tool_calls?: any }
-  | { role: 'tool'; toolCallId: string; content: string; tool_call_id?: string };
-
-export abstract class BaseMessage {
-  abstract role: string;
-  abstract content: string;
-  toJSON(): Record<string, unknown> {
-    return { role: this.role, content: this.content };
-  }
-  static fromLangChain(msg: LangChainBaseMessage): BaseMessage {
-    if (msg instanceof BaseMessage) return msg;
-    const role = msg.role || msg._getType?.();
-    if (!role) throw new Error('Unrecognized message shape');
-    switch (role) {
-      case 'system':
-        return new SystemMessage(msg.content as string);
-      case 'human':
-      case 'user':
-        return new HumanMessage(msg.content as string);
-      case 'ai':
-      case 'assistant': {
-        const toolCalls: ToolCall[] = (msg.toolCalls || msg.tool_calls || []).map((tc: any, idx: number) => ({
-          id: tc.id || `tc_${idx}`,
-          name: tc.name,
-          arguments: tc.args ?? tc.arguments,
-        }));
-        return new AIMessage(msg.content as string, toolCalls);
-      }
-      case 'tool':
-        return new ToolMessage((msg as any).toolCallId || (msg as any).tool_call_id, msg.content as string);
-      default:
-        return new SystemMessage(String(msg.content ?? ''));
-    }
-  }
-}
-
-// Structural interface for LangChain messages (avoids direct dependency)
-export interface LangChainBaseMessage {
-  role?: string;
-  content?: unknown;
-  toolCalls?: any[];
-  tool_calls?: any[];
-  toolCallId?: string;
-  tool_call_id?: string;
-  _getType?: () => string;
-  [k: string]: any;
-}
-
-export class SystemMessage extends BaseMessage {
-  role: 'system' = 'system';
-  constructor(public content: string) {
-    super();
-  }
-}
-export class HumanMessage extends BaseMessage {
-  role: 'human' = 'human';
-  constructor(public content: string) {
-    super();
-  }
-}
-export class AIMessage extends BaseMessage {
-  role: 'ai' = 'ai';
-  constructor(public content: string, public toolCalls: ToolCall[] = []) {
-    super();
-  }
-  override toJSON() {
-    return { role: this.role, content: this.content, toolCalls: this.toolCalls };
-  }
-}
-export class ToolMessage extends BaseMessage {
-  role: 'tool' = 'tool';
-  constructor(public toolCallId: string, public content: string) {
-    super();
-  }
-  override toJSON() {
-    return { role: this.role, toolCallId: this.toolCallId, content: this.content };
-  }
-}
-
-export type ChatMessage = BaseMessage;
+export type ContextMessage =
+  | SystemMessage //
+  | HumanMessage
+  | ResponseMessage
+  | ToolCallOutputMessage;
 
 // LLMResponse wrapper to extract standardized attributes while returning raw provider output
 export class LLMResponse<TRaw = unknown> {
   readonly raw: TRaw;
   readonly content?: string;
-  readonly toolCalls?: ToolCall[];
-  constructor(params: { raw: TRaw; content?: string; toolCalls?: ToolCall[] }) {
+  readonly toolCalls?: ToolCallMessage[];
+  constructor(params: { raw: TRaw; content?: string; toolCalls?: ToolCallMessage[] }) {
     this.raw = params.raw;
     this.content = params.content;
     this.toolCalls = params.toolCalls;
@@ -565,8 +530,8 @@ export class ToolCallResponse<TRaw = unknown, TOutput = unknown> {
 export class SummarizeResponse<TRaw = unknown> {
   readonly raw: TRaw;
   readonly summary?: string;
-  readonly newContext?: Array<ChatMessageInput>;
-  constructor(params: { raw: TRaw; summary?: string; newContext?: Array<ChatMessageInput> }) {
+  readonly newContext?: Array<ContextMessage>;
+  constructor(params: { raw: TRaw; summary?: string; newContext?: Array<ContextMessage> }) {
     this.raw = params.raw;
     this.summary = params.summary;
     this.newContext = params.newContext;

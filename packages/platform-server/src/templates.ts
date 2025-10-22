@@ -1,43 +1,52 @@
 import { toJSONSchema } from 'zod';
-import { Agent, AgentStaticConfigSchema } from './nodes/agent/agent.node';
-import { ContainerProviderEntity, ContainerProviderExposedStaticConfigSchema } from './entities/containerProvider.entity';
+import {
+  ContainerProviderEntity,
+  ContainerProviderExposedStaticConfigSchema,
+} from './entities/containerProvider.entity';
 import { TemplateRegistry } from './graph';
-import { LocalMCPServer } from './mcp';
-import { CheckpointerService } from './services/checkpointer.service';
+import { AgentNode, AgentStaticConfigSchema } from './nodes/agent/agent.node';
+
+import { LocalMCPServer, LocalMcpServerStaticConfigSchema } from './nodes/mcp/localMcpServer.node';
+import { MemoryNode, MemoryNodeStaticConfigSchema } from './nodes/memory/memory.node';
+import { MemoryConnectorNode, MemoryConnectorStaticConfigSchema } from './nodes/memoryConnector/memoryConnector.node';
+import { SlackTrigger, SlackTriggerExposedStaticConfigSchema } from './nodes/slackTrigger/slack.trigger';
+import { CallAgentTool, CallAgentToolStaticConfigSchema } from './nodes/tools/call_agent/call_agent.node';
+import { FinishTool, FinishToolStaticConfigSchema } from './nodes/tools/finish/finish.node';
+import {
+  GithubCloneRepoNode,
+  GithubCloneRepoToolExposedStaticConfigSchema,
+} from './nodes/tools/github_clone_repo/github_clone_repo.node';
+import { ManageTool, ManageToolStaticConfigSchema } from './nodes/tools/manage/manage.node';
+import { MemoryToolNode, MemoryToolNodeStaticConfigSchema } from './nodes/tools/memory/memory.node';
+
+import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
+import { RemindMeToolStaticConfigSchema } from './nodes/tools/remind_me/remind_me.tool';
+import {
+  SendSlackMessageTool,
+  SendSlackMessageToolExposedStaticConfigSchema,
+} from './nodes/tools/send_slack_message/send_slack_message.node';
+import { ShellCommandNode, ShellToolStaticConfigSchema } from './nodes/tools/shell_command/shell_command.node';
 import { ConfigService } from './services/config.service';
 import { ContainerService } from './services/container.service';
-import { LoggerService } from './services/logger.service';
-import { VaultService, VaultConfigSchema } from './services/vault.service';
 import { EnvService } from './services/env.service';
-import { CallAgentTool, CallAgentToolStaticConfigSchema } from './tools/call_agent.tool';
-import { ManageTool, ManageToolStaticConfigSchema } from './tools/manage.tool';
-import { GithubCloneRepoTool, GithubCloneRepoToolExposedStaticConfigSchema } from './tools/github_clone_repo';
-import { SendSlackMessageTool, SendSlackMessageToolExposedStaticConfigSchema } from './tools/send_slack_message.tool';
-import { ShellTool, ShellToolStaticConfigSchema } from './tools/shell_command';
-import { SlackTrigger } from './triggers';
-import { SlackTriggerExposedStaticConfigSchema } from './triggers/slack.trigger';
-import { RemindMeTool, RemindMeToolStaticConfigSchema } from './tools/remind_me.tool';
-import { DebugToolTrigger, DebugToolTriggerStaticConfigSchema } from './triggers/debugTool.trigger';
-import { LocalMcpServerStaticConfigSchema } from './mcp/localMcpServer';
-import { FinishTool, FinishToolStaticConfigSchema } from './tools/finish.tool';
+import { LLMFactoryService } from './services/llmFactory.service';
+import { LoggerService } from './services/logger.service';
 import { MongoService } from './services/mongo.service';
 import { NcpsKeyService } from './services/ncpsKey.service';
-import { MemoryNode, MemoryNodeStaticConfigSchema } from './nodes/memory.node';
-import { MemoryConnectorNode, MemoryConnectorStaticConfigSchema } from './nodes/memory-connector.node';
+import { VaultConfigSchema, VaultService } from './services/vault.service';
 // Unified Memory tool
-import { UnifiedMemoryTool, UnifiedMemoryToolNodeStaticConfigSchema } from './tools/memory/memory.tool';
 
 export interface TemplateRegistryDeps {
   logger: LoggerService;
   containerService: ContainerService;
   configService: ConfigService;
-  checkpointerService: CheckpointerService;
   mongoService: MongoService; // required for memory nodes
+  llmFactoryService: LLMFactoryService;
   ncpsKeyService?: NcpsKeyService;
 }
 
 export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
-  const { logger, containerService, configService, checkpointerService, mongoService, ncpsKeyService } = deps;
+  const { logger, containerService, configService, mongoService, ncpsKeyService, llmFactoryService } = deps;
 
   // Initialize Vault service from config (optional)
   const vault = new VaultService(
@@ -47,7 +56,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       token: configService.vaultToken,
       defaultMounts: ['secret'],
     }),
-    logger
+    logger,
   );
   const envService = new EnvService(vault);
 
@@ -89,7 +98,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'shellTool',
-        () => new ShellTool(vault, logger),
+        () => new ShellCommandNode(envService),
         {
           targetPorts: {
             $self: { kind: 'instance' },
@@ -105,7 +114,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'githubCloneRepoTool',
-        () => new GithubCloneRepoTool(configService, vault, logger),
+        () => new GithubCloneRepoNode(configService, vault, logger),
         {
           targetPorts: {
             $self: { kind: 'instance' },
@@ -121,7 +130,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'sendSlackMessageTool',
-        () => new SendSlackMessageTool(logger, vault),
+        () => new SendSlackMessageTool(logger, vault) as unknown as import('./graph/types').Configurable,
         {
           targetPorts: { $self: { kind: 'instance' } },
         },
@@ -134,7 +143,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'finishTool',
-        () => (new FinishTool(logger) as unknown as import('./graph/types').Configurable),
+        () => new FinishTool(logger) as unknown as import('./graph/types').Configurable,
         {
           targetPorts: { $self: { kind: 'instance' } },
         },
@@ -161,10 +170,10 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'manageTool',
-        () => new ManageTool(logger),
+        () => new ManageTool(logger) as unknown as import('./graph/types').Configurable,
         {
           targetPorts: { $self: { kind: 'instance' } },
-          sourcePorts: { agent: { kind: 'method', create: 'addAgent', destroy: 'removeAgent' } },
+          sourcePorts: { agent: { kind: 'method', create: 'addWorker', destroy: 'removeWorker' } },
         },
         {
           title: 'Manage',
@@ -175,24 +184,16 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'remindMeTool',
-        () => (new RemindMeTool(logger) as unknown as import('./graph/types').Configurable),
-        { targetPorts: { $self: { kind: 'instance' } } },
+        () => new RemindMeNode(logger) as unknown as import('./graph/types').Configurable,
+        {
+          targetPorts: { $self: { kind: 'instance' } },
+          sourcePorts: { caller: { kind: 'method', create: 'setCallerAgent' } },
+        },
         {
           title: 'Remind Me',
           kind: 'tool',
           capabilities: { staticConfigurable: true },
           staticConfigSchema: toJSONSchema(RemindMeToolStaticConfigSchema),
-        },
-      )
-      .register(
-        'debugTool',
-        () => new DebugToolTrigger(logger),
-        { targetPorts: { $tool: { kind: 'method', create: 'setTool' } } },
-        {
-          title: 'HTTP Debug Tool',
-          kind: 'trigger',
-          capabilities: { provisionable: true, staticConfigurable: true },
-          staticConfigSchema: toJSONSchema(DebugToolTriggerStaticConfigSchema),
         },
       )
       .register(
@@ -216,7 +217,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       )
       .register(
         'agent',
-        (ctx) => new Agent(configService, logger, checkpointerService, ctx.nodeId),
+        (ctx) => new AgentNode(configService, logger, llmFactoryService, ctx.nodeId),
         {
           sourcePorts: {
             tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
@@ -238,22 +239,19 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       // Register a single unified Memory tool
       .register(
         'memoryTool',
-        () => new UnifiedMemoryTool(logger),
+        () => new MemoryToolNode(logger) as unknown as import('./graph/types').Configurable,
         { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
         {
           title: 'Memory Tool',
           kind: 'tool',
           capabilities: {},
-          // Expose node-level static config (name/description/title), not invocation schema
-          staticConfigSchema: toJSONSchema(UnifiedMemoryToolNodeStaticConfigSchema),
+          staticConfigSchema: toJSONSchema(MemoryToolNodeStaticConfigSchema),
         },
       )
       .register(
         'mcpServer',
         () => {
-          const server = new LocalMCPServer(containerService, logger);
-          server.setEnvService(envService);
-          server.setVault(vault);
+          const server = new LocalMCPServer(containerService, logger, vault, envService, configService);
           void server.start();
           return server;
         },
@@ -291,11 +289,9 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       .register(
         'memoryConnector',
         () =>
-          new MemoryConnectorNode(
-            () => {
-              throw new Error('MemoryConnectorNode: memory factory not set');
-            },
-          ),
+          new MemoryConnectorNode(() => {
+            throw new Error('MemoryConnectorNode: memory factory not set');
+          }),
         {
           // Accept memory source (node or factory) from Memory node; expose self to Agent
           targetPorts: { $memory: { kind: 'method', create: 'setMemorySource' } },

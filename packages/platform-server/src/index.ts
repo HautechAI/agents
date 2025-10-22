@@ -13,8 +13,6 @@ import { Server } from 'socket.io';
 import { ConfigService } from './services/config.service.js';
 import { LoggerService } from './services/logger.service.js';
 import { MongoService } from './services/mongo.service.js';
-import { CheckpointerService } from './services/checkpointer.service.js';
-import { SocketService } from './services/socket.service.js';
 import { buildTemplateRegistry } from './templates';
 import { LiveGraphRuntime } from './graph/liveGraph.manager.js';
 import { GraphService } from './services/graph.service.js';
@@ -32,11 +30,11 @@ import { registerRunsRoutes } from './routes/runs.route.js';
 import { registerNixRoutes } from './routes/nix.route.js';
 import { NcpsKeyService } from './services/ncpsKey.service.js';
 import { maybeProvisionLiteLLMKey } from './services/litellm.provision.js';
+import { LLMFactoryService } from './services/llmFactory.service.js';
 
 const logger = new LoggerService();
 const config = ConfigService.fromEnv();
 const mongo = new MongoService(config, logger);
-const checkpointer = new CheckpointerService(logger);
 const containerService = new ContainerService(logger);
 const vaultService = new VaultService(
   VaultConfigSchema.parse({
@@ -48,6 +46,7 @@ const vaultService = new VaultService(
   logger,
 );
 const ncpsKeyService = new NcpsKeyService(config, logger);
+const llmFactoryService = new LLMFactoryService(config);
 
 async function bootstrap() {
   // Initialize Ncps key service early
@@ -72,15 +71,7 @@ async function bootstrap() {
     throw e;
   }
   await mongo.connect();
-  checkpointer.attachMongoClient(mongo.getClient());
-  checkpointer.bindDb(mongo.getDb());
   // Initialize checkpointer (optional Postgres mode)
-  try {
-    await checkpointer.initIfNeeded();
-  } catch (e) {
-    logger.error('Checkpointer init failed: %s', (e as Error)?.message || String(e));
-    process.exit(1);
-  }
 
   // Initialize container registry and cleanup services
   const registry = new ContainerRegistryService(mongo.getDb(), logger);
@@ -94,8 +85,8 @@ async function bootstrap() {
     logger,
     containerService: containerService,
     configService: config,
-    checkpointerService: checkpointer,
     mongoService: mongo,
+    llmFactoryService,
     ncpsKeyService,
   });
 
@@ -122,8 +113,8 @@ async function bootstrap() {
       // Centralized per-node state upsert helper
       upsertNodeState: async (nodeId: string, state: Record<string, unknown>) => {
         try {
-          if ('upsertNodeState' in graphService && typeof (graphService as any).upsertNodeState === 'function') {
-            await (graphService as any).upsertNodeState('main', nodeId, state);
+          if ('upsertNodeState' in graphService && typeof graphService.upsertNodeState === 'function') {
+            await graphService.upsertNodeState('main', nodeId, state);
           } else {
             // Fallback if not implemented
             const current = await graphService.get('main');
@@ -136,8 +127,8 @@ async function bootstrap() {
             };
             const nodes = Array.from(base.nodes || []);
             const idx = nodes.findIndex((n) => n.id === nodeId);
-            if (idx >= 0) nodes[idx] = { ...nodes[idx], state } as any;
-            else nodes.push({ id: nodeId, template: 'unknown', state } as any);
+            if (idx >= 0) nodes[idx] = { ...nodes[idx], state };
+            else nodes.push({ id: nodeId, template: 'unknown', state });
             await (graphService instanceof GitGraphService
               ? graphService.upsert({ name: 'main', version: base.version, nodes, edges: base.edges })
               : (graphService as GraphService).upsert({
@@ -148,13 +139,13 @@ async function bootstrap() {
                 }));
           }
           // Also update live runtime snapshot
-          const last = (runtime as any)?.state?.lastGraph as GraphDefinition | undefined;
+          const last = runtime?.state?.lastGraph as GraphDefinition | undefined;
           if (last) {
             const ln = last.nodes.find((n) => n.id === nodeId);
-            if (ln) ln.data.state = state as any;
+            if (ln) ln.data.state = state;
           }
-        } catch (e) {
-          logger.error('Failed to upsert node state for %s: %s', nodeId, (e as any)?.message || e);
+        } catch (e: unknown) {
+          logger.error('Failed to upsert node state for %s: %s', nodeId, JSON.stringify(e));
         }
       },
     },
@@ -281,12 +272,12 @@ async function bootstrap() {
       try {
         const { enforceMcpCommandMutationGuard } = await import('./services/graph.guard');
         enforceMcpCommandMutationGuard(before, parsed, runtime);
-      } catch (e) {
-        const err = e as any;
-        if (err?.code === GraphErrorCode.McpCommandMutationForbidden) {
+      } catch (e: unknown) {
+        if (e instanceof GraphError && e?.code === GraphErrorCode.McpCommandMutationForbidden) {
           reply.code(409);
           return { error: GraphErrorCode.McpCommandMutationForbidden };
         }
+        throw e;
       }
 
       // Support both GraphService and GitGraphService signatures
@@ -366,6 +357,32 @@ async function bootstrap() {
           // Stop any watcher if node is deprovisioned
           readinessWatcher?.stop(nodeId);
           break;
+        case 'refresh_mcp_tools': {
+          // Manual refresh: re-run discovery regardless of staleness
+          const inst = runtime.getNodeInstance<unknown>(nodeId);
+          const hasDiscover = !!inst && typeof (inst as Record<string, unknown>)['discoverTools'] === 'function';
+          if (!hasDiscover) {
+            reply.code(400);
+            return { error: 'not_mcp_node' };
+          }
+          // Avoid refresh if discovery/start is in-flight
+          const inFlight = !!inst && typeof (inst as Record<string, unknown>)['pendingStart'] !== 'undefined';
+          if (inFlight) {
+            reply.code(409);
+            return { error: 'discovery_in_flight' };
+          }
+          try {
+            const fn = (inst as Record<string, unknown>)['discoverTools'] as () => Promise<unknown>;
+            await fn.call(inst);
+            // Emit ready to trigger agent resyncs if applicable
+            const onFn = (inst as Record<string, unknown>)['on'];
+            if (typeof onFn === 'function') (onFn as Function).call(inst, 'ready', () => {});
+          } catch (e: any) {
+            reply.code(500);
+            return { error: e?.message || 'refresh_failed' };
+          }
+          break;
+        }
         default:
           reply.code(400);
           return { error: 'unknown_action' };
@@ -424,8 +441,6 @@ async function bootstrap() {
   logger.info(`HTTP server listening on :${PORT}`);
 
   const io = new Server(fastify.server, { cors: { origin: '*' } });
-  const socketService = new SocketService(io, logger, checkpointer);
-  socketService.register();
 
   function emitStatus(nodeId: string) {
     const status = runtime.getNodeStatus(nodeId);

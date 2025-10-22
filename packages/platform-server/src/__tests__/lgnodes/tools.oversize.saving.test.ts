@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AIMessage } from '@langchain/core/messages';
 import { ToolsNode } from '../../lgnodes/tools.lgnode';
-import { BaseTool } from '../../tools/base.tool';
+import { BaseTool } from '../../nodes/tools/base.tool';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { LoggerService } from '../../services/logger.service';

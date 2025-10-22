@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LocalMCPServer } from '../mcp/localMcpServer';
+import { LocalMCPServer } from '../mcp/localMcpServer.node';
 import { LoggerService } from '../services/logger.service';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
