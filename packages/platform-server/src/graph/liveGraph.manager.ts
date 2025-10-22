@@ -13,6 +13,8 @@ import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
 import { TemplateRegistry } from './templateRegistry';
 import type { Pausable, ProvisionStatus, Provisionable, DynamicConfigurable } from './capabilities';
+import type { FunctionTool } from '@agyn/llm';
+import type { PersistedMcpState } from '../nodes/mcp/types';
 import { hasSetConfig, hasSetDynamicConfig, isDynamicConfigurable } from './capabilities';
 import { ZodError } from 'zod';
 
@@ -351,13 +353,19 @@ export class LiveGraphRuntime {
           throw Errors.nodeInitFailure(node.id, err);
         }
       }
-      // Preload cached MCP tools into LocalMCPServer before config application
-      const state = node.data.state as Record<string, unknown> | undefined;
-      if (state && (state as any).mcp && typeof (created as any).preloadCachedTools === 'function') {
-        try {
-          const mcp = (state as any).mcp as { tools?: any[]; toolsUpdatedAt?: number | string | Date };
-          (created as any).preloadCachedTools?.(mcp.tools, mcp.toolsUpdatedAt);
-        } catch {}
+      // Preload cached MCP tools with strong typing (if instance supports it)
+      const state = node.data.state as { mcp?: PersistedMcpState } | undefined;
+      if (state?.mcp) {
+        const preloadable = this.isMcpCachePreloadable(created);
+        if (preloadable) {
+          const tools = Array.isArray(state.mcp.tools) ? (state.mcp.tools as FunctionTool[]) : ([] as FunctionTool[]);
+          const updatedAt = state.mcp.toolsUpdatedAt;
+          try {
+            preloadable.preloadCachedTools(tools, updatedAt);
+          } catch (e) {
+            this.logger.error('Error during MCP cache preload for node %s', node.id, e);
+          }
+        }
       }
       if (node.data.dynamicConfig) {
         if (hasSetDynamicConfig(created)) {
@@ -460,10 +468,12 @@ export class LiveGraphRuntime {
         const { isNodeLifecycle } = await import('../nodes/types');
         if (isNodeLifecycle(inst)) {
           try {
-            await (inst as any).stop?.();
+            const stopFn = (inst as Record<string, unknown>)['stop'];
+            if (typeof stopFn === 'function') await (stopFn as Function).call(inst);
           } catch {}
           try {
-            await (inst as any).delete?.();
+            const delFn = (inst as Record<string, unknown>)['delete'];
+            if (typeof delFn === 'function') await (delFn as Function).call(inst);
           } catch {}
         } else {
           const destroy = (inst as Record<string, unknown>)['destroy'];
@@ -569,10 +579,12 @@ export class LiveGraphRuntime {
         const inst = live.instance as unknown;
         if (isNodeLifecycle(inst)) {
           try {
-            await inst.stop();
+            const stopFn = (inst as Record<string, unknown>)['stop'];
+            if (typeof stopFn === 'function') await (stopFn as Function).call(inst);
           } catch {}
           try {
-            await inst.delete();
+            const delFn = (inst as Record<string, unknown>)['delete'];
+            if (typeof delFn === 'function') await (delFn as Function).call(inst);
           } catch {}
         }
         const inbound = this.state.inboundEdges.get(live.id) || new Set<string>();
@@ -588,5 +600,12 @@ export class LiveGraphRuntime {
       }),
     );
     this.state.executedEdges.clear();
+  }
+
+  // Minimal interface/type guard for MCP cache preload capability
+  private isMcpCachePreloadable(
+    o: unknown,
+  ): o is { preloadCachedTools: (tools: FunctionTool[], updatedAt?: number | string | Date) => void } {
+    return !!o && typeof (o as { preloadCachedTools?: unknown }).preloadCachedTools === 'function';
   }
 }
