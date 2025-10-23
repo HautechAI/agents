@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ContainerProviderEntity, type ContainerProviderStaticConfig } from '../entities/containerProvider.entity';
-import { ContainerService } from '../core/services/container.service';
-import { LoggerService } from '../core/services/logger.service';
-import { ContainerEntity } from '../entities/container.entity';
+import { ContainerProviderEntity, type ContainerProviderStaticConfig } from '../src/entities/containerProvider.entity';
+import { ContainerService } from '../src/core/services/container.service';
+import { LoggerService } from '../src/core/services/logger.service';
+import { ContainerEntity } from '../src/entities/container.entity';
 
 class StubLogger extends LoggerService {
   override info = vi.fn();

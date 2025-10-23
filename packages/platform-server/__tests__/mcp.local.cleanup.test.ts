@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LocalMCPServer } from '../mcp/localMcpServer.node';
-import { LoggerService } from '../core/services/logger.service';
+import { LocalMCPServer } from '../src/mcp/localMcpServer.node';
+import { LoggerService } from '../src/core/services/logger.service';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
 describe('LocalMCPServer.discoverTools DinD sidecar cleanup (finally)', () => {
