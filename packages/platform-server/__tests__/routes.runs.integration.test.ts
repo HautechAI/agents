@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import { AgentRunService } from '../src/services/run.service';

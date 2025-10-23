@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { LoggerService } from '../src/services/logger.service';
-import { ConfigService } from '../src/services/config.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
+import { ConfigService } from '../src/core/services/config.service.js';
 import { CheckpointerService } from '../src/services/checkpointer.service';
 import { Agent } from '../src/nodes/agent/agent.node';
 

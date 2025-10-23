@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { buildTemplateRegistry } from '../src/templates';
-import type { LoggerService } from '../src/services/logger.service';
-import type { ContainerService } from '../src/services/container.service';
-import type { ConfigService } from '../src/services/config.service';
+import type { LoggerService } from '../src/core/services/logger.service.js';
+import type { ContainerService } from '../src/core/services/container.service.js';
+import type { ConfigService } from '../src/core/services/config.service.js';
 import type { CheckpointerService } from '../src/services/checkpointer.service';
-import type { MongoService } from '../src/services/mongo.service';
+import type { MongoService } from '../src/core/services/mongo.service.js';
 
 // Build a registry and assert memory templates and agent memory port wiring are present.
 describe('templates: memory registration and agent memory port', () => {

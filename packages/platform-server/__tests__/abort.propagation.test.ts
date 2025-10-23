@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { ToolsNode } from '../src/lgnodes/tools.lgnode';
 import { tool } from '@langchain/core/tools';
 import { AIMessage } from '@langchain/core/messages';

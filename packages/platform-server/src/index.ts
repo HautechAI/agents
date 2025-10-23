@@ -10,43 +10,37 @@ initObs({
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Server } from 'socket.io';
-import { ConfigService } from './services/config.service.js';
-import { LoggerService } from './services/logger.service.js';
-import { MongoService } from './services/mongo.service.js';
+import { ConfigService } from './core/services/config.service';
+import { LoggerService } from './core/services/logger.service';
+import { MongoService } from './core/services/mongo.service';
 import { buildTemplateRegistry } from './templates';
-import { LiveGraphRuntime } from './graph/liveGraph.manager.js';
-import { GraphService } from './services/graph.service.js';
-import { GitGraphService } from './services/gitGraph.service.js';
-import { GraphDefinition, GraphError, PersistedGraphUpsertRequest } from './graph/types.js';
-import { GraphErrorCode } from './graph/errors.js';
-import { ContainerService } from './services/container.service.js';
-import { ReadinessWatcher } from './utils/readinessWatcher.js';
-import { VaultService, VaultConfigSchema } from './services/vault.service.js';
-import { ContainerRegistryService } from './services/containerRegistry.service.js';
-import { ContainerCleanupService } from './services/containerCleanup.service.js';
-import { registerRemindersRoute } from './routes/reminders.route.js';
-import { AgentRunService } from './services/run.service.js';
-import { registerRunsRoutes } from './routes/runs.route.js';
-import { registerNixRoutes } from './routes/nix.route.js';
-import { NcpsKeyService } from './services/ncpsKey.service.js';
-import { maybeProvisionLiteLLMKey } from './services/litellm.provision.js';
-import { LLMFactoryService } from './services/llmFactory.service.js';
+import { LiveGraphRuntime } from './graph/liveGraph.manager';
+import { GraphService } from './services/graph.service';
+import { GitGraphService } from './services/gitGraph.service';
+import { GraphDefinition, GraphError, PersistedGraphUpsertRequest } from './graph/types';
+import { GraphErrorCode } from './graph/errors';
+import { ContainerService } from './core/services/container.service';
+import { ReadinessWatcher } from './utils/readinessWatcher';
+import { VaultService } from './core/services/vault.service';
+import { ContainerRegistryService } from './services/containerRegistry.service';
+import { ContainerCleanupService } from './services/containerCleanup.service';
+import { registerRemindersRoute } from './routes/reminders.route';
+import { AgentRunService } from './services/run.service';
+import { registerRunsRoutes } from './routes/runs.route';
+import { registerNixRoutes } from './routes/nix.route';
+import { NcpsKeyService } from './core/services/ncpsKey.service';
+import { maybeProvisionLiteLLMKey } from './services/litellm.provision';
+import { LLMFactoryService } from './core/services/llmFactory.service';
+import { initDI, resolve, closeDI } from './bootstrap/di';
 
-const logger = new LoggerService();
-const config = ConfigService.fromEnv();
-const mongo = new MongoService(config, logger);
-const containerService = new ContainerService(logger);
-const vaultService = new VaultService(
-  VaultConfigSchema.parse({
-    enabled: config.vaultEnabled,
-    addr: config.vaultAddr,
-    token: config.vaultToken,
-    defaultMounts: ['secret'],
-  }),
-  logger,
-);
-const ncpsKeyService = new NcpsKeyService(config, logger);
-const llmFactoryService = new LLMFactoryService(config);
+await initDI();
+const logger = await resolve<LoggerService>(LoggerService);
+const config = await resolve<ConfigService>(ConfigService);
+const mongo = await resolve<MongoService>(MongoService);
+const containerService = await resolve<ContainerService>(ContainerService);
+const vaultService = await resolve<VaultService>(VaultService);
+const ncpsKeyService = await resolve<NcpsKeyService>(NcpsKeyService);
+const llmFactoryService = await resolve<LLMFactoryService>(LLMFactoryService);
 
 async function bootstrap() {
   // Initialize Ncps key service early
@@ -459,6 +453,7 @@ async function bootstrap() {
     try {
       await fastify.close();
     } catch {}
+    try { await closeDI(); } catch {}
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

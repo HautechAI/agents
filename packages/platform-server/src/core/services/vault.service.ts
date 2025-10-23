@@ -1,5 +1,7 @@
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { LoggerService } from './logger.service';
+import { ConfigService } from './config.service';
 
 // Typed KV v2 response shapes
 type KvV2MountsResponse = Record<string, { type?: string; options?: { version?: string | number } }>;
@@ -25,14 +27,16 @@ export type VaultRef = { mount: string; path: string; key: string };
 // Notes:
 // - Endpoints only return lists/metadata (never secret values).
 // - getSecret returns a single key's value for server-side injection only.
+@Injectable()
 export class VaultService {
   private cfg: VaultConfig;
-
-  constructor(
-    cfg: VaultConfig,
-    private logger?: LoggerService,
-  ) {
-    this.cfg = cfg;
+  constructor(private cfgService: ConfigService, private logger?: LoggerService) {
+    this.cfg = VaultConfigSchema.parse({
+      enabled: this.cfgService.vaultEnabled,
+      addr: this.cfgService.vaultAddr,
+      token: this.cfgService.vaultToken,
+      defaultMounts: ['secret'],
+    });
   }
 
   isEnabled(): boolean {

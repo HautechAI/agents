@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LocalMCPServer } from '../src/mcp/localMcpServer.js';
-import { LoggerService } from '../src/services/logger.service.js';
-import { ContainerService } from '../src/services/container.service.js';
+import { LoggerService } from '../src/core/services/logger.service.js';
+import { ContainerService } from '../src/core/services/container.service.js';
 import { PassThrough } from 'node:stream';
 
 function createBlockingMcpMock() {

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { GitGraphService } from '../src/services/gitGraph.service';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 
 class NoopLogger extends LoggerService {

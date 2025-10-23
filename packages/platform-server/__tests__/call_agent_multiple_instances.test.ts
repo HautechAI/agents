@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { AIMessage } from '@langchain/core/messages';
 import { CallAgentTool } from '../src/tools/call_agent.tool';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 
 class FakeAgent {
   async invoke(thread: string) {

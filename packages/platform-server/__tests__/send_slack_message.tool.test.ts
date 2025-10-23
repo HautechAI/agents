@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SendSlackMessageTool } from '../src/tools/send_slack_message.tool';
-import type { LoggerService } from '../src/services/logger.service';
-import type { VaultService } from '../src/services/vault.service';
+import type { LoggerService } from '../src/core/services/logger.service.js';
+import type { VaultService } from '../src/core/services/vault.service.js';
 
 // Mock @slack/web-api WebClient
 vi.mock('@slack/web-api', () => {

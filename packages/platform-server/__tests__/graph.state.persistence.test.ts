@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { GitGraphService } from '../src/services/gitGraph.service';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import os from 'os';
 import path from 'path';

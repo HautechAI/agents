@@ -1,6 +1,6 @@
 import { Reducer, ResponseMessage, SystemMessage, ToolCallMessage } from '@agyn/llm';
 import { LLMContext, LLMState } from '../types';
-import { LoggerService } from '../../services/logger.service';
+import { LoggerService } from '../../core/services/logger.service';
 
 /**
  * EnforceToolsLLMReducer injects a restriction message when the model

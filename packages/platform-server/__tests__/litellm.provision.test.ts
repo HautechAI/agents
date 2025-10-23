@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ConfigService } from '../src/services/config.service';
-import type { LoggerService } from '../src/services/logger.service';
+import { ConfigService } from '../src/core/services/config.service.js';
+import type { LoggerService } from '../src/core/services/logger.service.js';
 import { maybeProvisionLiteLLMKey, configureOpenAIEnvFromLiteLLM } from '../src/services/litellm.provision';
 
 const logger: Pick<LoggerService, 'info' | 'error' | 'debug'> = {

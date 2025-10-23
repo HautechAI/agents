@@ -1,7 +1,7 @@
-// src/logger.service.ts
-
+import { Injectable } from '@nestjs/common';
 import { logger as obsLogger } from '@agyn/tracing';
 
+@Injectable()
 export class LoggerService {
   private obs() {
     // Obtain contextual logger (bound to active span if any)

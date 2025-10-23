@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LocalMCPServer } from '../src/mcp/localMcpServer';
-import { LoggerService } from '../src/services/logger.service';
-import { ContainerService } from '../src/services/container.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
+import { ContainerService } from '../src/core/services/container.service.js';
 
 describe('LocalMCPServer preload + staleness + persist', () => {
   let server: LocalMCPServer;

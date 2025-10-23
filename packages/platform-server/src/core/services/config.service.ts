@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import { z } from 'zod';
 dotenv.config();
@@ -133,6 +134,7 @@ export const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema>;
 
+@Injectable()
 export class ConfigService implements Config {
   constructor(private params: Config) {}
 

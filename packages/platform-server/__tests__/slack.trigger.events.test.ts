@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { LoggerService } from '../src/services/logger.service';
+import type { LoggerService } from '../src/core/services/logger.service.js';
 import type { TriggerMessage } from '../src/triggers/base.trigger';
 // Mock socket-mode client; SlackTrigger registers a 'message' handler
 vi.mock('@slack/socket-mode', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import type { GraphDefinition } from '../src/graph/types';
 import type { Node } from '../src/nodes/types';
 

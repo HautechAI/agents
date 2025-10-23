@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 
 class MockLogger extends LoggerService { info=vi.fn(); debug=vi.fn(); error=vi.fn(); }
 

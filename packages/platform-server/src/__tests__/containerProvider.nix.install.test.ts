@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContainerProviderEntity, type ContainerProviderStaticConfig } from '../entities/containerProvider.entity';
-import { ContainerService } from '../services/container.service';
-import { LoggerService } from '../services/logger.service';
+import { ContainerService } from '../core/services/container.service';
+import { LoggerService } from '../core/services/logger.service';
 import { ContainerEntity } from '../entities/container.entity';
 
 class StubLogger extends LoggerService {

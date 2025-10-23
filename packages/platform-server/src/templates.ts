@@ -26,14 +26,14 @@ import {
   SendSlackMessageToolExposedStaticConfigSchema,
 } from './nodes/tools/send_slack_message/send_slack_message.node';
 import { ShellCommandNode, ShellToolStaticConfigSchema } from './nodes/tools/shell_command/shell_command.node';
-import { ConfigService } from './services/config.service';
-import { ContainerService } from './services/container.service';
+import { ConfigService } from './core/services/config.service';
+import { ContainerService } from './core/services/container.service';
 import { EnvService } from './services/env.service';
-import { LLMFactoryService } from './services/llmFactory.service';
-import { LoggerService } from './services/logger.service';
-import { MongoService } from './services/mongo.service';
-import { NcpsKeyService } from './services/ncpsKey.service';
-import { VaultConfigSchema, VaultService } from './services/vault.service';
+import { LLMFactoryService } from './core/services/llmFactory.service';
+import { LoggerService } from './core/services/logger.service';
+import { MongoService } from './core/services/mongo.service';
+import { NcpsKeyService } from './core/services/ncpsKey.service';
+import { VaultService } from './core/services/vault.service';
 // Unified Memory tool
 
 export interface TemplateRegistryDeps {
@@ -49,15 +49,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
   const { logger, containerService, configService, mongoService, ncpsKeyService, llmFactoryService } = deps;
 
   // Initialize Vault service from config (optional)
-  const vault = new VaultService(
-    VaultConfigSchema.parse({
-      enabled: configService.vaultEnabled,
-      addr: configService.vaultAddr,
-      token: configService.vaultToken,
-      defaultMounts: ['secret'],
-    }),
-    logger,
-  );
+  const vault = new VaultService(configService, logger);
   const envService = new EnvService(vault);
 
   return (

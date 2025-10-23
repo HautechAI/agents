@@ -6,7 +6,7 @@ import { BaseMessage, SystemMessage, AIMessage } from '@langchain/core/messages'
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { GraphDefinition } from '../src/graph/types';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { MemoryService } from '../src/services/memory.service';
 import { CallModelNode } from '../src/lgnodes/callModel.lgnode';
 import { BaseTool } from '../src/tools/base.tool';

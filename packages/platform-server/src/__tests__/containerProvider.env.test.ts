@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { parseVaultRef } from '../utils/refs';
 import { ContainerProviderEntity } from '../entities/containerProvider.entity';
-import { ConfigService, configSchema } from '../services/config.service';
-import { NcpsKeyService } from '../services/ncpsKey.service';
-import { ContainerService, type ContainerOpts } from '../services/container.service';
-import { LoggerService } from '../services/logger.service';
-import { VaultService } from '../services/vault.service';
+import { ConfigService, configSchema } from '../core/services/config.service';
+import { NcpsKeyService } from '../core/services/ncpsKey.service';
+import { ContainerService, type ContainerOpts } from '../core/services/container.service';
+import { LoggerService } from '../core/services/logger.service';
+import { VaultService } from '../core/services/vault.service';
 
 // Test ContainerEntity with exposed env/labels for assertions
 class TestContainerEntity extends (await import('../entities/container.entity')).ContainerEntity {
