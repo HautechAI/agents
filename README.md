@@ -23,7 +23,7 @@ Postgres checkpointer (optional)
 - Start Postgres only: `docker compose up -d postgres`
 - Configure server env:
   - `LANGGRAPH_CHECKPOINTER=postgres`
-  - `POSTGRES_URL=postgresql://postgres:postgres@localhost:5442/postgres?sslmode=disable`
+  - `POSTGRES_URL=postgresql://agents:agents@localhost:5443/agents?sslmode=disable`
 - Note: The UI checkpoint stream currently depends on Mongo change streams and won’t reflect Postgres writes in this initial version.
 
 Slack integration

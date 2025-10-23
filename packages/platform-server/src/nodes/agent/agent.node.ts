@@ -121,10 +121,10 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
     const llm = this.llmFactoryService.createLLM();
     const routers = new Map<string, ConditionalLLMRouter | StaticLLMRouter>();
     const tools = Array.from(this.tools);
+    // load -> summarize
+    routers.set('load', new StaticLLMRouter(new LoadLLMReducer(this.logger), 'summarize'));
 
-    // Load persisted state first; static route to call_model
-    routers.set('load', new StaticLLMRouter(new LoadLLMReducer(this.logger), 'call_model'));
-
+    // summarize -> call_model
     routers.set(
       'summarize',
       new StaticLLMRouter(
@@ -139,7 +139,7 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
       ),
     );
 
-    // 2) call_model -> (call_tools or save)
+    // call_model -> branch (call_tools | save)
     routers.set(
       'call_model',
       new ConditionalLLMRouter(
@@ -152,86 +152,26 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
           if (last instanceof ResponseMessage && last.output.find((o) => o instanceof ToolCallMessage)) {
             return 'call_tools';
           }
-          return this.config.restrictOutput ? 'enforceTools' : null;
+          return 'save';
         },
       ),
     );
 
-    // 3a) tools path: call_tools -> tools_save -> summarize
-    routers.set(
-      'call_tools',
-      new ConditionalLLMRouter(
-        new CallToolsLLMReducer(this.logger, tools),
-        (_, ctx) => (ctx.finishSignal.isActive ? null : 'tools_save'),
-      ),
-    );
+    // call_tools -> tools_save (static)
+    routers.set('call_tools', new StaticLLMRouter(new CallToolsLLMReducer(this.logger, tools), 'tools_save'));
+    // tools_save -> summarize (static)
     routers.set('tools_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), 'summarize'));
 
-    // 3b) no-tools path: save -> (enforceTools -> summarize OR end) OR end
-    routers.set('save', new StaticLLMRouter(new SaveLLMReducer(this.logger), 'post_save'));
-
+    // save -> enforceTools (if enabled) or end (static)
     routers.set(
-      'post_save',
-      new ConditionalLLMRouter(
-        new CallToolsLLMReducer(this.logger, []),
-        () => (this.config.restrictOutput ? 'enforceTools' : null),
-      ),
+      'save',
+      new StaticLLMRouter(new SaveLLMReducer(this.logger), this.config.restrictOutput ? 'enforceTools' : null),
     );
 
+    // enforceTools -> summarize (static) if enabled
     if (this.config.restrictOutput) {
-      routers.set(
-        'enforceTools',
-        new ConditionalLLMRouter(
-          new EnforceToolsLLMReducer(this.logger),
-          (state) => {
-            const injected = !!state.meta?.restrictionInjected;
-            return injected ? 'summarize' : null;
-          },
-        ),
-      );
+      routers.set('enforceTools', new StaticLLMRouter(new EnforceToolsLLMReducer(this.logger), 'summarize'));
     }
-    // Tools stage; static route to tools_save
-    routers.set('call_tools', new StaticLLMRouter(new CallToolsLLMReducer(this.logger, tools), 'tools_save'));
-    // Save after tools; static route back to call_model
-    routers.set('tools_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), 'call_model'));
-    // Summarize; static route to summarize_save
-    routers.set(
-      'summarize',
-      new StaticLLMRouter(
-        new SummarizationLLMReducer(llm, {
-          model: this.config.model ?? 'gpt-5',
-          keepTokens: this.config.summarizationKeepTokens ?? 1000,
-          maxTokens: this.config.summarizationMaxTokens ?? 10000,
-          systemPrompt:
-            'You update a running summary of a conversation. Keep key facts, goals, decisions, constraints, names, deadlines, and follow-ups. Be concise; use compact sentences; omit chit-chat. Structure summary with 3 high level sections: initial task, plan (if any), context (progress, findings, observations).',
-        }),
-        'summarize_save',
-      ),
-    );
-    // Save after summarize; static route end (null)
-    routers.set('summarize_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), null));
-
-    // Tools stage; static route to tools_save
-    routers.set('call_tools', new StaticLLMRouter(new CallToolsLLMReducer(this.logger, tools), 'tools_save'));
-    // Save after tools; static route back to call_model
-    routers.set('tools_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), 'call_model'));
-
-    // Summarize; static route to summarize_save
-    routers.set(
-      'summarize',
-      new StaticLLMRouter(
-        new SummarizationLLMReducer(llm, {
-          model: this.config.model ?? 'gpt-5',
-          keepTokens: this.config.summarizationKeepTokens ?? 1000,
-          maxTokens: this.config.summarizationMaxTokens ?? 10000,
-          systemPrompt:
-            'You update a running summary of a conversation. Keep key facts, goals, decisions, constraints, names, deadlines, and follow-ups. Be concise; use compact sentences; omit chit-chat. Structure summary with 3 high level sections: initial task, plan (if any), context (progress, findings, observations).',
-        }),
-        'summarize_save',
-      ),
-    );
-    // Save after summarize; static route end (null)
-    routers.set('summarize_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), null));
 
     const loop = new Loop<LLMState, LLMContext>(routers);
     return loop;
