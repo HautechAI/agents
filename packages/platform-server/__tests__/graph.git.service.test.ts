@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
-import { GitGraphService } from '../src/services/gitGraph.service';
+import { GitGraphService } from '../src/graph/gitGraph.repository';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 

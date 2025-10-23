@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { LiveGraphRuntime } from '../graph/liveGraph.manager';
 import { LoggerService } from '../core/services/logger.service';
-import { AgentRunService } from '../services/run.service';
+import { AgentRunService } from '../nodes/agentRun.repository';
 
 export function registerRunsRoutes(
   fastify: FastifyInstance,

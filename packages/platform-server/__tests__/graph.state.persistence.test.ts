@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GitGraphService } from '../src/services/gitGraph.service';
+import { GitGraphService } from '../src/graph/gitGraph.repository';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import os from 'os';

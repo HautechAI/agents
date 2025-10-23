@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConfigService } from '../src/core/services/config.service.js';
 import type { LoggerService } from '../src/core/services/logger.service.js';
-import { maybeProvisionLiteLLMKey, configureOpenAIEnvFromLiteLLM } from '../src/services/litellm.provision';
+import { maybeProvisionLiteLLMKey, configureOpenAIEnvFromLiteLLM } from '../src/llm/litellm.provisioner';
 
 const logger: Pick<LoggerService, 'info' | 'error' | 'debug'> = {
   info: vi.fn(),
@@ -62,4 +62,3 @@ describe('LiteLLM provisioning helper', () => {
     await expect(maybeProvisionLiteLLMKey(c, logger as any)).rejects.toThrow(/litellm_provision_failed_401/);
   });
 });
-

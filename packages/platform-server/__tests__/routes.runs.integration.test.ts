@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
-import { AgentRunService } from '../src/services/run.service';
+import { AgentRunService } from '../src/nodes/agentRun.repository';
 import type { FactoryFn } from '../src/graph/types';
 import { registerRunsRoutes } from '../src/routes/runs.route';
 import { MongoMemoryServer } from 'mongodb-memory-server';

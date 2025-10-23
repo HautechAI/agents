@@ -1,13 +1,21 @@
 import { ContainerOpts, ContainerService } from '../../core/services/container.service';
 import { ContainerHandle } from '../../core/handles/container.handle';
 import { z } from 'zod';
+<<<<<<< HEAD:packages/platform-server/src/nodes/workspace/workspace.node.ts
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../../constants';
 import { VaultService } from '../../core/services/vault.service';
 import { ConfigService } from '../../core/services/config.service';
 import { NcpsKeyService } from '../../core/services/ncpsKey.service';
-import { EnvService, type EnvItem } from '../../services/env.service';
+import { EnvService, type EnvItem } from '../../core/env.resolver';
 import { LoggerService } from '../../core/services/logger.service';
 import { Node } from '../base/Node';
+=======
+import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../../constants';
+import { VaultService } from '../../core/services/vault.service';
+import { ConfigService } from '../../core/services/config.service';
+import { NcpsKeyService } from '../../core/services/ncpsKey.service';
+import { EnvService, type EnvItem } from '../../core/env.resolver';
+import { LoggerService } from '../../core/services/logger.service';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.

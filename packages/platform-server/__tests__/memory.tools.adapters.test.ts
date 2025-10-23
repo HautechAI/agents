@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Db } from 'mongodb';
-import { MemoryService, type MemoryDoc } from '../src/services/memory.service';
+import { MemoryService, type MemoryDoc } from '../src/nodes/memory.repository';
 import { UnifiedMemoryTool } from '../src/tools/memory/memory.tool';
 import { LoggerService } from '../src/core/services/logger.service.js';
 

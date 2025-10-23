@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { WorkspaceNode } from '../../workspace/workspace.node';
-import { EnvService, type EnvItem } from '../../../services/env.service';
+import { EnvService, type EnvItem } from '../../../core/env.resolver';
 import { BaseToolNode } from '../baseToolNode';
 import { ShellCommandTool } from './shell_command.tool';
 

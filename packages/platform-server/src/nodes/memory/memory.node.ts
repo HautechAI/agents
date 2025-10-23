@@ -1,6 +1,6 @@
 import { Db } from 'mongodb';
 import { z } from 'zod';
-import { MemoryService, MemoryScope } from '../../services/memory.service';
+import { MemoryService, MemoryScope } from '../../nodes/memory.repository';
 import type { Node } from '../types';
 
 export interface MemoryNodeConfig {

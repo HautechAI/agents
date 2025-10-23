@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EnvService, EnvError, type EnvItem } from '../src/services/env.service';
-import { VaultService, type VaultConfig } from '../src/core/services/vault.service';
+<<<<<<< HEAD:packages/platform-server/__tests__/env.service.test.ts
+import { EnvService, EnvError, type EnvItem } from '../core/env.resolver';
+import { VaultService, type VaultConfig } from '../core/services/vault.service';
+=======
+import { EnvService, EnvError, type EnvItem } from '../core/env.resolver';
+import { VaultService, type VaultConfig } from '../core/services/vault.service';
 
 // Helper to build a real VaultService with desired enabled state
 function makeVault(cfg: Partial<VaultConfig>): VaultService {
