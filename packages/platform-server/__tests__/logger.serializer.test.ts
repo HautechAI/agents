@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 
 // Access private via any for lightweight test without changing API
 const logger = new LoggerService() as any;

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { GraphDefinition, GraphError } from '../src/graph/types';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { z } from 'zod';
 
 // Fake template with strict config schemas

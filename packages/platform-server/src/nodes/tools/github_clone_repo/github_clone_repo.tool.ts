@@ -2,9 +2,9 @@ import z from 'zod';
 
 import { FunctionTool } from '@agyn/llm';
 import { LLMContext } from '../../../llm/types';
-import { ConfigService } from '../../../services/config.service';
-import { LoggerService } from '../../../services/logger.service';
-import { VaultService, type VaultRef } from '../../../services/vault.service';
+import { ConfigService } from '../../../core/services/config.service.js';
+import { LoggerService } from '../../../core/services/logger.service.js';
+import { VaultService, type VaultRef } from '../../../core/services/vault.service.js';
 import { parseVaultRef } from '../../../utils/refs';
 import { GithubCloneRepoNode } from './github_clone_repo.node';
 

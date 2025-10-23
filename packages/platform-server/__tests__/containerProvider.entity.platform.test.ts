@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContainerProviderEntity, ContainerProviderStaticConfigSchema } from '../src/entities/containerProvider.entity';
-import { ContainerService } from '../src/services/container.service';
+import { ContainerService } from '../src/core/services/container.service.js';
 import { ContainerEntity } from '../src/entities/container.entity';
 import { PLATFORM_LABEL } from '../src/constants.js';
 

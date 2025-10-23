@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ShellTool } from '../../nodes/tools/shell_command/shell_command.node';
-import { LoggerService } from '../../services/logger.service';
+import { LoggerService } from '../../core/services/logger.service.js';
 import { ExecTimeoutError } from '../../utils/execTimeout';
 import { ContainerEntity } from '../../entities/container.entity';
 import { ContainerProviderEntity } from '../../entities/containerProvider.entity';
-import { ContainerService } from '../../services/container.service';
+import { ContainerService } from '../../core/services/container.service.js';
 
 // ANSI sequences should be stripped, but otherwise content preserved when <=10k
 const ANSI_GREEN = '\u001b[32m';

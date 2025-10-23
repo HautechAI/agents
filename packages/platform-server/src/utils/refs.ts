@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { VaultRef, VaultService } from '../services/vault.service';
+import type { VaultRef, VaultService } from '../core/services/vault.service.js';
 
 // Shared Vault reference parser: 'mount/path/key'
 export function parseVaultRef(ref: string): VaultRef {

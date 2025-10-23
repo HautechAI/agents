@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { buildTemplateRegistry } from '../src/templates';
-import type { LoggerService } from '../src/services/logger.service';
-import { ContainerService } from '../src/services/container.service';
-import { ConfigService, configSchema } from '../src/services/config.service';
+import type { LoggerService } from '../src/core/services/logger.service.js';
+import { ContainerService } from '../src/core/services/container.service.js';
+import { ConfigService, configSchema } from '../src/core/services/config.service.js';
 import { CheckpointerService } from '../src/services/checkpointer.service';
-import type { MongoService } from '../src/services/mongo.service';
+import type { MongoService } from '../src/core/services/mongo.service.js';
 import { ContainerEntity } from '../src/entities/container.entity';
 import type { GraphDefinition } from '../src/graph/types';
 import type { ContainerProviderStaticConfig } from '../src/entities/containerProvider.entity';

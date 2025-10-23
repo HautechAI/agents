@@ -1,12 +1,12 @@
-import { ContainerOpts, ContainerService } from '../services/container.service';
+import { ContainerOpts, ContainerService } from '../core/services/container.service.js';
 import { ContainerEntity } from './container.entity';
 import { z } from 'zod';
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../constants.js';
-import { VaultService } from '../services/vault.service';
-import { ConfigService } from '../services/config.service';
-import { NcpsKeyService } from '../services/ncpsKey.service';
+import { VaultService } from '../core/services/vault.service.js';
+import { ConfigService } from '../core/services/config.service.js';
+import { NcpsKeyService } from '../core/services/ncpsKey.service.js';
 import { EnvService, type EnvItem } from '../services/env.service';
-import { LoggerService } from '../services/logger.service';
+import { LoggerService } from '../core/services/logger.service.js';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.

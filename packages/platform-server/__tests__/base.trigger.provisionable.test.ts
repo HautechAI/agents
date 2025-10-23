@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BaseTrigger } from '../src/triggers/base.trigger';
 import type { ProvisionStatus } from '../src/graph/capabilities';
-import type { LoggerService } from '../src/services/logger.service';
+import type { LoggerService } from '../src/core/services/logger.service.js';
 
 const makeLogger = (): Pick<LoggerService, 'info' | 'debug' | 'error'> => ({
   info: vi.fn(),

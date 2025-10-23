@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 import { MemoryNode } from '../../src/nodes/memory.node';
-import { LoggerService } from '../../src/services/logger.service';
+import { LoggerService } from '../../src/core/services/logger.service.js';
 import { UnifiedMemoryTool } from '../../src/tools/memory/memory.tool';
 
 const RUN_MONGOMS = process.env.RUN_MONGOMS === '1';

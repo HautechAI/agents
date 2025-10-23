@@ -26,14 +26,14 @@ import {
   SendSlackMessageToolExposedStaticConfigSchema,
 } from './nodes/tools/send_slack_message/send_slack_message.node';
 import { ShellCommandNode, ShellToolStaticConfigSchema } from './nodes/tools/shell_command/shell_command.node';
-import { ConfigService } from './core/services/config.service.js';
-import { ContainerService } from './core/services/container.service.js';
+import { ConfigService } from './core/core/services/config.service.js';
+import { ContainerService } from './core/core/services/container.service.js';
 import { EnvService } from './services/env.service';
-import { LLMFactoryService } from './core/services/llmFactory.service.js';
-import { LoggerService } from './core/services/logger.service.js';
-import { MongoService } from './core/services/mongo.service.js';
-import { NcpsKeyService } from './core/services/ncpsKey.service.js';
-import { VaultService } from './core/services/vault.service.js';
+import { LLMFactoryService } from './core/core/services/llmFactory.service.js';
+import { LoggerService } from './core/core/services/logger.service.js';
+import { MongoService } from './core/core/services/mongo.service.js';
+import { NcpsKeyService } from './core/core/services/ncpsKey.service.js';
+import { VaultService } from './core/core/services/vault.service.js';
 // Unified Memory tool
 
 export interface TemplateRegistryDeps {

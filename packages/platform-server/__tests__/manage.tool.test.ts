@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AIMessage } from '@langchain/core/messages';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { BaseAgent } from '../src/nodes/agent/agent.node';
 import { ManageTool } from '../src/tools/manage.tool';
 import { DynamicStructuredTool } from '@langchain/core/tools';

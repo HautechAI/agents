@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { UnifiedMemoryTool } from '../../src/tools/memory/memory.tool';
-import { LoggerService } from '../../src/services/logger.service';
+import { LoggerService } from '../../src/core/services/logger.service.js';
 import { TemplateRegistry } from '../../src/graph/templateRegistry';
 import { toJSONSchema } from 'zod';
 import { UnifiedMemoryToolNodeStaticConfigSchema } from '../../src/tools/memory/memory.tool';

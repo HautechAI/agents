@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ConfigService, configSchema } from '../services/config.service';
-import { NcpsKeyService } from '../services/ncpsKey.service';
+import { ConfigService, configSchema } from '../core/services/config.service.js';
+import { NcpsKeyService } from '../core/services/ncpsKey.service.js';
 
 describe('NcpsKeyService', () => {
   const baseEnv = {

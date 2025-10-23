@@ -4,7 +4,7 @@ import { TemplateRegistry } from '../src/graph/templateRegistry';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { GraphDefinition } from '../src/graph/types';
 import { TemplatePortsRegistry } from '../src/graph/ports.types';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 
 // Simple fixtures
 class A {

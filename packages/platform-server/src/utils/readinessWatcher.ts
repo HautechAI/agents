@@ -1,5 +1,5 @@
 import type { LiveGraphRuntime } from '../graph/liveGraph.manager.js';
-import type { LoggerService } from '../services/logger.service.js';
+import type { LoggerService } from '../core/services/logger.service.js';
 
 // Polls a node until it's ready and triggers a status emit once.
 // Debounces per-node to avoid concurrent watchers.

@@ -1,6 +1,6 @@
 import { tool as lcToolFn } from '@langchain/core/tools';
 import z from 'zod';
-import { LoggerService } from '../../services/logger.service';
+import { LoggerService } from '../../core/services/logger.service.js';
 
 // Minimal BaseTool interface used by legacy lgnodes (CallModelNode, ToolsNode)
 export abstract class BaseTool {

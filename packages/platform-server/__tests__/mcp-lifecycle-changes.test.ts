@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { LocalMCPServer } from '../src/mcp/localMcpServer.js';
 import { McpServerConfig } from '../src/mcp/types.js';
-import { LoggerService } from '../src/services/logger.service.js';
-import { ContainerService } from '../src/services/container.service.js';
+import { LoggerService } from '../src/core/services/logger.service.js';
+import { ContainerService } from '../src/core/services/container.service.js';
 
 describe('MCP Lifecycle Changes', () => {
   const logger = new LoggerService();

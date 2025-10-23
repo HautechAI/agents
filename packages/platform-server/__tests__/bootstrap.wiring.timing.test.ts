@@ -3,7 +3,7 @@ import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { FactoryFn } from '../src/graph/types';
 import type { GraphDefinition } from '../src/graph/types';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 
 class WiringProbeAgent {
   public sawRunsService: boolean;

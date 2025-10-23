@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Docker from 'dockerode';
-import { ContainerService } from '../src/services/container.service';
-import { LoggerService } from '../src/services/logger.service';
+import { ContainerService } from '../src/core/services/container.service.js';
+import { LoggerService } from '../src/core/services/logger.service.js';
 import { PLATFORM_LABEL } from '../src/constants.js';
 
 vi.mock('dockerode', () => {
