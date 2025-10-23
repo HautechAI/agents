@@ -55,7 +55,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
   return (
     new TemplateRegistry()
       .register(
-        'containerProvider',
+        'workspace',
         (ctx) =>
           new ContainerProviderEntity(
             containerService,
@@ -94,7 +94,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: {
             $self: { kind: 'instance' },
-            containerProvider: { kind: 'method', create: 'setContainerProvider' },
+            workspace: { kind: 'method', create: 'setContainerProvider' },
           },
         },
         {
@@ -110,7 +110,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: {
             $self: { kind: 'instance' },
-            containerProvider: { kind: 'method', create: 'setContainerProvider' },
+            workspace: { kind: 'method', create: 'setContainerProvider' },
           },
         },
         {
@@ -250,7 +250,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: {
             $self: { kind: 'instance' },
-            containerProvider: { kind: 'method', create: 'setContainerProvider' },
+            workspace: { kind: 'method', create: 'setContainerProvider' },
           },
         },
         {

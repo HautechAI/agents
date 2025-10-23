@@ -62,7 +62,7 @@ describe('containerProvider nix config acceptance', () => {
         {
           id: 'ws',
           data: {
-            template: 'containerProvider',
+            template: 'workspace',
             config: {
               image: 'alpine:3',
               nix: { packages: [{ attr: 'htop', pname: 'htop', channel: 'nixpkgs' }] },
@@ -87,7 +87,7 @@ describe('containerProvider nix config acceptance', () => {
         {
           id: 'ws2',
           data: {
-            template: 'containerProvider',
+            template: 'workspace',
             config: {
               image: 'alpine:3',
               nix: {},
@@ -119,7 +119,7 @@ describe('containerProvider nix config acceptance', () => {
         {
           id: 'ws3',
           data: {
-            template: 'containerProvider',
+            template: 'workspace',
             config: {
               image: 'alpine:3',
               nix: { packages: [{ name: 'git', version: '2.44.0', attribute_path: 'pkgs/git', commit_hash: 'abc123' }] },
