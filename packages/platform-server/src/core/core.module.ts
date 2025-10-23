@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '../../src/services/config.service.js';
-import { LoggerService } from '../../src/services/logger.service.js';
-import { MongoService } from '../../src/services/mongo.service.js';
-import { ContainerService } from '../../src/services/container.service.js';
-import { VaultService, VaultConfigSchema } from '../../src/services/vault.service.js';
-import { NcpsKeyService } from '../../src/services/ncpsKey.service.js';
-import { LLMFactoryService } from '../../src/services/llmFactory.service.js';
+import { ConfigService } from '../services/config.service.js';
+import { LoggerService } from '../services/logger.service.js';
+import { MongoService } from '../services/mongo.service.js';
+import { ContainerService } from '../services/container.service.js';
+import { VaultService, VaultConfigSchema } from '../services/vault.service.js';
+import { NcpsKeyService } from '../services/ncpsKey.service.js';
+import { LLMFactoryService } from '../services/llmFactory.service.js';
 
 @Module({
   providers: [
