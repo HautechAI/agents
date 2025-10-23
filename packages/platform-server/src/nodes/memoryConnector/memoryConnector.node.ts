@@ -34,8 +34,8 @@ export class MemoryConnectorNode
   ) {
     if (typeof factoryOrNode === 'function') {
       this.serviceFactory = factoryOrNode as (opts: { threadId?: string }) => MemoryService;
-    } else if (factoryOrNode && typeof (factoryOrNode as any).getMemoryService === 'function') {
-      this.serviceFactory = (opts: { threadId?: string }) => (factoryOrNode as any).getMemoryService(opts);
+    } else if (factoryOrNode && typeof (factoryOrNode as { getMemoryService?: unknown }).getMemoryService === 'function') {
+      this.serviceFactory = (opts: { threadId?: string }) => factoryOrNode.getMemoryService(opts);
     } else {
       throw new Error('Invalid argument to setServiceFactory');
     }
@@ -56,8 +56,8 @@ export class MemoryConnectorNode
 
   configure(config: Partial<MemoryConnectorConfig> & Partial<MemoryConnectorStaticConfig>) {
     const next: Partial<MemoryConnectorConfig> = { ...this.config };
-    if (config.placement !== undefined) next.placement = config.placement as any;
-    if (config.content !== undefined) next.content = config.content as any;
+    if (config.placement !== undefined) next.placement = config.placement as MemoryConnectorConfig['placement'];
+    if (config.content !== undefined) next.content = config.content as MemoryConnectorConfig['content'];
     if (config.maxChars !== undefined) next.maxChars = config.maxChars;
     this.config = { ...this.config, ...next } as MemoryConnectorConfig;
   }

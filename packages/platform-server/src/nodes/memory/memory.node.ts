@@ -36,7 +36,7 @@ export class MemoryNode implements Node<Partial<MemoryNodeConfig> & Partial<Memo
   configure(config: Partial<MemoryNodeConfig> & Partial<MemoryNodeStaticConfig>) {
     const next: Partial<MemoryNodeConfig> = { ...this.config };
     if (config.scope !== undefined) {
-      const scopeVal = (config as any).scope;
+      const scopeVal = config.scope as MemoryScope | 'thread';
       next.scope = scopeVal === 'thread' ? 'perThread' : scopeVal;
     }
     if (config.collectionPrefix !== undefined) next.collectionPrefix = config.collectionPrefix;
