@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import type { Db, Collection, WithId, UpdateFilter, Filter } from 'mongodb';
 import { LoggerService } from '../../core/services/logger.service';
 
@@ -19,6 +20,7 @@ export interface ContainerDoc {
   metadata?: Record<string, any>;
 }
 
+@Injectable()
 export class ContainerRegistry {
   private col: Collection<ContainerDoc>;
 
