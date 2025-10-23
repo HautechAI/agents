@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AgentNode } from '../src/nodes/agent/agent.node';
-import { ConfigService } from '../src/core/services/config.service.js';
-import { LoggerService } from '../src/core/services/logger.service.js';
+import { ConfigService } from '../src/core/services/config.service';
+import { LoggerService } from '../src/core/services/logger.service';
 import { LLM } from '@agyn/llm';
 import { ResponseMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { FinishNode } from '../src/nodes/tools/finish/finish.node';

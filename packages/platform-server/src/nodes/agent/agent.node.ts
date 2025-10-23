@@ -16,6 +16,8 @@ import { LLMContext, LLMState } from '../../llm/types';
 import { LLMFactoryService } from '../../core/services/llmFactory.service';
 
 import { SummarizationLLMReducer } from '../../llm/reducers/summarization.llm.reducer';
+import { LoadLLMReducer } from '../../llm/reducers/load.llm.reducer';
+import { SaveLLMReducer } from '../../llm/reducers/save.llm.reducer';
 import { EnforceToolsLLMReducer } from '../../llm/reducers/enforceTools.llm.reducer';
 import { Signal } from '../../signal';
 import { TriggerListener, TriggerMessage } from '../slackTrigger';
@@ -119,7 +121,10 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
     const llm = this.llmFactoryService.createLLM();
     const routers = new Map<string, ConditionalLLMRouter | StaticLLMRouter>();
     const tools = Array.from(this.tools);
+    // load -> summarize
+    routers.set('load', new StaticLLMRouter(new LoadLLMReducer(this.logger), 'summarize'));
 
+    // summarize -> call_model
     routers.set(
       'summarize',
       new StaticLLMRouter(
@@ -134,8 +139,9 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
       ),
     );
 
+    // call_model -> branch (call_tools | save)
     routers.set(
-      'call_model', //
+      'call_model',
       new ConditionalLLMRouter(
         new CallModelLLMReducer(llm, tools, {
           model: this.config.model ?? 'gpt-5',
@@ -146,37 +152,42 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
           if (last instanceof ResponseMessage && last.output.find((o) => o instanceof ToolCallMessage)) {
             return 'call_tools';
           }
-          // Route to enforce only when restrictOutput is enabled; else end turn
-          return this.config.restrictOutput ? 'enforceTools' : null;
+          return 'save';
         },
       ),
     );
 
+    // call_tools -> tools_save (static)
+    routers.set('call_tools', new StaticLLMRouter(new CallToolsLLMReducer(this.logger, tools), 'tools_save'));
+    // tools_save -> summarize (static)
+    routers.set('tools_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), 'summarize'));
+
+    // save -> enforceTools (if enabled) or end (static)
+    routers.set(
+      'save',
+      new StaticLLMRouter(new SaveLLMReducer(this.logger), this.config.restrictOutput ? 'enforceTools' : null),
+    );
+
+    // enforceTools -> summarize OR end (conditional) if enabled
     if (this.config.restrictOutput) {
       routers.set(
         'enforceTools',
         new ConditionalLLMRouter(
           new EnforceToolsLLMReducer(this.logger),
           (state) => {
-            // If restrictionInjected=true, go back to call_model to try again
-            const injected = !!state.meta?.restrictionInjected;
-            return injected ? 'call_model' : null;
+            const injected = state.meta?.restrictionInjected === true;
+            // Safeguard: if injected once and next model still yields no tools, terminate to avoid infinite cycle
+            const injections = state.meta?.restrictionInjectionCount ?? 0;
+            if (injected && injections >= 1) return 'summarize';
+            return null;
           },
         ),
       );
     }
 
-    routers.set(
-      'call_tools', //
-      new ConditionalLLMRouter(new CallToolsLLMReducer(this.logger, tools), (_, ctx) =>
-        ctx.finishSignal.isActive ? null : 'summarize',
-      ),
-    );
-
     const loop = new Loop<LLMState, LLMContext>(routers);
     return loop;
   }
-
   async invoke(
     thread: string,
     messages: TriggerMessage[] | TriggerMessage,
@@ -193,7 +204,7 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
           { messages: history },
           { threadId: thread, finishSignal, callerAgent: this },
           {
-            route: 'summarize',
+            route: 'load',
           },
         );
 

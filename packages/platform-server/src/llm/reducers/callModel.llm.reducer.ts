@@ -36,9 +36,10 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       }
     });
 
-    return {
+    const updated: LLMState = {
       ...state,
       messages: [...state.messages, response],
     };
+    return updated;
   }
 }
