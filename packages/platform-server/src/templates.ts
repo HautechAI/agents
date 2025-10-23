@@ -1,8 +1,5 @@
 import { toJSONSchema } from 'zod';
-import {
-  ContainerProviderEntity,
-  ContainerProviderExposedStaticConfigSchema,
-} from './entities/containerProvider.entity';
+import { WorkspaceNode, ContainerProviderExposedStaticConfigSchema } from './nodes/workspace/workspace.node';
 import { TemplateRegistry } from './graph';
 import { AgentNode, AgentStaticConfigSchema } from './nodes/agent/agent.node';
 
@@ -55,9 +52,9 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
   return (
     new TemplateRegistry()
       .register(
-        'containerProvider',
+        'workspace',
         (ctx) =>
-          new ContainerProviderEntity(
+          new WorkspaceNode(
             containerService,
             vault,
             {
@@ -94,7 +91,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: {
             $self: { kind: 'instance' },
-            containerProvider: { kind: 'method', create: 'setContainerProvider' },
+            workspace: { kind: 'method', create: 'setContainerProvider' },
           },
         },
         {
@@ -110,7 +107,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: {
             $self: { kind: 'instance' },
-            containerProvider: { kind: 'method', create: 'setContainerProvider' },
+            workspace: { kind: 'method', create: 'setContainerProvider' },
           },
         },
         {
@@ -250,7 +247,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
         {
           targetPorts: {
             $self: { kind: 'instance' },
-            containerProvider: { kind: 'method', create: 'setContainerProvider' },
+            workspace: { kind: 'method', create: 'setContainerProvider' },
           },
         },
         {

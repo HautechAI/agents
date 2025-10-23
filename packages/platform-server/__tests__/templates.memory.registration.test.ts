@@ -31,7 +31,7 @@ describe('templates: memory registration and agent memory port', () => {
     expect(memSchema?.kind).toBe('service');
     const memConnMeta = schema.find((s) => s.name === 'memoryConnector');
     expect(memConnMeta?.kind).toBe('service');
-    const workspaceMeta = schema.find((s) => s.name === 'containerProvider');
+    const workspaceMeta = schema.find((s) => s.name === 'workspace');
     expect(workspaceMeta?.kind).toBe('service');
     expect(memSchema?.staticConfigSchema).toBeTruthy();
     const memConnSchema = schema.find((s) => s.name === 'memoryConnector');

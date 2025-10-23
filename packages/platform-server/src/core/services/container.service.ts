@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
-import { ContainerEntity } from '../entities/container.entity';
+import { ContainerHandle } from '../handles/container.handle';
 import { LoggerService } from './logger.service';
 import { PLATFORM_LABEL, type Platform } from '../constants';
 import {
@@ -124,9 +124,9 @@ export class ContainerService {
   }
 
   /**
-   * Start a new container and return a ContainerEntity representing it.
-   */
-  async start(opts?: ContainerOpts): Promise<ContainerEntity> {
+   * Start a new container and return a ContainerHandle representing it.
+  */
+  async start(opts?: ContainerOpts): Promise<ContainerHandle> {
     const defaults: Partial<ContainerOpts> = { image: DEFAULT_IMAGE, autoRemove: true, tty: false };
     const optsWithDefaults = { ...defaults, ...opts };
 
@@ -205,7 +205,7 @@ export class ContainerService {
         this.logger.error('Failed to register container start', e);
       }
     }
-    return new ContainerEntity(this, inspect.Id);
+    return new ContainerHandle(this, inspect.Id);
   }
 
   /** Execute a command inside a running container by its docker id. */
@@ -604,7 +604,7 @@ export class ContainerService {
   async findContainersByLabels(
     labels: Record<string, string>,
     options?: { all?: boolean },
-  ): Promise<ContainerEntity[]> {
+  ): Promise<ContainerHandle[]> {
     const labelFilters = Object.entries(labels).map(([k, v]) => `${k}=${v}`);
     this.logger.info(`Listing containers by labels all=${options?.all ?? false} filters=${labelFilters.join(',')}`);
     // dockerode returns Docker.ContainerInfo[]; type explicitly for comparator safety
@@ -622,7 +622,7 @@ export class ContainerService {
       const bid = String(b.Id ?? '');
       return aid.localeCompare(bid);
     });
-    return sorted.map((c) => new ContainerEntity(this, c.Id));
+    return sorted.map((c) => new ContainerHandle(this, c.Id));
   }
 
   /**
@@ -631,7 +631,7 @@ export class ContainerService {
   async findContainerByLabels(
     labels: Record<string, string>,
     options?: { all?: boolean },
-  ): Promise<ContainerEntity | undefined> {
+  ): Promise<ContainerHandle | undefined> {
     const containers = await this.findContainersByLabels(labels, options);
     return containers[0];
   }

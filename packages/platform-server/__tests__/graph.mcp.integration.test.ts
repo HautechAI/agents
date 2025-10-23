@@ -66,12 +66,12 @@ describe('Graph MCP integration', () => {
 
     const graph: GraphDefinition = {
       nodes: [
-        { id: 'container', data: { template: 'containerProvider' } },
+        { id: 'container', data: { template: 'workspace' } },
         { id: 'agent', data: { template: 'agent' } },
         { id: 'mcp', data: { template: 'mcpServer', config: { namespace: 'x', command: 'echo "mock" && sleep 1' } } },
       ],
       edges: [
-        { source: 'container', sourceHandle: '$self', target: 'mcp', targetHandle: 'containerProvider' },
+        { source: 'container', sourceHandle: '$self', target: 'mcp', targetHandle: 'workspace' },
         { source: 'agent', sourceHandle: 'mcp', target: 'mcp', targetHandle: '$self' },
       ],
     };
