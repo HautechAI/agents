@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import { LoggerService } from "./logger.service";
 import { ConfigService } from "./config.service";
 import type { Dispatcher } from "undici";
@@ -6,6 +7,7 @@ import { readFileSync } from "node:fs";
 
 const KEY_RE = /^[A-Za-z0-9._-]+:[A-Za-z0-9+/=]+$/;
 
+@Injectable()
 export class NcpsKeyService {
   private currentKey?: string;
   private previousKey?: string;

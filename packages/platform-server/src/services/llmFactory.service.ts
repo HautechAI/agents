@@ -1,7 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import { ConfigService } from './config.service';
 import { LLM } from '@agyn/llm';
 
+@Injectable()
 export class LLMFactoryService {
   constructor(private configService: ConfigService) {}
 

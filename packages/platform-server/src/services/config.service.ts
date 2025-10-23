@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import { z } from 'zod';
 dotenv.config();
@@ -133,8 +134,58 @@ export const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema>;
 
+@Injectable()
 export class ConfigService implements Config {
-  constructor(private params: Config) {}
+  constructor(private params?: Config) {
+    if (!this.params) {
+      const legacy = process.env.NCPS_URL;
+      const urlServer = process.env.NCPS_URL_SERVER || legacy;
+      const urlContainer = process.env.NCPS_URL_CONTAINER || legacy;
+      const parsed = configSchema.parse({
+        githubAppId: process.env.GITHUB_APP_ID,
+        githubAppPrivateKey: process.env.GITHUB_APP_PRIVATE_KEY,
+        githubInstallationId: process.env.GITHUB_INSTALLATION_ID,
+        openaiApiKey: process.env.OPENAI_API_KEY,
+        litellmBaseUrl:
+          process.env.LITELLM_BASE_URL ||
+          (process.env.OPENAI_BASE_URL ? process.env.OPENAI_BASE_URL.replace(/\/v1$/, '') : undefined),
+        litellmMasterKey: process.env.LITELLM_MASTER_KEY,
+        openaiBaseUrl: process.env.OPENAI_BASE_URL,
+        githubToken: process.env.GH_TOKEN,
+        mongodbUrl: process.env.MONGODB_URL,
+        graphStore: process.env.GRAPH_STORE,
+        graphRepoPath: process.env.GRAPH_REPO_PATH,
+        graphBranch: process.env.GRAPH_BRANCH,
+        graphAuthorName: process.env.GRAPH_AUTHOR_NAME,
+        graphAuthorEmail: process.env.GRAPH_AUTHOR_EMAIL,
+        vaultEnabled: process.env.VAULT_ENABLED,
+        vaultAddr: process.env.VAULT_ADDR,
+        vaultToken: process.env.VAULT_TOKEN,
+        dockerMirrorUrl: process.env.DOCKER_MIRROR_URL,
+        nixAllowedChannels: process.env.NIX_ALLOWED_CHANNELS,
+        nixHttpTimeoutMs: process.env.NIX_HTTP_TIMEOUT_MS,
+        nixCacheTtlMs: process.env.NIX_CACHE_TTL_MS,
+        nixCacheMax: process.env.NIX_CACHE_MAX,
+        mcpToolsStaleTimeoutMs: process.env.MCP_TOOLS_STALE_TIMEOUT_MS,
+        ncpsEnabled: process.env.NCPS_ENABLED,
+        ncpsUrl: legacy,
+        ncpsUrlServer: urlServer,
+        ncpsUrlContainer: urlContainer,
+        ncpsPubkeyPath: process.env.NCPS_PUBKEY_PATH,
+        ncpsFetchTimeoutMs: process.env.NCPS_FETCH_TIMEOUT_MS,
+        ncpsRefreshIntervalMs: process.env.NCPS_REFRESH_INTERVAL_MS,
+        ncpsStartupMaxRetries: process.env.NCPS_STARTUP_MAX_RETRIES,
+        ncpsRetryBackoffMs: process.env.NCPS_RETRY_BACKOFF_MS,
+        ncpsRetryBackoffFactor: process.env.NCPS_RETRY_BACKOFF_FACTOR,
+        ncpsAllowStartWithoutKey: process.env.NCPS_ALLOW_START_WITHOUT_KEY,
+        ncpsCaBundle: process.env.NCPS_CA_BUNDLE,
+        ncpsRotationGraceMinutes: process.env.NCPS_ROTATION_GRACE_MINUTES,
+        ncpsAuthHeader: process.env.NCPS_AUTH_HEADER,
+        ncpsAuthToken: process.env.NCPS_AUTH_TOKEN,
+      });
+      this.params = parsed;
+    }
+  }
 
   get githubAppId(): string {
     return this.params.githubAppId;

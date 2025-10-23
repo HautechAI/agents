@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
 import { ContainerEntity } from '../entities/container.entity';
@@ -53,6 +54,7 @@ export type ContainerOpts = {
  * await c.stop();
  * await c.remove();
  */
+@Injectable()
 export class ContainerService {
   private docker: Docker;
   private registry?: ContainerRegistryService;

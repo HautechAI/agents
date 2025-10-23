@@ -1,7 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import { MongoClient, Db } from 'mongodb';
 import { ConfigService } from './config.service';
 import { LoggerService } from './logger.service';
 
+@Injectable()
 export class MongoService {
   private client?: MongoClient;
   private db?: Db;

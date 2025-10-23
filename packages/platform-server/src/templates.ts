@@ -33,7 +33,7 @@ import { LLMFactoryService } from './services/llmFactory.service';
 import { LoggerService } from './services/logger.service';
 import { MongoService } from './services/mongo.service';
 import { NcpsKeyService } from './services/ncpsKey.service';
-import { VaultConfigSchema, VaultService } from './services/vault.service';
+import { VaultService } from './services/vault.service';
 // Unified Memory tool
 
 export interface TemplateRegistryDeps {
@@ -49,15 +49,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
   const { logger, containerService, configService, mongoService, ncpsKeyService, llmFactoryService } = deps;
 
   // Initialize Vault service from config (optional)
-  const vault = new VaultService(
-    VaultConfigSchema.parse({
-      enabled: configService.vaultEnabled,
-      addr: configService.vaultAddr,
-      token: configService.vaultToken,
-      defaultMounts: ['secret'],
-    }),
-    logger,
-  );
+  const vault = new VaultService(configService, logger);
   const envService = new EnvService(vault);
 
   return (
