@@ -1,8 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-<<<<<<< HEAD:packages/platform-server/__tests__/env.service.test.ts
-import { EnvService, EnvError, type EnvItem } from '../core/env.resolver';
-import { VaultService, type VaultConfig } from '../core/services/vault.service';
-=======
 import { EnvService, EnvError, type EnvItem } from '../core/env.resolver';
 import { VaultService, type VaultConfig } from '../core/services/vault.service';
 
