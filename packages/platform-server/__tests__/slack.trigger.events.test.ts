@@ -1,10 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-<<<<<<< HEAD
 import type { LoggerService } from '../src/core/services/logger.service.js';
 import type { TriggerMessage } from '../src/nodes/slackTrigger/base.trigger';
-=======
-// removed legacy import branch after rebase
->>>>>>> b1c3502 (refactor(platform-server): align Node lifecycle API (remove start/stop/delete, use created state, getters, setConfig, instance wait); update SlackTrigger and tests per Issue #398)
 // Mock socket-mode client; SlackTrigger registers a 'message' handler
 vi.mock('@slack/socket-mode', () => {
   let last: MockClient | null = null;
