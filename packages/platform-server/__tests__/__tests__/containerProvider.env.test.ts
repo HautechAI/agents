@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { parseVaultRef } from '../utils/refs';
-import { ContainerProviderEntity } from '../entities/containerProvider.entity';
-import { ConfigService, configSchema } from '../core/services/config.service';
-import { NcpsKeyService } from '../core/services/ncpsKey.service';
-import { ContainerService, type ContainerOpts } from '../core/services/container.service';
-import { LoggerService } from '../core/services/logger.service';
-import { VaultService } from '../core/services/vault.service';
+import { parseVaultRef } from '../src/utils/refs';
+import { ContainerProviderEntity } from '../src/entities/containerProvider.entity';
+import { ConfigService, configSchema } from '../src/core/services/config.service';
+import { NcpsKeyService } from '../src/core/services/ncpsKey.service';
+import { ContainerService, type ContainerOpts } from '../src/core/services/container.service';
+import { LoggerService } from '../src/core/services/logger.service';
+import { VaultService } from '../src/core/services/vault.service';
 
 // Test ContainerEntity with exposed env/labels for assertions
-class TestContainerEntity extends (await import('../entities/container.entity')).ContainerEntity {
+class TestContainerEntity extends (await import('../src/entities/container.entity')).ContainerEntity {
   constructor(service: ContainerService, id: string, public env: Record<string, string>, public labels: Record<string, string>) {
     super(service, id);
   }
