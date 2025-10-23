@@ -15,21 +15,21 @@ import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';
 import { buildTemplateRegistry } from './templates';
 import { LiveGraphRuntime } from './graph/liveGraph.manager';
-import { GraphService } from './services/graph.service';
-import { GitGraphService } from './services/gitGraph.service';
+import { GraphService } from './graph/graphMongo.repository';
+import { GitGraphService } from './graph/gitGraph.repository';
 import { GraphDefinition, GraphError, PersistedGraphUpsertRequest } from './graph/types';
 import { GraphErrorCode } from './graph/errors';
 import { ContainerService } from './core/services/container.service';
 import { ReadinessWatcher } from './utils/readinessWatcher';
 import { VaultService } from './core/services/vault.service';
-import { ContainerRegistryService } from './services/containerRegistry.service';
-import { ContainerCleanupService } from './services/containerCleanup.service';
+import { ContainerRegistryService } from './infra/container/container.registry';
+import { ContainerCleanupService } from './infra/container/containerCleanup.job';
 import { registerRemindersRoute } from './routes/reminders.route';
-import { AgentRunService } from './services/run.service';
+import { AgentRunService } from './nodes/agentRun.repository';
 import { registerRunsRoutes } from './routes/runs.route';
 import { registerNixRoutes } from './routes/nix.route';
 import { NcpsKeyService } from './core/services/ncpsKey.service';
-import { maybeProvisionLiteLLMKey } from './services/litellm.provision';
+import { maybeProvisionLiteLLMKey } from './llm/litellm.provisioner';
 import { LLMFactoryService } from './core/services/llmFactory.service';
 import { initDI, resolve, closeDI } from './bootstrap/di';
 
@@ -264,7 +264,7 @@ async function bootstrap() {
       const before = await graphService.get(parsed.name);
       // Guard against unsafe MCP command mutation
       try {
-        const { enforceMcpCommandMutationGuard } = await import('./services/graph.guard');
+        const { enforceMcpCommandMutationGuard } = await import('./graph/graph.guard');
         enforceMcpCommandMutationGuard(before, parsed, runtime);
       } catch (e: unknown) {
         if (e instanceof GraphError && e?.code === GraphErrorCode.McpCommandMutationForbidden) {

@@ -7,7 +7,7 @@ import { ConfigService } from '../src/core/services/config.service.js';
 // CheckpointerService removed in refactor; tests relying on it should drop usage.
 // Avoid real Mongo connections; stub minimal service
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
-import { GitGraphService } from '../src/services/gitGraph.service';
+import { GitGraphService } from '../src/graph/gitGraph.repository';
 import os from 'os';
 import path from 'path';
 import { promises as fs } from 'fs';
@@ -42,7 +42,7 @@ describe('API guard: MCP command mutation forbidden', () => {
     fastify.post('/api/graph', async (request, reply) => {
       const parsed = request.body as any;
       const before = await graphService.get('main');
-      const { enforceMcpCommandMutationGuard } = await import('../src/services/graph.guard');
+      const { enforceMcpCommandMutationGuard } = await import('../src/graph/graph.guard');
       try {
         enforceMcpCommandMutationGuard(before, parsed, runtime);
       } catch (e: any) {

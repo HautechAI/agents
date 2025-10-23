@@ -7,7 +7,7 @@ import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { GraphDefinition } from '../src/graph/types';
 import { LoggerService } from '../src/core/services/logger.service.js';
-import { MemoryService } from '../src/services/memory.service';
+import { MemoryService } from '../src/nodes/memory.repository';
 import { CallModelNode } from '../src/lgnodes/callModel.lgnode';
 import { BaseTool } from '../src/tools/base.tool';
 

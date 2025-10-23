@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
-import { ContainerRegistryService } from '../src/services/containerRegistry.service';
-import { LoggerService } from '../src/core/services/logger.service';
+import { ContainerRegistryService } from '../infra/container/container.registry';
+import { LoggerService } from '../core/services/logger.service';
 
 describe('ContainerRegistryService', () => {
   let mongod: MongoMemoryServer;

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ContainerProviderEntity } from '../src/entities/containerProvider.entity';
-import { ContainerService } from '../src/core/services/container.service';
-import { ContainerEntity } from '../src/entities/container.entity';
-import { LoggerService } from '../src/core/services/logger.service';
-import type { ContainerRegistryService } from '../src/services/containerRegistry.service';
+import { ContainerProviderEntity } from '../entities/containerProvider.entity';
+import { ContainerService } from '../core/services/container.service';
+import { ContainerEntity } from '../entities/container.entity';
+import { LoggerService } from '../core/services/logger.service';
+import type { ContainerRegistryService } from '../infra/container/container.registry';
 
 class FakeRegistry implements Pick<ContainerRegistryService, 'updateLastUsed' | 'registerStart'> {
   lastUsed: string[] = [];

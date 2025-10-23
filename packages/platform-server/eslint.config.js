@@ -30,8 +30,8 @@ export default [
   },
   {
     files: [
-      'src/nodes/workspace/workspace.node.ts',
-      'src/services/env.service.ts',
+      'src/entities/containerProvider.entity.ts',
+      'src/core/env.resolver.ts',
       'src/tools/shell_command.ts',
       'src/mcp/localMcpServer.ts',
     ],

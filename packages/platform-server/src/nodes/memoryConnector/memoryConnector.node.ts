@@ -1,6 +1,6 @@
 import { SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
-import { MemoryService } from '../../services/memory.service';
+import { MemoryService } from '../../nodes/memory.repository';
 import Node from '../base/Node';
 
 export interface MemoryConnectorConfig {
