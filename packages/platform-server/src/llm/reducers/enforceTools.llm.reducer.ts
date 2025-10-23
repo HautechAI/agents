@@ -1,10 +1,6 @@
 import { Reducer, ResponseMessage, SystemMessage, ToolCallMessage } from '@agyn/llm';
 import { LLMContext, LLMState } from '../types';
-<<<<<<< HEAD
 import { LoggerService } from '../../core/services/logger.service';
-=======
-import { LoggerService } from '../../services/logger.service';
->>>>>>> 9e97088 (resolve rebase: agent loop rewired to static save routes per owner directives)
 
 /**
  * EnforceToolsLLMReducer injects a restriction message when the model

@@ -168,9 +168,21 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
       new StaticLLMRouter(new SaveLLMReducer(this.logger), this.config.restrictOutput ? 'enforceTools' : null),
     );
 
-    // enforceTools -> summarize (static) if enabled
+    // enforceTools -> summarize OR end (conditional) if enabled
     if (this.config.restrictOutput) {
-      routers.set('enforceTools', new StaticLLMRouter(new EnforceToolsLLMReducer(this.logger), 'summarize'));
+      routers.set(
+        'enforceTools',
+        new ConditionalLLMRouter(
+          new EnforceToolsLLMReducer(this.logger),
+          (state) => {
+            const injected = state.meta?.restrictionInjected === true;
+            // Safeguard: if injected once and next model still yields no tools, terminate to avoid infinite cycle
+            const injections = state.meta?.restrictionInjectionCount ?? 0;
+            if (injected && injections >= 1) return 'summarize';
+            return null;
+          },
+        ),
+      );
     }
 
     const loop = new Loop<LLMState, LLMContext>(routers);

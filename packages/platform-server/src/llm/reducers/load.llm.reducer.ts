@@ -3,7 +3,7 @@ import type { LLMContext, LLMState } from '../types';
 import { PrismaService } from '../../services/prisma.service';
 import { ConversationStateRepository } from '../../services/conversationState.repository';
 import { LoggerService } from '../../services/logger.service';
-import { serializeState, deserializeState } from '../utils/serialization';
+import { deserializeState } from '../utils/serialization';
 
 export class LoadLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(private logger: LoggerService) {
@@ -19,7 +19,7 @@ export class LoadLLMReducer extends Reducer<LLMState, LLMContext> {
       const existing = await repo.get(ctx.threadId, nodeId);
       if (!existing?.state) return state;
       // Merge: existing.messages + incoming messages; keep latest summary
-      const persisted = deserializeState(existing.state as any);
+      const persisted = deserializeState(existing.state);
       const merged: LLMState = {
         summary: persisted.summary,
         messages: [...persisted.messages, ...state.messages],
