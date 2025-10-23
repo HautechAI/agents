@@ -16,9 +16,9 @@ import { LLMContext, LLMState } from '../../llm/types';
 import { LLMFactoryService } from '../../core/services/llmFactory.service';
 
 import { SummarizationLLMReducer } from '../../llm/reducers/summarization.llm.reducer';
-import { EnforceToolsLLMReducer } from '../../llm/reducers/enforceTools.llm.reducer';
 import { LoadLLMReducer } from '../../llm/reducers/load.llm.reducer';
 import { SaveLLMReducer } from '../../llm/reducers/save.llm.reducer';
+import { EnforceToolsLLMReducer } from '../../llm/reducers/enforceTools.llm.reducer';
 import { Signal } from '../../signal';
 import { TriggerListener, TriggerMessage } from '../slackTrigger';
 import { BaseToolNode } from '../tools/baseToolNode';
@@ -122,7 +122,7 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
     const routers = new Map<string, ConditionalLLMRouter | StaticLLMRouter>();
     const tools = Array.from(this.tools);
 
-    // Load persisted state first, then summarize per approved sequence
+    // 1) load -> summarize
     routers.set('load', new StaticLLMRouter(new LoadLLMReducer(this.logger), 'summarize'));
 
     routers.set(
@@ -135,11 +135,11 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
           systemPrompt:
             'You update a running summary of a conversation. Keep key facts, goals, decisions, constraints, names, deadlines, and follow-ups. Be concise; use compact sentences; omit chit-chat. Structure summary with 3 high level sections: initial task, plan (if any), context (progress, findings, observations).',
         }),
-        // After summarize, proceed to model call
         'call_model',
       ),
     );
 
+    // 2) call_model -> (call_tools or save)
     routers.set(
       'call_model',
       new ConditionalLLMRouter(
@@ -152,9 +152,29 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
           if (last instanceof ResponseMessage && last.output.find((o) => o instanceof ToolCallMessage)) {
             return 'call_tools';
           }
-          // No tools path: persist state first
           return 'save';
         },
+      ),
+    );
+
+    // 3a) tools path: call_tools -> tools_save -> summarize
+    routers.set(
+      'call_tools',
+      new ConditionalLLMRouter(
+        new CallToolsLLMReducer(this.logger, tools),
+        (_, ctx) => (ctx.finishSignal.isActive ? null : 'tools_save'),
+      ),
+    );
+    routers.set('tools_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), 'summarize'));
+
+    // 3b) no-tools path: save -> (enforceTools -> summarize OR end) OR end
+    routers.set('save', new StaticLLMRouter(new SaveLLMReducer(this.logger), 'post_save'));
+
+    routers.set(
+      'post_save',
+      new ConditionalLLMRouter(
+        new CallToolsLLMReducer(this.logger, []),
+        () => (this.config.restrictOutput ? 'enforceTools' : null),
       ),
     );
 
@@ -164,20 +184,16 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
         new ConditionalLLMRouter(
           new EnforceToolsLLMReducer(this.logger),
           (state) => {
+            const injected = !!state.meta?.restrictionInjected;
+            return injected ? 'summarize' : null;
           },
         ),
       );
     }
-      ),
-    
-    );
-    // Save after summarize; static route end (null)
-    routers.set('summarize_save', new StaticLLMRouter(new SaveLLMReducer(this.logger), null));
 
     const loop = new Loop<LLMState, LLMContext>(routers);
     return loop;
   }
-
   async invoke(
     thread: string,
     messages: TriggerMessage[] | TriggerMessage,
