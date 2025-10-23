@@ -238,8 +238,8 @@ export class AgentNode extends Node implements TriggerListener {
     };
 
     // Subscribe to server lifecycle and unified MCP tools update event
-    server.on('ready', sync);
-    server.on('mcp.tools_updated', sync);
+    (server as any).on?.('status_changed', (ev: any) => { if (ev?.next === 'ready') sync(); });
+    (server as any).on?.('mcp.tools_updated', sync);
 
     // Trigger initial sync so agent catches up if server is already ready/cached
     sync();
