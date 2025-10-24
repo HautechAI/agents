@@ -6,15 +6,13 @@
   "type": "module",
   "scripts": {
     "dev": "node --loader ts-node/esm src/index.ts",
-    "dev:deps": "docker compose up -d mongo1 mongo-setup agents-db vault vault-auto-init registry-mirror ncps-init ncps",
-    "dev:start": "node --loader ts-node/esm src/index.ts",
-    "dev:all": "pnpm dev:deps && pnpm dev:start",
     "test": "cross-env MONGOMS_VERSION=7.0.14 vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "dev:start": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
     "@agyn/llm": "workspace:*",
@@ -40,7 +38,7 @@
     "@types/json-schema": "^7.0.15",
     "dockerode": "^4.0.8",
     "dotenv": "^17.2.2",
-  "fastify": "^4.28.0",
+    "fastify": "^4.28.0",
     "lodash-es": "^4.17.21",
     "md5": "^2.3.0",
     "mongodb": "^6.20.0",

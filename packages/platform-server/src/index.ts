@@ -33,6 +33,14 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.init();
 
+  // Attempt Mongo connection lazily; log warning if not available
+  try {
+    await app.get(MongoService).connect();
+  } catch (e) {
+    const logger = app.get(LoggerService);
+    logger.debug(`Mongo connection not available; continuing boot. Reason: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
   const logger = app.get(LoggerService);
   // Attempt lazy Mongo connect after app init; do not crash if unavailable
   try {
