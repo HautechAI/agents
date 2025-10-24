@@ -128,23 +128,7 @@ async function bootstrap() {
         existing.edges.length,
       );
       await runtime.apply(toRuntimeGraph(existing));
-      // Attach NodeStateService to any existing MCP servers (post-apply)
-<<<<<<< HEAD
       // Wiring is deterministic via templates; no post-hoc assignment
-=======
-      try {
-        if (nodeStateService) {
-          const nodes = runtime.getNodes();
-          for (const ln of nodes) {
-            const inst = runtime.getNodeInstance<any>(ln.id);
-            const isMcp = !!inst && typeof inst?.discoverTools === 'function' && typeof inst?.callTool === 'function';
-            if (isMcp && (inst as any).nodeStateService === undefined) {
-              (inst as any).nodeStateService = nodeStateService;
-            }
-          }
-        }
-      } catch {}
->>>>>>> 0ce07ed (fix(platform-server): resolve rebase conflict in index.ts; preserve NodeStateService wiring and GraphService DI)
     } else {
       logger.info('No persisted graph found; starting with empty runtime graph.');
     }

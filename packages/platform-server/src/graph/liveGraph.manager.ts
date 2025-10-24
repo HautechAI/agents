@@ -327,7 +327,7 @@ export class LiveGraphRuntime {
       const created = await factory({
         get: (id: string) => this.state.nodes.get(id)?.instance,
         nodeId: node.id,
-      } as any);
+      });
       // NOTE: setGraphNodeId reflection removed; prefer factories to leverage ctx.nodeId directly.
       const live: LiveNode = { id: node.id, template: node.data.template, instance: created, config: node.data.config };
       this.state.nodes.set(node.id, live);

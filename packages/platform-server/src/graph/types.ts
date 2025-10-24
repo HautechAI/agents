@@ -23,22 +23,12 @@ export interface EdgeDef {
   targetHandle: string; // handle name on target instance
 }
 
-<<<<<<< HEAD
 /**
  * Deprecated: legacy dependency bag previously passed to factories via runtime.
  * Prefer explicit wiring through template factories and constructor params.
  * Kept for backward-compat of type signatures; will be removed in a future release.
  */
 export type DependencyBag = Record<string, unknown>;
-=======
-export interface DependencyBag {
-  // Deprecated: legacy dependency bag previously passed to factories via runtime.
-  // Prefer explicit wiring through template factories and constructor params.
-  // Kept for backward-compat of type signatures; will be removed in a future release.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [k: string]: any;
-}
->>>>>>> 0ce07ed (fix(platform-server): resolve rebase conflict in index.ts; preserve NodeStateService wiring and GraphService DI)
 
 export interface FactoryContext {
   // Deprecated: deps were previously injected globally; avoid relying on this.
