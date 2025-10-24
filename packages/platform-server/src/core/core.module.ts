@@ -5,6 +5,7 @@ import { MongoService } from './services/mongo.service';
 import { LLMFactoryService } from '../llm/llmFactory.service';
 import { EnvService } from './env.resolver';
 import { PrismaService } from './services/prisma.service';
+import { RuntimeService } from '../graph/runtime.service';
 
 @Module({
   providers: [
@@ -14,6 +15,7 @@ import { PrismaService } from './services/prisma.service';
     LLMFactoryService,
     EnvService,
     PrismaService,
+    RuntimeService,
   ],
   exports: [
     ConfigService, //
@@ -22,6 +24,7 @@ import { PrismaService } from './services/prisma.service';
     LLMFactoryService,
     EnvService,
     PrismaService,
+    RuntimeService,
   ],
 })
 export class CoreModule {}
