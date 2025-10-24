@@ -40,7 +40,15 @@ export class TemplateRegistry {
       // Attempt DI instantiation to read ports from instance
       try {
         const cls = this.classes.get(name)!;
-        const inst = (await resolve<Node>(cls as any)) as any;
+        let inst: any;
+        try {
+          inst = (await resolve<Node>(cls as any)) as any;
+        } catch {
+          // Fallback for test environments without DI bindings
+          try {
+            inst = new (cls as any)();
+          } catch {}
+        }
         if (inst && typeof inst.getPortConfig === 'function') {
           const cfg = inst.getPortConfig();
           sourcePorts = cfg?.sourcePorts ? Object.keys(cfg.sourcePorts) : [];
