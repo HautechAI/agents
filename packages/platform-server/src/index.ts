@@ -23,7 +23,6 @@ import { GraphRepository } from './graph/graph.repository';
 import { GraphDefinition, GraphError, PersistedGraphUpsertRequest } from './graph/types';
 import { GraphErrorCode } from './graph/errors';
 import { ContainerService } from './infra/container/container.service';
-import { ReadinessWatcher } from './utils/readinessWatcher';
 import { VaultService } from './infra/vault/vault.service';
 import { ContainerRegistry as ContainerRegistryService } from './infra/container/container.registry';
 import { ContainerCleanupService } from './infra/container/containerCleanup.job';
@@ -31,9 +30,10 @@ import { ContainerCleanupService } from './infra/container/containerCleanup.job'
 import { AgentRunService } from './nodes/agentRun.repository';
 // Nix routes are served via Nest controller; keep import if legacy route file exists
 // import { registerNixRoutes } from './routes/nix.route';
-import { NcpsKeyService } from './core/services/ncpsKey.service';
+// NcpsKeyService is provided by InfraModule
 import { initDI, closeDI } from './bootstrap/di';
 import { AppModule } from './bootstrap/app.module';
+import { NcpsKeyService } from './infra/ncps/ncpsKey.service';
 
 await initDI();
 
@@ -70,7 +70,6 @@ async function bootstrap() {
   // Initialize container registry and cleanup services
   const registry = app.get(ContainerRegistryService, { strict: false });
   await registry.ensureIndexes();
-  containerService.setRegistry(registry);
   await registry.backfillFromDocker(containerService);
   const cleanup = new ContainerCleanupService(registry, containerService, logger);
   cleanup.start();
@@ -138,7 +137,7 @@ async function bootstrap() {
 
   // Load and apply existing persisted graph BEFORE starting server
   try {
-  const existing = await graphService.get('main');
+    const existing = await graphService.get('main');
     if (existing) {
       logger.info(
         'Applying persisted graph to live runtime (version=%s, nodes=%d, edges=%d)',
@@ -171,51 +170,15 @@ async function bootstrap() {
     setAppRef(app);
   } catch {}
 
-  // Background watcher reference (initialized after socket is attached)
-  let readinessWatcher: ReadinessWatcher | null = null;
-
   // Existing endpoints (namespaced under /api)
   // Moved graph-related routes to Nest controllers
 
-  // Vault autocomplete endpoints (only when enabled)
-  if (vaultService.isEnabled()) {
-    fastify.get('/api/vault/mounts', async () => ({ items: await vaultService.listKvV2Mounts() }));
-    fastify.get('/api/vault/kv/:mount/paths', async (req) => {
-      const { mount } = req.params as { mount: string };
-      const { prefix } = (req.query || {}) as { prefix?: string };
-      const items = await vaultService.listPaths(mount, prefix || '');
-      return { items };
-    });
-    fastify.get('/api/vault/kv/:mount/keys', async (req) => {
-      const { mount } = req.params as { mount: string };
-      const { path } = (req.query || {}) as { path?: string };
-      const items = await vaultService.listKeys(mount, path || '');
-      return { items };
-    });
-    fastify.post('/api/vault/kv/:mount/write', async (req, reply) => {
-      const { mount } = req.params as { mount: string };
-      const body = req.body as unknown;
-      if (!isValidWriteBody(body)) {
-        reply.code(400);
-        return { error: 'invalid_body' };
-      }
-      try {
-        const { version } = await vaultService.setSecret({ mount, path: body.path, key: body.key }, body.value);
-        reply.code(201);
-        return { mount, path: body.path, key: body.key, version };
-      } catch (e: unknown) {
-        const sc = statusCodeFrom(e);
-        reply.code(typeof sc === 'number' && Number.isFinite(sc) ? sc : 500);
-        return { error: 'vault_write_failed' };
-      }
-    });
-  }
+  // Vault endpoints migrated to Nest VaultController
 
   // Graph-related routes migrated to Nest controllers
 
   // Register routes that need runtime on fastify instance (non-Nest legacy)
   const fastify = adapter.getInstance();
-  registerRemindersRoute(fastify, runtime, logger);
   // Runs routes are handled by Nest RunsController
   // Nix proxy routes are now handled by Nest NixController; legacy Fastify wiring removed
 
@@ -231,7 +194,6 @@ async function bootstrap() {
 
   const shutdown = async () => {
     logger.info('Shutting down...');
-    readinessWatcher?.stopAll();
     await mongo.close();
     try {
       await fastify.close();
@@ -250,26 +212,4 @@ bootstrap().catch((e) => {
   process.exit(1);
 });
 
-function isValidWriteBody(body: unknown): body is { path: string; key: string; value: string } {
-  if (!body || typeof body !== 'object') return false;
-  const o = body as Record<string, unknown>;
-  return (
-    typeof o.path === 'string' &&
-    o.path.length > 0 &&
-    typeof o.key === 'string' &&
-    o.key.length > 0 &&
-    typeof o.value === 'string'
-  );
-}
-
-function statusCodeFrom(e: unknown): number | undefined {
-  if (e && typeof e === 'object') {
-    const v = (e as { statusCode?: unknown }).statusCode;
-    if (typeof v === 'number') return v;
-    if (typeof v === 'string') {
-      const n = Number(v);
-      if (Number.isFinite(n)) return n;
-    }
-  }
-  return undefined;
-}
+// Legacy Fastify helpers removed; Vault routes handled by Nest

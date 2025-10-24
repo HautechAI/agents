@@ -18,9 +18,6 @@ import { LoggerService } from '../core/services/logger.service';
 import { ContainerService } from '../infra/container/container.service';
 import { ConfigService } from '../core/services/config.service';
 import { MongoService } from '../core/services/mongo.service';
-import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
-import { LLMProvisioner } from '../llm/llm.provisioner';
-import { LLMModule } from '../llm/llm.module';
 import { LLMProvisioner } from '../llm/llm.provisioner';
 import { NcpsKeyService } from '../core/services/ncpsKey.service';
 import { Provider } from '@nestjs/common';
@@ -37,8 +34,6 @@ import { Provider } from '@nestjs/common';
         configService: ConfigService,
         mongoService: MongoService,
         provisioner: LLMProvisioner,
-        llmProvisioner: LLMProvisioner,
-        provisioner: LLMProvisioner,
         ncpsKeyService: NcpsKeyService,
       ) =>
         buildTemplateRegistry({
@@ -47,7 +42,6 @@ import { Provider } from '@nestjs/common';
           configService,
           mongoService,
           provisioner,
-          llmProvisioner,
           provisioner,
           ncpsKeyService,
         }),

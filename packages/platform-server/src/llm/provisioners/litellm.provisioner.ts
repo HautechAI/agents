@@ -1,48 +1,20 @@
 import OpenAI from 'openai';
 import { LLM } from '@agyn/llm';
 import { LLMProvisioner } from '../llm.provisioner';
-import { LLMProvisioner } from './llm.provisioner';
 import { ConfigService } from '../../core/services/config.service';
 import { LoggerService } from '../../core/services/logger.service';
 
 type ProvisionResult = { apiKey?: string; baseUrl?: string };
 
-export class LiteLLMProvisioner implements LLMProvisioner {
-  private client: OpenAI | null = null;
+export class LiteLLMProvisioner extends LLMProvisioner {
   private llm: LLM | null = null;
-  constructor(private cfg: ConfigService, private logger: LoggerService) {}
-
-  async getLLM(): Promise<LLM> {
-    if (this.llm) return this.llm;
-    if (this.client) {
-      this.llm = new LLM(this.client as any);
-      return this.llm;
-    }
-    const apiKey = this.cfg.openaiApiKey ?? this.cfg.litellmMasterKey;
-    let baseURL = this.cfg.openaiBaseUrl;
-    if (!this.cfg.openaiApiKey) {
-      const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
-      if (provKey) {
-        this.logger.info('LiteLLM provisioned virtual key for OpenAI client');
-        this.client = new OpenAI({ apiKey: provKey, baseURL: baseUrl });
-        this.llm = new LLM(this.client as any);
-        return this.llm;
-      }
-      if (!baseURL) baseURL = this.cfg.litellmBaseUrl ? f"{self.cfg.litellmBaseUrl.rstrip('/')}/v1" : undefined
-    }
-    this.client = new OpenAI({ apiKey, baseURL });
-    this.llm = new LLM(this.client as any);
-    return this.llm;
-  private llm: LLM | null = null;
-  constructor(private cfg: ConfigService, private logger: LoggerService) {
-    super();
-  }
+  constructor(private cfg: ConfigService, private logger: LoggerService) { super(); }
 
   async getLLM(): Promise<LLM> {
     if (this.llm) return this.llm;
     const { apiKey, baseUrl } = await this.fetchOrCreateKeysInternal();
     const client = new OpenAI({ apiKey, baseURL: baseUrl });
-    this.llm = new LLM(client);
+    this.llm = new LLM(client as any);
     return this.llm;
   }
 
@@ -61,10 +33,9 @@ export class LiteLLMProvisioner implements LLMProvisioner {
     if (provKey) return { apiKey: provKey, baseUrl };
 
     // Fallback to configured envs
-    const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
+    const fallbackKey = this.cfg.litellmMasterKey as string;
     const base = this.cfg.openaiBaseUrl || (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
     return { apiKey: fallbackKey, baseUrl: base };
->>>>>>> d49b9af (merge: resolve remaining conflicts across graph/templates/llm modules and provisioners; finalize DI with LLMProvisioner provider)
   }
 
   private async provisionWithRetry(): Promise<ProvisionResult> {

@@ -14,7 +14,6 @@ import { ConditionalLLMRouter } from '../../llm/routers/conditional.llm.router';
 import { StaticLLMRouter } from '../../llm/routers/static.llm.router';
 import { LLMContext, LLMState } from '../../llm/types';
 import { LLMProvisioner } from '../../llm/llm.provisioner';
-import { LLMProvisioner } from '../../llm/llm.provisioner';
 
 import { SummarizationLLMReducer } from '../../llm/reducers/summarization.llm.reducer';
 import { LoadLLMReducer } from '../../llm/reducers/load.llm.reducer';
@@ -98,7 +97,6 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
   constructor(
     protected configService: ConfigService,
     protected logger: LoggerService,
-    protected llmProvisioner: LLMProvisioner,
     protected provisioner: LLMProvisioner,
     protected agentId?: string,
   ) {
@@ -119,12 +117,8 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
   }
 
   private async prepareLoop(): Promise<Loop<LLMState, LLMContext>> {
-    const llm = await this.llmProvisioner.getLLM();
-    const reducers: Record<string, Reducer<LLMState, LLMContext>> = {};
-
     const llm = await this.provisioner.getLLM();
-    const routers = new Map<string, ConditionalLLMRouter | StaticLLMRouter>();
->>>>>>> d49b9af (merge: resolve remaining conflicts across graph/templates/llm modules and provisioners; finalize DI with LLMProvisioner provider)
+    const reducers: Record<string, Reducer<LLMState, LLMContext>> = {};
     const tools = Array.from(this.tools);
     // load -> summarize
     reducers['load'] = new LoadLLMReducer(this.logger).next(new StaticLLMRouter('summarize'));
