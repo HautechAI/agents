@@ -6,7 +6,7 @@ import { Loop } from '../src/loop';
 type S = { n: number };
 type C = {};
 
-class IncReducer extends Reducer<S, C, { by?: number }> {
+class IncReducer extends Reducer<S, C> {
   private by = 1;
   init(p?: { by?: number }) { this.by = p?.by ?? 1; return this; }
   async invoke(state: S): Promise<S> { return { n: state.n + this.by }; }

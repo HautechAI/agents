@@ -4,18 +4,9 @@ import { Router } from './router';
  * Base Reducer: performs a transformation over state given a context.
  * Supports chaining via an optional next Router.
  */
-export abstract class Reducer<S, C, P = unknown> {
+export abstract class Reducer<S, C> {
   // Next router to determine the following reducer id
   protected nextRouter?: Router<S, C>;
-
-  /**
-   * Optional runtime initialization for DI-provided reducers.
-   * Default no-op returning this for chaining.
-   */
-  init(_params: P): this {
-    // Default no-op
-    return this;
-  }
 
   /**
    * Attach the next router in the chain.

@@ -4,7 +4,7 @@ import { LLMResponse, withLLM } from '@agyn/tracing';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
-export class CallModelLLMReducer extends Reducer<LLMState, LLMContext, { model: string; systemPrompt: string; tools: FunctionTool[] }> {
+export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(private llm: LLM) {
     super();
   }

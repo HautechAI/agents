@@ -6,7 +6,7 @@ import { LoggerService } from '../../core/services/logger.service';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
-export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext, { tools: FunctionTool[] }> {
+export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(private logger: LoggerService) {
     super();
   }

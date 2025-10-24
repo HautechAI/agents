@@ -14,7 +14,7 @@ import { stringify } from 'yaml';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
-export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext, { model: string; keepTokens: number; maxTokens: number; systemPrompt: string }> {
+export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(private llm: LLM) {
     super();
   }
