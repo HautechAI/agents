@@ -13,7 +13,7 @@ import { LoggerService } from '../../core/services/logger.service';
 import { VaultService } from '../../infra/vault/vault.service';
 import { DockerExecTransport } from './dockerExecTransport';
 import { LocalMCPServerTool } from './localMcpServer.tool';
-import { DEFAULT_MCP_COMMAND, McpError, McpServer, McpTool, McpToolCallResult, PersistedMcpState, PersistedMcpToolSummary } from './types';
+import { DEFAULT_MCP_COMMAND, McpError, McpServer, McpTool, McpToolCallResult, PersistedMcpState } from './types';
 import { NodeStateService } from '../../graph/nodeState.service';
 
 const EnvItemSchema = z
