@@ -15,6 +15,12 @@ export class LiteLLMProvisioner extends LLMProvisioner {
     private cfg: ConfigService,
     private logger: LoggerService,
   ) {
+  private llm?: LLM;
+
+  constructor(
+    private cfg: ConfigService,
+    private logger: LoggerService,
+  ) {
     super();
   }
 
