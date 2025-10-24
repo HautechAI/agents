@@ -7,15 +7,13 @@ import { PersistedGraph, PersistedGraphEdge, PersistedGraphNode, PersistedGraphU
 import { validatePersistedGraph } from './graphSchema.validator';
 import { GraphRepository } from './graph.repository';
 import { ConfigService } from '../core/services/config.service';
-import { diffNodes as diffNodesMap, diffEdges as diffEdgesMap, Edge as DiffEdge } from './gitGraph.diff';
 
 // Narrow meta persisted at repo root
 interface GraphMeta {
   name: string;
   version: number;
   updatedAt: string;
-  // Use a broad numeric type to avoid parser issues with literal types
-  format: number;
+  format: 2;
 }
 
 // Typed error helper to avoid any
@@ -23,9 +21,7 @@ type CodeError<T = unknown> = Error & { code: string; current?: T };
 function codeError<T = unknown>(code: string, message: string, current?: T): CodeError<T> {
   const e = new Error(message) as CodeError<T>;
   e.code = code;
-  if (current !== undefined) {
-    e.current = current;
-  }
+  if (current !== undefined) e.current = current;
   return e;
 }
 
@@ -74,21 +70,13 @@ export class GitGraphRepository extends GraphRepository {
       // ignore and try HEAD fallbacks
     }
     // If working tree failed or absent, prefer the last committed snapshot if available (should match HEAD)
-    if (this.lastCommitted) {
-      return this.lastCommitted;
-    }
+    if (this.lastCommitted) return this.lastCommitted;
     const headRoot = await this.readFromHeadRoot(name);
-    if (headRoot) {
-      return headRoot;
-    }
+    if (headRoot) return headRoot;
     const headPerGraph = await this.readFromHeadPerGraph(name);
-    if (headPerGraph) {
-      return headPerGraph;
-    }
+    if (headPerGraph) return headPerGraph;
     const headMonolith = await this.readFromHeadMonolith(name);
-    if (headMonolith) {
-      return headMonolith;
-    }
+    if (headMonolith) return headMonolith;
     return null;
   }
 
@@ -119,9 +107,7 @@ export class GitGraphRepository extends GraphRepository {
         const out = this.stripInternalNode(n);
         if (out.state === undefined && existing) {
           const prev = existing.nodes.find((p) => p.id === out.id);
-          if (prev && prev.state !== undefined) {
-            out.state = prev.state;
-          }
+          if (prev && prev.state !== undefined) out.state = prev.state;
         }
         return out;
       });
@@ -161,7 +147,7 @@ export class GitGraphRepository extends GraphRepository {
         (isNew ? touched.added : touched.updated).push(rel);
       };
       const writeEdge = async (e: PersistedGraphEdge, isNew: boolean) => {
-        const id = String(e.id ?? this.edgeId(e));
+        const id = e.id!;
         const rel = path.posix.join('edges', `${encodeURIComponent(id)}.json`);
         await this.atomicWriteFile(path.join(root, rel), JSON.stringify({ ...e, id }, null, 2));
         (isNew ? touched.added : touched.updated).push(rel);
@@ -181,14 +167,12 @@ export class GitGraphRepository extends GraphRepository {
       await Promise.all(edgeDeletes.map((id) => delRel(path.posix.join('edges', `${encodeURIComponent(id)}.json`))));
 
       // Update meta last
-      const meta = { name, version: target.version, updatedAt: target.updatedAt, format: 2 };
+      const meta = { name, version: target.version, updatedAt: target.updatedAt, format: 2 } as const;
       await this.atomicWriteFile(path.join(root, 'graph.meta.json'), JSON.stringify(meta, null, 2));
 
       // Stage changes
       const toStage = Array.from(new Set([...touched.added, ...touched.updated, ...touched.deleted, 'graph.meta.json']));
-      if (toStage.length) {
-        await this.runGit(['add', '--all', ...toStage], root);
-      }
+      if (toStage.length) await this.runGit(['add', '--all', ...toStage], root);
 
       // Remove legacy graphs/ directory if exists
       if (await this.pathExists(path.join(root, 'graphs'))) {
@@ -219,11 +203,8 @@ export class GitGraphRepository extends GraphRepository {
     const base = current ?? { name, version: 0, updatedAt: new Date().toISOString(), nodes: [], edges: [] };
     const nodes = Array.from(base.nodes || []);
     const idx = nodes.findIndex((n) => n.id === nodeId);
-    if (idx >= 0) {
-      nodes[idx] = { ...nodes[idx], state: patch } as PersistedGraphNode;
-    } else {
-      nodes.push({ id: nodeId, template: 'unknown', state: patch } as PersistedGraphNode);
-    }
+    if (idx >= 0) nodes[idx] = { ...nodes[idx], state: patch } as PersistedGraphNode;
+    else nodes.push({ id: nodeId, template: 'unknown', state: patch } as PersistedGraphNode);
     await this.upsert({ name, version: base.version, nodes, edges: base.edges }, undefined);
   }
 
@@ -255,14 +236,11 @@ export class GitGraphRepository extends GraphRepository {
     return new Promise((resolve, reject) => {
       const child = spawn('git', args, { cwd });
       let stderr = '';
-      child.stderr.on('data', (d) => { stderr += d.toString(); });
+      child.stderr.on('data', (d) => (stderr += d.toString()))
       child.on('error', reject);
       child.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git ${args.join(' ')} failed: ${stderr}`));
-        }
+        if (code === 0) resolve();
+        else reject(new Error(`git ${args.join(' ')} failed: ${stderr}`));
       });
     });
   }
@@ -276,11 +254,8 @@ export class GitGraphRepository extends GraphRepository {
       child.stderr.on('data', (d) => (stderr += d.toString()));
       child.on('error', reject);
       child.on('exit', (code) => {
-        if (code === 0) {
-          resolve(stdout);
-        } else {
-          reject(new Error(`git ${args.join(' ')} failed: ${stderr}`));
-        }
+        if (code === 0) resolve(stdout);
+        else reject(new Error(`git ${args.join(' ')} failed: ${stderr}`));
       });
     });
   }
@@ -301,19 +276,13 @@ export class GitGraphRepository extends GraphRepository {
     // Configure committer when defaults are present (graphAuthorName/Email)
     const committerName = this.config.graphAuthorName;
     const committerEmail = this.config.graphAuthorEmail;
-    if (committerName) {
-      args.push('-c', `user.name=${committerName}`);
-    }
-    if (committerEmail) {
-      args.push('-c', `user.email=${committerEmail}`);
-    }
+    if (committerName) args.push('-c', `user.name=${committerName}`);
+    if (committerEmail) args.push('-c', `user.email=${committerEmail}`);
     args.push('commit');
     if (author?.name || author?.email) {
       const aName = author?.name || committerName || '';
       const aEmail = author?.email || committerEmail || '';
-      if (aName || aEmail) {
-        args.push('--author', `${aName} <${aEmail}>`);
-      }
+      if (aName || aEmail) args.push('--author', `${aName} <${aEmail}>`);
     }
     args.push('-m', message);
     return new Promise((resolve, reject) => {
@@ -322,11 +291,8 @@ export class GitGraphRepository extends GraphRepository {
       child.stderr.on('data', (d) => (stderr += d.toString()));
       child.on('error', reject);
       child.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`git commit failed: ${stderr}`));
-        }
+        if (code === 0) resolve();
+        else reject(new Error(`git commit failed: ${stderr}`));
       });
     });
   }
@@ -348,20 +314,12 @@ export class GitGraphRepository extends GraphRepository {
   private async rollbackPaths(touched: { added: string[]; updated: string[]; deleted: string[] }) {
     const toRestore = [...touched.updated, ...touched.deleted, 'graph.meta.json'];
     await Promise.all(toRestore.map(async (rel) => {
-      try {
-        await this.runGit(['restore', '--worktree', '--source', 'HEAD', rel], this.cfg.repoPath);
-      } catch {}
-      try {
-        await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.cfg.repoPath);
-      } catch {}
+      try { await this.runGit(['restore', '--worktree', '--source', 'HEAD', rel], this.cfg.repoPath); } catch {}
+      try { await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.cfg.repoPath); } catch {}
     }));
     await Promise.all(touched.added.map(async (rel) => {
-      try {
-        await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.cfg.repoPath);
-      } catch {}
-      try {
-        await fs.unlink(path.join(this.cfg.repoPath, rel));
-      } catch {}
+      try { await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.cfg.repoPath); } catch {}
+      try { await fs.unlink(path.join(this.cfg.repoPath, rel)); } catch {}
     }));
   }
 
@@ -392,9 +350,7 @@ export class GitGraphRepository extends GraphRepository {
   }
 
   private async releaseLock(handle: { lockPath: string } | null | undefined) {
-    if (!handle) {
-      return;
-    }
+    if (!handle) return;
     try {
       await fs.unlink(handle.lockPath);
     } catch {}
@@ -410,20 +366,14 @@ export class GitGraphRepository extends GraphRepository {
       const edgesRes = await this.readEntitiesFromDir<PersistedGraphEdge>(path.join(this.config.graphRepoPath, 'edges'));
       if (nodesRes.hadError || edgesRes.hadError) {
         // Prefer lastCommitted snapshot if available; otherwise fall back to HEAD
-        if (this.lastCommitted) {
-          return this.lastCommitted;
-        }
+        if (this.lastCommitted) return this.lastCommitted;
         const head = await this.readFromHeadRoot(name);
-        if (head) {
-          return head;
-        }
+        if (head) return head;
       }
       return { name: meta.name ?? name, version: meta.version ?? 0, updatedAt: meta.updatedAt ?? new Date().toISOString(), nodes: nodesRes.items, edges: edgesRes.items };
     } catch {
       const head = await this.readFromHeadRoot(name);
-      if (head) {
-        return head;
-      }
+      if (head) return head;
       throw new Error('Failed to read working tree root layout');
     }
   }
@@ -446,11 +396,7 @@ export class GitGraphRepository extends GraphRepository {
           return null;
         }
       }));
-      for (const r of reads) {
-        if (r) {
-          items.push(r);
-        }
-      }
+      for (const r of reads) if (r) items.push(r);
     } catch {
       // directory may not exist
     }
@@ -469,18 +415,14 @@ export class GitGraphRepository extends GraphRepository {
       const nodes = await Promise.all(nodePaths.map(async (p) => {
         const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
         const obj = JSON.parse(raw);
-        if (!obj.id) {
-          obj.id = decodeURIComponent(path.basename(p, '.json'));
-        }
+        if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
         obj.id = String(obj.id);
         return obj as PersistedGraphNode;
       }));
       const edges = await Promise.all(edgePaths.map(async (p) => {
         const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
         const obj = JSON.parse(raw);
-        if (!obj.id) {
-          obj.id = decodeURIComponent(path.basename(p, '.json'));
-        }
+        if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
         obj.id = String(obj.id);
         return obj as PersistedGraphEdge;
       }));
@@ -532,58 +474,38 @@ export class GitGraphRepository extends GraphRepository {
   }
 
   private diffNodes(before: PersistedGraphNode[], after: PersistedGraphNode[]) {
-    const normalize = (n: PersistedGraphNode): string => {
-      return JSON.stringify({
-        id: n.id,
-        template: n.template,
-        config: n.config,
-        dynamicConfig: n.dynamicConfig,
-        state: n.state,
-        position: n.position,
-      });
-    };
-    const b = new Map<string, string>(before.map((n) => [n.id, normalize(n)]));
-    const a = new Map<string, string>(after.map((n) => [n.id, normalize(n)]));
-    const res = diffNodesMap(a, b);
-    // Convert map of updates to arrays of ids to keep behavior consistent with callers
+    // Include position and state so both cause updates; encode template/config/dynamicConfig/state/position
+    const normalize = (n: PersistedGraphNode) => JSON.stringify({ id: n.id, template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, state: n.state, position: n.position });
+    const b = new Map(before.map((n) => [n.id, normalize(n)]));
+    const a = new Map(after.map((n) => [n.id, normalize(n)]));
     const nodeAdds: string[] = [];
-    const nodeUpdates: string[] = Array.from(res.updates.keys());
-    const nodeDeletes: string[] = res.deletes;
+    const nodeUpdates: string[] = [];
+    const nodeDeletes: string[] = [];
     for (const id of a.keys()) {
-      if (!b.has(id)) {
-        nodeAdds.push(id);
-      }
+      if (!b.has(id)) nodeAdds.push(id);
+      else if (b.get(id) !== a.get(id)) nodeUpdates.push(id);
     }
+    for (const id of b.keys()) if (!a.has(id)) nodeDeletes.push(id);
     return { nodeAdds, nodeUpdates, nodeDeletes };
   }
 
   private diffEdges(before: PersistedGraphEdge[], after: PersistedGraphEdge[]) {
-    const toEdge = (e: PersistedGraphEdge): DiffEdge => ({ id: String(e.id ?? this.edgeId(e)), ...e });
-    const bi = new Map<string, DiffEdge>(before.map((e) => {
-      const edge = toEdge(e);
-      return [edge.id, edge];
-    }));
-    const ai = new Map<string, DiffEdge>(after.map((e) => {
-      const edge = toEdge(e);
-      return [edge.id, edge];
-    }));
-    const res = diffEdgesMap(ai, bi);
+    const bi = new Map(before.map((e) => [String(e.id ?? this.edgeId(e)), JSON.stringify({ ...e, id: String(e.id ?? this.edgeId(e)) })]));
+    const ai = new Map(after.map((e) => [String(e.id ?? this.edgeId(e)), JSON.stringify({ ...e, id: String(e.id ?? this.edgeId(e)) })]));
     const edgeAdds: string[] = [];
-    const edgeUpdates: string[] = Array.from(res.updates.keys());
-    const edgeDeletes: string[] = res.deletes;
+    const edgeUpdates: string[] = [];
+    const edgeDeletes: string[] = [];
     for (const id of ai.keys()) {
-      if (!bi.has(id)) {
-        edgeAdds.push(id);
-      }
+      if (!bi.has(id)) edgeAdds.push(id);
+      else if (bi.get(id) !== ai.get(id)) edgeUpdates.push(id);
     }
+    for (const id of bi.keys()) if (!ai.has(id)) edgeDeletes.push(id);
     return { edgeAdds, edgeUpdates, edgeDeletes };
   }
 }
   private defaultAuthor(): { name?: string; email?: string } | undefined {
     const name = this.config.graphAuthorName;
     const email = this.config.graphAuthorEmail;
-    if (!name && !email) {
-      return undefined;
-    }
+    if (!name && !email) return undefined;
     return { name, email };
   }
