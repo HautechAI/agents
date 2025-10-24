@@ -18,7 +18,7 @@ export class SaveLLMReducer extends Reducer<LLMState, LLMContext> {
 
   async invoke(state: LLMState, ctx: LLMContext): Promise<LLMState> {
     try {
-      const prisma = this.prismaService.getClient();
+      const prisma = await this.prismaService.getClient();
       if (!prisma) return state; // persistence disabled
 
       const repo = new ConversationStateRepository(prisma);

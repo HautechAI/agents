@@ -40,3 +40,4 @@ Persistent conversation state (Prisma)
   - pnpm --filter @agyn/platform-server prisma:migrate
   - pnpm --filter @agyn/platform-server prisma:studio
 - Best-effort: if AGENTS_DATABASE_URL is not set or DB errors occur, reducers fall back to in-memory only.
+- Local dev: GitHub integration is optional. If no GitHub env is provided, the server boots and logs that GitHub is disabled. Any GitHub-dependent feature will error at runtime until credentials are configured.
