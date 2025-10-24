@@ -419,14 +419,6 @@ async function bootstrap() {
 
   const io = new Server(fastify.server, { cors: { origin: '*' } });
 
-  function emitStatus(nodeId: string) {
-    const status = runtime.getNodeStatus(nodeId);
-    io.emit('node_status', { nodeId, ...status, updatedAt: new Date().toISOString() });
-  }
-
-  // Watcher that emits a follow-up node_status once node becomes ready after provision/start.
-  readinessWatcher = new ReadinessWatcher(runtime, emitStatus, logger);
-
   // Routes registered above
 
   const shutdown = async () => {

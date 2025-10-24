@@ -7,7 +7,7 @@ import { AgentNode } from './agent/agent.node';
 import { MemoryNode } from './memory/memory.node';
 import { MemoryConnectorNode } from './memoryConnector/memoryConnector.node';
 import { WorkspaceNode } from './workspace/workspace.node';
-import { SlackTrigger } from './slackTrigger/slack.trigger';
+import { SlackTrigger } from './slackTrigger/slackTrigger.node';
 // MCP
 import { LocalMCPServer } from './mcp/localMcpServer.node';
 // Tool nodes and tools

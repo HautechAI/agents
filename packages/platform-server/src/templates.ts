@@ -6,7 +6,7 @@ import { AgentNode, AgentStaticConfigSchema } from './nodes/agent/agent.node';
 import { LocalMCPServer, LocalMcpServerStaticConfigSchema } from './nodes/mcp/localMcpServer.node';
 import { MemoryNode, MemoryNodeStaticConfigSchema } from './nodes/memory/memory.node';
 import { MemoryConnectorNode, MemoryConnectorStaticConfigSchema } from './nodes/memoryConnector/memoryConnector.node';
-import { SlackTrigger, SlackTriggerExposedStaticConfigSchema } from './nodes/slackTrigger/slack.trigger';
+import { SlackTrigger, SlackTriggerExposedStaticConfigSchema } from './nodes/slackTrigger/slackTrigger.node';
 import { CallAgentTool, CallAgentToolStaticConfigSchema } from './nodes/tools/call_agent/call_agent.node';
 import { FinishTool, FinishToolStaticConfigSchema } from './nodes/tools/finish/finish.node';
 import {

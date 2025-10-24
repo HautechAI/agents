@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import { JSONSchema } from 'zod/v4/core';
 import { TemplatePortConfig, TemplatePortsRegistry } from './ports.types';
 import { FactoryFn, TemplateKind, TemplateNodeSchema } from './types';
@@ -55,4 +56,3 @@ export class TemplateRegistry {
     return schemas.sort((a, b) => a.name.localeCompare(b.name));
   }
 }
-import { Injectable } from '@nestjs/common';
