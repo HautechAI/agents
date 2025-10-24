@@ -515,7 +515,7 @@ export class ContainerService {
                 stderr.pipe(outStderr);
               }
             }
-          } catch (_e) {
+          } catch (e) {
             // Fallback: treat as single combined stream
             armIdle();
             stream.on('data', (c: Buffer | string) => {
@@ -546,17 +546,17 @@ export class ContainerService {
               stderr: stderrCollector.getText(),
               exitCode: inspectData.ExitCode ?? -1,
             });
-          } catch (_e) {
+          } catch (e) {
             clearAll(execTimer, idleTimer);
             if (signal)
               try {
                 signal.removeEventListener('abort', onAbort);
               } catch {}
             finished = true;
-            reject(_e);
+            reject(e);
           }
         });
-        stream.on('error', (_e) => {
+        stream.on('error', (e) => {
           if (finished) return;
           clearAll(execTimer, idleTimer);
           if (signal)
@@ -569,7 +569,7 @@ export class ContainerService {
             stderrCollector.flush();
           } catch {}
           finished = true;
-          reject(_e);
+          reject(e);
         });
         // Extra safety: clear timers on close as well
         stream.on('close', () => {

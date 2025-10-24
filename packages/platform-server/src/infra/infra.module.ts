@@ -15,12 +15,16 @@ import { PRService } from './github/pr.usecase';
   providers: [
     {
       provide: ContainerRegistry,
-      useFactory: async (mongo: MongoService, logger: LoggerService) => {
+      useFactory: async (mongo: MongoService, logger: LoggerService, containers: ContainerService) => {
         const svc = new ContainerRegistry(mongo.getDb(), logger);
         await svc.ensureIndexes();
+        // Backfill registry from Docker on startup; safe to run repeatedly
+        try {
+          await svc.backfillFromDocker(containers);
+        } catch {}
         return svc;
       },
-      inject: [MongoService, LoggerService],
+      inject: [MongoService, LoggerService, ContainerService],
     },
     {
       provide: ContainerCleanupService,

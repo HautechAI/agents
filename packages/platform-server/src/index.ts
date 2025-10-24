@@ -11,13 +11,15 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
 import cors from '@fastify/cors';
-import { ConfigService } from './core/services/config.service';
+// import { ConfigService } from './core/services/config.service';
 import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';
 import { LiveGraphRuntime } from './graph/liveGraph.manager';
 import { NodeStateService } from './graph/nodeState.service';
 import { setNodeStateService } from './graph/nodeState.provider';
 import { GraphDefinition, GraphError } from './graph/types';
+import { GraphRepository } from './graph/graph.repository';
+import { ContainerCleanupService } from './infra/container/containerCleanup.job';
 // Container and Vault services are resolved via Nest where needed
 // Removed unused ContainerRegistryService and ContainerCleanupService imports
 
@@ -65,7 +67,6 @@ async function bootstrap() {
   // Initialize and wire platform services via factory
   // Resolve services via DI; providers handle init/start via factories
   const graphRepository = app.get(GraphRepository, { strict: false });
-  const containerCleanupService = app.get(ContainerCleanupService, { strict: false });
 
   const runtime = app.get(LiveGraphRuntime, { strict: false });
   // Construct NodeStateService for state persistence and runtime snapshot updates
