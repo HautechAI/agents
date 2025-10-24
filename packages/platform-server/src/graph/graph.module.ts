@@ -21,7 +21,7 @@ import { MongoService } from '../core/services/mongo.service';
 import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
 import { LLMProvisioner } from '../llm/llm.provisioner';
 import { LLMModule } from '../llm/llm.module';
-import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
+import { LLMProvisioner } from '../llm/llm.provisioner';
 import { NcpsKeyService } from '../core/services/ncpsKey.service';
 import { Provider } from '@nestjs/common';
 

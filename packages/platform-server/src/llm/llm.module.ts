@@ -21,6 +21,7 @@ import { ConfigService } from '../core/services/config.service';
 import { LoggerService } from '../core/services/logger.service';
 import { LiteLLMProvisioner } from './provisioners/litellm.provisioner';
 import { OpenAILLMProvisioner } from './provisioners/openai.provisioner';
+>>>>>>> 05d9ee4 (fix: clean up imports and normalize LLMProvisioner references; resolve DI wiring)
 
 @Module({
   imports: [],

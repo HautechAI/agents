@@ -28,7 +28,7 @@ import { ContainerService } from './infra/container/container.service';
 import { EnvService } from './graph/env.service';
 import { LLMProvisioner } from './llm/provisioners/llm.provisioner';
 import { LLMProvisioner } from './llm/llm.provisioner';
-import { LLMProvisioner } from './llm/provisioners/llm.provisioner';
+import { LLMProvisioner } from './llm/llm.provisioner';
 import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';
 import { NcpsKeyService } from './core/services/ncpsKey.service';
