@@ -9,9 +9,22 @@ import { EnforceToolsLLMReducer } from './reducers/enforceTools.llm.reducer';
 import { SummarizationLLMReducer } from './reducers/summarization.llm.reducer';
 import { StaticLLMRouter } from './routers/static.llm.router';
 import { ConditionalLLMRouter } from './routers/conditional.llm.router';
+import { LLMProvisioner } from './provisioners/types';
+import { ConfigService } from '../core/services/config.service';
+import { LoggerService } from '../core/services/logger.service';
+import { LiteLLMProvisioner } from './provisioners/litellm.provisioner';
+import { OpenAILLMProvisioner } from './provisioners/openai.provisioner';
+import { CoreModule } from '../core/core.module';
 
 @Module({
+  imports: [CoreModule],
   providers: [
+    {
+      provide: LLMProvisioner,
+      useFactory: (cfg: ConfigService, logger: LoggerService) =>
+        cfg.llmProvider === 'litellm' ? new LiteLLMProvisioner(cfg, logger) : new OpenAILLMProvisioner(cfg),
+      inject: [ConfigService, LoggerService],
+    },
     LLMFactoryService,
     ConversationStateRepository,
     LoadLLMReducer,
@@ -23,7 +36,6 @@ import { ConditionalLLMRouter } from './routers/conditional.llm.router';
     StaticLLMRouter,
     ConditionalLLMRouter,
   ],
-  exports: [],
+  exports: [LLMFactoryService],
 })
 export class LLMModule {}
-

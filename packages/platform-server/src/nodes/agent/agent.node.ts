@@ -116,8 +116,8 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
     return this.getNodeId();
   }
 
-  private prepareLoop(): Loop<LLMState, LLMContext> {
-    const llm = this.llmFactoryService.createLLM();
+  private async prepareLoop(): Promise<Loop<LLMState, LLMContext>> {
+    const llm = await this.llmFactoryService.createLLM();
     const routers = new Map<string, ConditionalLLMRouter | StaticLLMRouter>();
     const tools = Array.from(this.tools);
     // load -> summarize
@@ -194,7 +194,7 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
     return await withAgent(
       { threadId: thread, nodeId: this.getNodeId(), inputParameters: [{ thread }, { messages }] },
       async () => {
-        const loop = this.prepareLoop();
+        const loop = await this.prepareLoop();
         const incoming: TriggerMessage[] = Array.isArray(messages) ? messages : [messages];
         const history: HumanMessage[] = incoming.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
         const finishSignal = new Signal();

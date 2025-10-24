@@ -5,29 +5,50 @@ import { LoggerService } from '../../core/services/logger.service';
 
 type ProvisionResult = { apiKey?: string; baseUrl?: string };
 
-export class LiteLLMProvisioner implements LLMProvisioner {
+export class LiteLLMProvisioner extends LLMProvisioner {
   private client: OpenAI | null = null;
-  constructor(private cfg: ConfigService, private logger: LoggerService) {}
+  constructor(private cfg: ConfigService, private logger: LoggerService) {
+    super();
+  }
 
-  async getOpenAIClient(): Promise<OpenAI> {
+  async getClient(): Promise<OpenAI> {
     if (this.client) return this.client;
-    // Lazy provisioning: if OPENAI API key is present, use it; otherwise try LiteLLM.
-    const apiKey = this.cfg.openaiApiKey ?? this.cfg.litellmMasterKey;
-    let baseURL = this.cfg.openaiBaseUrl;
-    if (!this.cfg.openaiApiKey) {
-      // Attempt provisioning bounded retries.
-      const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
-      if (provKey) {
-        // Prefer provisioned key and base URL
-        this.logger.info('LiteLLM provisioned virtual key for OpenAI client');
-        this.client = new OpenAI({ apiKey: provKey, baseURL: baseUrl });
-        return this.client;
-      }
-      // Fallback to configured envs
-      if (!baseURL) baseURL = this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined;
-    }
-    this.client = new OpenAI({ apiKey, baseURL });
+    const { apiKey, baseUrl } = await this.fetchOrCreateKeys();
+    this.client = new OpenAI({ apiKey, baseURL: baseUrl });
     return this.client;
+  }
+
+  async ensureKeys(): Promise<void> {
+    // If direct OpenAI key exists, nothing to provision
+    if (this.cfg.openaiApiKey) return;
+    // Otherwise require LiteLLM config to be present for provisioning
+    if (!this.cfg.litellmBaseUrl || !this.cfg.litellmMasterKey) {
+      throw new Error('litellm_missing_config');
+    }
+  }
+
+  async fetchOrCreateKeys(): Promise<{ apiKey: string; baseUrl?: string }> {
+    // Prefer direct OpenAI if available
+    if (this.cfg.openaiApiKey) {
+      return { apiKey: this.cfg.openaiApiKey, baseUrl: this.cfg.openaiBaseUrl };
+    }
+
+    await this.ensureKeys();
+    const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
+    if (provKey) return { apiKey: provKey, baseUrl };
+
+    // Fallback to configured envs
+    const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
+    const base = this.cfg.openaiBaseUrl || (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
+    return { apiKey: fallbackKey, baseUrl: base };
+  }
+
+  async refresh(): Promise<void> {
+    this.client = null;
+  }
+
+  async dispose(): Promise<void> {
+    this.client = null;
   }
 
   private async provisionWithRetry(): Promise<ProvisionResult> {
@@ -124,4 +145,3 @@ export class LiteLLMProvisioner implements LLMProvisioner {
     await new Promise((res) => setTimeout(res, ms));
   }
 }
-
