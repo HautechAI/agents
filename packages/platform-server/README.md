@@ -43,3 +43,12 @@ Persistent conversation state (Prisma)
 - Local dev:
   - LLM_PROVIDER must be set explicitly to 'openai' or 'litellm'. There is no default.
   - GitHub integration is optional. If no GitHub env is provided, the server boots and logs that GitHub is disabled. Any GitHub-dependent feature will error at runtime until credentials are configured.
+
+Quick start (local dev):
+- Install deps: `pnpm -w i`
+- Start local services (from repo root docker-compose):
+  - `pnpm -w dev:deps`
+- Seed env: `cp packages/platform-server/.env.dev.example packages/platform-server/.env`
+- Start server:
+  - `pnpm --filter @agyn/platform-server dev` (or)
+  - `pnpm --filter @agyn/platform-server dev:all` to start deps + server
