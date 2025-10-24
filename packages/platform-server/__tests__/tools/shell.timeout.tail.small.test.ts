@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ShellTool } from '../../nodes/tools/shell_command/shell_command.node';
-import { LoggerService } from '../../core/services/logger.service';
-import { ExecTimeoutError } from '../../utils/execTimeout';
-import { ContainerEntity } from '../../entities/container.entity';
-import { ContainerProviderEntity } from '../../entities/containerProvider.entity';
-import { ContainerService } from '../../core/services/container.service';
+import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
+import { LoggerService } from '../../src/core/services/logger.service';
+import { ExecTimeoutError } from '../../src/utils/execTimeout';
+import { ContainerHandle } from '../../src/infra/container/container.handle';
+import { ContainerProviderEntity } from '../../src/entities/containerProvider.entity';
+import { ContainerService } from '../../src/infra/container/container.service';
 
 // ANSI sequences should be stripped, but otherwise content preserved when <=10k
 const ANSI_GREEN = '\u001b[32m';
@@ -18,22 +18,19 @@ describe('ShellTool timeout full inclusion when <=10k', () => {
     const combinedPlain = 'hello-from-stdoutand-stderr';
     const err = new ExecTimeoutError(3600000, smallStdout, smallStderr);
 
-    class FakeContainer extends ContainerEntity { override async exec(): Promise<never> { throw err; } }
-    class FakeProvider extends ContainerProviderEntity {
-      constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); }
-      override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); }
-    }
-    const provider = new FakeProvider(logger);
-    const tool = new ShellTool(undefined, logger);
-    tool.setContainerProvider(provider);
-    await tool.setConfig({});
-    const t = tool.init();
+    const node = new ShellCommandNode(new (await import('../../src/graph/env.service')).EnvService(new LoggerService() as any));
+    node.setContainerProvider(({
+      provide: async (_t: string) => ({
+        exec: async (): Promise<never> => { throw err; },
+      } as any),
+    } as any));
+    await node.setConfig({});
+    const t = node.getTool();
 
-    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
-    const payload: InvokeArgs[0] = { command: 'sleep 1h' };
-    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
+    const payload: any = { command: 'sleep 1h' };
+    const ctx: any = { threadId: 't' };
     try {
-      await t.invoke(payload, ctx);
+      await t.execute(payload, ctx);
       throw new Error('expected to throw');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

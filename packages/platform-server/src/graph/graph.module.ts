@@ -4,20 +4,51 @@ import { PortsRegistry } from './ports.registry';
 import { GraphService } from './graphMongo.repository';
 import { GitGraphService } from './gitGraph.repository';
 import { LiveGraphRuntime } from './liveGraph.manager';
-import { GraphGuard } from './graph.guard';
-import { EnvService } from './env.service';
+import { RunsController } from './controllers/runs.controller';
+import { NodesModule } from '../nodes/nodes.module';
+import { CoreModule } from '../core/core.module';
+import { InfraModule } from '../infra/infra.module';
+import { AgentRunService } from '../nodes/agentRun.repository';
+import { buildTemplateRegistry } from '../templates';
+import { LoggerService } from '../core/services/logger.service';
+import { ContainerService } from '../infra/container/container.service';
+import { ConfigService } from '../core/services/config.service';
+import { MongoService } from '../core/services/mongo.service';
+import { LLMFactoryService } from '../llm/llmFactory.service';
+import { NcpsKeyService } from '../core/services/ncpsKey.service';
 
 @Module({
+  imports: [CoreModule, InfraModule, NodesModule],
+  controllers: [RunsController],
   providers: [
-    TemplateRegistry,
+    {
+      provide: TemplateRegistry,
+      useFactory: (
+        logger: LoggerService,
+        containerService: ContainerService,
+        configService: ConfigService,
+        mongoService: MongoService,
+        llmFactoryService: LLMFactoryService,
+        ncpsKeyService: NcpsKeyService,
+      ) =>
+        buildTemplateRegistry({
+          logger,
+          containerService,
+          configService,
+          mongoService,
+          llmFactoryService,
+          ncpsKeyService,
+        }),
+      inject: [LoggerService, ContainerService, ConfigService, MongoService, LLMFactoryService, NcpsKeyService],
+    },
     PortsRegistry,
     GraphService,
     GitGraphService,
     LiveGraphRuntime,
-    // Guards
-    GraphGuard,
-    EnvService,
+    AgentRunService,
+    // Guards (functions are not providers; list here for visibility if later wrapped)
+    // enforceMcpCommandMutationGuard is a pure function and intentionally not registered
   ],
-  exports: [GraphGuard],
+  exports: [LiveGraphRuntime, TemplateRegistry, PortsRegistry, GraphService, GitGraphService, AgentRunService],
 })
 export class GraphModule {}

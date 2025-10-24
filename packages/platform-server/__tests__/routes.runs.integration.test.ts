@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Fastify from 'fastify';
+import { Test, type TestingModule } from '@nestjs/testing';
+import { FastifyAdapter } from '@nestjs/platform-fastify';
+import type { FastifyInstance } from 'fastify';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
+import { GraphModule } from '../src/graph/graph.module';
 import { AgentRunService } from '../src/nodes/agentRun.repository';
 import type { FactoryFn } from '../src/graph/types';
-import { registerRunsRoutes } from '../src/routes/runs.route';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 
@@ -22,49 +24,58 @@ class TestAgent {
   }
 }
 
-describe('Runs routes integration', () => {
-  const logger = new LoggerService();
-  const registry = new TemplateRegistry();
-  const runtime = new LiveGraphRuntime(logger, registry);
-  let fastify = Fastify({ logger: false });
-  let runs: AgentRunService;
+describe('RunsController (Nest + FastifyAdapter) integration', () => {
   let mongod: MongoMemoryServer | undefined;
   let client: MongoClient | undefined;
+  let app: import('@nestjs/common').INestApplication | undefined;
+  let fastify: FastifyInstance | undefined;
+  let runs: AgentRunService | undefined;
+  let runtime: LiveGraphRuntime | undefined;
+  let registry: TemplateRegistry | undefined;
   let ready = true;
 
   beforeAll(async () => {
     try {
       mongod = await MongoMemoryServer.create({ binary: { version: process.env.MONGOMS_VERSION || '7.0.14' } });
       client = await MongoClient.connect(mongod.getUri());
-      runs = new AgentRunService(client.db('agents-routes'), logger);
-      await runs.ensureIndexes();
 
-      // Register a simple agent node in runtime
+      const logger = new LoggerService();
+      const moduleRef: TestingModule = await Test.createTestingModule({ imports: [GraphModule] })
+        .overrideProvider(AgentRunService)
+        .useFactory({ factory: () => new AgentRunService(client!.db('agents-routes'), logger) })
+        .compile();
+
+      const adapter = new FastifyAdapter({ logger: false });
+      app = moduleRef.createNestApplication(adapter as any);
+      await app.init();
+      fastify = (adapter as any).getInstance();
+
+      runs = app.get(AgentRunService, { strict: false });
+      await runs.ensureIndexes();
+      registry = app.get(TemplateRegistry, { strict: false });
+      runtime = app.get(LiveGraphRuntime, { strict: false });
+
+      // Register a simple agent node in runtime and apply a minimal graph
       const factory: FactoryFn = async () => new TestAgent() as any;
       registry.register('testAgent', factory, { sourcePorts: {}, targetPorts: {} }, { title: 'A', kind: 'agent' });
       await runtime.apply({ nodes: [{ id: 'agent1', data: { template: 'testAgent', config: {} } }], edges: [] } as any);
-
-      fastify = Fastify();
-      registerRunsRoutes(fastify, runtime, runs, logger);
-      await fastify.listen({ port: 0 });
     } catch (e) {
       ready = false;
-      // eslint-disable-next-line no-console
-      console.warn('Skipping runs routes integration tests, mongo unavailable', (e as Error)?.message || String(e));
+      console.warn('Skipping runs routes integration tests, mongo/Nest unavailable', (e as Error)?.message || String(e));
     }
   });
 
   afterAll(async () => {
-    try { if (ready) await fastify.close(); } catch {}
+    try { await app?.close(); } catch {}
     try { await client?.close(); } catch {}
     try { await mongod?.stop(); } catch {}
   });
 
-  it('lists runs; 404 when node not found', async () => {
-    if (!ready) return;
+  it('lists runs; node absent -> empty list', async () => {
+    if (!ready || !fastify || !runs || !runtime) return;
     const r404 = await fastify.inject({ method: 'GET', url: '/graph/nodes/absent/runs' });
-    // service uses list only; absent node is fine -> empty list
     expect(r404.statusCode).toBe(200);
+
     const agent = runtime.getNodeInstance<TestAgent>('agent1')!;
     const runId = 'thread-1/run-123';
     agent.setRun('thread-1', runId);
@@ -77,7 +88,7 @@ describe('Runs routes integration', () => {
   });
 
   it('terminate by runId uses persisted threadId; 409 when not running; idempotent', async () => {
-    if (!ready) return;
+    if (!ready || !fastify || !runs || !runtime) return;
     const agent = runtime.getNodeInstance<TestAgent>('agent1')!;
     const runId = 'thrA/run-1';
     agent.setRun('thrA', runId);
@@ -85,12 +96,11 @@ describe('Runs routes integration', () => {
     const res1 = await fastify.inject({ method: 'POST', url: `/graph/nodes/agent1/runs/${encodeURIComponent(runId)}/terminate` });
     expect(res1.statusCode).toBe(202);
     const res2 = await fastify.inject({ method: 'POST', url: `/graph/nodes/agent1/runs/${encodeURIComponent(runId)}/terminate` });
-    // Now agent no longer running that run -> 409
     expect(res2.statusCode).toBe(409);
   });
 
-  it('terminate by threadId uses current run; 404 when node/run not found', async () => {
-    if (!ready) return;
+  it('terminate by threadId uses current run; 404/409 cases', async () => {
+    if (!ready || !fastify || !runs || !runtime) return;
     const runId = 'thrB/run-1';
     const agent = runtime.getNodeInstance<TestAgent>('agent1')!;
     agent.setRun('thrB', runId);

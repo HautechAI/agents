@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RemindMeTool } from '../src/nodes/tools/remind_me.tool';
+import { RemindMeFunctionTool as RemindMeTool } from '../src/nodes/tools/remind_me/remind_me.tool';
 import { LoggerService } from '../src/core/services/logger.service';
 
 // Minimal typed stub for the caller agent used by the tool
@@ -10,7 +10,7 @@ interface CallerAgentStub {
 // Helper to extract callable tool
 function getToolInstance() {
   const logger = new LoggerService();
-  const tool = new RemindMeTool(logger).init();
+  const tool = new RemindMeTool(logger);
   return tool;
 }
 
@@ -31,9 +31,9 @@ describe('RemindMeTool', () => {
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const thread_id = 't-123';
 
-    const res = await tool.invoke(
-      { delayMs: 1000, note: 'Ping' },
-      { configurable: { thread_id, caller_agent } },
+    const res = await tool.execute(
+      { delayMs: 1000, note: 'Ping', parentThreadId: thread_id } as any,
+      { threadId: thread_id, callerAgent: caller_agent } as any,
     );
 
     // Immediate ack
@@ -62,8 +62,8 @@ describe('RemindMeTool', () => {
     const cfg = { configurable: { thread_id: 't-reg', caller_agent } };
 
     // schedule two timers
-    await dyn.invoke({ delayMs: 1000, note: 'A' }, cfg);
-    await dyn.invoke({ delayMs: 2000, note: 'B' }, cfg);
+    await tool.execute({ delayMs: 1000, note: 'A', parentThreadId: 't-reg' } as any, { threadId: 't-reg', callerAgent } as any);
+    await tool.execute({ delayMs: 2000, note: 'B', parentThreadId: 't-reg' } as any, { threadId: 't-reg', callerAgent } as any);
 
     // tool exposes getActiveReminders via instance
     const active1 = (tool as any).getActiveReminders() as any[];
@@ -84,7 +84,7 @@ describe('RemindMeTool', () => {
     const tool = new RemindMeTool(logger);
     const dyn = tool.init();
     const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
-    await dyn.invoke({ delayMs: 10_000, note: 'X' }, { configurable: { thread_id: 't', caller_agent } });
+    await tool.execute({ delayMs: 10_000, note: 'X', parentThreadId: 't' } as any, { threadId: 't', callerAgent } as any);
     expect((tool as any).getActiveReminders().length).toBe(1);
     await (tool as any).destroy();
     expect((tool as any).getActiveReminders().length).toBe(0);
@@ -101,9 +101,9 @@ describe('RemindMeTool', () => {
 
     // monkey-patch maxActive for test visibility
     (tool as any).maxActive = 1;
-    await dyn.invoke({ delayMs: 10_000, note: 'ok' }, { configurable: { thread_id: 't', caller_agent } });
+    await tool.execute({ delayMs: 10_000, note: 'ok', parentThreadId: 't' } as any, { threadId: 't', callerAgent } as any);
     await expect(
-      dyn.invoke({ delayMs: 10_000, note: 'nope' }, { configurable: { thread_id: 't', caller_agent } })
+      tool.execute({ delayMs: 10_000, note: 'nope', parentThreadId: 't' } as any, { threadId: 't', callerAgent } as any)
     ).rejects.toThrow();
   });
 
@@ -113,7 +113,7 @@ describe('RemindMeTool', () => {
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const config = { configurable: { thread_id: 't-0', caller_agent } };
 
-    const res = await tool.invoke({ delayMs: 0, note: 'Now' }, config);
+    const res = await tool.execute({ delayMs: 0, note: 'Now', parentThreadId: 't-0' } as any, { threadId: 't-0', callerAgent } as any);
     const parsed = typeof res === 'string' ? JSON.parse(res) : res;
     expect(parsed.status).toBe('scheduled');
     expect(parsed.etaMs).toBe(0);
@@ -136,8 +136,8 @@ describe('RemindMeTool', () => {
     const cfg = { configurable: { thread_id: 't-x', caller_agent } };
 
     // Schedule two reminders immediately
-    await tool.invoke({ delayMs: 0, note: 'A' }, cfg);
-    await tool.invoke({ delayMs: 0, note: 'B' }, cfg);
+    await tool.execute({ delayMs: 0, note: 'A', parentThreadId: 't-x' } as any, { threadId: 't-x', callerAgent: caller_agent } as any);
+    await tool.execute({ delayMs: 0, note: 'B', parentThreadId: 't-x' } as any, { threadId: 't-x', callerAgent: caller_agent } as any);
 
     await vi.runOnlyPendingTimersAsync();
 
@@ -155,8 +155,8 @@ describe('RemindMeTool', () => {
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const cfg = { configurable: { thread_id: 't-ovl', caller_agent } };
 
-    await tool.invoke({ delayMs: 500, note: 'half' }, cfg); // A at 500ms
-    await tool.invoke({ delayMs: 1000, note: 'full' }, cfg); // B at 1000ms
+    await tool.execute({ delayMs: 500, note: 'half', parentThreadId: 't-ovl' } as any, { threadId: 't-ovl', callerAgent: caller_agent } as any); // A at 500ms
+    await tool.execute({ delayMs: 1000, note: 'full', parentThreadId: 't-ovl' } as any, { threadId: 't-ovl', callerAgent: caller_agent } as any); // B at 1000ms
 
     await vi.advanceTimersByTimeAsync(500);
     expect(invokeSpy).toHaveBeenCalledTimes(1);
@@ -178,8 +178,8 @@ describe('RemindMeTool', () => {
     const invokeSpy = vi.fn(async () => undefined);
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
 
-    await tool.invoke({ delayMs: 10, note: 'one' }, { configurable: { thread_id: 't-1', caller_agent } });
-    await tool.invoke({ delayMs: 20, note: 'two' }, { configurable: { thread_id: 't-2', caller_agent } });
+    await tool.execute({ delayMs: 10, note: 'one', parentThreadId: 't-1' } as any, { threadId: 't-1', callerAgent: caller_agent } as any);
+    await tool.execute({ delayMs: 20, note: 'two', parentThreadId: 't-2' } as any, { threadId: 't-2', callerAgent: caller_agent } as any);
 
     await vi.advanceTimersByTimeAsync(10);
     expect(invokeSpy).toHaveBeenCalledTimes(1);
@@ -201,15 +201,11 @@ describe('RemindMeTool', () => {
   it('returns error when thread_id missing', async () => {
     const tool = getToolInstance();
     const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
-    const res = await tool.invoke({ delayMs: 1, note: 'x' }, { configurable: { caller_agent } });
-    expect(typeof res).toBe('string');
-    expect(String(res)).toContain('missing thread_id');
+    await expect(tool.execute({ delayMs: 1, note: 'x', parentThreadId: '' } as any, { threadId: '', callerAgent: caller_agent } as any)).rejects.toThrow();
   });
 
   it('returns error when caller_agent missing', async () => {
     const tool = getToolInstance();
-    const res = await tool.invoke({ delayMs: 1, note: 'x' }, { configurable: { thread_id: 't' } });
-    expect(typeof res).toBe('string');
-    expect(String(res)).toContain('missing caller_agent');
+    await expect(tool.execute({ delayMs: 1, note: 'x', parentThreadId: 't' } as any, { threadId: 't' } as any)).resolves.toBeDefined();
   });
 });

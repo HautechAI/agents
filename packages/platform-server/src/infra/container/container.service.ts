@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
-import { ContainerHandle } from '../../core/handles/container.handle';
+// ContainerHandle moved to infra; inline minimal type for tests
+type ContainerHandle = { id: string; exec: (cmd: string | string[], opts?: any) => Promise<{ stdout: string; stderr: string; exitCode: number }> };
 import { LoggerService } from '../../core/services/logger.service';
-import { PLATFORM_LABEL, type Platform } from '../constants';
+import { PLATFORM_LABEL, type Platform } from '../../constants';
 import {
   isExecTimeoutError,
   ExecTimeoutError,

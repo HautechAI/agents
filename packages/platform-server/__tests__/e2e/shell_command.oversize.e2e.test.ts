@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ToolsNode } from '../../lgnodes/tools.lgnode';
+// Legacy ToolsNode removed; skip this test or migrate if needed
+import { describe, it, expect, vi } from 'vitest';
+it.skip('legacy ToolsNode oversize behavior (removed)', () => {});
 import { AIMessage } from '@langchain/core/messages';
 import { ShellTool } from '../../nodes/tools/shell_command/shell_command.node';
 import { LoggerService } from '../../core/services/logger.service';
@@ -33,4 +35,3 @@ describe('shell_command oversize output e2e (mocked putArchive)', () => {
     (tool as any).init = origInit;
   });
 });
-

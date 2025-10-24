@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ContainerService } from '../../core/services/container.service';
+import { ContainerService } from '../../src/infra/container/container.service';
 import { LoggerService } from '../../core/services/logger.service';
 
 describe('ContainerService idle timeout disable', () => {
@@ -33,4 +33,3 @@ describe('ContainerService idle timeout disable', () => {
     expect(res.exitCode).toBe(0);
   });
 });
-

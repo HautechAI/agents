@@ -1,5 +1,5 @@
 // Observability SDK initialization (replaces traceloop)
-import { init as initObs, withSystem } from '@agyn/tracing';
+import { init as initObs } from '@agyn/tracing';
 
 initObs({
   mode: 'extended',
@@ -7,13 +7,16 @@ initObs({
   defaultAttributes: { service: 'server' },
 });
 
-import Fastify from 'fastify';
+import { NestFactory } from '@nestjs/core';
+import { FastifyAdapter } from '@nestjs/platform-fastify';
+import { ValidationPipe } from '@nestjs/common';
 import cors from '@fastify/cors';
 import { Server } from 'socket.io';
 import { ConfigService } from './core/services/config.service';
 import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';
-import { buildTemplateRegistry } from './templates';
+// TemplateRegistry is provided via GraphModule factory provider
+import { TemplateRegistry } from './graph/templateRegistry';
 import { LiveGraphRuntime } from './graph/liveGraph.manager';
 import { GraphService } from './graph/graphMongo.repository';
 import { GitGraphService } from './graph/gitGraph.repository';
@@ -22,26 +25,39 @@ import { GraphErrorCode } from './graph/errors';
 import { ContainerService } from './infra/container/container.service';
 import { ReadinessWatcher } from './utils/readinessWatcher';
 import { VaultService } from './infra/vault/vault.service';
-import { ContainerRegistryService } from './infra/container/container.registry';
+import { ContainerRegistry as ContainerRegistryService } from './infra/container/container.registry';
 import { ContainerCleanupService } from './infra/container/containerCleanup.job';
 
 import { AgentRunService } from './nodes/agentRun.repository';
-import { registerRunsRoutes } from './routes/runs.route';
+// Nix routes are served via Nest controller; keep import if legacy route file exists
+// import { registerNixRoutes } from './routes/nix.route';
 import { NcpsKeyService } from './core/services/ncpsKey.service';
 import { maybeProvisionLiteLLMKey } from './llm/litellm.provisioner';
-import { LLMFactoryService } from './llm/llmFactory.service';
-import { initDI, resolve, closeDI } from './bootstrap/di';
+import { initDI, closeDI } from './bootstrap/di';
+import { AppModule } from './bootstrap/app.module';
 
 await initDI();
-const logger = await resolve<LoggerService>(LoggerService);
-const config = await resolve<ConfigService>(ConfigService);
-const mongo = await resolve<MongoService>(MongoService);
-const containerService = await resolve<ContainerService>(ContainerService);
-const vaultService = await resolve<VaultService>(VaultService);
-const ncpsKeyService = await resolve<NcpsKeyService>(NcpsKeyService);
-const llmFactoryService = await resolve<LLMFactoryService>(LLMFactoryService);
 
 async function bootstrap() {
+  // NestJS HTTP bootstrap using FastifyAdapter and resolve services via DI
+  const adapter = new FastifyAdapter({ logger: false });
+  await adapter.getInstance().register(cors, { origin: true });
+  const app = await NestFactory.create(AppModule, adapter, { logger: false });
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  await app.init();
+  // Ensure global DI helpers use the same Nest container
+  try {
+    const { setAppRef } = await import('./bootstrap/di');
+    setAppRef(app);
+  } catch {}
+
+  const logger = app.get(LoggerService, { strict: false });
+  const config = app.get(ConfigService, { strict: false });
+  const mongo = app.get(MongoService, { strict: false });
+  const containerService = app.get(ContainerService, { strict: false });
+  const vaultService = app.get(VaultService, { strict: false });
+  const ncpsKeyService = app.get(NcpsKeyService, { strict: false });
+
   // Initialize Ncps key service early
   try {
     await ncpsKeyService.init();
@@ -67,25 +83,16 @@ async function bootstrap() {
   // Initialize checkpointer (optional Postgres mode)
 
   // Initialize container registry and cleanup services
-  const registry = new ContainerRegistryService(mongo.getDb(), logger);
+  const registry = app.get(ContainerRegistryService, { strict: false });
   await registry.ensureIndexes();
   containerService.setRegistry(registry);
   await registry.backfillFromDocker(containerService);
   const cleanup = new ContainerCleanupService(registry, containerService, logger);
   cleanup.start();
 
-  const templateRegistry = buildTemplateRegistry({
-    logger,
-    containerService: containerService,
-    configService: config,
-    mongoService: mongo,
-    llmFactoryService,
-    ncpsKeyService,
-  });
-
-  const runtime = new LiveGraphRuntime(logger, templateRegistry);
-
-  const runsService = new AgentRunService(mongo.getDb(), logger);
+  const templateRegistry = app.get(TemplateRegistry, { strict: false });
+  const runtime = app.get(LiveGraphRuntime, { strict: false });
+  const runsService = app.get(AgentRunService, { strict: false });
   await runsService.ensureIndexes();
   const graphService =
     config.graphStore === 'git'
@@ -191,8 +198,18 @@ async function bootstrap() {
   }
 
   // Globals already set above
-  const fastify = Fastify({ logger: false });
-  await fastify.register(cors, { origin: true });
+  // NestJS HTTP bootstrap using FastifyAdapter
+  const adapter = new FastifyAdapter({ logger: false });
+  // Register CORS directly on underlying fastify instance for permissive origin
+  await adapter.getInstance().register(cors, { origin: true });
+  const app = await NestFactory.create(AppModule, adapter, { logger: false });
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  await app.init();
+  // Ensure global DI helpers use the same Nest container
+  try {
+    const { setAppRef } = await import('./bootstrap/di');
+    setAppRef(app);
+  } catch {}
 
   // Background watcher reference (initialized after socket is attached)
   let readinessWatcher: ReadinessWatcher | null = null;
@@ -378,7 +395,7 @@ async function bootstrap() {
       reply.code(204);
       return null;
     } catch (e: any) {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
+       
       reply.code(500);
       return { error: e.message || 'action_failed' };
     }
@@ -401,21 +418,23 @@ async function bootstrap() {
           : undefined;
       return { ready, schema };
     } catch (e: any) {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
+       
       reply.code(500);
       return { error: e.message || 'dynamic_config_schema_error' };
     }
   });
 
-  // Register routes that need runtime
-  // Reminders endpoint handled by Nest controller (no Fastify wiring here)
-  registerRunsRoutes(fastify, runtime, runsService, logger);
-  // Nix routes will be provided via Nest FastifyAdapter in a future task.
+  // Register routes that need runtime on fastify instance (non-Nest legacy)
+  const fastify = adapter.getInstance();
+  registerRemindersRoute(fastify, runtime, logger);
+  // Runs routes are handled by Nest RunsController
+  // Nix proxy routes are now handled by Nest NixController; legacy Fastify wiring removed
 
   // Start Fastify then attach Socket.io
   const PORT = Number(process.env.PORT) || 3010;
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   logger.info(`HTTP server listening on :${PORT}`);
+  // RuntimeRef removed; runtime is available via DI
 
   const io = new Server(fastify.server, { cors: { origin: '*' } });
 

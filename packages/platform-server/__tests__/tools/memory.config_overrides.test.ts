@@ -1,37 +1,33 @@
 import { describe, it, expect } from 'vitest';
-import { UnifiedMemoryTool } from '../../src/tools/memory/memory.tool';
+import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../../src/nodes/tools/memory/memory.tool';
+import { MemoryToolNodeStaticConfigSchema as UnifiedMemoryToolNodeStaticConfigSchema } from '../../src/nodes/tools/memory/memory.node';
 import { LoggerService } from '../../src/core/services/logger.service.js';
 import { TemplateRegistry } from '../../src/graph/templateRegistry';
 import { toJSONSchema } from 'zod';
-import { UnifiedMemoryToolNodeStaticConfigSchema } from '../../src/tools/memory/memory.tool';
+// Note: schema below tests node-level config, not function tool input schema.
 
 describe('UnifiedMemoryTool config overrides and templates exposure', () => {
   it('applies name/description overrides and keeps defaults', async () => {
-    const tool = new UnifiedMemoryTool(new LoggerService());
-    // default metadata
-    let dynamic = tool.init();
-    expect(dynamic.name).toBe('memory');
-    expect(dynamic.description).toMatch(/Unified Memory tool/i);
+    // New API: config applied at node level; tool pulls metadata from node
+    const logger = new LoggerService();
+    const node = new (await import('../../src/nodes/tools/memory/memory.node')).MemoryToolNode(logger);
+    await node.setConfig({ description: 'Custom desc' });
+    const tool = node.getTool();
+    expect(tool.name).toBe('memory');
+    expect(tool.description).toBe('Custom desc');
 
-    // override description only (back-compat default name)
-    await tool.setConfig({ description: 'Custom desc' });
-    dynamic = tool.init();
-    expect(dynamic.name).toBe('memory');
-    expect(dynamic.description).toBe('Custom desc');
-
-    // override name (valid)
-    await tool.setConfig({ name: 'mem_x' });
-    dynamic = tool.init();
-    expect(dynamic.name).toBe('mem_x');
-    expect(dynamic.description).toBe('Custom desc');
+    await node.setConfig({ name: 'mem_x', description: 'Custom desc' });
+    const tool2 = node.getTool();
+    expect(tool2.name).toBe('mem_x');
+    expect(tool2.description).toBe('Custom desc');
   });
 
   it('rejects invalid name via schema', async () => {
-    const tool = new UnifiedMemoryTool(new LoggerService());
-    await expect(tool.setConfig({ name: 'Bad-Name' })).rejects.toThrow();
-    // ensure defaults unchanged
-    const dynamic = tool.init();
-    expect(dynamic.name).toBe('memory');
+    const logger = new LoggerService();
+    const node = new (await import('../../src/nodes/tools/memory/memory.node')).MemoryToolNode(logger);
+    await expect(node.setConfig({ name: 'Bad-Name' })).rejects.toThrow();
+    const tool = node.getTool();
+    expect(tool.name).toBe('memory');
   });
 
   it('templates expose node-level static config schema', () => {
@@ -40,4 +36,3 @@ describe('UnifiedMemoryTool config overrides and templates exposure', () => {
     expect(Object.keys(js.properties)).toEqual(expect.arrayContaining(['name','description','title']));
   });
 });
-

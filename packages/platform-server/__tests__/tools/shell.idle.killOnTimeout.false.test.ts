@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ContainerService } from '../../core/services/container.service';
+import { ContainerService } from '../../src/infra/container/container.service';
 import { LoggerService } from '../../core/services/logger.service';
 import { ExecIdleTimeoutError } from '../../utils/execTimeout';
 
@@ -32,4 +32,3 @@ describe('ContainerService idle timeout with killOnTimeout=false', () => {
     expect(stoppedCalled).toBe(false);
   });
 });
-

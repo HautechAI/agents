@@ -25,7 +25,7 @@ import {
 import { ShellCommandNode, ShellToolStaticConfigSchema } from './nodes/tools/shell_command/shell_command.node';
 import { ConfigService } from './core/services/config.service';
 import { ContainerService } from './infra/container/container.service';
-import { EnvService } from './core/env.resolver';
+import { EnvService } from './graph/env.service';
 import { LLMFactoryService } from './llm/llmFactory.service';
 import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';

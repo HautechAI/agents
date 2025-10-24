@@ -537,3 +537,6 @@ export class SummarizeResponse<TRaw = unknown> {
     this.newContext = params.newContext;
   }
 }
+
+// Re-export LLM message classes for convenience in SDK consumers/tests
+export { Message, SystemMessage as SystemMessage, HumanMessage as HumanMessage, AIMessage as AIMessage, ToolCallMessage as ToolCallMessage, ToolCallOutputMessage as ToolCallOutputMessage } from '@agyn/llm';
