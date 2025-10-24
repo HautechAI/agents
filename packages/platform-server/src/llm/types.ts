@@ -21,7 +21,14 @@
 //   | ResponseCustomToolCall
 //   | ResponseInputItem.ItemReference;
 
-import { HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
+import {
+  AIMessage,
+  HumanMessage,
+  ResponseMessage,
+  SystemMessage,
+  ToolCallMessage,
+  ToolCallOutputMessage,
+} from '@agyn/llm';
 import { Signal } from '../signal';
 import { AgentNode } from '../nodes/agent/agent.node';
 

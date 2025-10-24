@@ -34,6 +34,7 @@ import { RemindersController } from './tools/remind_me/reminders.controller';
     {
       provide: AgentRunService,
       useFactory: async (mongo: MongoService, logger: LoggerService) => {
+        await mongo.connect();
         const svc = new AgentRunService(mongo.getDb(), logger);
         await svc.ensureIndexes();
         return svc;
