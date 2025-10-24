@@ -10,8 +10,11 @@ import { NodesModule } from '../nodes/nodes.module';
 import { CoreModule } from '../core/core.module';
 import { InfraModule } from '../infra/infra.module';
 import { AgentRunService } from '../nodes/agentRun.repository';
+<<<<<<< HEAD
 import { CoreModule } from '../core/core.module';
 import { InfraModule } from '../infra/infra.module';
+=======
+>>>>>>> 3773528 (fix(GraphModule): provide TemplateRegistry via factory provider wired to Core/Infra deps)
 import { buildTemplateRegistry } from '../templates';
 import { LoggerService } from '../core/services/logger.service';
 import { ContainerService } from '../infra/container/container.service';
