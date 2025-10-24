@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { LLMProvisioner } from './llm.provisioner';
 import { ConversationStateRepository } from './repositories/conversationState.repository';
 import { LoadLLMReducer } from './reducers/load.llm.reducer';
 import { SaveLLMReducer } from './reducers/save.llm.reducer';

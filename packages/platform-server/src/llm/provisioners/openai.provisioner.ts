@@ -10,9 +10,9 @@ export class OpenAILLMProvisioner extends LLMProvisioner {
   async getLLM(): Promise<LLM> {
     if (this.llm) return this.llm;
     const apiKey = this.cfg.openaiApiKey;
-    const baseURL = this.cfg.openaiBaseUrl;
     if (!apiKey) throw new Error('openai_provider_missing_key');
-    const client = new OpenAI({ apiKey, baseURL });
+    const baseUrl = this.cfg.openaiBaseUrl;
+    const client = new OpenAI({ apiKey, baseURL: baseUrl });
     this.llm = new LLM(client as any);
     return this.llm;
   }
