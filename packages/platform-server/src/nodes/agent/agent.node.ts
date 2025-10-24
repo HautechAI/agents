@@ -28,7 +28,7 @@ import { LoadLLMReducer } from '../../llm/reducers/load.llm.reducer';
 import { SaveLLMReducer } from '../../llm/reducers/save.llm.reducer';
 import { SummarizationLLMReducer } from '../../llm/reducers/summarization.llm.reducer';
 import { Signal } from '../../signal';
-import { TriggerListener, TriggerMessage } from '../slackTrigger';
+
 import { BaseToolNode } from '../tools/baseToolNode';
 import { MessagesBuffer } from './messagesBuffer';
 
@@ -99,10 +99,10 @@ import type { TemplatePortConfig } from '../../graph/ports.types';
 import type { RuntimeContext } from '../../graph/runtimeContext';
 import Node from '../base/Node';
 import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
-import { Injectable, Scope } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class AgentNode extends Node<AgentStaticConfig> implements TriggerListener {
+export class AgentNode extends Node<AgentStaticConfig> {
   protected buffer = new MessagesBuffer({ debounceMs: 0 });
 
   private mcpServerTools: Map<McpServer, FunctionTool[]> = new Map();
@@ -112,6 +112,7 @@ export class AgentNode extends Node<AgentStaticConfig> implements TriggerListene
     protected configService: ConfigService,
     protected logger: LoggerService,
     protected llmProvisioner: LLMProvisioner,
+    private readonly moduleRef: ModuleRef,
   ) {
     super();
   }
@@ -163,7 +164,9 @@ export class AgentNode extends Node<AgentStaticConfig> implements TriggerListene
     const reducers: Record<string, Reducer<LLMState, LLMContext>> = {};
     const tools = Array.from(this.tools);
     // load -> summarize
-    reducers['load'] = new LoadLLMReducer(this.logger).next(new StaticLLMRouter('summarize'));
+    reducers['load'] = (await this.moduleRef.create(LoadLLMReducer)).next(
+      (await this.moduleRef.create(StaticLLMRouter)).init('summarize'),
+    );
 
     // summarize -> call_model
     reducers['summarize'] = new SummarizationLLMReducer(llm)

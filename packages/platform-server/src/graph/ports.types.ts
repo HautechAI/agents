@@ -2,7 +2,9 @@ import { EdgeDef } from './types';
 
 export type PortKind = 'instance' | 'method';
 
-export interface BasePortConfig { kind: PortKind; }
+export interface BasePortConfig {
+  kind: PortKind;
+}
 
 export interface MethodPortConfig extends BasePortConfig {
   kind: 'method';
@@ -38,10 +40,10 @@ export interface ResolvedEdgePorts {
 }
 
 export class PortResolutionError extends Error {
-  constructor(message: string, public edge: EdgeDef) { super(message); }
-}
-
-// New interface: nodes can provide their ports configuration at runtime
-export interface PortsProvider {
-  getPortConfig(): TemplatePortConfig;
+  constructor(
+    message: string,
+    public edge: EdgeDef,
+  ) {
+    super(message);
+  }
 }

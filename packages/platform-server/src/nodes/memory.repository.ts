@@ -39,12 +39,14 @@ export class MemoryService {
 
   constructor(private db: Db) {}
 
-  init(params: { nodeId: string; scope: MemoryScope; threadId?: string }): void {
+  init(params: { nodeId: string; scope: MemoryScope; threadId?: string }) {
     this.nodeId = params.nodeId;
     this.scope = params.scope;
     this.threadId = params.threadId;
     if (this.scope === 'perThread' && !this.threadId) throw new Error('threadId is required for perThread scope');
     this.collection = this.db.collection<MemoryDoc>('memories');
+
+    return this;
   }
 
   /** Collapse multiple slashes, require leading slash, forbid ".." and "$", and allow [A-Za-z0-9_ -] only in segments. */
@@ -307,7 +309,8 @@ export class MemoryService {
     } catch {}
     // fallback: flat dotted key value
     if (current === undefined) current = dataMap[key];
-    const next = current === undefined ? data : current + (current.endsWith('\n') || data.startsWith('\n') ? '' : '\n') + data;
+    const next =
+      current === undefined ? data : current + (current.endsWith('\n') || data.startsWith('\n') ? '' : '\n') + data;
     await this.collection.updateOne(this.filter, { $set: { [`data.${key}`]: next } });
   }
 
@@ -323,7 +326,8 @@ export class MemoryService {
     try {
       const nested = (this as any).getNested?.((doc as any).data, key);
       if (nested && nested.exists) {
-        if (typeof nested.node === 'string') current = nested.node; else throw new Error('EISDIR: path is a directory');
+        if (typeof nested.node === 'string') current = nested.node;
+        else throw new Error('EISDIR: path is a directory');
       }
     } catch {}
     if (current === undefined) current = (doc as any).data?.[key];
@@ -398,9 +402,17 @@ export class MemoryService {
   }
 
   /** Convenience dump of entire doc (shallow). */
-  async dump(): Promise<Pick<MemoryDoc, 'nodeId' | 'scope' | 'threadId'> & { data: Record<string, string>; dirs: Record<string, true> }> {
+  async dump(): Promise<
+    Pick<MemoryDoc, 'nodeId' | 'scope' | 'threadId'> & { data: Record<string, string>; dirs: Record<string, true> }
+  > {
     const doc = await this.getDocOrCreate();
-    return { nodeId: (doc as any).nodeId, scope: (doc as any).scope, threadId: (doc as any).threadId, data: { ...(doc as any).data }, dirs: { ...(doc as any).dirs } } as any;
+    return {
+      nodeId: (doc as any).nodeId,
+      scope: (doc as any).scope,
+      threadId: (doc as any).threadId,
+      data: { ...(doc as any).data },
+      dirs: { ...(doc as any).dirs },
+    } as any;
   }
 
   // ensure parents of a dotted key are marked as dirs
@@ -412,7 +424,6 @@ export class MemoryService {
       const dirKey = parts.slice(0, i).join('.');
       updates[`dirs.${dirKey}`] = true as any;
     }
-    if (Object.keys(updates).length)
-      await this.collection.updateOne(this.filter, { $set: updates }, { upsert: true });
+    if (Object.keys(updates).length) await this.collection.updateOne(this.filter, { $set: updates }, { upsert: true });
   }
 }

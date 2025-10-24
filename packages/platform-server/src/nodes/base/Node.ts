@@ -1,5 +1,6 @@
 import { Injectable, Scope } from '@nestjs/common';
 import { EventEmitter } from 'events';
+import { TemplatePortConfig } from '../../graph';
 
 export type NodeStatusState =
   | 'not_ready'
@@ -13,11 +14,13 @@ export type StatusChangedEvent = { prev: NodeStatusState; next: NodeStatusState;
 export type ConfigChangedEvent<TConfig = unknown> = { config: TConfig; at: number };
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class Node<TConfig = unknown> extends EventEmitter {
+export abstract class Node<TConfig = unknown> extends EventEmitter {
   private _status: NodeStatusState = 'not_ready';
   private _pending: 'provision' | 'deprovision' | null = null;
   protected _config: TConfig = {} as TConfig;
   protected _nodeId?: string;
+
+  abstract getPortConfig(): TemplatePortConfig;
 
   init(params: { nodeId: string }) {
     this._nodeId = params.nodeId;

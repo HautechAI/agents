@@ -1,11 +1,11 @@
 import z from 'zod';
 
-import { LoggerService } from '../../../core/services/logger.service';
-import { AgentNode } from '../../agent/agent.node';
-import { TriggerMessage } from '../../slackTrigger';
 import { FunctionTool } from '@agyn/llm';
+import { ManageToolNode } from './manage.node';
+import { LoggerService } from '../../../core/services/logger.service';
+import { TriggerMessage } from '../../slackTrigger/base.trigger';
 
-export const manageInvocationSchema = z
+export const ManageInvocationSchema = z
   .object({
     command: z.enum(['list', 'send_message', 'check_status']).describe('Command to execute.'),
     worker: z.string().min(1).optional().describe('Target worker name (required for send_message).'),
@@ -14,31 +14,36 @@ export const manageInvocationSchema = z
   })
   .strict();
 
-interface ManageFunctionToolDeps {
-  getWorkers: () => { name: string; agent: AgentNode }[];
-  getDescription: () => string;
-  getName: () => string;
-  logger: LoggerService;
-}
+export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSchema> {
+  private _node?: ManageToolNode;
 
-export class ManageFunctionTool extends FunctionTool<typeof manageInvocationSchema> {
-  constructor(private deps: ManageFunctionToolDeps) {
+  constructor(private logger: LoggerService) {
     super();
   }
-  get name() {
-    return this.deps.getName();
-  }
-  get schema() {
-    return manageInvocationSchema;
-  }
-  get description() {
-    return this.deps.getDescription();
+
+  init(node: ManageToolNode) {
+    this._node = node;
+    return this;
   }
 
-  async execute(args: z.infer<typeof manageInvocationSchema>): Promise<string> {
+  get node() {
+    if (!this._node) throw new Error('ManageFunctionTool: node not initialized');
+    return this._node;
+  }
+
+  get name() {
+    return this.node.config.name ?? 'manage';
+  }
+  get schema() {
+    return ManageInvocationSchema;
+  }
+  get description() {
+    return this.node.config.description ?? 'Manage tool';
+  }
+
+  async execute(args: z.infer<typeof ManageInvocationSchema>): Promise<string> {
     const { command, worker, message, parentThreadId } = args;
-    const workers = this.deps.getWorkers();
-    const logger = this.deps.logger;
+    const workers = this.node.listWorkers();
 
     if (command === 'list') {
       return JSON.stringify(workers.map((w) => w.name));
@@ -54,7 +59,7 @@ export class ManageFunctionTool extends FunctionTool<typeof manageInvocationSche
         const res = await target.agent.invoke(childThreadId, [triggerMessage]);
         return res?.text;
       } catch (err: unknown) {
-        logger.error('Manage: send_message failed', {
+        this.logger.error('Manage: send_message failed', {
           worker: target.name,
           childThreadId,
           error: (err as { message?: string })?.message || String(err),
@@ -71,7 +76,10 @@ export class ManageFunctionTool extends FunctionTool<typeof manageInvocationSche
           const threads = w.agent.listActiveThreads(prefix) || [];
           for (const t of threads) if (t.startsWith(prefix)) ids.add(t.slice(prefix.length));
         } catch (err: unknown) {
-          logger.error('Manage: listActiveThreads failed', { worker: w.name, error: (err as { message?: string })?.message || String(err) });
+          this.logger.error('Manage: listActiveThreads failed', {
+            worker: w.name,
+            error: (err as { message?: string })?.message || String(err),
+          });
         }
       }
       return JSON.stringify({ activeTasks: ids.size, childThreadIds: Array.from(ids.values()) });
@@ -79,14 +87,3 @@ export class ManageFunctionTool extends FunctionTool<typeof manageInvocationSche
     return '';
   }
 }
-
-export const ManageToolStaticConfigSchema = z
-  .object({
-    description: z.string().min(1).optional(),
-    name: z
-      .string()
-      .regex(/^[a-z0-9_]{1,64}$/)
-      .optional()
-      .describe('Optional tool name. Default: Manage'),
-  })
-  .strict();

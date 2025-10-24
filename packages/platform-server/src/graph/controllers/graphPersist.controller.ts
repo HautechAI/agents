@@ -4,8 +4,13 @@ import { LoggerService } from '../../core/services/logger.service';
 import { TemplateRegistry } from '../templateRegistry';
 import { LiveGraphRuntime } from '../liveGraph.manager';
 import { GraphRepository, type GraphAuthor } from '../graph.repository';
-import type { GraphDefinition, PersistedGraphUpsertRequest, PersistedGraphUpsertResponse } from '../types';
-import { GraphError, GraphErrorCode } from '../errors';
+import {
+  GraphError,
+  type GraphDefinition,
+  type PersistedGraphUpsertRequest,
+  type PersistedGraphUpsertResponse,
+} from '../types';
+import { GraphErrorCode } from '../errors';
 
 // Helper to convert persisted graph to runtime GraphDefinition (mirrors src/index.ts)
 const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition => {

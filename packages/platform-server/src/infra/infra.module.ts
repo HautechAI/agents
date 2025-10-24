@@ -1,18 +1,19 @@
 import { Module } from '@nestjs/common';
-import { MongoService } from '../core/services/mongo.service';
-import { LoggerService } from '../core/services/logger.service';
+import { CoreModule } from '../core/core.module';
 import { ConfigService } from '../core/services/config.service';
-import { NixController } from './ncps/nix.controller';
-import { ContainerService } from './container/container.service';
-import { VaultModule } from './vault/vault.module';
-import { ContainerCleanupService } from './container/containerCleanup.job';
+import { LoggerService } from '../core/services/logger.service';
+import { MongoService } from '../core/services/mongo.service';
 import { ContainerRegistry } from './container/container.registry';
-import { NcpsKeyService } from './ncps/ncpsKey.service';
+import { ContainerService } from './container/container.service';
+import { ContainerCleanupService } from './container/containerCleanup.job';
 import { GithubService } from './github/github.client';
 import { PRService } from './github/pr.usecase';
+import { NcpsKeyService } from './ncps/ncpsKey.service';
+import { NixController } from './ncps/nix.controller';
+import { VaultModule } from './vault/vault.module';
 
 @Module({
-  imports: [VaultModule],
+  imports: [CoreModule, VaultModule],
   providers: [
     {
       provide: ContainerRegistry,

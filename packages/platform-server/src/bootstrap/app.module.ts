@@ -4,7 +4,7 @@ import { GraphModule } from '../graph/graph.module';
 import { InfraModule } from '../infra/infra.module';
 import { NodesModule } from '../nodes/nodes.module';
 
-@Module({ imports: [CoreModule, InfraModule, NodesModule, GraphModule] })
+@Module({ imports: [CoreModule, InfraModule] })
 export class AppModule {
   constructor() {}
 }

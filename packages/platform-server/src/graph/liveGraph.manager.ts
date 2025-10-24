@@ -9,19 +9,19 @@ import {
 import { EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
 // Ports based reversible universal edges
 import { ZodError } from 'zod';
+import { LoggerService } from '../core/services/logger.service';
 import { LocalMCPServer } from '../nodes/mcp';
 import type { PersistedMcpState } from '../nodes/mcp/types';
-import { isNodeLifecycle } from '../nodes/types';
-import { LoggerService } from '../core/services/logger.service';
 
+import { Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { NodeStatusState } from '../nodes/base/Node';
+
+import type Node from '../nodes/base/Node';
 import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
+import type { TemplatePortConfig } from './ports.types';
 import { TemplateRegistry } from './templateRegistry';
-import { resolve } from '../bootstrap/di';
-import type Node from '../nodes/base/Node';
-import type { PortsProvider, TemplatePortConfig } from './ports.types';
-import type { RuntimeContext, RuntimeContextAware } from './runtimeContext';
-import { hasSetConfig } from './capabilities';
 // hasSetDynamicConfig guard is optional; check presence inline to avoid hard dependency
 import { GraphRepository } from './graph.repository';
 
@@ -48,6 +48,7 @@ export class LiveGraphRuntime {
     private readonly logger: LoggerService,
     private readonly templateRegistry: TemplateRegistry,
     private readonly graphs: GraphRepository,
+    private readonly moduleRef: ModuleRef,
   ) {
     this.portsRegistry = new PortsRegistry();
   }
@@ -334,61 +335,24 @@ export class LiveGraphRuntime {
   }
 
   private async instantiateNode(node: NodeDef): Promise<void> {
-      try {
-        const nodeClass = this.templateRegistry.getClass(node.data.template);
-        if (!nodeClass) throw Errors.unknownTemplate(node.data.template, node.id);
-        // Instantiate via DI container (transient scope expected)
-        const created: Node = await resolve<Node>(nodeClass as any);
+    try {
+      const nodeClass = this.templateRegistry.getClass(node.data.template);
+      if (!nodeClass) throw Errors.unknownTemplate(node.data.template, node.id);
 
-      // If node supports runtime context, provide it
-      const maybeAware = created as unknown as Partial<RuntimeContextAware>;
-      if (maybeAware && typeof maybeAware.setRuntimeContext === 'function') {
-        const ctx: RuntimeContext = {
-          nodeId: node.id,
-          get: (id: string) => this.state.nodes.get(id)?.instance,
-        };
-        maybeAware.setRuntimeContext(ctx);
+      const created: Node = await this.moduleRef.create<Node>(nodeClass);
+
+      const cfg = created.getPortConfig() as TemplatePortConfig;
+      if (cfg) {
+        this.portsRegistry.registerTemplatePorts(node.data.template, cfg);
+        this.portsRegistry.validateTemplateInstance(node.data.template, created);
       }
 
-      // If node provides port config, register it and validate instance shape
-      const maybePorts = created as unknown as Partial<PortsProvider>;
-      if (maybePorts && typeof maybePorts.getPortConfig === 'function') {
-        const cfg = maybePorts.getPortConfig() as TemplatePortConfig;
-        if (cfg) {
-          this.portsRegistry.registerTemplatePorts(node.data.template, cfg);
-          this.portsRegistry.validateTemplateInstance(node.data.template, created);
-        }
-      }
       // NOTE: setGraphNodeId reflection removed; prefer factories to leverage ctx.nodeId directly.
       const live: LiveNode = { id: node.id, template: node.data.template, instance: created, config: node.data.config };
       this.state.nodes.set(node.id, live);
 
-      if (!isNodeLifecycle(created) && node.data.config) {
-        if (hasSetConfig(created)) {
-          try {
-            const cleaned = await this.applyConfigWithUnknownKeyStripping(
-              created,
-              'setConfig',
-              node.data.config,
-              node.id,
-            );
-            if (cleaned) live.config = cleaned;
-          } catch (err) {
-            throw Errors.nodeInitFailure(node.id, err);
-          }
-        }
-      }
-      // Lifecycle-aware path: configure + start
-      if (isNodeLifecycle(created)) {
-        try {
-          const cfg = (node.data.config || {}) as Record<string, unknown>;
-          await created.configure(cfg);
-          await created.start();
-          live.config = cfg;
-        } catch (err) {
-          throw Errors.nodeInitFailure(node.id, err);
-        }
-      }
+      await created.setConfig(node.data.config);
+      await created.provision();
 
       // Fix: Create LocalMCPServerTool instances from McpTool if present in state.mcp.tools
       if (created instanceof LocalMCPServer) {
@@ -401,21 +365,6 @@ export class LiveGraphRuntime {
             created.preloadCachedTools(tools, updatedAt);
           } catch (e) {
             this.logger.error('Error during MCP cache preload for node %s', node.id, e);
-          }
-        }
-      }
-
-      if (node.data.dynamicConfig) {
-        if ((created as any) && typeof (created as any).setDynamicConfig === 'function') {
-          try {
-            await this.applyConfigWithUnknownKeyStripping(
-              created,
-              'setDynamicConfig',
-              node.data.dynamicConfig,
-              node.id,
-            );
-          } catch (err) {
-            throw Errors.nodeInitFailure(node.id, err);
           }
         }
       }
@@ -636,5 +585,3 @@ export class LiveGraphRuntime {
     this.state.executedEdges.clear();
   }
 }
-import { Injectable } from '@nestjs/common';
-import { NodeStatusState } from '../nodes/base/Node';

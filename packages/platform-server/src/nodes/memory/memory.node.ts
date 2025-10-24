@@ -13,7 +13,7 @@ export interface MemoryNodeConfig {
 // Static config exposed to UI for MemoryNode
 export const MemoryNodeStaticConfigSchema = z
   .object({
-    scope: z.enum(['global', 'thread']).default('global'),
+    scope: z.enum(['global', 'perThread']).default('global'),
     collectionPrefix: z.string().optional(),
     // UI display only; not used by service
     title: z.string().min(1).optional(),
@@ -28,11 +28,12 @@ export type MemoryNodeStaticConfig = z.infer<typeof MemoryNodeStaticConfigSchema
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class MemoryNode extends Node<MemoryNodeStaticConfig> {
-  constructor(private db: Db, private moduleRef: ModuleRef) {
+  constructor(
+    private db: Db,
+    private moduleRef: ModuleRef,
+  ) {
     super();
   }
-
-  private config: MemoryNodeConfig = { scope: 'global' };
 
   init(params: { nodeId: string }): void {
     super.init(params);
@@ -40,8 +41,8 @@ export class MemoryNode extends Node<MemoryNodeStaticConfig> {
 
   getMemoryService(opts: { threadId?: string }): MemoryService {
     const threadId = this.config.scope === 'perThread' ? opts.threadId : undefined;
-    const svc = this.moduleRef.create(MemoryService);
-    svc.init({ nodeId: this.nodeId, scope: this.config.scope, threadId });
+    const svc = this.moduleRef.create(MemoryService).init({ nodeId: this.nodeId, scope: this.config.scope, threadId });
+
     return svc;
   }
 
