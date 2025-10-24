@@ -121,7 +121,7 @@ import { GraphDefinition, GraphError } from './types';
           }
         } catch (e) {
           if (e instanceof GraphError) {
-            logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, (e as any)?.cause);
+            logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, e.cause);
           }
           logger.error('Failed to apply initial persisted graph: %s', String(e));
         }
