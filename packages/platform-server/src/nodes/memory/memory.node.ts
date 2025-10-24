@@ -2,7 +2,8 @@ import { Db } from 'mongodb';
 import { z } from 'zod';
 import { MemoryService, MemoryScope } from '../../nodes/memory.repository';
 import Node from '../base/Node';
-import { Injectable, Scope, ModuleRef } from '@nestjs/common';
+import { Injectable, Scope } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 
 export interface MemoryNodeConfig {
   scope: MemoryScope; // 'global' | 'perThread'
