@@ -59,7 +59,7 @@ import { Provider } from '@nestjs/common';
           await svc.initIfNeeded();
           return svc;
         } else {
-          const svc = new MongoGraphRepository(mongo.getDb(), logger, templateRegistry);
+          const svc = new MongoGraphRepository(mongo.getDb(), logger, templateRegistry, config);
           await svc.initIfNeeded();
           return svc;
         }

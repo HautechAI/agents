@@ -23,14 +23,16 @@ export interface EdgeDef {
   targetHandle: string; // handle name on target instance
 }
 
-export interface DependencyBag {
-  // Arbitrary shared services / singletons instanced outside the builder
-  // (e.g., logger, configService, slackService, containerProvider, checkpointerService, etc.)
-  [k: string]: any;  
-}
+/**
+ * Deprecated: legacy dependency bag previously passed to factories via runtime.
+ * Prefer explicit wiring through template factories and constructor params.
+ * Kept for backward-compat of type signatures; will be removed in a future release.
+ */
+export type DependencyBag = Record<string, unknown>;
 
 export interface FactoryContext {
-  deps: DependencyBag;
+  // Deprecated: deps were previously injected globally; avoid relying on this.
+  deps?: DependencyBag;
   get: (id: string) => unknown; // access previously instantiated node (must exist already)
   nodeId: string; // id of the node currently being instantiated (for namespacing / awareness)
 }
@@ -41,6 +43,11 @@ export interface Configurable {
 }
 
 export type FactoryFn = (ctx: FactoryContext) => Configurable | Promise<Configurable>;
+
+// Minimal persistence interface used by NodeStateService to upsert per-node state
+export interface GraphStateUpsertService {
+  upsertNodeState(name: string, nodeId: string, patch: Record<string, unknown>): Promise<void>;
+}
 
 export interface TemplateRegistryLike {
   get(template: string): FactoryFn | undefined;

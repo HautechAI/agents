@@ -31,6 +31,7 @@ import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';
 import { NcpsKeyService } from './core/services/ncpsKey.service';
 import { VaultService } from './infra/vault/vault.service';
+import { NodeStateService } from './graph/nodeState.service';
 // Unified Memory tool
 
 export interface TemplateRegistryDeps {
@@ -40,10 +41,12 @@ export interface TemplateRegistryDeps {
   mongoService: MongoService; // required for memory nodes
   llmFactoryService: LLMFactoryService;
   ncpsKeyService?: NcpsKeyService;
+  // Provide NodeStateService deterministically; prefer provider to avoid construction cycles
+  nodeStateServiceProvider?: () => NodeStateService | undefined;
 }
 
 export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
-  const { logger, containerService, configService, mongoService, ncpsKeyService, llmFactoryService } = deps;
+  const { logger, containerService, configService, mongoService, ncpsKeyService, llmFactoryService, nodeStateServiceProvider } = deps;
 
   // Initialize Vault service from config (optional)
   const vault = new VaultService(configService, logger);
@@ -240,7 +243,14 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       .register(
         'mcpServer',
         () => {
-          const server = new LocalMCPServer(containerService, logger, vault, envService, configService);
+          const server = new LocalMCPServer(
+            containerService,
+            logger,
+            vault,
+            envService,
+            configService,
+            nodeStateServiceProvider ? nodeStateServiceProvider() : undefined,
+          );
           void server.start();
           return server;
         },

@@ -6,7 +6,7 @@ import {
   LiveNode,
   edgeKey,
 } from './liveGraph.types';
-import { DependencyBag, EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
+import { EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
 // Ports based reversible universal edges
 import { ZodError } from 'zod';
 import { LocalMCPServer } from '../nodes/mcp';
@@ -45,11 +45,7 @@ export class LiveGraphRuntime {
     this.portsRegistry = new PortsRegistry(this.templateRegistry.getPortsMap());
   }
 
-  // Optional global deps bag exposed to factories and post-instantiation hooks
-  private factoryDeps: DependencyBag = {};
-  setFactoryDeps(deps: DependencyBag) {
-    this.factoryDeps = deps || {};
-  }
+  // factoryDeps removed; factories should rely on FactoryContext primitives only
 
   get version() {
     return this.state.version;
@@ -68,6 +64,15 @@ export class LiveGraphRuntime {
     if (this.state.lastGraph) {
       const node = this.state.lastGraph.nodes.find((n) => n.id === id);
       if (node) node.data.config = cfg;
+    }
+  }
+
+  // Update persisted runtime snapshot state for a node (typed helper)
+  updateNodeState(id: string, state: Record<string, unknown>): void {
+    if (!this.state.lastGraph) return;
+    const node = this.state.lastGraph.nodes.find((n) => n.id === id);
+    if (node) {
+      node.data.state = state;
     }
   }
 
@@ -255,7 +260,7 @@ export class LiveGraphRuntime {
       removedNodes: diff.removedNodeIds,
       recreatedNodes: diff.recreatedNodeIds,
       updatedConfigNodes: diff.configUpdateNodeIds,
-      updatedDynamicConfigNodes: (diff as any).dynamicConfigUpdateNodeIds || [],
+      updatedDynamicConfigNodes: diff.dynamicConfigUpdateNodeIds || [],
       addedEdges: diff.addedEdges.map(edgeKey),
       removedEdges: diff.removedEdges.map(edgeKey),
       errors,
@@ -285,8 +290,8 @@ export class LiveGraphRuntime {
           const prevCfg = prevNode.data.config || {};
           const nextCfg = n.data.config || {};
           if (!configsEqual(prevCfg, nextCfg)) configUpdateNodeIds.push(n.id);
-          const prevDyn = (prevNode.data as any).dynamicConfig || {};
-          const nextDyn = (n.data as any).dynamicConfig || {};
+          const prevDyn = prevNode.data.dynamicConfig || {};
+          const nextDyn = n.data.dynamicConfig || {};
           if (!configsEqual(prevDyn, nextDyn)) dynamicConfigUpdateNodeIds.push(n.id);
         }
       }
@@ -311,16 +316,15 @@ export class LiveGraphRuntime {
       dynamicConfigUpdateNodeIds,
       addedEdges,
       removedEdges,
-    } as any;
+    } as InternalDiffComputation;
   }
 
   private async instantiateNode(node: NodeDef): Promise<void> {
     try {
       const factory = this.templateRegistry.get(node.data.template);
       if (!factory) throw Errors.unknownTemplate(node.data.template, node.id);
-      // Factories receive a minimal context (deps deprecated -> empty object)
+      // Factories receive a minimal context
       const created = await factory({
-        deps: this.factoryDeps,
         get: (id: string) => this.state.nodes.get(id)?.instance,
         nodeId: node.id,
       });
