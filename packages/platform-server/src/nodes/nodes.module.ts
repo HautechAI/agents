@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongoService } from '../core/services/mongo.service';
 import { LoggerService } from '../core/services/logger.service';
 import { LLMModule } from '../llm/llm.module';
+import { CoreModule } from '../core/core.module';
 // Agent and memory
 import { AgentRunService } from './agentRun.repository';
 import { MemoryService } from './memory.repository';
@@ -26,7 +27,7 @@ import { RemindMeNode } from './tools/remind_me/remind_me.node';
 import { RemindersController } from './tools/remind_me/reminders.controller';
 
 @Module({
-  imports: [LLMModule],
+  imports: [CoreModule, LLMModule],
   controllers: [RemindersController],
   providers: [
     // repositories/services
