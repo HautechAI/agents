@@ -1,52 +1,35 @@
 import { LLM } from '@agyn/llm';
-<<<<<<< HEAD
 import OpenAI from 'openai';
 import { ConfigService } from '../../core/services/config.service';
 import { LoggerService } from '../../core/services/logger.service';
 import { LLMProvisioner } from './llm.provisioner';
 import { Injectable } from '@nestjs/common';
-=======
-import OpenAI from 'openai';
-import { ConfigService } from '../../core/services/config.service';
-import { LoggerService } from '../../core/services/logger.service';
-import { LLMProvisioner } from './llm.provisioner';
-import { Injectable } from '@nestjs/common';
->>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
 
 type ProvisionResult = { apiKey?: string; baseUrl?: string };
 
 @Injectable()
 export class LiteLLMProvisioner extends LLMProvisioner {
-<<<<<<< HEAD
   private llm?: LLM;
 
   constructor(
     private cfg: ConfigService,
     private logger: LoggerService,
   ) {
-=======
   private llm?: LLM;
 
   constructor(
     private cfg: ConfigService,
     private logger: LoggerService,
   ) {
->>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
     super();
   }
 
   async getLLM(): Promise<LLM> {
     if (this.llm) return this.llm;
 
-<<<<<<< HEAD
     const { apiKey, baseUrl } = await this.fetchOrCreateKeysInternal();
     const client = new OpenAI({ apiKey, baseURL: baseUrl });
     this.llm = new LLM(client);
-=======
-    const { apiKey, baseUrl } = await this.fetchOrCreateKeysInternal();
-    const client = new OpenAI({ apiKey, baseURL: baseUrl });
-    this.llm = new LLM(client);
->>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
     return this.llm;
   }
 
@@ -62,21 +45,12 @@ export class LiteLLMProvisioner extends LLMProvisioner {
     const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
     if (provKey) return { apiKey: provKey, baseUrl };
 
-<<<<<<< HEAD
     // Fallback to configured envs
     const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
     const base =
       this.cfg.openaiBaseUrl ||
       (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
     return { apiKey: fallbackKey, baseUrl: base };
-=======
-    // Fallback to configured envs
-    const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
-    const base =
-      this.cfg.openaiBaseUrl ||
-      (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
-    return { apiKey: fallbackKey, baseUrl: base };
->>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
   }
 
   private async provisionWithRetry(): Promise<ProvisionResult> {
