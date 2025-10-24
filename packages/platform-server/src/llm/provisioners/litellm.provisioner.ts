@@ -7,12 +7,13 @@ import { LLM } from '@agyn/llm';
 type ProvisionResult = { apiKey?: string; baseUrl?: string };
 
 export class LiteLLMProvisioner extends LLMProvisioner {
-  private client: OpenAI | null = null;
+  private llm: LLM | null = null;
   constructor(private cfg: ConfigService, private logger: LoggerService) {
     super();
   }
 
   async getLLM(): Promise<LLM> {
+<<<<<<< HEAD
     if (!this.client) {
       const apiKey = this.cfg.openaiApiKey ?? this.cfg.litellmMasterKey;
       let baseURL = this.cfg.openaiBaseUrl;
@@ -28,6 +29,33 @@ export class LiteLLMProvisioner extends LLMProvisioner {
       this.client = new OpenAI({ apiKey: apiKey as string, baseURL });
     }
     return new LLM(this.client as any);
+=======
+    if (this.llm) return this.llm;
+    const { apiKey, baseUrl } = await this.fetchOrCreateKeysInternal();
+    const client = new OpenAI({ apiKey, baseURL: baseUrl });
+    this.llm = new LLM(client);
+    return this.llm;
+  }
+
+  private async fetchOrCreateKeysInternal(): Promise<{ apiKey: string; baseUrl?: string }> {
+    // Prefer direct OpenAI if available
+    if (this.cfg.openaiApiKey) {
+      return { apiKey: this.cfg.openaiApiKey, baseUrl: this.cfg.openaiBaseUrl };
+    }
+
+    // Otherwise require LiteLLM config to be present for provisioning
+    if (!this.cfg.litellmBaseUrl || !this.cfg.litellmMasterKey) {
+      throw new Error('litellm_missing_config');
+    }
+
+    const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
+    if (provKey) return { apiKey: provKey, baseUrl };
+
+    // Fallback to configured envs
+    const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
+    const base = this.cfg.openaiBaseUrl || (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
+    return { apiKey: fallbackKey, baseUrl: base };
+>>>>>>> ffaf5ae (refactor(platform-server): simplify LLMProvisioner to getLLM(); update provisioners; remove LLMFactoryService; inject provisioner in consumers; keep DI factory provider (Issue #423)})
   }
 
   private async provisionWithRetry(): Promise<ProvisionResult> {

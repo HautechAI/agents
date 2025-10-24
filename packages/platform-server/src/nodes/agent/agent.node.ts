@@ -13,7 +13,11 @@ import { CallToolsLLMReducer } from '../../llm/reducers/callTools.llm.reducer';
 import { ConditionalLLMRouter } from '../../llm/routers/conditional.llm.router';
 import { StaticLLMRouter } from '../../llm/routers/static.llm.router';
 import { LLMContext, LLMState } from '../../llm/types';
+<<<<<<< HEAD
 import { LLMProvisioner } from '../../llm/llm.provisioner';
+=======
+import { LLMProvisioner } from '../../llm/provisioners/llm.provisioner';
+>>>>>>> ffaf5ae (refactor(platform-server): simplify LLMProvisioner to getLLM(); update provisioners; remove LLMFactoryService; inject provisioner in consumers; keep DI factory provider (Issue #423)})
 
 import { SummarizationLLMReducer } from '../../llm/reducers/summarization.llm.reducer';
 import { LoadLLMReducer } from '../../llm/reducers/load.llm.reducer';
@@ -118,7 +122,11 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
 
   private async prepareLoop(): Promise<Loop<LLMState, LLMContext>> {
     const llm = await this.provisioner.getLLM();
+<<<<<<< HEAD
     const reducers: Record<string, Reducer<LLMState, LLMContext>> = {};
+=======
+    const routers = new Map<string, ConditionalLLMRouter | StaticLLMRouter>();
+>>>>>>> ffaf5ae (refactor(platform-server): simplify LLMProvisioner to getLLM(); update provisioners; remove LLMFactoryService; inject provisioner in consumers; keep DI factory provider (Issue #423)})
     const tools = Array.from(this.tools);
     // load -> summarize
     reducers['load'] = new LoadLLMReducer(this.logger).next(new StaticLLMRouter('summarize'));
