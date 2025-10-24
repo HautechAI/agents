@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LoggerService } from '../../src/core/services/logger.service';
 import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
-import { EnvService } from '../../src/graph/env.service';
 
 class FakeContainer {
   public lastExec: { cmd: string; env?: Record<string, string>; workdir?: string } | null = null;
@@ -32,18 +31,16 @@ describe('ShellTool env/workdir isolation with vault-backed overlay', () => {
 
     const fakeVault = { isEnabled: () => true, getSecret: vi.fn(async () => 'VAULTED') } as any;
 
-    const nodeA = new ShellCommandNode(new EnvService(fakeVault));
-    nodeA.setContainerProvider(provider as any);
-    await nodeA.setConfig({ env: [ { key: 'FOO', value: 'A' }, { key: 'BAR', value: 'secret/path/key', source: 'vault' } ], workdir: '/w/a' });
-    const at = nodeA.getTool();
+    const a = new ShellCommandNode(fakeVault as any); a.setContainerProvider(provider as any);
+    await a.setConfig({ env: [ { key: 'FOO', value: 'A' }, { key: 'BAR', value: 'secret/path/key', source: 'vault' } ], workdir: '/w/a' });
+    const b = new ShellCommandNode(undefined as any); b.setContainerProvider(provider as any);
+    await b.setConfig({ env: [ { key: 'FOO', value: 'B' } ], workdir: '/w/b' });
 
-    const nodeB = new ShellCommandNode(new EnvService(undefined as any));
-    nodeB.setContainerProvider(provider as any);
-    await nodeB.setConfig({ env: [ { key: 'FOO', value: 'B' } ], workdir: '/w/b' });
-    const bt = nodeB.getTool();
+    const at = a.getTool();
+    const bt = b.getTool();
 
-    const aRes = String(await at.execute({ command: 'printenv' } as any, { threadId: 't' } as any));
-    const bRes = String(await bt.execute({ command: 'printenv' } as any, { threadId: 't' } as any));
+    const aRes = String(await at.execute({ command: 'printenv' } as any, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false } as any, callerAgent: {} as any } as any));
+    const bRes = String(await bt.execute({ command: 'printenv' } as any, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false } as any, callerAgent: {} as any } as any));
 
     const parse = (s: string) => Object.fromEntries(s.trim().split('\n').map((l) => l.split('=')));
     const A = parse(aRes), B = parse(bRes);

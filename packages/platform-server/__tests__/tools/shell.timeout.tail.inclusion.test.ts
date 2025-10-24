@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
 import { LoggerService } from '../../src/core/services/logger.service';
 import { ExecTimeoutError } from '../../src/utils/execTimeout';
-// ContainerProviderEntity and ContainerHandle were removed; this test focuses on tool error handling.
-// Use a minimal stub provider with exec throwing expected error.
+import { ContainerEntity } from '../../src/entities/container.entity';
+import { ContainerProviderEntity } from '../../src/entities/containerProvider.entity';
+import { ContainerService } from '../../src/infra/container/container.service';
 
 // ANSI colored output to verify stripping; include more than 10k and ensure we only keep tail
 const ANSI_RED = '\u001b[31m';
@@ -17,23 +18,24 @@ describe('ShellTool timeout tail inclusion and ANSI stripping', () => {
     const stderr = `${ANSI_RED}ERR-SECTION${ANSI_RESET}`;
     const err = new ExecTimeoutError(3600000, stdout, stderr);
 
-    const node = new ShellCommandNode(new (await import('../../src/graph/env.service')).EnvService(new LoggerService() as any));
-    node.setContainerProvider(({
-      provide: async (_t: string) => ({
-        exec: async (): Promise<never> => { throw err; },
-      } as any),
-    } as any));
+    class FakeContainer extends ContainerEntity { override async exec(): Promise<never> { throw err; } }
+    class FakeProvider extends ContainerProviderEntity {
+      constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); }
+      override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); }
+    }
+    const provider = new FakeProvider(logger);
+    const node = new ShellCommandNode(undefined as any);
+    node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();
 
-    const payload: any = { command: 'sleep 1h' };
-    const ctx: any = { threadId: 't' };
+    const payload = { command: 'sleep 1h' } as any;
     await expect(
-      t.execute(payload, ctx),
+      t.execute(payload as any, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false } as any, callerAgent: {} as any } as any),
     ).rejects.toThrowError(/Error \(timeout after 3600000ms\): command exceeded 3600000ms and was terminated\. See output tail below\./);
 
     try {
-      await t.execute(payload, ctx);
+      await t.execute(payload as any, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false } as any, callerAgent: {} as any } as any);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       // No ANSI should remain
