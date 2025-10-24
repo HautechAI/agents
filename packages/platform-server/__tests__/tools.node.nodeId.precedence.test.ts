@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ResponseMessage, ToolCallMessage } from '@agyn/llm';
-import { tool, DynamicStructuredTool } from '@langchain/core/tools';
 import { CallToolsLLMReducer } from '../src/llm/reducers/callTools.llm.reducer';
 import { LoggerService } from '../src/core/services/logger.service.js';
 
@@ -26,13 +25,7 @@ vi.mock('@agyn/tracing', () => {
   return { withToolCall, ToolCallResponse, __test: { captured } } as any;
 });
 
-class EchoTool /* extends BaseTool (legacy) */ {
-  init(): DynamicStructuredTool {
-    return tool(async (raw) => `echo:${JSON.stringify(raw)}`,
-      { name: 'echo', description: 'echo tool', schema: ({} as any) },
-    );
-  }
-}
+// Legacy EchoTool removed; tests use FunctionTool shape directly
 
 describe('ToolsNode tool_call span attribution', () => {
   it('stamps nodeId=Tool id when provided (no toolNodeId attribute)', async () => {
