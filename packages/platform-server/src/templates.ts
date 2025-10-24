@@ -27,6 +27,7 @@ import { ConfigService } from './core/services/config.service';
 import { ContainerService } from './infra/container/container.service';
 import { EnvService } from './graph/env.service';
 import { LLMProvisioner } from './llm/provisioners/llm.provisioner';
+import { LLMProvisioner } from './llm/llm.provisioner';
 import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';
 import { NcpsKeyService } from './core/services/ncpsKey.service';
@@ -39,11 +40,13 @@ export interface TemplateRegistryDeps {
   configService: ConfigService;
   mongoService: MongoService; // required for memory nodes
   provisioner: LLMProvisioner;
+  llmProvisioner: LLMProvisioner;
   ncpsKeyService?: NcpsKeyService;
 }
 
 export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
   const { logger, containerService, configService, mongoService, ncpsKeyService, provisioner } = deps;
+  const { logger, containerService, configService, mongoService, ncpsKeyService, llmProvisioner } = deps;
 
   // Initialize Vault service from config (optional)
   const vault = new VaultService(configService, logger);
@@ -207,6 +210,7 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       .register(
         'agent',
         (ctx) => new AgentNode(configService, logger, provisioner, ctx.nodeId),
+        (ctx) => new AgentNode(configService, logger, llmProvisioner, ctx.nodeId),
         {
           sourcePorts: {
             tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
