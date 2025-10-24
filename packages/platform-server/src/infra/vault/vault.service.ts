@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { z } from 'zod';
 import { LoggerService } from '../../core/services/logger.service';
 import { ConfigService } from '../../core/services/config.service';
@@ -31,8 +31,8 @@ export type VaultRef = { mount: string; path: string; key: string };
 export class VaultService {
   private cfg: VaultConfig;
   constructor(
-    private configService: ConfigService,
-    private logger: LoggerService,
+    @Inject(ConfigService) private readonly configService: ConfigService,
+    @Inject(LoggerService) private readonly logger: LoggerService,
   ) {
     this.cfg = VaultConfigSchema.parse({
       enabled: this.configService.vaultEnabled,
