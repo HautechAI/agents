@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EnvService, EnvError, type EnvItem } from '../core/env.resolver';
+import { EnvService, EnvError, type EnvItem } from '../src/graph/env.service';
 import { VaultService, type VaultConfig } from '../core/services/vault.service';
 
 // Helper to build a real VaultService with desired enabled state

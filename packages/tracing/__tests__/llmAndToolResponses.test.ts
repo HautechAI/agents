@@ -29,8 +29,7 @@ describe('LLMResponse & withLLM', () => {
     await withLLM({ context: [] as any }, async () => new LLMResponse({ raw, content: 'Result body', toolCalls: [{ id: 'tc1', name: 'foo', arguments: {} }] }));
     const completed = posted.find(p => p.state === 'completed');
     expect(completed).toBeTruthy();
-    expect(completed.attributes['llm.content']).toBe('Result body');
-    expect(Array.isArray(completed.attributes['llm.toolCalls'])).toBe(true);
+    // New API: attributes.output.content contains result
     expect(completed.attributes.output.content).toBe('Result body');
   });
 });

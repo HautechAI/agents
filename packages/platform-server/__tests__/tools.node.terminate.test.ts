@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { describe, it, expect, vi } from 'vitest';
 import { AIMessage } from '@langchain/core/messages';
 import { tool, DynamicStructuredTool } from '@langchain/core/tools';
-import { TerminateResponse } from '../src/tools/terminateResponse';
+import { TerminateResponse } from '../src/nodes/tools/terminate/terminateResponse';
 import { FinishFunctionTool } from '../src/nodes/tools/finish/finish.tool';
 import { CallToolsLLMReducer } from '../src/llm/reducers/callTools.llm.reducer';
 import { LoggerService } from '../src/core/services/logger.service.js';

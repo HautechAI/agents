@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BaseMessage, SystemMessage, HumanMessage, AIMessage, ToolMessage, withLLM, init, LLMResponse } from '../src';
+import { Message, SystemMessage, HumanMessage, AIMessage, ToolCallOutputMessage, withLLM, init, LLMResponse } from '../src/index';
 
 // mock fetch
 // @ts-ignore
@@ -9,27 +9,26 @@ init({ mode: 'extended', endpoints: { extended: '', otlp: '' } });
 
 describe('Message class hierarchy', () => {
   it('creates concrete message instances', () => {
-    const sys = new SystemMessage('sys');
-    const hum = new HumanMessage('hi');
-    const ai = new AIMessage('hello', [{ id: '1', name: 'tool', arguments: { a: 1 } }]);
-    const tool = new ToolMessage('1', 'result');
+    const sys = SystemMessage.fromText('sys');
+    const hum = HumanMessage.fromText('hi');
+    const ai = new AIMessage({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'hello' }] } as any);
+    const tool = new ToolCallOutputMessage({ type: 'function_call_output', call_id: '1', output: 'result' } as any);
     expect(sys.role).toBe('system');
-    expect(hum.role).toBe('human');
-    expect(ai.toolCalls?.length).toBe(1);
-    expect(tool.toolCallId).toBe('1');
+    expect(hum.role).toBe('user');
+    expect(ai.role).toBe('assistant');
+    expect(tool.callId).toBe('1');
   });
 
-  it('fromLangChain maps user/assistant/tool formats', () => {
-    const lcUser = { role: 'user', content: 'hello there' };
-    const lcAi = { role: 'assistant', content: 'hi', tool_calls: [{ name: 't', args: { v: 1 } }] } as any;
-    const lcTool = { role: 'tool', tool_call_id: 'abc', content: 'done' } as any;
-    const m1 = BaseMessage.fromLangChain(lcUser);
-    const m2 = BaseMessage.fromLangChain(lcAi);
-    const m3 = BaseMessage.fromLangChain(lcTool);
+  it('fromPlain maps user/assistant/tool formats', () => {
+    const lcUser = { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hello there' }] } as any;
+    const lcAi = { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'hi' }] } as any;
+    const lcTool = { type: 'function_call_output', call_id: 'abc', output: 'done' } as any;
+    const m1 = Message.fromPlain(lcUser);
+    const m2 = Message.fromPlain(lcAi);
+    const m3 = Message.fromPlain(lcTool);
     expect(m1 instanceof HumanMessage).toBe(true);
     expect(m2 instanceof AIMessage).toBe(true);
-    expect((m2 as AIMessage).toolCalls?.[0].name).toBe('t');
-    expect(m3 instanceof ToolMessage).toBe(true);
+    expect(m3 instanceof ToolCallOutputMessage).toBe(true);
   });
 });
 

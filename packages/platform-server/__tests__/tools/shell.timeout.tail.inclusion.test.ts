@@ -1,10 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ShellTool } from '../../nodes/tools/shell_command/shell_command.node';
-import { LoggerService } from '../../core/services/logger.service';
-import { ExecTimeoutError } from '../../utils/execTimeout';
-import { ContainerEntity } from '../../entities/container.entity';
-import { ContainerProviderEntity } from '../../entities/containerProvider.entity';
-import { ContainerService } from '../../core/services/container.service';
+import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
+import { LoggerService } from '../../src/core/services/logger.service';
+import { ExecTimeoutError } from '../../src/utils/execTimeout';
+// ContainerProviderEntity and ContainerHandle were removed; this test focuses on tool error handling.
+// Use a minimal stub provider with exec throwing expected error.
 
 // ANSI colored output to verify stripping; include more than 10k and ensure we only keep tail
 const ANSI_RED = '\u001b[31m';
@@ -18,26 +17,23 @@ describe('ShellTool timeout tail inclusion and ANSI stripping', () => {
     const stderr = `${ANSI_RED}ERR-SECTION${ANSI_RESET}`;
     const err = new ExecTimeoutError(3600000, stdout, stderr);
 
-    class FakeContainer extends ContainerEntity { override async exec(): Promise<never> { throw err; } }
-    class FakeProvider extends ContainerProviderEntity {
-      constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); }
-      override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); }
-    }
-    const provider = new FakeProvider(logger);
-    const tool = new ShellTool(undefined, logger);
-    tool.setContainerProvider(provider);
-    await tool.setConfig({});
-    const t = tool.init();
+    const node = new ShellCommandNode(new (await import('../../src/graph/env.service')).EnvService(new LoggerService() as any));
+    node.setContainerProvider(({
+      provide: async (_t: string) => ({
+        exec: async (): Promise<never> => { throw err; },
+      } as any),
+    } as any));
+    await node.setConfig({});
+    const t = node.getTool();
 
-    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
-    const payload: InvokeArgs[0] = { command: 'sleep 1h' };
-    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
+    const payload: any = { command: 'sleep 1h' };
+    const ctx: any = { threadId: 't' };
     await expect(
-      t.invoke(payload, ctx),
+      t.execute(payload, ctx),
     ).rejects.toThrowError(/Error \(timeout after 3600000ms\): command exceeded 3600000ms and was terminated\. See output tail below\./);
 
     try {
-      await t.invoke(payload, ctx);
+      await t.execute(payload, ctx);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       // No ANSI should remain
