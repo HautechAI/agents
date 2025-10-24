@@ -1,4 +1,5 @@
 import { FunctionTool } from '@agyn/llm';
+// z is imported for types in other modules; keep for forward-compat even if unused here.
 import z from 'zod';
 import { JSONSchema } from 'zod/v4/core';
 
