@@ -1,30 +1,28 @@
-import { Module, Scope } from '@nestjs/common';
-import { MongoService } from '../core/services/mongo.service';
-import { LoggerService } from '../core/services/logger.service';
-import { LLMModule } from '../llm/llm.module';
+import { Module } from '@nestjs/common';
 import { CoreModule } from '../core/core.module';
+import { LoggerService } from '../core/services/logger.service';
+import { MongoService } from '../core/services/mongo.service';
+import { LLMModule } from '../llm/llm.module';
 // Agent and memory
 import { AgentRunService } from './agentRun.repository';
-import { MemoryService } from './memory.repository';
 // Nodes
 import { AgentNode } from './agent/agent.node';
 import { MemoryNode } from './memory/memory.node';
 import { MemoryConnectorNode } from './memoryConnector/memoryConnector.node';
-import { WorkspaceNode } from './workspace/workspace.node';
 import { SlackTrigger } from './slackTrigger/slackTrigger.node';
+import { WorkspaceNode } from './workspace/workspace.node';
 // MCP
 import { LocalMCPServer } from './mcp/localMcpServer.node';
 // Tool nodes and tools
-import { BaseToolNode } from './tools/baseToolNode';
-import { ManageToolNode } from './tools/manage/manage.node';
 import { CallAgentNode } from './tools/call_agent/call_agent.node';
 import { FinishNode } from './tools/finish/finish.node';
-import { MemoryToolNode } from './tools/memory/memory.node';
-import { SendSlackMessageNode } from './tools/send_slack_message/send_slack_message.node';
-import { ShellCommandNode } from './tools/shell_command/shell_command.node';
 import { GithubCloneRepoNode } from './tools/github_clone_repo/github_clone_repo.node';
+import { ManageToolNode } from './tools/manage/manage.node';
+import { MemoryToolNode } from './tools/memory/memory.node';
 import { RemindMeNode } from './tools/remind_me/remind_me.node';
 import { RemindersController } from './tools/remind_me/reminders.controller';
+import { SendSlackMessageNode } from './tools/send_slack_message/send_slack_message.node';
+import { ShellCommandNode } from './tools/shell_command/shell_command.node';
 
 @Module({
   imports: [CoreModule, LLMModule],

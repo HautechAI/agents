@@ -37,7 +37,7 @@
     "@types/json-schema": "^7.0.15",
     "dockerode": "^4.0.8",
     "dotenv": "^17.2.2",
-    "fastify": "^5.6.1",
+  "fastify": "^4.28.0",
     "lodash-es": "^4.17.21",
     "md5": "^2.3.0",
     "mongodb": "^6.20.0",
