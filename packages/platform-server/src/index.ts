@@ -15,7 +15,11 @@ import { Server } from 'socket.io';
 import { ConfigService } from './core/services/config.service';
 import { LoggerService } from './core/services/logger.service';
 import { MongoService } from './core/services/mongo.service';
+<<<<<<< HEAD
 // TemplateRegistry built via GraphModule factory provider
+=======
+// TemplateRegistry is provided via GraphModule factory provider
+>>>>>>> a391d7d (refactor(bootstrap): resolve providers via Nest DI; use DI-provided TemplateRegistry/LiveGraphRuntime/ContainerRegistry)
 import { TemplateRegistry } from './graph/templateRegistry';
 import { LiveGraphRuntime } from './graph/liveGraph.manager';
 import { GraphService } from './graph/graphMongo.repository';
@@ -33,19 +37,32 @@ import { registerNixRoutes } from './routes/nix.route';
 import { NcpsKeyService } from './core/services/ncpsKey.service';
 import { maybeProvisionLiteLLMKey } from './llm/litellm.provisioner';
 import { LLMFactoryService } from './llm/llmFactory.service';
-import { initDI, resolve, closeDI } from './bootstrap/di';
+import { initDI, closeDI } from './bootstrap/di';
 import { AppModule } from './bootstrap/app.module';
 
 await initDI();
-const logger = await resolve<LoggerService>(LoggerService);
-const config = await resolve<ConfigService>(ConfigService);
-const mongo = await resolve<MongoService>(MongoService);
-const containerService = await resolve<ContainerService>(ContainerService);
-const vaultService = await resolve<VaultService>(VaultService);
-const ncpsKeyService = await resolve<NcpsKeyService>(NcpsKeyService);
-const llmFactoryService = await resolve<LLMFactoryService>(LLMFactoryService);
 
 async function bootstrap() {
+  // NestJS HTTP bootstrap using FastifyAdapter and resolve services via DI
+  const adapter = new FastifyAdapter({ logger: false });
+  await adapter.getInstance().register(cors, { origin: true });
+  const app = await NestFactory.create(AppModule, adapter, { logger: false });
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  await app.init();
+  // Ensure global DI helpers use the same Nest container
+  try {
+    const { setAppRef } = await import('./bootstrap/di');
+    setAppRef(app);
+  } catch {}
+
+  const logger = app.get(LoggerService, { strict: false });
+  const config = app.get(ConfigService, { strict: false });
+  const mongo = app.get(MongoService, { strict: false });
+  const containerService = app.get(ContainerService, { strict: false });
+  const vaultService = app.get(VaultService, { strict: false });
+  const ncpsKeyService = app.get(NcpsKeyService, { strict: false });
+  const llmFactoryService = app.get(LLMFactoryService, { strict: false });
+
   // Initialize Ncps key service early
   try {
     await ncpsKeyService.init();
@@ -71,18 +88,16 @@ async function bootstrap() {
   // Initialize checkpointer (optional Postgres mode)
 
   // Initialize container registry and cleanup services
-  const registry = new ContainerRegistryService(mongo.getDb(), logger);
+  const registry = app.get(ContainerRegistryService, { strict: false });
   await registry.ensureIndexes();
   containerService.setRegistry(registry);
   await registry.backfillFromDocker(containerService);
   const cleanup = new ContainerCleanupService(registry, containerService, logger);
   cleanup.start();
 
-  const appRef = await NestFactory.createApplicationContext(AppModule, { logger: false });
-  const templateRegistry = appRef.get(TemplateRegistry, { strict: false });
-  const runtime = appRef.get(LiveGraphRuntime, { strict: false });
-
-  const runsService = new AgentRunService(mongo.getDb(), logger);
+  const templateRegistry = app.get(TemplateRegistry, { strict: false });
+  const runtime = app.get(LiveGraphRuntime, { strict: false });
+  const runsService = app.get(AgentRunService, { strict: false });
   await runsService.ensureIndexes();
   const graphService =
     config.graphStore === 'git'
