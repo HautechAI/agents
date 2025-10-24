@@ -1,21 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
-import { describe, it, expect, vi } from 'vitest';
-import { AIMessage } from '@langchain/core/messages';
 import { tool, DynamicStructuredTool } from '@langchain/core/tools';
-import { TerminateResponse } from '../src/nodes/tools/terminate/terminateResponse';
+<<<<<<< HEAD
+import { ResponseMessage } from '@agyn/llm';
+import type { ResponseFunctionToolCall } from 'openai/resources/responses/responses.mjs';
+=======
+import { ResponseMessage } from '@agyn/llm';
+import type { ResponseFunctionToolCall } from 'openai/resources/responses/responses.mjs';
+>>>>>>> 1227e88 (fix(platform-server): align tests with new APIs; correct imports; skip/adjust legacy lgnodes; fix container streams and execTimeout imports; adjust CallTools reducer output; fix memory/shell/remind_me tests; update schema paths)
 import { FinishFunctionTool } from '../src/nodes/tools/finish/finish.tool';
 import { CallToolsLLMReducer } from '../src/llm/reducers/callTools.llm.reducer';
 import { LoggerService } from '../src/core/services/logger.service.js';
 
-class TerminatingTool /* extends BaseTool (legacy) */ {
-  init(): DynamicStructuredTool {
-    return tool(async (raw) => new TerminateResponse((raw as any)?.note || 'done'), {
-      name: 'finish',
-      description: 'finish tool',
-      schema: ({} as any),
-    });
-  }
-}
+// Remove legacy TerminatingTool; FinishFunctionTool covers finish behavior
 
 class EchoTool /* extends BaseTool (legacy) */ {
   init(): DynamicStructuredTool {
@@ -27,26 +23,26 @@ class EchoTool /* extends BaseTool (legacy) */ {
   }
 }
 
-describe('CallToolsLLMReducer termination via finish tool', () => {
-  it('sets done=true when tool returns TerminateResponse and includes note in ToolMessage', async () => {
+describe('CallToolsLLMReducer finish tool output handling', () => {
+  it('includes note from finish tool output in ToolCallOutputMessage', async () => {
     // Build FunctionTools list including finish
-    const finish = new FinishFunctionTool();
-    const term = new TerminatingTool().init();
-    const tools = [finish, term] as any;
+    const finish = new FinishFunctionTool({ logger: new LoggerService() });
+    const tools = [finish] as any;
     const reducer = new CallToolsLLMReducer(new LoggerService(), tools);
-    const ai = new AIMessage({ content: '', tool_calls: [{ id: '1', name: 'finish', args: { note: 'complete' } }] });
-    const state = await reducer.invoke({ messages: [ai], meta: {} } as any, { configurable: { thread_id: 't' } } as any);
+    const call: ResponseFunctionToolCall = { type: 'function_call', name: 'finish', call_id: '1', arguments: JSON.stringify({ note: 'complete' }) } as any;
+    const resp = new ResponseMessage({ output: [call] } as any);
+    const state = await reducer.invoke({ messages: [resp], meta: {} } as any, { configurable: { thread_id: 't' } } as any);
     const tm = state.messages.at(-1) as any;
-    expect(tm?.name).toBe('finish');
-    expect(String(tm?.output)).toContain('complete');
+    expect(tm?.type).toBe('function_call_output');
+    expect(String(tm?.text)).toContain('complete');
   });
 
-  it('does not set done for non-terminating tools', async () => {
-    const echo = new EchoTool().init();
-    const reducer = new CallToolsLLMReducer(new LoggerService(), [echo] as any);
-    const ai = new AIMessage({ content: '', tool_calls: [{ id: '2', name: 'echo', args: { x: 1 } }] });
-    const state = await reducer.invoke({ messages: [ai], meta: {} } as any, { configurable: { thread_id: 't' } } as any);
-    const tm = state.messages.at(-1) as any;
-    expect(String(tm?.output)).toContain('echo');
+  it('does not set output when unknown tool', async () => {
+    const reducer = new CallToolsLLMReducer(new LoggerService(), [] as any);
+    const call: ResponseFunctionToolCall = { type: 'function_call', name: 'echo', call_id: '2', arguments: JSON.stringify({ x: 1 }) } as any;
+    const resp = new ResponseMessage({ output: [call] } as any);
+    await expect(
+      reducer.invoke({ messages: [resp], meta: {} } as any, { configurable: { thread_id: 't' } } as any),
+    ).rejects.toThrow(/Unknown tool called/);
   });
 });
