@@ -65,7 +65,6 @@ export class LiteLLMProvisioner extends LLMProvisioner {
     const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
     const base = this.cfg.openaiBaseUrl || (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
     return { apiKey: fallbackKey, baseUrl: base };
->>>>>>> d49b9af (merge: resolve remaining conflicts across graph/templates/llm modules and provisioners; finalize DI with LLMProvisioner provider)
   }
 
   private async provisionWithRetry(): Promise<ProvisionResult> {
