@@ -24,7 +24,7 @@ import { ReadinessWatcher } from './utils/readinessWatcher';
 import { VaultService } from './infra/vault/vault.service';
 import { ContainerRegistryService } from './infra/container/container.registry';
 import { ContainerCleanupService } from './infra/container/containerCleanup.job';
-import { registerRemindersRoute } from './routes/reminders.route';
+
 import { AgentRunService } from './nodes/agentRun.repository';
 import { registerRunsRoutes } from './routes/runs.route';
 import { NcpsKeyService } from './core/services/ncpsKey.service';
@@ -84,6 +84,7 @@ async function bootstrap() {
   });
 
   const runtime = new LiveGraphRuntime(logger, templateRegistry);
+
   const runsService = new AgentRunService(mongo.getDb(), logger);
   await runsService.ensureIndexes();
   const graphService =
@@ -407,7 +408,7 @@ async function bootstrap() {
   });
 
   // Register routes that need runtime
-  registerRemindersRoute(fastify, runtime, logger);
+  // Reminders endpoint handled by Nest controller (no Fastify wiring here)
   registerRunsRoutes(fastify, runtime, runsService, logger);
   // Nix routes will be provided via Nest FastifyAdapter in a future task.
 
