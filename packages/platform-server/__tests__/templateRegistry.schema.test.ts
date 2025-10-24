@@ -11,7 +11,7 @@ const dummyPorts = {
 };
 
 describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () => {
-  it('includes capabilities and staticConfigSchema when provided in meta', () => {
+  it('includes capabilities and staticConfigSchema when provided in meta', async () => {
     const reg = new TemplateRegistry();
     reg.register(
       'withMeta',
@@ -33,10 +33,9 @@ describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () =>
         } as any,
       },
       DummyNode as any,
-      dummyPorts as any,
     );
 
-    const schema = reg.toSchema();
+    const schema = await reg.toSchema();
     const entry = schema.find((s) => s.name === 'withMeta') as TemplateNodeSchema;
     expect(entry).toBeTruthy();
     expect(entry.capabilities).toEqual({
@@ -52,11 +51,10 @@ describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () =>
     });
   });
 
-  it('defaults to undefined when not provided in meta', () => {
+  it('defaults to undefined when not provided in meta', async () => {
     const reg = new TemplateRegistry();
-    reg.register('noMeta', { title: 'No Meta', kind: 'service' as TemplateKind }, DummyNode as any, dummyPorts as any);
-
-    const schema = reg.toSchema();
+    reg.register('noMeta', { title: 'No Meta', kind: 'service' as TemplateKind }, DummyNode as any);
+    const schema = await reg.toSchema();
     const entry = schema.find((s) => s.name === 'noMeta') as TemplateNodeSchema;
     expect(entry).toBeTruthy();
     expect(entry.capabilities).toBeUndefined();

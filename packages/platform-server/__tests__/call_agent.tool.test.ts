@@ -170,16 +170,8 @@ describe('CallAgentTool graph wiring', () => {
     }
 
     registry
-      .register('agent', () => new FakeAgentWithTools(logger) as any, {
-        sourcePorts: {
-          tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
-        },
-        targetPorts: { $self: { kind: 'instance' } },
-      })
-      .register('callAgentTool', () => new CallAgentTool(logger), {
-        targetPorts: { $self: { kind: 'instance' } },
-        sourcePorts: { agent: { kind: 'method', create: 'setAgent' } },
-      });
+      .register('agent', { title: 'Agent', kind: 'agent' }, (() => new FakeAgentWithTools(logger) as any) as any)
+      .register('callAgentTool', { title: 'Call agent', kind: 'tool' }, (() => new CallAgentTool(logger)) as any);
 
     const runtime = new LiveGraphRuntime(logger, registry);
 

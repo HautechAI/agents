@@ -42,7 +42,7 @@ describe('Runtime helpers and GraphRepository API surfaces', () => {
     }
 
     const factory: FactoryFn = async () => new MockNode() as any;
-    registry.register('mock', factory, { targetPorts: {}, sourcePorts: {} }, { title: 'Mock', kind: 'tool' });
+    registry.register('mock', { title: 'Mock', kind: 'tool' }, factory as any);
 
     // Apply a simple graph with one node
     await runtime.apply({ nodes: [{ id: 'n1', data: { template: 'mock', config: {} } }], edges: [] });
@@ -66,10 +66,8 @@ describe('Runtime helpers and GraphRepository API surfaces', () => {
     const { registry, runtime } = makeRuntimeAndRegistry();
 
     // Expand template with capabilities and static schema
-    registry.register('dyn', async () => ({ setConfig: async () => {} } as any), { sourcePorts: {}, targetPorts: {} }, {
-      title: 'Dyn', kind: 'tool', capabilities: { pausable: true, provisionable: true, dynamicConfigurable: true, staticConfigurable: false },
-      staticConfigSchema: { type: 'object', properties: {} } as any,
-    });
+    registry.register('dyn', { title: 'Dyn', kind: 'tool', capabilities: { pausable: true, provisionable: true, dynamicConfigurable: true, staticConfigurable: false },
+      staticConfigSchema: { type: 'object', properties: {} } as any }, (async () => ({ setConfig: async () => {} } as any)) as any);
 
     // Create a mock dyn-configurable node instance
     class DynNode implements DynamicConfigurable<Record<string, unknown>> {
@@ -78,7 +76,7 @@ describe('Runtime helpers and GraphRepository API surfaces', () => {
       setDynamicConfig = vi.fn((_cfg: Record<string, unknown>) => {});
       setConfig = vi.fn(async (_cfg: Record<string, unknown>) => {});
     }
-    registry.register('dyn2', async () => new DynNode() as any, { sourcePorts: {}, targetPorts: {} }, { title: 'Dyn2', kind: 'tool' });
+    registry.register('dyn2', { title: 'Dyn2', kind: 'tool' }, (async () => new DynNode() as any) as any);
 
     // Runtime graph
     await runtime.apply({ nodes: [
@@ -87,7 +85,7 @@ describe('Runtime helpers and GraphRepository API surfaces', () => {
     ], edges: []});
 
     // Template schema via registry directly (GraphRepository now stateless for templates only)
-    const templates = registry.toSchema();
+    const templates = await registry.toSchema();
     const dynEntry = templates.find(t => t.name === 'dyn');
     expect(dynEntry?.capabilities?.dynamicConfigurable).toBe(true);
     expect(dynEntry?.staticConfigSchema).toBeTruthy();

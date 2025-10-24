@@ -57,7 +57,7 @@ describe('RunsController (Nest + FastifyAdapter) integration', () => {
       runtime = app.get(LiveGraphRuntime, { strict: false });
 
       // Register a simple agent node class in runtime
-      registry.register('testAgent', { title: 'A', kind: 'agent' }, TestAgent as any as new () => Node, { sourcePorts: {}, targetPorts: {} });
+      registry.register('testAgent', { title: 'A', kind: 'agent' }, TestAgent as any as new () => Node);
       await runtime.apply({ nodes: [{ id: 'agent1', data: { template: 'testAgent', config: {} } }], edges: [] } as any);
     } catch (e) {
       ready = false;
