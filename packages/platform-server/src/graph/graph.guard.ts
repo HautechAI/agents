@@ -28,8 +28,8 @@ export class GraphGuard {
       const was = prev.get(n.id);
       if (!was) continue;
       if (n.template !== 'mcpServer') continue;
-      const prevCmd = (was.config as any)?.command;
-      const nextCmd = (n.config as any)?.command;
+      const prevCmd = was.config?.command;
+      const nextCmd = n.config?.command;
       if (prevCmd === nextCmd) continue;
       const status = runtime.getNodeStatus(n.id);
       const state = status?.provisionStatus?.state || 'not_ready';

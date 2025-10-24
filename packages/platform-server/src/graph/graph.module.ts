@@ -18,8 +18,6 @@ import { EnvService } from './env.service';
     GraphGuard,
     EnvService,
   ],
-  exports: [
-    GraphGuard,
-  ],
+  exports: [GraphGuard],
 })
 export class GraphModule {}
