@@ -62,102 +62,68 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
     'shellTool',
     { title: 'Shell', kind: 'tool', capabilities: { staticConfigurable: true }, staticConfigSchema: toJSONSchema(ShellToolStaticConfigSchema) },
     ShellCommandNode,
-    {
-      targetPorts: {
-        $self: { kind: 'instance' },
-        workspace: { kind: 'method', create: 'setContainerProvider' },
-      },
-    },
   );
   registry.register(
     'githubCloneRepoTool',
     { title: 'Github clone', kind: 'tool', capabilities: { staticConfigurable: true }, staticConfigSchema: toJSONSchema(GithubCloneRepoToolExposedStaticConfigSchema) },
     GithubCloneRepoNode,
-    {
-      targetPorts: {
-        $self: { kind: 'instance' },
-        workspace: { kind: 'method', create: 'setContainerProvider' },
-      },
-    },
   );
   registry.register(
     'sendSlackMessageTool',
     { title: 'Send Slack message', kind: 'tool', capabilities: { staticConfigurable: true }, staticConfigSchema: toJSONSchema(SendSlackMessageToolExposedStaticConfigSchema) },
     SendSlackMessageTool as any,
-    {
-      targetPorts: { $self: { kind: 'instance' } },
-    },
   );
   registry.register(
     'finishTool',
     { title: 'Finish', kind: 'tool', capabilities: { staticConfigurable: true }, staticConfigSchema: toJSONSchema(FinishToolStaticConfigSchema) },
     FinishTool as any,
-    { targetPorts: { $self: { kind: 'instance' } } },
   );
   registry.register(
     'callAgentTool',
     { title: 'Call agent', kind: 'tool', capabilities: { staticConfigurable: true }, staticConfigSchema: toJSONSchema(CallAgentToolStaticConfigSchema) },
     CallAgentTool as any,
-    { targetPorts: { $self: { kind: 'instance' } }, sourcePorts: { agent: { kind: 'method', create: 'setAgent' } } },
   );
   registry.register(
     'manageTool',
     { title: 'Manage', kind: 'tool', capabilities: { staticConfigurable: true }, staticConfigSchema: toJSONSchema(ManageToolStaticConfigSchema) },
     ManageTool as any,
-    { targetPorts: { $self: { kind: 'instance' } }, sourcePorts: { agent: { kind: 'method', create: 'addWorker', destroy: 'removeWorker' } } },
   );
   registry.register(
     'remindMeTool',
     { title: 'Remind Me', kind: 'tool', capabilities: { staticConfigurable: true }, staticConfigSchema: toJSONSchema(RemindMeToolStaticConfigSchema) },
     RemindMeNode as any,
-    { targetPorts: { $self: { kind: 'instance' } }, sourcePorts: { caller: { kind: 'method', create: 'setCallerAgent' } } },
   );
   registry.register(
     'slackTrigger',
     { title: 'Slack (Socket Mode)', kind: 'trigger', capabilities: { provisionable: true, pausable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(SlackTriggerExposedStaticConfigSchema) },
     SlackTrigger as any,
-    { sourcePorts: { subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' } } },
   );
   registry.register(
     'agent',
     { title: 'Agent', kind: 'agent', capabilities: { pausable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(AgentStaticConfigSchema) },
     AgentNode,
-    {
-      sourcePorts: {
-        tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
-        mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
-      },
-      targetPorts: {
-        $self: { kind: 'instance' },
-        memory: { kind: 'method', create: 'attachMemoryConnector', destroy: 'detachMemoryConnector' },
-      },
-    },
   );
       // Register a single unified Memory tool
   registry.register(
     'memoryTool',
     { title: 'Memory Tool', kind: 'tool', capabilities: {}, staticConfigSchema: toJSONSchema(MemoryToolNodeStaticConfigSchema) },
     MemoryToolNode as any,
-    { targetPorts: { $self: { kind: 'instance' }, $memory: { kind: 'method', create: 'setMemorySource' } } },
   );
   registry.register(
     'mcpServer',
     { title: 'MCP Server', kind: 'mcp', capabilities: { provisionable: true, dynamicConfigurable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(LocalMcpServerStaticConfigSchema) },
     LocalMCPServer as any,
-    { targetPorts: { $self: { kind: 'instance' }, workspace: { kind: 'method', create: 'setContainerProvider' } } },
   );
   // Memory: provide MemoryNode and MemoryConnectorNode as explicit templates with ports
   registry.register(
     'memory',
     { title: 'Memory', kind: 'service', capabilities: { provisionable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(MemoryNodeStaticConfigSchema) },
     MemoryNode as any,
-    { sourcePorts: { $self: { kind: 'instance' } } },
   );
   registry.register(
     'memoryConnector',
     { title: 'Memory Connector', kind: 'service', capabilities: { provisionable: true, staticConfigurable: true }, staticConfigSchema: toJSONSchema(MemoryConnectorStaticConfigSchema) },
     MemoryConnectorNode as any,
-    { targetPorts: { $memory: { kind: 'method', create: 'setMemorySource' } }, sourcePorts: { $self: { kind: 'instance' } } },
   );
   
 
