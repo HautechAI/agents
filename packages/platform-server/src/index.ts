@@ -92,7 +92,6 @@ async function bootstrap() {
   const cleanup = new ContainerCleanupService(registry, containerService, logger);
   cleanup.start();
 
-  const templateRegistry = app.get(TemplateRegistry, { strict: false });
   const runtime = app.get(LiveGraphRuntime, { strict: false });
   const runsService = app.get(AgentRunService, { strict: false });
   await runsService.ensureIndexes();
@@ -144,31 +143,13 @@ async function bootstrap() {
 
   // Globals already set above; reuse adapter/app
 
-  // Existing endpoints (namespaced under /api)
-  // Moved graph-related routes to Nest controllers
-
-  // Vault endpoints migrated to Nest VaultController
-
-  // Graph-related routes migrated to Nest controllers
-
-  // Register routes that need runtime on fastify instance (non-Nest legacy)
   const fastify = adapter.getInstance();
-  // Runs routes are handled by Nest RunsController
-  // Nix proxy routes are now handled by Nest NixController; legacy Fastify wiring removed
 
   // Start Fastify then attach Socket.io
   const PORT = Number(process.env.PORT) || 3010;
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   logger.info(`HTTP server listening on :${PORT}`);
   // RuntimeRef removed; runtime is available via DI
-
-  const io = new Server(fastify.server, { cors: { origin: '*' } });
-  const emitStatus = (nodeId: string) => {
-    try {
-      const status = runtime.getNodeStatus(nodeId);
-      io.emit('node_status', { nodeId, ...status });
-    } catch {}
-  };
 
   // Routes registered above
 
