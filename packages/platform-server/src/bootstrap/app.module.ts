@@ -7,8 +7,5 @@ import { GraphModule } from '../graph/graph.module';
 @Module({ imports: [CoreModule, InfraModule, NodesModule, GraphModule] })
 export class AppModule {
   // Force eager instantiation of bootstrap/initializer providers
-  constructor(
-    @Inject('GraphModuleBootstrap') _bootstrap: unknown,
-    @Inject('LiveGraphRuntimeInitializer') _runtimeInit: unknown,
-  ) {}
+  constructor() {}
 }

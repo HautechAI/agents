@@ -11,16 +11,10 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
 import cors from '@fastify/cors';
-// import { ConfigService } from './core/services/config.service';
-import { LoggerService } from './core/services/logger.service';
-import { MongoService } from './core/services/mongo.service';
-import { ContainerCleanupService } from './infra/container/containerCleanup.job';
-// Container and Vault services are resolved via Nest where needed
-// Removed unused ContainerRegistryService and ContainerCleanupService imports
 
-// Removed unused AgentRunService import
-// Nix routes are served via Nest controller; keep import if legacy route file exists
-// import { registerNixRoutes } from './routes/nix.route';
+import { LoggerService } from './core/services/logger.service';
+import { ContainerCleanupService } from './infra/container/containerCleanup.job';
+
 import { initDI, closeDI } from './bootstrap/di';
 import { AppModule } from './bootstrap/app.module';
 // Remove central platform.services.factory usage; rely on DI providers
@@ -34,17 +28,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, adapter, { logger: false });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.init();
-  // Ensure global DI helpers use the same Nest container
-  try {
-    const { setAppRef } = await import('./bootstrap/di');
-    setAppRef(app);
-  } catch {}
 
   const logger = app.get(LoggerService, { strict: false });
-  // const config = app.get(ConfigService, { strict: false }); // not used
-  const mongo = app.get(MongoService, { strict: false });
   const fastify = adapter.getInstance();
-  await mongo.connect();
+
   // Initialize checkpointer (optional Postgres mode)
 
   // Fastify instance is initialized via Nest adapter; routes are handled by Nest controllers only.
@@ -79,8 +66,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((e) => {
-  // Logger not available at module scope here
-  // eslint-disable-next-line no-console
   console.error('Bootstrap failure', e);
   process.exit(1);
 });

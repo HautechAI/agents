@@ -8,7 +8,15 @@ import { PrismaService } from './services/prisma.service';
   providers: [
     { provide: ConfigService, useFactory: () => ConfigService.fromEnv() },
     LoggerService,
-    MongoService,
+    {
+      provide: MongoService,
+      useFactory: async (configService: ConfigService, logger: LoggerService) => {
+        const mongo = new MongoService(configService, logger);
+        await mongo.connect();
+        return mongo;
+      },
+      inject: [ConfigService, LoggerService],
+    },
     PrismaService,
   ],
   exports: [
