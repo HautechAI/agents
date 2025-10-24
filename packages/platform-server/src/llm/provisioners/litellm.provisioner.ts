@@ -1,39 +1,60 @@
 import { LLM } from '@agyn/llm';
+<<<<<<< HEAD
 import OpenAI from 'openai';
 import { ConfigService } from '../../core/services/config.service';
 import { LoggerService } from '../../core/services/logger.service';
 import { LLMProvisioner } from './llm.provisioner';
 import { Injectable } from '@nestjs/common';
+=======
+import OpenAI from 'openai';
+import { ConfigService } from '../../core/services/config.service';
+import { LoggerService } from '../../core/services/logger.service';
+import { LLMProvisioner } from './llm.provisioner';
+import { Injectable } from '@nestjs/common';
+>>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
 
 type ProvisionResult = { apiKey?: string; baseUrl?: string };
 
 @Injectable()
 export class LiteLLMProvisioner extends LLMProvisioner {
+<<<<<<< HEAD
   private llm?: LLM;
 
   constructor(
     private cfg: ConfigService,
     private logger: LoggerService,
   ) {
+=======
+  private llm?: LLM;
+
+  constructor(
+    private cfg: ConfigService,
+    private logger: LoggerService,
+  ) {
+>>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
     super();
   }
 
   async getLLM(): Promise<LLM> {
     if (this.llm) return this.llm;
 
+<<<<<<< HEAD
     const { apiKey, baseUrl } = await this.fetchOrCreateKeysInternal();
     const client = new OpenAI({ apiKey, baseURL: baseUrl });
     this.llm = new LLM(client);
+=======
+    const { apiKey, baseUrl } = await this.fetchOrCreateKeysInternal();
+    const client = new OpenAI({ apiKey, baseURL: baseUrl });
+    this.llm = new LLM(client);
+>>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
     return this.llm;
   }
 
-  private async fetchOrCreateKeysInternal(): Promise<{ apiKey: string; baseUrl?: string }> {
-    // Prefer direct OpenAI if available
+  private async resolveKeys(): Promise<{ apiKey: string; baseUrl?: string }> {
     if (this.cfg.openaiApiKey) {
       return { apiKey: this.cfg.openaiApiKey, baseUrl: this.cfg.openaiBaseUrl };
     }
 
-    // Otherwise require LiteLLM config to be present for provisioning
     if (!this.cfg.litellmBaseUrl || !this.cfg.litellmMasterKey) {
       throw new Error('litellm_missing_config');
     }
@@ -41,12 +62,21 @@ export class LiteLLMProvisioner extends LLMProvisioner {
     const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
     if (provKey) return { apiKey: provKey, baseUrl };
 
+<<<<<<< HEAD
     // Fallback to configured envs
     const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
     const base =
       this.cfg.openaiBaseUrl ||
       (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
     return { apiKey: fallbackKey, baseUrl: base };
+=======
+    // Fallback to configured envs
+    const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
+    const base =
+      this.cfg.openaiBaseUrl ||
+      (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
+    return { apiKey: fallbackKey, baseUrl: base };
+>>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
   }
 
   private async provisionWithRetry(): Promise<ProvisionResult> {
@@ -54,12 +84,12 @@ export class LiteLLMProvisioner extends LLMProvisioner {
     const master = this.cfg.litellmMasterKey;
     if (!base || !master) return {};
 
-    const models = this.toList(process.env.LITELLM_MODELS, ['all-team-models']);
+    const models = this.csvOrDefault(process.env.LITELLM_MODELS, ['all-team-models']);
     const duration = process.env.LITELLM_KEY_DURATION || '30d';
     const keyAlias = process.env.LITELLM_KEY_ALIAS || `agents-${process.pid}`;
-    const maxBudget = process.env.LITELLM_MAX_BUDGET;
-    const rpm = process.env.LITELLM_RPM_LIMIT;
-    const tpm = process.env.LITELLM_TPM_LIMIT;
+    const maxBudget = this.toNumber(process.env.LITELLM_MAX_BUDGET);
+    const rpm = this.toNumber(process.env.LITELLM_RPM_LIMIT);
+    const tpm = this.toNumber(process.env.LITELLM_TPM_LIMIT);
     const teamId = process.env.LITELLM_TEAM_ID;
 
     const url = `${base.replace(/\/$/, '')}/key/generate`;
@@ -68,17 +98,9 @@ export class LiteLLMProvisioner extends LLMProvisioner {
       authorization: `Bearer ${master}`,
     };
     const body: Record<string, unknown> = { models, duration, key_alias: keyAlias };
-    const num = (s?: string) => {
-      if (!s) return undefined;
-      const n = Number(s);
-      return Number.isFinite(n) && n >= 0 ? n : undefined;
-    };
-    const mb = num(maxBudget);
-    const r = num(rpm);
-    const t = num(tpm);
-    if (mb !== undefined) body.max_budget = mb;
-    if (r !== undefined) body.rpm_limit = r;
-    if (t !== undefined) body.tpm_limit = t;
+    if (maxBudget !== undefined) body.max_budget = maxBudget;
+    if (rpm !== undefined) body.rpm_limit = rpm;
+    if (tpm !== undefined) body.tpm_limit = tpm;
     if (typeof teamId === 'string' && teamId.length > 0) body.team_id = teamId;
 
     const maxAttempts = 3;
@@ -88,7 +110,11 @@ export class LiteLLMProvisioner extends LLMProvisioner {
         const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
         if (!resp.ok) {
           const text = await this.safeReadText(resp);
-          this.logger.error('LiteLLM provisioning failed: status=%s, body=%s', String(resp.status), this.redact(text));
+          this.logger.error(
+            'LiteLLM provisioning failed: status=%s, body=%s',
+            String(resp.status),
+            this.redact(text),
+          );
           if (resp.status >= 500 && attempt < maxAttempts) {
             await this.delay(baseDelayMs * Math.pow(2, attempt - 1));
             continue;
@@ -100,9 +126,9 @@ export class LiteLLMProvisioner extends LLMProvisioner {
         if (!key || typeof key !== 'string') throw new Error('litellm_provision_invalid_response');
         const baseUrl = this.cfg.openaiBaseUrl || `${base.replace(/\/$/, '')}/v1`;
         return { apiKey: key, baseUrl };
-      } catch (e: any) {
+      } catch (e) {
         if (attempt < maxAttempts) {
-          this.logger.debug('LiteLLM provisioning attempt %d failed: %s', attempt, e?.message || String(e));
+          this.logger.debug('LiteLLM provisioning attempt %d failed: %s', attempt, (e as Error)?.message || String(e));
           await this.delay(baseDelayMs * Math.pow(2, attempt - 1));
           continue;
         }
@@ -113,12 +139,17 @@ export class LiteLLMProvisioner extends LLMProvisioner {
     return {};
   }
 
-  private toList(v: string | undefined, dflt: string[]): string[] {
+  private csvOrDefault(v: string | undefined, dflt: string[]): string[] {
     const parts = (v || '')
       .split(',')
       .map((x) => x.trim())
       .filter(Boolean);
     return parts.length ? parts : dflt;
+  }
+  private toNumber(s?: string): number | undefined {
+    if (!s) return undefined;
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 ? n : undefined;
   }
   private async safeReadText(resp: Response): Promise<string> {
     try {

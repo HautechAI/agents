@@ -45,7 +45,7 @@ async function bootstrap() {
   } catch {}
 
   const logger = app.get(LoggerService, { strict: false });
-  const config = app.get(ConfigService, { strict: false });
+  // const config = app.get(ConfigService, { strict: false }); // not used
   const mongo = app.get(MongoService, { strict: false });
   // Resolve optional services via DI as needed
   const ncpsKeyService = app.get(NcpsKeyService, { strict: false });

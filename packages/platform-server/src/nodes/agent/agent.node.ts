@@ -198,11 +198,11 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
     );
   }
 
-  public listActiveThreads(prefix?: string): string[] {
+  public listActiveThreads(_prefix?: string): string[] {
     return [];
   }
 
-  terminateRun(thread: string, runId?: string): 'ok' | 'not_running' | 'not_found' {
+  terminateRun(_thread: string, _runId?: string): 'ok' | 'not_running' | 'not_found' {
     return 'not_running';
   }
 

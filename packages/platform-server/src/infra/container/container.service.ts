@@ -556,7 +556,7 @@ export class ContainerService {
             reject(e);
           }
         });
-        stream.on('error', (e) => {
+        stream.on('error', (_e) => {
           if (finished) return;
           clearAll(execTimer, idleTimer);
           if (signal)
@@ -569,7 +569,7 @@ export class ContainerService {
             stderrCollector.flush();
           } catch {}
           finished = true;
-          reject(e);
+          reject(_e);
         });
         // Extra safety: clear timers on close as well
         stream.on('close', () => {
