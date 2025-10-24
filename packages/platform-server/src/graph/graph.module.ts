@@ -18,9 +18,8 @@ import { LoggerService } from '../core/services/logger.service';
 import { ContainerService } from '../infra/container/container.service';
 import { ConfigService } from '../core/services/config.service';
 import { MongoService } from '../core/services/mongo.service';
-import { LLMProvisioner } from '../llm/llm.provisioner';
-import { NcpsKeyService } from '../core/services/ncpsKey.service';
-import { Provider } from '@nestjs/common';
+import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
+import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
 
 @Module({
   imports: [CoreModule, InfraModule, NodesModule, LLMModule],
@@ -69,8 +68,6 @@ import { Provider } from '@nestjs/common';
     },
     LiveGraphRuntime,
     AgentRunService,
-    // Guards (functions are not providers; list here for visibility if later wrapped)
-    // enforceMcpCommandMutationGuard is a pure function and intentionally not registered
   ],
   exports: [LiveGraphRuntime, TemplateRegistry, PortsRegistry, GraphRepository, AgentRunService],
 })

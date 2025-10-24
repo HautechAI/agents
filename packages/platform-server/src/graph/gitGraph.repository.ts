@@ -3,7 +3,13 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { LoggerService } from '../core/services/logger.service';
 import { TemplateRegistry } from './templateRegistry';
-import { PersistedGraph, PersistedGraphEdge, PersistedGraphNode, PersistedGraphUpsertRequest, PersistedGraphUpsertResponse } from '../graph/types';
+import {
+  PersistedGraph,
+  PersistedGraphEdge,
+  PersistedGraphNode,
+  PersistedGraphUpsertRequest,
+  PersistedGraphUpsertResponse,
+} from '../graph/types';
 import { validatePersistedGraph } from './graphSchema.validator';
 import { GraphRepository } from './graph.repository';
 import { ConfigService } from '../core/services/config.service';
@@ -30,7 +36,9 @@ export class GitGraphRepository extends GraphRepository {
     private readonly config: ConfigService,
     private readonly logger: LoggerService,
     private readonly templateRegistry: TemplateRegistry,
-  ) { super(); }
+  ) {
+    super();
+  }
 
   // Cache of last successfully committed snapshot to tolerate partial/corrupt working tree reads
   private lastCommitted?: PersistedGraph;
@@ -50,7 +58,10 @@ export class GitGraphRepository extends GraphRepository {
       await fs.mkdir(path.join(this.config.graphRepoPath, 'nodes'), { recursive: true });
       await fs.mkdir(path.join(this.config.graphRepoPath, 'edges'), { recursive: true });
       const meta = { name: 'main', version: 0, updatedAt: new Date().toISOString(), format: 2 };
-      await this.atomicWriteFile(path.join(this.config.graphRepoPath, 'graph.meta.json'), JSON.stringify(meta, null, 2));
+      await this.atomicWriteFile(
+        path.join(this.config.graphRepoPath, 'graph.meta.json'),
+        JSON.stringify(meta, null, 2),
+      );
       await this.runGit(['add', '.'], this.config.graphRepoPath);
       await this.commit('chore(graph): init repository (format:2)', this.defaultAuthor());
     } else {
@@ -94,7 +105,11 @@ export class GitGraphRepository extends GraphRepository {
       if (!existing) {
         if (req.version !== undefined && req.version !== 0) {
           throw codeError<PersistedGraph>('VERSION_CONFLICT', 'Version conflict', {
-            name, version: 0, updatedAt: nowIso, nodes: [], edges: [],
+            name,
+            version: 0,
+            updatedAt: nowIso,
+            nodes: [],
+            edges: [],
           });
         }
       } else if (req.version !== undefined && req.version !== existing.version) {
@@ -139,7 +154,11 @@ export class GitGraphRepository extends GraphRepository {
       await fs.mkdir(nodesDir, { recursive: true });
       await fs.mkdir(edgesDir, { recursive: true });
 
-      const touched: { added: string[]; updated: string[]; deleted: string[] } = { added: [], updated: [], deleted: [] };
+      const touched: { added: string[]; updated: string[]; deleted: string[] } = {
+        added: [],
+        updated: [],
+        deleted: [],
+      };
 
       const writeNode = async (n: PersistedGraphNode, isNew: boolean) => {
         const rel = path.posix.join('nodes', `${encodeURIComponent(n.id)}.json`);
@@ -153,7 +172,9 @@ export class GitGraphRepository extends GraphRepository {
         (isNew ? touched.added : touched.updated).push(rel);
       };
       const delRel = async (rel: string) => {
-        try { await fs.unlink(path.join(root, rel)); } catch {}
+        try {
+          await fs.unlink(path.join(root, rel));
+        } catch {}
         touched.deleted.push(rel);
       };
 
@@ -171,13 +192,19 @@ export class GitGraphRepository extends GraphRepository {
       await this.atomicWriteFile(path.join(root, 'graph.meta.json'), JSON.stringify(meta, null, 2));
 
       // Stage changes
-      const toStage = Array.from(new Set([...touched.added, ...touched.updated, ...touched.deleted, 'graph.meta.json']));
+      const toStage = Array.from(
+        new Set([...touched.added, ...touched.updated, ...touched.deleted, 'graph.meta.json']),
+      );
       if (toStage.length) await this.runGit(['add', '--all', ...toStage], root);
 
       // Remove legacy graphs/ directory if exists
       if (await this.pathExists(path.join(root, 'graphs'))) {
-        try { await this.runGit(['rm', '-r', '--ignore-unmatch', 'graphs'], root); } catch {
-          try { await fs.rm(path.join(root, 'graphs'), { recursive: true, force: true }); } catch {}
+        try {
+          await this.runGit(['rm', '-r', '--ignore-unmatch', 'graphs'], root);
+        } catch {
+          try {
+            await fs.rm(path.join(root, 'graphs'), { recursive: true, force: true });
+          } catch {}
         }
       }
 
@@ -212,7 +239,14 @@ export class GitGraphRepository extends GraphRepository {
   // Validation is shared via validatePersistedGraph
 
   private stripInternalNode(n: PersistedGraphNode): PersistedGraphNode {
-    return { id: n.id, template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, state: n.state, position: n.position };
+    return {
+      id: n.id,
+      template: n.template,
+      config: n.config,
+      dynamicConfig: n.dynamicConfig,
+      state: n.state,
+      position: n.position,
+    };
   }
   private stripInternalEdge(e: PersistedGraphEdge): PersistedGraphEdge {
     return { source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle, id: e.id };
@@ -223,20 +257,37 @@ export class GitGraphRepository extends GraphRepository {
     await fs.mkdir(dir, { recursive: true });
     const tmp = path.join(dir, `.${path.basename(filePath)}.tmp-${process.pid}-${Date.now()}`);
     const fd = await fs.open(tmp, 'w');
-    try { await fd.writeFile(content); await fd.sync(); } finally { await fd.close(); }
+    try {
+      await fd.writeFile(content);
+      await fd.sync();
+    } finally {
+      await fd.close();
+    }
     await fs.rename(tmp, filePath);
-    try { const dfd = await fs.open(dir, 'r'); try { await dfd.sync(); } finally { await dfd.close(); } } catch {}
+    try {
+      const dfd = await fs.open(dir, 'r');
+      try {
+        await dfd.sync();
+      } finally {
+        await dfd.close();
+      }
+    } catch {}
   }
 
   private async pathExists(p: string) {
-    try { await fs.stat(p); return true; } catch { return false; }
+    try {
+      await fs.stat(p);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private runGit(args: string[], cwd: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const child = spawn('git', args, { cwd });
       let stderr = '';
-      child.stderr.on('data', (d) => (stderr += d.toString()))
+      child.stderr.on('data', (d) => (stderr += d.toString()));
       child.on('error', reject);
       child.on('exit', (code) => {
         if (code === 0) resolve();
@@ -297,7 +348,10 @@ export class GitGraphRepository extends GraphRepository {
     });
   }
 
-  private deltaSummary(before: Pick<PersistedGraph, 'nodes' | 'edges'>, after: Pick<PersistedGraph, 'nodes' | 'edges'>) {
+  private deltaSummary(
+    before: Pick<PersistedGraph, 'nodes' | 'edges'>,
+    after: Pick<PersistedGraph, 'nodes' | 'edges'>,
+  ) {
     const dn = after.nodes.length - (before.nodes?.length || 0);
     const de = after.edges.length - (before.edges?.length || 0);
     const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -307,20 +361,33 @@ export class GitGraphRepository extends GraphRepository {
   private deltaSummaryDetailed({ before, after }: { before: PersistedGraph; after: PersistedGraph }) {
     const nd = this.diffNodes(before.nodes, after.nodes);
     const ed = this.diffEdges(before.edges, after.edges);
-    const fmt = (adds: string[], upds: string[], dels: string[]) => `add:${adds.length},upd:${upds.length},del:${dels.length}`;
+    const fmt = (adds: string[], upds: string[], dels: string[]) =>
+      `add:${adds.length},upd:${upds.length},del:${dels.length}`;
     return `(+${nd.nodeAdds.length}/-${nd.nodeDeletes.length} nodes, +${ed.edgeAdds.length}/-${ed.edgeDeletes.length} edges; changed: nodes=[${fmt(nd.nodeAdds, nd.nodeUpdates, nd.nodeDeletes)}], edges=[${fmt(ed.edgeAdds, ed.edgeUpdates, ed.edgeDeletes)}])`;
   }
 
   private async rollbackPaths(touched: { added: string[]; updated: string[]; deleted: string[] }) {
     const toRestore = [...touched.updated, ...touched.deleted, 'graph.meta.json'];
-    await Promise.all(toRestore.map(async (rel) => {
-      try { await this.runGit(['restore', '--worktree', '--source', 'HEAD', rel], this.cfg.repoPath); } catch {}
-      try { await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.cfg.repoPath); } catch {}
-    }));
-    await Promise.all(touched.added.map(async (rel) => {
-      try { await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.cfg.repoPath); } catch {}
-      try { await fs.unlink(path.join(this.cfg.repoPath, rel)); } catch {}
-    }));
+    await Promise.all(
+      toRestore.map(async (rel) => {
+        try {
+          await this.runGit(['restore', '--worktree', '--source', 'HEAD', rel], this.config.graphRepoPath);
+        } catch {}
+        try {
+          await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.config.graphRepoPath);
+        } catch {}
+      }),
+    );
+    await Promise.all(
+      touched.added.map(async (rel) => {
+        try {
+          await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.config.graphRepoPath);
+        } catch {}
+        try {
+          await fs.unlink(path.join(this.config.graphRepoPath, rel));
+        } catch {}
+      }),
+    );
   }
 
   // Advisory lock: repo-root .graph.lock
@@ -361,16 +428,31 @@ export class GitGraphRepository extends GraphRepository {
     const metaPath = path.join(this.config.graphRepoPath, 'graph.meta.json');
     try {
       const parsed = JSON.parse(await fs.readFile(metaPath, 'utf8')) as Partial<GraphMeta>;
-      const meta: GraphMeta = { name: (parsed.name ?? name) as string, version: Number(parsed.version ?? 0), updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string, format: 2 };
-      const nodesRes = await this.readEntitiesFromDir<PersistedGraphNode>(path.join(this.config.graphRepoPath, 'nodes'));
-      const edgesRes = await this.readEntitiesFromDir<PersistedGraphEdge>(path.join(this.config.graphRepoPath, 'edges'));
+      const meta: GraphMeta = {
+        name: (parsed.name ?? name) as string,
+        version: Number(parsed.version ?? 0),
+        updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string,
+        format: 2,
+      };
+      const nodesRes = await this.readEntitiesFromDir<PersistedGraphNode>(
+        path.join(this.config.graphRepoPath, 'nodes'),
+      );
+      const edgesRes = await this.readEntitiesFromDir<PersistedGraphEdge>(
+        path.join(this.config.graphRepoPath, 'edges'),
+      );
       if (nodesRes.hadError || edgesRes.hadError) {
         // Prefer lastCommitted snapshot if available; otherwise fall back to HEAD
         if (this.lastCommitted) return this.lastCommitted;
         const head = await this.readFromHeadRoot(name);
         if (head) return head;
       }
-      return { name: meta.name ?? name, version: meta.version ?? 0, updatedAt: meta.updatedAt ?? new Date().toISOString(), nodes: nodesRes.items, edges: edgesRes.items };
+      return {
+        name: meta.name ?? name,
+        version: meta.version ?? 0,
+        updatedAt: meta.updatedAt ?? new Date().toISOString(),
+        nodes: nodesRes.items,
+        edges: edgesRes.items,
+      };
     } catch {
       const head = await this.readFromHeadRoot(name);
       if (head) return head;
@@ -378,24 +460,28 @@ export class GitGraphRepository extends GraphRepository {
     }
   }
 
-  private async readEntitiesFromDir<T extends { id?: string }>(dir: string): Promise<{ items: T[]; hadError: boolean }> {
+  private async readEntitiesFromDir<T extends { id?: string }>(
+    dir: string,
+  ): Promise<{ items: T[]; hadError: boolean }> {
     let hadError = false;
     const items: T[] = [];
     try {
       const files = await fs.readdir(dir);
       const jsonFiles = files.filter((f) => f.endsWith('.json'));
-      const reads = await Promise.all(jsonFiles.map(async (f) => {
-        const p = path.join(dir, f);
-        try {
-          const raw = JSON.parse(await fs.readFile(p, 'utf8')) as Partial<T>;
-          const decodedId = decodeURIComponent(f.replace(/\.json$/, ''));
-          const obj = { id: String((raw as any).id ?? decodedId), ...(raw as object) } as T;
-          return obj;
-        } catch {
-          hadError = true;
-          return null;
-        }
-      }));
+      const reads = await Promise.all(
+        jsonFiles.map(async (f) => {
+          const p = path.join(dir, f);
+          try {
+            const raw = JSON.parse(await fs.readFile(p, 'utf8')) as Partial<T>;
+            const decodedId = decodeURIComponent(f.replace(/\.json$/, ''));
+            const obj = { id: String((raw as any).id ?? decodedId), ...(raw as object) } as T;
+            return obj;
+          } catch {
+            hadError = true;
+            return null;
+          }
+        }),
+      );
       for (const r of reads) if (r) items.push(r);
     } catch {
       // directory may not exist
@@ -407,26 +493,41 @@ export class GitGraphRepository extends GraphRepository {
     try {
       const metaRaw = await this.runGitCapture(['show', 'HEAD:graph.meta.json'], this.config.graphRepoPath);
       const parsed = JSON.parse(metaRaw) as Partial<GraphMeta>;
-      const meta: GraphMeta = { name: (parsed.name ?? name) as string, version: Number(parsed.version ?? 0), updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string, format: 2 };
+      const meta: GraphMeta = {
+        name: (parsed.name ?? name) as string,
+        version: Number(parsed.version ?? 0),
+        updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string,
+        format: 2,
+      };
       const list = await this.runGitCapture(['ls-tree', '-r', '--name-only', 'HEAD'], this.config.graphRepoPath);
       const paths = list.split('\n').filter(Boolean);
       const nodePaths = paths.filter((p) => p.startsWith('nodes/') && p.endsWith('.json'));
       const edgePaths = paths.filter((p) => p.startsWith('edges/') && p.endsWith('.json'));
-      const nodes = await Promise.all(nodePaths.map(async (p) => {
-        const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-        const obj = JSON.parse(raw);
-        if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
-        obj.id = String(obj.id);
-        return obj as PersistedGraphNode;
-      }));
-      const edges = await Promise.all(edgePaths.map(async (p) => {
-        const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-        const obj = JSON.parse(raw);
-        if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
-        obj.id = String(obj.id);
-        return obj as PersistedGraphEdge;
-      }));
-      return { name: meta.name ?? name, version: meta.version ?? 0, updatedAt: meta.updatedAt ?? new Date().toISOString(), nodes, edges };
+      const nodes = await Promise.all(
+        nodePaths.map(async (p) => {
+          const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
+          const obj = JSON.parse(raw);
+          if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
+          obj.id = String(obj.id);
+          return obj as PersistedGraphNode;
+        }),
+      );
+      const edges = await Promise.all(
+        edgePaths.map(async (p) => {
+          const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
+          const obj = JSON.parse(raw);
+          if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
+          obj.id = String(obj.id);
+          return obj as PersistedGraphEdge;
+        }),
+      );
+      return {
+        name: meta.name ?? name,
+        version: meta.version ?? 0,
+        updatedAt: meta.updatedAt ?? new Date().toISOString(),
+        nodes,
+        edges,
+      };
     } catch {
       return null;
     }
@@ -437,23 +538,42 @@ export class GitGraphRepository extends GraphRepository {
       const relMeta = path.posix.join('graphs', name, 'graph.meta.json');
       const rawMeta = await this.runGitCapture(['show', `HEAD:${relMeta}`], this.config.graphRepoPath);
       const parsed = JSON.parse(rawMeta) as Partial<GraphMeta>;
-      const meta: GraphMeta = { name: (parsed.name ?? name) as string, version: Number(parsed.version ?? 0), updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string, format: 2 };
+      const meta: GraphMeta = {
+        name: (parsed.name ?? name) as string,
+        version: Number(parsed.version ?? 0),
+        updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string,
+        format: 2,
+      };
       const base = path.posix.join('graphs', name);
       const list = await this.runGitCapture(['ls-tree', '-r', '--name-only', 'HEAD', base], this.config.graphRepoPath);
       const paths = list.split('\n').filter(Boolean);
-      const nodes = await Promise.all(paths.filter((p) => p.startsWith(`${base}/nodes/`) && p.endsWith('.json')).map(async (p) => {
-        const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-        const obj = JSON.parse(raw) as PersistedGraphNode;
-        (obj as any).id = String((obj as any).id ?? decodeURIComponent(path.basename(p, '.json')));
-        return obj;
-      }));
-      const edges = await Promise.all(paths.filter((p) => p.startsWith(`${base}/edges/`) && p.endsWith('.json')).map(async (p) => {
-        const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-        const obj = JSON.parse(raw) as PersistedGraphEdge;
-        (obj as any).id = String((obj as any).id ?? decodeURIComponent(path.basename(p, '.json')));
-        return obj;
-      }));
-      return { name: meta.name ?? name, version: meta.version ?? 0, updatedAt: meta.updatedAt ?? new Date().toISOString(), nodes, edges };
+      const nodes = await Promise.all(
+        paths
+          .filter((p) => p.startsWith(`${base}/nodes/`) && p.endsWith('.json'))
+          .map(async (p) => {
+            const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
+            const obj = JSON.parse(raw) as PersistedGraphNode;
+            (obj as any).id = String((obj as any).id ?? decodeURIComponent(path.basename(p, '.json')));
+            return obj;
+          }),
+      );
+      const edges = await Promise.all(
+        paths
+          .filter((p) => p.startsWith(`${base}/edges/`) && p.endsWith('.json'))
+          .map(async (p) => {
+            const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
+            const obj = JSON.parse(raw) as PersistedGraphEdge;
+            (obj as any).id = String((obj as any).id ?? decodeURIComponent(path.basename(p, '.json')));
+            return obj;
+          }),
+      );
+      return {
+        name: meta.name ?? name,
+        version: meta.version ?? 0,
+        updatedAt: meta.updatedAt ?? new Date().toISOString(),
+        nodes,
+        edges,
+      };
     } catch {
       return null;
     }
@@ -475,7 +595,15 @@ export class GitGraphRepository extends GraphRepository {
 
   private diffNodes(before: PersistedGraphNode[], after: PersistedGraphNode[]) {
     // Include position and state so both cause updates; encode template/config/dynamicConfig/state/position
-    const normalize = (n: PersistedGraphNode) => JSON.stringify({ id: n.id, template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, state: n.state, position: n.position });
+    const normalize = (n: PersistedGraphNode) =>
+      JSON.stringify({
+        id: n.id,
+        template: n.template,
+        config: n.config,
+        dynamicConfig: n.dynamicConfig,
+        state: n.state,
+        position: n.position,
+      });
     const b = new Map(before.map((n) => [n.id, normalize(n)]));
     const a = new Map(after.map((n) => [n.id, normalize(n)]));
     const nodeAdds: string[] = [];
@@ -497,8 +625,12 @@ export class GitGraphRepository extends GraphRepository {
   }
 
   private diffEdges(before: PersistedGraphEdge[], after: PersistedGraphEdge[]) {
-    const bi = new Map(before.map((e) => [String(e.id ?? this.edgeId(e)), JSON.stringify({ ...e, id: String(e.id ?? this.edgeId(e)) })]));
-    const ai = new Map(after.map((e) => [String(e.id ?? this.edgeId(e)), JSON.stringify({ ...e, id: String(e.id ?? this.edgeId(e)) })]));
+    const bi = new Map(
+      before.map((e) => [String(e.id ?? this.edgeId(e)), JSON.stringify({ ...e, id: String(e.id ?? this.edgeId(e)) })]),
+    );
+    const ai = new Map(
+      after.map((e) => [String(e.id ?? this.edgeId(e)), JSON.stringify({ ...e, id: String(e.id ?? this.edgeId(e)) })]),
+    );
     const edgeAdds: string[] = [];
     const edgeUpdates: string[] = [];
     const edgeDeletes: string[] = [];
