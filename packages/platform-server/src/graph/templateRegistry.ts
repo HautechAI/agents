@@ -37,6 +37,7 @@ export class TemplateRegistry {
     for (const name of this.classes.keys()) {
       let sourcePorts: string[] = [];
       let targetPorts: string[] = [];
+      // Attempt DI instantiation to read ports from instance
       try {
         const cls = this.classes.get(name)!;
         const inst = (await resolve<Node>(cls as any)) as any;
@@ -47,14 +48,21 @@ export class TemplateRegistry {
         }
       } catch {}
       const meta = this.meta.get(name) ?? { title: name, kind: 'tool' as TemplateKind };
+      const clsAny = this.classes.get(name)! as any;
+      const caps = (clsAny && clsAny.capabilities)
+        ? (clsAny.capabilities as TemplateNodeSchema['capabilities'])
+        : undefined;
+      const staticSchema = (clsAny && clsAny.staticConfigSchema)
+        ? (clsAny.staticConfigSchema as JSONSchema.BaseSchema)
+        : undefined;
       schemas.push({
         name,
         title: meta.title,
         kind: meta.kind,
         sourcePorts,
         targetPorts,
-        capabilities: meta.capabilities,
-        staticConfigSchema: meta.staticConfigSchema,
+        capabilities: caps ?? meta.capabilities,
+        staticConfigSchema: staticSchema ?? meta.staticConfigSchema,
       });
     }
     return schemas.sort((a, b) => a.name.localeCompare(b.name));
