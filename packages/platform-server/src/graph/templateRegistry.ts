@@ -58,11 +58,6 @@ export class TemplateRegistry {
       } catch {
         // ignore instance creation errors for schema generation; fall back to no ports
       }
-          const cfg = inst.getPortConfig();
-          sourcePorts = cfg?.sourcePorts ? Object.keys(cfg.sourcePorts) : [];
-          targetPorts = cfg?.targetPorts ? Object.keys(cfg.targetPorts) : [];
-        }
-      } catch {}
       const meta = this.meta.get(name) ?? { title: name, kind: 'tool' as TemplateKind };
       const clsAny = this.classes.get(name)! as any;
       const caps = (clsAny && clsAny.capabilities)
