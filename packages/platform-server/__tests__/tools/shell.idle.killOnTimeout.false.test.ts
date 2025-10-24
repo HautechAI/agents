@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ContainerService } from '../../src/infra/container/container.service';
 import { LoggerService } from '../../src/core/services/logger.service';
+<<<<<<< HEAD
 import { ExecIdleTimeoutError } from '../../src/utils/execTimeout';
+=======
+import { ExecIdleTimeoutError } from '../../utils/execTimeout';
+>>>>>>> cf45ead (fix(platform-server): correct import paths and adjust legacy tests)
 
 describe('ContainerService idle timeout with killOnTimeout=false', () => {
   it('does not stop container on idle timeout when killOnTimeout=false', async () => {

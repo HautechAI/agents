@@ -3,7 +3,7 @@ import { LoggerService } from '../../src/core/services/logger.service';
 import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
 import { ContainerService } from '../../src/infra/container/container.service';
 import { isExecTimeoutError, ExecIdleTimeoutError } from '../../src/utils/execTimeout';
-import { ContainerProviderEntity } from '../../src/entities/containerProvider.entity';
+// ContainerProviderEntity was removed in refactor; use WorkspaceNode where needed or stub.
 import { ContainerHandle } from '../../src/infra/container/container.handle';
 import type { Mock } from 'vitest';
 
@@ -19,11 +19,6 @@ describe('ShellTool timeout error message', () => {
     } as const;
 
     const FakeContainer = class { async exec(): Promise<never> { throw timeoutErr; } } as any;
-    class FakeProvider extends ContainerProviderEntity {
-      constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); }
-      override async provide(_t: string): Promise<ContainerHandle> { return new ContainerHandle(new ContainerService(logger), 'fake'); }
-    }
-    const provider = new FakeProvider(logger);
     const node = new ShellCommandNode(new (await import('../../src/graph/env.service')).EnvService(new LoggerService() as any));
     node.setContainerProvider(({
       provide: async (_t: string) => ({ exec: async () => { throw timeoutErr; } } as any),
@@ -46,7 +41,6 @@ describe('ShellTool timeout error message', () => {
     const idleErr = new ExecIdleTimeoutError(60000, 'out', 'err');
     const fakeContainer = { exec: vi.fn(async () => { throw idleErr; }) } as const;
     const FakeContainer = class { async exec(): Promise<never> { throw idleErr; } } as any;
-    class FakeProvider extends ContainerProviderEntity { constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); } override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); } }
     const node = new ShellCommandNode(new (await import('../../src/graph/env.service')).EnvService(new LoggerService() as any));
     node.setContainerProvider(({
       provide: async (_t: string) => ({ exec: async () => { throw idleErr; } } as any),
@@ -65,7 +59,6 @@ describe('ShellTool timeout error message', () => {
     const idleErr = new (class extends ExecIdleTimeoutError { constructor() { super(12345, 'out', 'err'); } })();
     const fakeContainer = { exec: vi.fn(async () => { throw idleErr; }) } as const;
     const FakeContainer = class { async exec(): Promise<never> { throw idleErr; } } as any;
-    class FakeProvider extends ContainerProviderEntity { constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); } override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); } }
     const node = new ShellCommandNode(new (await import('../../src/graph/env.service')).EnvService(new LoggerService() as any));
     node.setContainerProvider(({
       provide: async (_t: string) => ({ exec: async () => { throw idleErr; } } as any),
@@ -201,22 +194,16 @@ describe('ShellTool non-timeout error propagation', () => {
     class FakeContainer extends ContainerEntity {
       override async exec(): Promise<never> { throw new Error('Permission denied'); }
     }
-    class FakeProvider extends ContainerProviderEntity {
-      constructor(logger: LoggerService) { super(new ContainerService(logger), undefined, {}, () => ({})); }
-      override async provide(): Promise<ContainerEntity> { return new FakeContainer(new ContainerService(logger), 'fake'); }
-    }
-    const provider = new FakeProvider(logger);
-
-    const tool = new ShellTool(undefined, logger);
-    tool.setContainerProvider(provider);
-    await tool.setConfig({});
-    const t = tool.init();
-
-    type InvokeArgs = Parameters<ReturnType<ShellTool['init']>['invoke']>;
-    const payload: InvokeArgs[0] = { command: 'ls' };
-    const ctx: InvokeArgs[1] = { configurable: { thread_id: 't' } } as any;
+    const node = new ShellCommandNode(new (await import('../../src/graph/env.service')).EnvService(new LoggerService() as any));
+    node.setContainerProvider(({
+      provide: async (_t: string) => ({ exec: async () => { throw new Error('Permission denied'); } } as any),
+    } as any));
+    await node.setConfig({});
+    const t = node.getTool();
+    const payload: any = { command: 'ls' };
+    const ctx: any = { threadId: 't' };
     await expect(
-      t.invoke(payload, ctx),
+      t.execute(payload, ctx),
     ).rejects.toThrow('Permission denied');
   });
 });
