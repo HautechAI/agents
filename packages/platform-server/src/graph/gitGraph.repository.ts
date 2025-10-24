@@ -500,7 +500,9 @@ export class GitGraphRepository extends GraphRepository {
       if (!bi.has(id)) edgeAdds.push(id);
       else if (bi.get(id) !== ai.get(id)) edgeUpdates.push(id);
     }
-    for (const id of bi.keys()) if (!ai.has(id)) edgeDeletes.push(id);
+    for (const id of bi.keys()) {
+      if (!ai.has(id)) edgeDeletes.push(id);
+    }
     return { edgeAdds, edgeUpdates, edgeDeletes };
   }
 }
