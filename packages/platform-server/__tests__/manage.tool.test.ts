@@ -139,14 +139,8 @@ describe('ManageTool graph wiring', () => {
     const registry = new TemplateRegistry();
 
     registry
-      .register('agent', () => new FakeAgentWithTools(logger) as any, {
-        sourcePorts: { tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' } },
-        targetPorts: { $self: { kind: 'instance' } },
-      })
-      .register('manageTool', () => new ManageTool(logger), {
-        targetPorts: { $self: { kind: 'instance' } },
-        sourcePorts: { agent: { kind: 'method', create: 'addAgent' } },
-      });
+      .register('agent', { title: 'Agent', kind: 'agent' }, (() => new FakeAgentWithTools(logger) as any) as any)
+      .register('manageTool', { title: 'Manage', kind: 'tool' }, (() => new ManageTool(logger)) as any);
 
     const runtime = new LiveGraphRuntime(logger, registry);
     const graph = {

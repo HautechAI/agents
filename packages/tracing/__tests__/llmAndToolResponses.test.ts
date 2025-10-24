@@ -31,6 +31,7 @@ describe('LLMResponse & withLLM', () => {
     expect(completed).toBeTruthy();
     // New API: attributes.output.content contains result
     expect(completed.attributes.output.content).toBe('Result body');
+    expect(Array.isArray(completed.attributes.output.toolCalls)).toBe(true);
   });
 });
 

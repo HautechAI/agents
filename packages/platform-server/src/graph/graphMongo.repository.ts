@@ -38,7 +38,7 @@ export class MongoGraphRepository extends GraphRepository {
   }
 
   async upsert(req: PersistedGraphUpsertRequest, _author?: { name?: string; email?: string }): Promise<PersistedGraphUpsertResponse> {
-    validatePersistedGraph(req, this.templateRegistry.toSchema());
+    validatePersistedGraph(req, await this.templateRegistry.toSchema());
     const now = new Date();
     const name = req.name;
     const existing = await this.collection!.findOne({ _id: name });
@@ -92,8 +92,8 @@ export class MongoGraphRepository extends GraphRepository {
 
   // API-like helpers to be wired to HTTP in a follow-up
   // Endpoints should reflect single-graph model, e.g., /graph/nodes/:nodeId for runtime actions (handled elsewhere)
-  getTemplates() {
-    return this.templateRegistry.toSchema();
+  async getTemplates() {
+    return await this.templateRegistry.toSchema();
   }
 
   // Validation moved to graph.validation.ts to share with GitGraphRepository

@@ -24,9 +24,8 @@ describe('GitGraphRepository', () => {
     // Provide explicit ports so edges using sourceHandle 'out' and targetHandle 'in' validate
     registry.register(
       'noop',
-      async () => ({ setConfig: () => {} } as any),
-      { sourcePorts: { out: { kind: 'instance' } }, targetPorts: { in: { kind: 'instance' } } },
       { title: 'Noop', kind: 'tool' },
+      (async () => ({ setConfig: () => {} } as any)) as any,
     );
     // Use minimal ConfigService stub and env
     const { ConfigService } = await import('../src/core/services/config.service');

@@ -13,7 +13,7 @@ import { CallToolsLLMReducer } from '../../llm/reducers/callTools.llm.reducer';
 import { ConditionalLLMRouter } from '../../llm/routers/conditional.llm.router';
 import { StaticLLMRouter } from '../../llm/routers/static.llm.router';
 import { LLMContext, LLMState } from '../../llm/types';
-import { LLMProvisioner } from '../../llm/llm.provisioner';
+import { LLMProvisioner } from '../../llm/provisioners/llm.provisioner';
 
 import { SummarizationLLMReducer } from '../../llm/reducers/summarization.llm.reducer';
 import { LoadLLMReducer } from '../../llm/reducers/load.llm.reducer';
@@ -87,8 +87,12 @@ export type WhenBusyMode = 'wait' | 'injectAfterTools';
 
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
 import Node from "../base/Node";
+import type { PortsProvider, TemplatePortConfig } from '../../graph/ports.types';
+import type { RuntimeContext, RuntimeContextAware } from '../../graph/runtimeContext';
+import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
 
-export class AgentNode extends Node<AgentStaticConfig | undefined> implements TriggerListener {
+export class AgentNode extends Node<AgentStaticConfig | undefined> implements TriggerListener, PortsProvider, RuntimeContextAware {
+  protected _config?: AgentStaticConfig;
   protected buffer = new MessagesBuffer({ debounceMs: 0 });
 
   private mcpServerTools: Map<McpServer, FunctionTool[]> = new Map();
@@ -114,6 +118,33 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
   }
   public getAgentNodeId(): string | undefined {
     return this.getNodeId();
+  }
+
+  setRuntimeContext(ctx: RuntimeContext): void {
+    this.agentId = ctx.nodeId;
+  }
+
+  // Minimal memory connector attachment to satisfy port validation and future use
+  private memoryConnector?: MemoryConnectorNode;
+  attachMemoryConnector(conn: MemoryConnectorNode | undefined): void {
+    this.memoryConnector = conn;
+  }
+  detachMemoryConnector(_conn: MemoryConnectorNode | undefined): void {
+    // detach regardless of identity for simplicity
+    this.memoryConnector = undefined;
+  }
+
+  getPortConfig(): TemplatePortConfig {
+    return {
+      sourcePorts: {
+        tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' },
+        mcp: { kind: 'method', create: 'addMcpServer', destroy: 'removeMcpServer' },
+      },
+      targetPorts: {
+        $self: { kind: 'instance' },
+        memory: { kind: 'method', create: 'attachMemoryConnector', destroy: 'detachMemoryConnector' },
+      },
+    };
   }
 
   private async prepareLoop(): Promise<Loop<LLMState, LLMContext>> {
@@ -279,4 +310,6 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
       this.logger.error?.('Agent: syncMcpToolsFromServer error', e);
     }
   }
+
+  // Static introspection removed per hotfix; rely on TemplateRegistry meta.
 }
