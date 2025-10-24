@@ -24,7 +24,7 @@ import { ReadinessWatcher } from './utils/readinessWatcher';
 import { VaultService } from './infra/vault/vault.service';
 import { ContainerRegistryService } from './infra/container/container.registry';
 import { ContainerCleanupService } from './infra/container/containerCleanup.job';
-import { registerRemindersRoute } from './routes/reminders.route';
+
 import { AgentRunService } from './nodes/agentRun.repository';
 import { registerRunsRoutes } from './routes/runs.route';
 import { registerNixRoutes } from './routes/nix.route';
@@ -409,7 +409,7 @@ async function bootstrap() {
   });
 
   // Register routes that need runtime
-  registerRemindersRoute(fastify, runtime, logger);
+  // Reminders endpoint handled by Nest controller (no Fastify wiring here)
   registerRunsRoutes(fastify, runtime, runsService, logger);
   // Nix proxy routes
   try {
