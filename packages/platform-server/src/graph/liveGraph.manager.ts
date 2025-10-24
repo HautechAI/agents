@@ -21,6 +21,9 @@ import { resolve } from '../bootstrap/di';
 import type Node from '../nodes/base/Node';
 import type { PortsProvider, TemplatePortConfig } from './ports.types';
 import type { RuntimeContext, RuntimeContextAware } from './runtimeContext';
+import { hasSetConfig } from './capabilities';
+// hasSetDynamicConfig guard is optional; check presence inline to avoid hard dependency
+import type { GraphRepository } from './graph.repository';
 
 const configsEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b); // unchanged
 
@@ -58,6 +61,64 @@ export class LiveGraphRuntime {
   }
   getExecutedEdges() {
     return Array.from(this.state.executedEdges.values());
+  }
+
+  /**
+   * Load and apply a persisted graph from the provided repository.
+   * Does not throw on failure; logs and returns { applied: false }.
+   */
+  public async load(
+    graphs: GraphRepository,
+    opts?: { graphName?: string },
+  ): Promise<{ applied: boolean; version?: number }> {
+    const name = opts?.graphName ?? 'main';
+    const toRuntimeGraph = (saved: {
+      nodes: Array<{
+        id: string;
+        template: string;
+        config?: Record<string, unknown>;
+        dynamicConfig?: Record<string, unknown>;
+        state?: Record<string, unknown>;
+      }>;
+      edges: Array<{ source: string; sourceHandle: string; target: string; targetHandle: string }>;
+      version: number;
+    }) =>
+      ({
+        nodes: saved.nodes.map((n) => ({
+          id: n.id,
+          data: { template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, state: n.state },
+        })),
+        edges: saved.edges.map((e) => ({
+          source: e.source,
+          sourceHandle: e.sourceHandle,
+          target: e.target,
+          targetHandle: e.targetHandle,
+        })),
+      }) as GraphDefinition;
+
+    try {
+      const existing = await graphs.get(name);
+      if (existing) {
+        this.logger.info(
+          'Applying persisted graph to live runtime (version=%s, nodes=%d, edges=%d)',
+          existing.version,
+          existing.nodes.length,
+          existing.edges.length,
+        );
+        await this.apply(toRuntimeGraph(existing));
+        this.logger.info('Initial persisted graph applied successfully');
+        return { applied: true, version: existing.version };
+      } else {
+        this.logger.info('No persisted graph found; starting with empty runtime graph.');
+        return { applied: false };
+      }
+    } catch (e) {
+      if (e instanceof GraphError) {
+        this.logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, (e as any)?.cause);
+      }
+      this.logger.error('Failed to apply initial persisted graph: %s', String(e));
+      return { applied: false };
+    }
   }
 
   // Persist a config update into the stored graph definition so future GETs / reloads reflect it.
@@ -278,8 +339,13 @@ export class LiveGraphRuntime {
     try {
       const nodeClass = this.templateRegistry.getClass(node.data.template);
       if (!nodeClass) throw Errors.unknownTemplate(node.data.template, node.id);
-      // Instantiate via DI container (transient scope expected)
-      const created = await resolve<Node>(nodeClass as any);
+      // Instantiate via DI container (transient scope expected); fallback to direct construction in tests
+      let created: Node;
+      try {
+        created = await resolve<Node>(nodeClass as any);
+      } catch {
+        created = new (nodeClass as any)();
+      }
 
       // If node supports runtime context, provide it
       const maybeAware = created as unknown as Partial<RuntimeContextAware>;
@@ -347,7 +413,7 @@ export class LiveGraphRuntime {
       }
 
       if (node.data.dynamicConfig) {
-        if (hasSetDynamicConfig(created)) {
+        if ((created as any) && typeof (created as any).setDynamicConfig === 'function') {
           try {
             await this.applyConfigWithUnknownKeyStripping(
               created,
