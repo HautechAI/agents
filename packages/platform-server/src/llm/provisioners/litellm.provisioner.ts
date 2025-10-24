@@ -1,4 +1,9 @@
 import OpenAI from 'openai';
+<<<<<<< HEAD
+=======
+import { LLM } from '@agyn/llm';
+import { LLMProvisioner } from './llm.provisioner';
+>>>>>>> 184fcae (merge: finalize conflict cleanup; ensure single LLMProvisioner abstraction usage across modules)
 import { LLMProvisioner } from '../llm.provisioner';
 import { ConfigService } from '../../core/services/config.service';
 import { LoggerService } from '../../core/services/logger.service';
@@ -38,6 +43,36 @@ export class LiteLLMProvisioner extends LLMProvisioner {
     const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
     const base = this.cfg.openaiBaseUrl || (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
     return { apiKey: fallbackKey, baseUrl: base };
+export class LiteLLMProvisioner implements LLMProvisioner {
+  private client: OpenAI | null = null;
+  private llm: LLM | null = null;
+  constructor(private cfg: ConfigService, private logger: LoggerService) {}
+
+  async getLLM(): Promise<LLM> {
+    if (this.llm) return this.llm;
+    if (this.client) {
+      this.llm = new LLM(this.client as any);
+      return this.llm;
+    }
+    // Lazy provisioning: if OPENAI API key is present, use it; otherwise try LiteLLM.
+    const apiKey = this.cfg.openaiApiKey ?? this.cfg.litellmMasterKey;
+    let baseURL = this.cfg.openaiBaseUrl;
+    if (!this.cfg.openaiApiKey) {
+      // Attempt provisioning bounded retries.
+      const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
+      if (provKey) {
+        // Prefer provisioned key and base URL
+        this.logger.info('LiteLLM provisioned virtual key for OpenAI client');
+        this.client = new OpenAI({ apiKey: provKey, baseURL: baseUrl });
+        this.llm = new LLM(this.client as any);
+        return this.llm;
+      }
+      // Fallback to configured envs
+      if (!baseURL) baseURL = this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined;
+    }
+    this.client = new OpenAI({ apiKey, baseURL });
+    this.llm = new LLM(this.client as any);
+    return this.llm;
   }
 
   private async provisionWithRetry(): Promise<ProvisionResult> {
