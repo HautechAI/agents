@@ -3,7 +3,7 @@ import { TemplateRegistry } from '../src/graph/templateRegistry';
 
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { GraphDefinition } from '../src/graph/types';
-import { TemplatePortsRegistry } from '../src/graph/ports.types';
+// Ports are resolved dynamically from instances; static TemplatePortsRegistry is no longer used in tests.
 import { LoggerService } from '../src/core/services/logger.service.js';
 
 // Simple fixtures
@@ -37,17 +37,8 @@ class B {
 const makeRuntime = () => {
   const templates = new TemplateRegistry();
   templates
-    .register('A', () => new A(), {
-      sourcePorts: { self: { kind: 'instance' } },
-      targetPorts: { self: { kind: 'instance' }, link: { kind: 'method', create: 'attach', destroy: 'detach' } },
-    })
-    .register('B', () => new B(), {
-      sourcePorts: { self: { kind: 'instance' } },
-      targetPorts: {
-        self: { kind: 'instance' },
-        subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' },
-      },
-    });
+    .register('A', { title: 'A', kind: 'service' as any }, A as any)
+    .register('B', { title: 'B', kind: 'service' as any }, B as any);
   const runtime = new LiveGraphRuntime(new LoggerService(), templates);
   return runtime;
 };

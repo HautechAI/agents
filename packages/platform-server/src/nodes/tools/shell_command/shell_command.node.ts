@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { WorkspaceNode } from '../../workspace/workspace.node';
-import { EnvService, type EnvItem } from '../../graph/env.service';
+import { EnvService, type EnvItem } from '../../../graph/env.service';
 import { BaseToolNode } from '../baseToolNode';
 import { ShellCommandTool } from './shell_command.tool';
 
@@ -42,6 +42,14 @@ export class ShellCommandNode extends BaseToolNode {
   constructor(private envService: EnvService) {
     super();
   }
+  getPortConfig() {
+    return {
+      targetPorts: {
+        $self: { kind: 'instance' },
+        workspace: { kind: 'method', create: 'setContainerProvider' },
+      },
+    };
+  }
 
   setContainerProvider(provider: WorkspaceNode | undefined): void {
     this.containerProvider = provider;
@@ -60,14 +68,12 @@ export class ShellCommandNode extends BaseToolNode {
     this.cfg = parsed.data;
   }
 
-  async resolveEnv(): Promise<Record<string, string> | undefined> {
+  async resolveEnv(base?: Record<string, string>): Promise<Record<string, string> | undefined> {
     const items: EnvItem[] = (this.cfg?.env || []) as EnvItem[];
-    if (!items.length) return undefined;
     try {
-      const r = await this.envService.resolveEnvItems(items);
-      return Object.keys(r).length ? r : undefined;
+      return await this.envService.resolveProviderEnv(items, undefined, base);
     } catch {
-      return undefined;
+      return base && Object.keys(base).length ? { ...base } : undefined;
     }
   }
 

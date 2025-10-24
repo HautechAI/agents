@@ -26,7 +26,7 @@ import { ContainerCleanupService } from './infra/container/containerCleanup.job'
 // Removed unused AgentRunService import
 // Nix routes are served via Nest controller; keep import if legacy route file exists
 // import { registerNixRoutes } from './routes/nix.route';
-import { initDI, closeDI } from './bootstrap/di';
+import { initDI, closeDI, resolve } from './bootstrap/di';
 import { AppModule } from './bootstrap/app.module';
 import { NcpsKeyService } from './infra/ncps/ncpsKey.service';
 // Remove central platform.services.factory usage; rely on DI providers
@@ -52,7 +52,6 @@ async function bootstrap() {
   // Resolve optional services via DI as needed
   const ncpsKeyService = app.get(NcpsKeyService, { strict: false });
   let nodeStateService: NodeStateService | undefined;
-  // Register routes that need runtime on fastify instance (non-Nest legacy)
   const fastify = adapter.getInstance();
   // Initialize Ncps key service early
   try {
@@ -112,9 +111,7 @@ async function bootstrap() {
     }
     logger.error('Failed to apply initial persisted graph: %s', String(e));
   }
-  // Globals already set above; reuse adapter/app
-
-  // Fastify instance already initialized above
+  // Fastify instance is initialized via Nest adapter; routes are handled by Nest controllers only.
 
   // Start Fastify then attach Socket.io
   const PORT = Number(process.env.PORT) || 3010;
@@ -143,10 +140,28 @@ async function bootstrap() {
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+=======
+  // Graph-related routes migrated to Nest controllers; legacy Fastify wiring removed
+  const fastify = adapter.getInstance();
+  const PORT = Number(process.env.PORT) || 3010;
+  await fastify.listen({ port: PORT, host: '0.0.0.0' });
+  logger.info(`HTTP server listening on :${PORT}`);
+
+  const shutdown = async () => {
+    logger.info('Shutting down...');
+    await mongo.close();
+    try { await fastify.close(); } catch {}
+    try { await closeDI(); } catch {}
+    process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 bootstrap().catch((e) => {
-  logger.error('Bootstrap failure', e);
+  // Logger not available at module scope here
+  // eslint-disable-next-line no-console
+  console.error('Bootstrap failure', e);
   process.exit(1);
 });
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { TemplateNodeSchema, TemplateKind } from '../src/graph/types';
+class DummyNode { getPortConfig() { return { sourcePorts: { out: { kind: 'instance' as const } }, targetPorts: { inp: { kind: 'instance' as const } } }; } }
 
 const noopFactory = () => ({ setConfig: () => {} });
 
@@ -10,32 +11,25 @@ const dummyPorts = {
 };
 
 describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () => {
-  it('includes capabilities and staticConfigSchema when provided in meta', () => {
+  it('includes capabilities and staticConfigSchema when provided in meta', async () => {
     const reg = new TemplateRegistry();
-    reg.register(
-      'withMeta',
-      noopFactory,
-      dummyPorts as any,
-      {
-        title: 'With Meta',
-        kind: 'service' as TemplateKind,
-        capabilities: {
-          pausable: true,
-          staticConfigurable: true,
-          dynamicConfigurable: false,
-          provisionable: true,
-        },
-        staticConfigSchema: {
-          type: 'object',
-          properties: {
-            foo: { type: 'string' },
-          },
-          required: ['foo'],
-        } as any,
-      }
-    );
+    reg.register('withMeta', {
+      title: 'With Meta',
+      kind: 'service' as TemplateKind,
+      capabilities: {
+        pausable: true,
+        staticConfigurable: true,
+        dynamicConfigurable: false,
+        provisionable: true,
+      },
+      staticConfigSchema: {
+        type: 'object',
+        properties: { foo: { type: 'string' } },
+        required: ['foo'],
+      } as any,
+    }, DummyNode as any);
 
-    const schema = reg.toSchema();
+    const schema = await reg.toSchema();
     const entry = schema.find((s) => s.name === 'withMeta') as TemplateNodeSchema;
     expect(entry).toBeTruthy();
     expect(entry.capabilities).toEqual({
@@ -51,14 +45,11 @@ describe('TemplateRegistry.toSchema with capabilities/staticConfigSchema', () =>
     });
   });
 
-  it('defaults to undefined when not provided in meta', () => {
+  it('defaults to undefined when not provided in meta', async () => {
     const reg = new TemplateRegistry();
-    reg.register('noMeta', noopFactory, dummyPorts as any, {
-      title: 'No Meta',
-      kind: 'service' as TemplateKind,
-    });
+    reg.register('noMeta', { title: 'No Meta', kind: 'service' as TemplateKind }, DummyNode as any);
 
-    const schema = reg.toSchema();
+    const schema = await reg.toSchema();
     const entry = schema.find((s) => s.name === 'noMeta') as TemplateNodeSchema;
     expect(entry).toBeTruthy();
     expect(entry.capabilities).toBeUndefined();

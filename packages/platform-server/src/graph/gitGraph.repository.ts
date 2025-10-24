@@ -95,7 +95,7 @@ export class GitGraphRepository extends GraphRepository {
     req: PersistedGraphUpsertRequest,
     author?: { name?: string; email?: string },
   ): Promise<PersistedGraphUpsertResponse> {
-    validatePersistedGraph(req, this.templateRegistry.toSchema());
+    validatePersistedGraph(req, await this.templateRegistry.toSchema());
 
     const name = req.name;
     const lock = await this.acquireLock();

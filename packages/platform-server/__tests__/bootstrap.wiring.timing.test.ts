@@ -23,7 +23,7 @@ describe('Server bootstrap wiring timing', () => {
     const runtime = new LiveGraphRuntime(logger, registry);
     // Register a factory that captures globals at instantiation time
     const factory: FactoryFn = async () => new WiringProbeAgent();
-    registry.register('wiringProbe', factory, { sourcePorts: {}, targetPorts: {} }, { title: 'Probe', kind: 'agent' });
+    registry.register('wiringProbe', { title: 'Probe', kind: 'agent' }, factory as any);
 
     // Emulate server code: set globals BEFORE runtime.apply
     declare global {

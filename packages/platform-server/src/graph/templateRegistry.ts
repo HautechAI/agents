@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { JSONSchema } from 'zod/v4/core';
-import { TemplatePortConfig, TemplatePortsRegistry } from './ports.types';
-import { FactoryFn, TemplateKind, TemplateNodeSchema } from './types';
+import type { TemplatePortConfig, TemplatePortsRegistry } from './ports.types';
+import type { TemplateKind, TemplateNodeSchema } from './types';
+import type Node from '../nodes/base/Node';
+import { resolve } from '../bootstrap/di';
 
 export interface TemplateMeta {
   title: string;
@@ -12,45 +14,66 @@ export interface TemplateMeta {
 
 @Injectable()
 export class TemplateRegistry {
-  private factories = new Map<string, FactoryFn>();
-  private ports = new Map<string, TemplatePortConfig>();
+  private classes = new Map<string, new (...args: any[]) => Node>();
   private meta = new Map<string, TemplateMeta>();
 
-  register(template: string, factory: FactoryFn, portConfig?: TemplatePortConfig, meta?: TemplateMeta): this {
-    if (this.factories.has(template)) {
+  // Register associates template -> node class and meta (ports are read from instance via getPortConfig)
+  register(template: string, meta: TemplateMeta, nodeClass: new (...args: any[]) => Node): this {
+    if (this.classes.has(template)) {
       // Allow override deliberately; could warn here if desired
     }
-    this.factories.set(template, factory);
-    if (portConfig) this.ports.set(template, portConfig);
+    this.classes.set(template, nodeClass);
     if (meta) this.meta.set(template, meta);
     return this;
   }
 
-  get(template: string): FactoryFn | undefined {
-    return this.factories.get(template);
+  // Provide class lookup for runtime
+  getClass(template: string): (new (...args: any[]) => Node) | undefined {
+    return this.classes.get(template);
   }
 
-  getPortsMap(): TemplatePortsRegistry {
-    const out: TemplatePortsRegistry = {};
-    for (const [k, v] of this.ports.entries()) out[k] = v;
-    return out;
-  }
-
-  toSchema(): TemplateNodeSchema[] {
+  // Introspect ports by instantiating classes via DI; async to support resolution.
+  async toSchema(): Promise<TemplateNodeSchema[]> {
     const schemas: TemplateNodeSchema[] = [];
-    for (const name of this.factories.keys()) {
-      const portCfg = this.ports.get(name);
-      const sourcePorts = portCfg?.sourcePorts ? Object.keys(portCfg.sourcePorts) : [];
-      const targetPorts = portCfg?.targetPorts ? Object.keys(portCfg.targetPorts) : [];
+    for (const name of this.classes.keys()) {
+      let sourcePorts: string[] = [];
+      let targetPorts: string[] = [];
+      // Attempt DI instantiation to read ports from instance
+      try {
+        const cls = this.classes.get(name)!;
+        let inst: any;
+        try {
+          inst = (await resolve<Node>(cls as any)) as any;
+        } catch {
+          // Fallback for test environments without DI bindings
+          try {
+            inst = new (cls as any)();
+          } catch {}
+        }
+        if (inst && typeof inst.getPortConfig === 'function') {
+          const cfg = (inst.getPortConfig?.() || {}) as TemplatePortConfig;
+          sourcePorts = cfg?.sourcePorts ? Object.keys(cfg.sourcePorts) : [];
+          targetPorts = cfg?.targetPorts ? Object.keys(cfg.targetPorts) : [];
+        }
+      } catch {
+        // ignore instance creation errors for schema generation; fall back to no ports
+      }
       const meta = this.meta.get(name) ?? { title: name, kind: 'tool' as TemplateKind };
+      const clsAny = this.classes.get(name)! as any;
+      const caps = (clsAny && clsAny.capabilities)
+        ? (clsAny.capabilities as TemplateNodeSchema['capabilities'])
+        : undefined;
+      const staticSchema = (clsAny && clsAny.staticConfigSchema)
+        ? (clsAny.staticConfigSchema as JSONSchema.BaseSchema)
+        : undefined;
       schemas.push({
         name,
         title: meta.title,
         kind: meta.kind,
         sourcePorts,
         targetPorts,
-        capabilities: meta.capabilities,
-        staticConfigSchema: meta.staticConfigSchema,
+        capabilities: caps ?? meta.capabilities,
+        staticConfigSchema: staticSchema ?? meta.staticConfigSchema,
       });
     }
     return schemas.sort((a, b) => a.name.localeCompare(b.name));
