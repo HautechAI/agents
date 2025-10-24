@@ -471,12 +471,10 @@ export class LiveGraphRuntime {
         const { isNodeLifecycle } = await import('../nodes/types');
         if (isNodeLifecycle(inst)) {
           try {
-            const stopFn = (inst as Record<string, unknown>)['stop'];
-            if (typeof stopFn === 'function') await (stopFn as Function).call(inst);
+            await inst.stop();
           } catch {}
           try {
-            const delFn = (inst as Record<string, unknown>)['delete'];
-            if (typeof delFn === 'function') await (delFn as Function).call(inst);
+            await inst.delete();
           } catch {}
         } else {
           const destroy = (inst as Record<string, unknown>)['destroy'];
@@ -579,15 +577,13 @@ export class LiveGraphRuntime {
     const { isNodeLifecycle } = await import('../nodes/types');
     await Promise.all(
       nodes.map(async (live) => {
-        const inst = live.instance as unknown;
+        const inst = live.instance;
         if (isNodeLifecycle(inst)) {
           try {
-            const stopFn = (inst as Record<string, unknown>)['stop'];
-            if (typeof stopFn === 'function') await (stopFn as Function).call(inst);
+            await inst.stop();
           } catch {}
           try {
-            const delFn = (inst as Record<string, unknown>)['delete'];
-            if (typeof delFn === 'function') await (delFn as Function).call(inst);
+            await inst.delete();
           } catch {}
         }
         const inbound = this.state.inboundEdges.get(live.id) || new Set<string>();
