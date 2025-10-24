@@ -199,7 +199,7 @@ async function retryingPost(url: string, body: unknown, idempotencyKey: string) 
             return '[unserializable body]';
           }
         })();
-        // eslint-disable-next-line no-console
+        // Use console.debug for optional dev logging (kept under debug flag)
         console.debug('[tracing-sdk] POST', url, 'attempt', attempt, 'body<=', preview);
       }
       await httpPost(url, body, idempotencyKey);
@@ -581,4 +581,5 @@ export class SummarizeResponse<TRaw = unknown> {
 }
 
 // Re-export LLM message classes for convenience in SDK consumers/tests
-export { Message, SystemMessage as SystemMessage, HumanMessage as HumanMessage, AIMessage as AIMessage, ToolCallMessage as ToolCallMessage, ToolCallOutputMessage as ToolCallOutputMessage } from '@agyn/llm';
+// Use a single export list without duplicate aliases to satisfy bundlers
+export { Message, SystemMessage, HumanMessage, AIMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
