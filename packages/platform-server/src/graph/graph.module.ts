@@ -18,14 +18,8 @@ import { LoggerService } from '../core/services/logger.service';
 import { ContainerService } from '../infra/container/container.service';
 import { ConfigService } from '../core/services/config.service';
 import { MongoService } from '../core/services/mongo.service';
-<<<<<<< HEAD
 import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
 import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
-=======
-import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
-import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
-// import { Provider } from '@nestjs/common'; // not used
->>>>>>> 44f6900 (fix(platform-server): resolve ESLint parsing error and unused imports/vars)
 
 @Module({
   imports: [CoreModule, InfraModule, NodesModule, LLMModule],
