@@ -27,7 +27,7 @@ export class Loop<S, C> {
       if (!reducer.hasNext()) {
         break;
       }
-      const router = (reducer as any).nextRouter as Router<S, C> | undefined; // internal access
+      const router = reducer.getNextRouter();
       if (!router) break;
 
       const result = await router.route(workingState, ctx);

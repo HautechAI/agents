@@ -45,7 +45,7 @@ describe('Loop and Routers', () => {
 
   it('throws on missing reducer id', async () => {
     const loop = new Loop<S, C>({});
-    await expect(loop.invoke({ n: 0 }, {}, { start: 'missing' as any })).rejects.toThrow(/No reducer found/);
+    await expect(loop.invoke({ n: 0 }, {}, { start: 'missing' })).rejects.toThrow(/No reducer found/);
   });
 
   it('throws on missing next reducer id', async () => {
@@ -64,4 +64,3 @@ describe('Loop and Routers', () => {
     await expect(loop.invoke({ n: 0 }, {}, { start: 'a' })).rejects.toThrow(/Cycle detected/);
   });
 });
-

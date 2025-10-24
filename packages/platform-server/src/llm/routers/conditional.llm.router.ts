@@ -1,6 +1,8 @@
 import { Router } from '@agyn/llm';
 import { LLMContext, LLMState } from '../types';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class ConditionalLLMRouter extends Router<LLMState, LLMContext> {
   constructor(
     private next: (state: LLMState, ctx: LLMContext) => string | null,

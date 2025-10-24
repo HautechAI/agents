@@ -54,7 +54,7 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext, { tools: 
             name: tool.name,
             toolCallId: t.callId,
             input,
-            nodeId: (ctx as any)?.configurable?.nodeId,
+            nodeId: ctx.nodeId ?? ctx.callerAgent.getAgentNodeId?.(),
           },
           async () => {
             try {
@@ -82,7 +82,7 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext, { tools: 
         );
 
         // Emit raw output payload for FunctionCallOutput
-        return ToolCallOutputMessage.fromResponse(t.callId, response);
+        return ToolCallOutputMessage.fromResponse(t.callId, response.raw);
       }),
     );
 

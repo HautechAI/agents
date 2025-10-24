@@ -118,7 +118,7 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
 
   private prepareLoop(): Loop<LLMState, LLMContext> {
     const llm = this.llmFactoryService.createLLM();
-    const reducers: Record<string, Reducer<LLMState, LLMContext>> = {} as any;
+    const reducers: Record<string, Reducer<LLMState, LLMContext>> = {};
     const tools = Array.from(this.tools);
     // load -> summarize
     reducers['load'] = new LoadLLMReducer(this.logger).next(new StaticLLMRouter('summarize'));
@@ -182,7 +182,7 @@ export class AgentNode extends Node<AgentStaticConfig | undefined> implements Tr
 
         const newState = await loop.invoke(
           { messages: history },
-          { threadId: thread, finishSignal, callerAgent: this },
+          { threadId: thread, finishSignal, callerAgent: this, nodeId: this.getAgentNodeId?.() },
           { start: 'load' },
         );
 

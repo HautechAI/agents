@@ -33,6 +33,13 @@ export abstract class Reducer<S, C, P = unknown> {
   }
 
   /**
+   * Typed accessor for the next router.
+   */
+  getNextRouter(): Router<S, C> | undefined {
+    return this.nextRouter;
+  }
+
+  /**
    * Execute reducer logic, returning the updated state.
    */
   abstract invoke(state: S, ctx: C): Promise<S>;
