@@ -30,10 +30,11 @@ import { ContainerCleanupService } from './infra/container/containerCleanup.job'
 import { AgentRunService } from './nodes/agentRun.repository';
 // Nix routes are served via Nest controller; keep import if legacy route file exists
 // import { registerNixRoutes } from './routes/nix.route';
-import { NcpsKeyService } from './core/services/ncpsKey.service';
+
 import { maybeProvisionLiteLLMKey } from './llm/litellm.provisioner';
 import { initDI, closeDI } from './bootstrap/di';
 import { AppModule } from './bootstrap/app.module';
+import { NcpsKeyService } from './infra/ncps/ncpsKey.service';
 
 await initDI();
 
@@ -84,7 +85,6 @@ async function bootstrap() {
   // Initialize container registry and cleanup services
   const registry = app.get(ContainerRegistryService, { strict: false });
   await registry.ensureIndexes();
-  containerService.setRegistry(registry);
   await registry.backfillFromDocker(containerService);
   const cleanup = new ContainerCleanupService(registry, containerService, logger);
   cleanup.start();

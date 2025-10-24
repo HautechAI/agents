@@ -57,9 +57,11 @@ export type ContainerOpts = {
 @Injectable()
 export class ContainerService {
   private docker: Docker;
-  private registry?: ContainerRegistryService;
 
-  constructor(private logger: LoggerService) {
+  constructor(
+    private logger: LoggerService,
+    private registry: ContainerRegistryService,
+  ) {
     this.docker = new Docker({
       ...(process.env.DOCKER_SOCKET
         ? {
@@ -67,11 +69,6 @@ export class ContainerService {
           }
         : {}),
     });
-  }
-
-  /** Attach registry service for persistence and last-used tracking */
-  setRegistry(registry: ContainerRegistryService) {
-    this.registry = registry;
   }
 
   /** Public helper to touch last-used timestamp for a container */
@@ -125,7 +122,7 @@ export class ContainerService {
 
   /**
    * Start a new container and return a ContainerHandle representing it.
-  */
+   */
   async start(opts?: ContainerOpts): Promise<ContainerHandle> {
     const defaults: Partial<ContainerOpts> = { image: DEFAULT_IMAGE, autoRemove: true, tty: false };
     const optsWithDefaults = { ...defaults, ...opts };
@@ -341,7 +338,9 @@ export class ContainerService {
       // Prefer docker modem demux; fall back to manual demux if unavailable or throws
       try {
         // Narrow modem type to expected shape for demux
-        const modem = this.docker.modem as unknown as { demuxStream: (s: NodeJS.ReadableStream, out: NodeJS.WritableStream, err: NodeJS.WritableStream) => void };
+        const modem = this.docker.modem as unknown as {
+          demuxStream: (s: NodeJS.ReadableStream, out: NodeJS.WritableStream, err: NodeJS.WritableStream) => void;
+        };
         if (!modem?.demuxStream) throw new Error('demuxStream not available');
         modem.demuxStream(hijackStream, stdoutStream, stderrStream);
       } catch {
@@ -392,7 +391,10 @@ export class ContainerService {
           // Node.js streams expose destroy(); WHATWG ReadableStream does not. Cast to any safely.
           (streamRef as any)?.destroy?.();
         } catch {}
-        try { stdoutCollector.flush(); stderrCollector.flush(); } catch {}
+        try {
+          stdoutCollector.flush();
+          stderrCollector.flush();
+        } catch {}
         // Properly-typed AbortError without casts
         const abortErr = new Error('Aborted');
         abortErr.name = 'AbortError';
@@ -441,12 +443,18 @@ export class ContainerService {
       exec.start({ hijack: true, stdin: false }, (err, stream) => {
         if (err) {
           clearAll(execTimer, idleTimer);
-          if (signal) try { signal.removeEventListener('abort', onAbort); } catch {}
+          if (signal)
+            try {
+              signal.removeEventListener('abort', onAbort);
+            } catch {}
           return reject(err);
         }
         if (!stream) {
           clearAll(execTimer, idleTimer);
-          if (signal) try { signal.removeEventListener('abort', onAbort); } catch {}
+          if (signal)
+            try {
+              signal.removeEventListener('abort', onAbort);
+            } catch {}
           return reject(new Error('No stream returned from exec.start'));
         }
 
@@ -492,7 +500,13 @@ export class ContainerService {
                 },
               });
               try {
-                const modem = this.docker.modem as unknown as { demuxStream: (s: NodeJS.ReadableStream, out: NodeJS.WritableStream, err: NodeJS.WritableStream) => void };
+                const modem = this.docker.modem as unknown as {
+                  demuxStream: (
+                    s: NodeJS.ReadableStream,
+                    out: NodeJS.WritableStream,
+                    err: NodeJS.WritableStream,
+                  ) => void;
+                };
                 if (!modem?.demuxStream) throw new Error('demuxStream not available');
                 modem.demuxStream(stream, outStdout, outStderr);
               } catch {
@@ -518,16 +532,26 @@ export class ContainerService {
           try {
             const inspectData = await exec.inspect();
             clearAll(execTimer, idleTimer);
-            if (signal) try { signal.removeEventListener('abort', onAbort); } catch {}
+            if (signal)
+              try {
+                signal.removeEventListener('abort', onAbort);
+              } catch {}
             finished = true;
             try {
               stdoutCollector.flush();
               stderrCollector.flush();
             } catch {}
-            resolve({ stdout: stdoutCollector.getText(), stderr: stderrCollector.getText(), exitCode: inspectData.ExitCode ?? -1 });
+            resolve({
+              stdout: stdoutCollector.getText(),
+              stderr: stderrCollector.getText(),
+              exitCode: inspectData.ExitCode ?? -1,
+            });
           } catch (e) {
             clearAll(execTimer, idleTimer);
-            if (signal) try { signal.removeEventListener('abort', onAbort); } catch {}
+            if (signal)
+              try {
+                signal.removeEventListener('abort', onAbort);
+              } catch {}
             finished = true;
             reject(e);
           }
@@ -535,7 +559,10 @@ export class ContainerService {
         stream.on('error', (e) => {
           if (finished) return;
           clearAll(execTimer, idleTimer);
-          if (signal) try { signal.removeEventListener('abort', onAbort); } catch {}
+          if (signal)
+            try {
+              signal.removeEventListener('abort', onAbort);
+            } catch {}
           // Flush decoders to avoid dropping partial code units
           try {
             stdoutCollector.flush();
@@ -547,7 +574,10 @@ export class ContainerService {
         // Extra safety: clear timers on close as well
         stream.on('close', () => {
           clearAll(execTimer, idleTimer);
-          if (signal) try { signal.removeEventListener('abort', onAbort); } catch {}
+          if (signal)
+            try {
+              signal.removeEventListener('abort', onAbort);
+            } catch {}
         });
       });
     });
