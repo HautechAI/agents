@@ -483,10 +483,15 @@ export class GitGraphRepository extends GraphRepository {
     const nodeUpdates: string[] = [];
     const nodeDeletes: string[] = [];
     for (const id of a.keys()) {
-      if (!b.has(id)) nodeAdds.push(id);
-      else if (b.get(id) !== a.get(id)) nodeUpdates.push(id);
+      if (!b.has(id)) {
+        nodeAdds.push(id);
+      } else if (b.get(id) !== a.get(id)) {
+        nodeUpdates.push(id);
+      }
     }
-    for (const id of b.keys()) if (!a.has(id)) nodeDeletes.push(id);
+    for (const id of b.keys()) {
+      if (!a.has(id)) nodeDeletes.push(id);
+    }
     return { nodeAdds, nodeUpdates, nodeDeletes };
   }
 
