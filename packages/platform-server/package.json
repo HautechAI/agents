@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "dev": "node --loader ts-node/esm src/index.ts",
+    "dev": "node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' src/index.ts",
     "test": "cross-env MONGOMS_VERSION=7.0.14 vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
