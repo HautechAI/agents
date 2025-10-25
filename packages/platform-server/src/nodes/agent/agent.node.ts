@@ -231,13 +231,13 @@ export class AgentNode extends Node<AgentStaticConfig> {
   }
   async invoke(
     thread: string,
-    messages: TriggerMessage[] | TriggerMessage,
+    messages: Array<{ content: string; info?: Record<string, unknown> }> | { content: string; info?: Record<string, unknown> },
   ): Promise<ResponseMessage | ToolCallOutputMessage> {
     return await withAgent(
       { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
       async () => {
         const loop = await this.prepareLoop();
-        const incoming: TriggerMessage[] = Array.isArray(messages) ? messages : [messages];
+        const incoming: Array<{ content: string; info?: Record<string, unknown> }> = Array.isArray(messages) ? messages : [messages];
         const history: HumanMessage[] = incoming.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
         const finishSignal = new Signal();
 
@@ -267,12 +267,12 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return 'not_running';
   }
 
-  addTool(toolNode: BaseToolNode): void {
+  addTool(toolNode: BaseToolNode<any>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.add(tool);
     this.logger.info(`Tool added to Agent: ${toolNode?.constructor?.name || 'UnknownTool'}`);
   }
-  removeTool(toolNode: BaseToolNode): void {
+  removeTool(toolNode: BaseToolNode<any>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.delete(tool);
     this.logger.info(`Tool removed from Agent: ${toolNode?.constructor?.name || 'UnknownTool'}`);

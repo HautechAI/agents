@@ -12,7 +12,7 @@ export interface TemplateMeta {
   staticConfigSchema?: JSONSchema.BaseSchema;
 }
 
-type TemplateCtor = new (...args: unknown[]) => Node;
+export type TemplateCtor = new (...args: unknown[]) => Node<any>;
 interface TemplateStatic { capabilities?: TemplateNodeSchema['capabilities']; staticConfigSchema?: JSONSchema.BaseSchema }
 
 @Injectable()

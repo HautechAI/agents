@@ -27,18 +27,19 @@ setTimeout(() => {
 async function bootstrap() {
   // NestJS HTTP bootstrap using FastifyAdapter and resolve services via DI
   const adapter = new FastifyAdapter();
-  await adapter.getInstance().register(cors, { origin: true });
+  const fastify = adapter.getInstance();
+  await fastify.register(cors as any, { origin: true } as any);
 
   const app = await NestFactory.create(AppModule, adapter);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.init();
 
   const logger = app.get(LoggerService);
-  const fastify = adapter.getInstance();
+  const fastifyInstance = fastify;
 
   // Start Fastify then attach Socket.io
   const PORT = Number(process.env.PORT) || 3010;
-  await fastify.listen({ port: PORT, host: '0.0.0.0' });
+  await fastifyInstance.listen({ port: PORT, host: '0.0.0.0' });
   logger.info(`HTTP server listening on :${PORT}`);
 
   const shutdown = async () => {
@@ -48,7 +49,7 @@ async function bootstrap() {
     cleanup?.stop();
 
     await app.get(MongoService).close();
-    await fastify.close();
+    await fastifyInstance.close();
 
     process.exit(0);
   };

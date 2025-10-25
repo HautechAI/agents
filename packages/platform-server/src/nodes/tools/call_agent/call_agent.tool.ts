@@ -6,7 +6,7 @@ import { AgentNode } from '../../agent/agent.node';
 import { CallAgentToolStaticConfigSchema } from './call_agent.node';
 import { FunctionTool } from '@agyn/llm';
 import { LLMContext } from '../../../llm/types';
-import { TriggerMessage } from '../../slackTrigger/base.trigger';
+type TriggerMessage = { content: string; info?: Record<string, unknown> };
 
 export const callAgentInvocationSchema = z.object({
   input: z.string().min(1).describe('Message to forward to the target agent.'),

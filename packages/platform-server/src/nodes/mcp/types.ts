@@ -19,13 +19,13 @@ export interface McpTool {
   name: string;
   description?: string;
   inputSchema: JSONSchema.BaseSchema; // JSON Schema for arguments
-  outputSchema: JSONSchema.BaseSchema; // JSON Schema for output
+  outputSchema?: JSONSchema.BaseSchema; // JSON Schema for output (optional)
 }
 
 export interface McpToolCallResult {
   isError?: boolean;
   content?: string; // textual fallback
-  structuredContent?: unknown; // object validated by outputSchema if provided
+  structuredContent?: { [x: string]: unknown } | undefined; // object validated by outputSchema if provided
   raw?: unknown; // full raw SDK result
 }
 
@@ -34,6 +34,8 @@ export interface PersistedMcpToolSummary {
   name: string;
   description?: string;
 }
+
+// unified type alias removed; use interface McpTool
 export interface PersistedMcpState {
   tools?: PersistedMcpToolSummary[];
   toolsUpdatedAt?: string | number; // ISO string or epoch ms

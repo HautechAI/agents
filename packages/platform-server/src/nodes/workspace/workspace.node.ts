@@ -1,6 +1,6 @@
 import { ContainerOpts, ContainerService } from '../../infra/container/container.service';
 import Node from '../base/Node';
-import { ContainerHandle } from '../../core/handles/container.handle';
+import { ContainerHandle } from '../../infra/container/container.handle';
 import { z } from 'zod';
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../../constants';
 import { VaultService } from '../../infra/vault/vault.service';
@@ -108,19 +108,13 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     this.envService = new EnvService(undefined as any);
   }
 
-  init(params?: {
-    vaultService?: VaultService;
-    opts?: ContainerOpts;
-    idLabels?: (id: string) => Record<string, string>;
-  }): void {
-    this.vaultService = params?.vaultService;
-    this.envService = new EnvService(this.vaultService as any);
-    this.opts = params?.opts || {};
-    this.idLabels = params?.idLabels || this.idLabels;
+  init(params: { nodeId: string }): void {
+    super.init(params);
+    // envService stays as constructed; advanced injection happens in factory wiring
   }
 
   getPortConfig() {
-    return { sourcePorts: { $self: { kind: 'instance' } } };
+    return { sourcePorts: { $self: { kind: 'instance' as const } } } as const;
   }
 
   // Allow tests to inject a mock logger
@@ -130,8 +124,10 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
 
   // Accept static configuration (image/env/initialScript). Validation performed via zod schema.
   async setConfig(cfg: Record<string, unknown>): Promise<void> {
-    this.cfg = ContainerProviderStaticConfigSchema.parse(cfg);
-    await super.setConfig(cfg);
+    const parsed = ContainerProviderStaticConfigSchema.safeParse(cfg || {});
+    if (!parsed.success) throw new Error('Invalid Workspace config');
+    this.cfg = parsed.data;
+    await super.setConfig(this.cfg);
   }
 
   async provide(threadId: string): Promise<ContainerHandle> {
@@ -231,13 +227,13 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       } catch {
         // If inspect fails, do not reuse to be safe; still attempt cleanup
         try {
-          await container.stop();
+          await container!.stop();
         } catch (e: unknown) {
           const sc = getStatusCode(e);
           if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
         }
         try {
-          await container.remove(true);
+          await container!.remove(true);
         } catch (e: unknown) {
           const sc = getStatusCode(e);
           if (sc !== 404 && sc !== 409) throw e;

@@ -3,8 +3,8 @@
 // - maybeProvisionLiteLLMKey(cfg, logger): resolves to { apiKey?, baseUrl? } or {}
 // - configureOpenAIEnvFromLiteLLM(cfg, logger): calls maybeProvisionLiteLLMKey and sets process.env vars
 
-import type { ConfigService } from './config.service';
-import type { LoggerService } from './logger.service';
+import type { ConfigService } from '../core/services/config.service';
+import type { LoggerService } from '../core/services/logger.service';
 
 export type ProvisionResult = { apiKey?: string; baseUrl?: string };
 
@@ -118,4 +118,3 @@ function redact(s: string): string {
   // Remove anything that looks like a key or token
   return s.replace(/(sk-[A-Za-z0-9_\-]{6,})/g, '[REDACTED]');
 }
-

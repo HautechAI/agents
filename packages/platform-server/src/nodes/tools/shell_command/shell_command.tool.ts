@@ -54,7 +54,7 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
     this.logger.info('Tool called', 'shell_command', { command });
 
     // Base env pulled from container; overlay from node config
-    const baseEnv = await container.getEnv?.();
+    const baseEnv = undefined; // ContainerHandle does not expose getEnv; resolution handled via EnvService
     const envOverlay = await this.node.resolveEnv(baseEnv);
     const cfg = (this.node.config || {}) as z.infer<typeof ShellToolStaticConfigSchema>;
     const timeoutMs = cfg.executionTimeoutMs ?? 60 * 60 * 1000;

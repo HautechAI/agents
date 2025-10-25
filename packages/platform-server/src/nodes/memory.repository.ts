@@ -228,14 +228,14 @@ export class MemoryService {
 
     // Children from nested data tree (preferred)
     const n = this.getNested((doc as any).data, key);
-    if (n.exists && typeof n.node === 'object') {
+    if (n.exists && typeof n.node === 'object' && n.node !== null) {
       nestedChildren.push(...this.listNestedChildren(n.node));
     }
 
     // Include explicit nested dirs under this key
     const nd = this.getNested((doc as any).dirs, key);
-    if (nd.exists && typeof nd.node === 'object') {
-      for (const name of Object.keys(nd.node)) nestedChildren.push({ name, kind: 'dir' });
+    if (nd.exists && typeof nd.node === 'object' && nd.node !== null) {
+      for (const name of Object.keys(nd.node as Record<string, unknown>)) nestedChildren.push({ name, kind: 'dir' });
     }
 
     // Back-compat: flat dotted keys aggregation

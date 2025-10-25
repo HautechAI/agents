@@ -87,13 +87,14 @@ export class SendSlackMessageFunctionTool extends FunctionTool<typeof sendSlackI
         if (!resp.ok) return JSON.stringify({ ok: false, error: resp.error });
         return JSON.stringify({ ok: true, channel, message_ts: resp.message_ts, ephemeral: true });
       }
-      const resp: ChatPostMessageResponse = await client.chat.postMessage({
-        channel,
-        text,
-        attachments: [],
-        ...(thread_ts ? { thread_ts } : {}),
-        ...(thread_ts && broadcast ? { reply_broadcast: true } : {}),
-      });
+      const resp: ChatPostMessageResponse = await client.chat.postMessage(
+        {
+          channel,
+          text,
+          attachments: [],
+          ...(thread_ts ? { thread_ts } : {}),
+        } as any,
+      );
       if (!resp.ok) return JSON.stringify({ ok: false, error: resp.error });
       const thread =
         (resp.message && 'thread_ts' in resp.message

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ContainerRegistryService } from './containerRegistry.service';
+import { ContainerRegistry as ContainerRegistryService } from './container.registry';
 import type { ContainerService } from './container.service';
 import { Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';

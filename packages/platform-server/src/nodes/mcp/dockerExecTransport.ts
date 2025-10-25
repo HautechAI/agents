@@ -1,7 +1,7 @@
 import type { JSONRPCMessage } from './types';
 import type Docker from 'dockerode';
 import { PassThrough } from 'node:stream';
-import { LoggerService } from '../core/services/logger.service';
+import { LoggerService } from '../../core/services/logger.service';
 
 class ReadBufferInline {
   private _buffer?: Buffer;
@@ -62,10 +62,11 @@ export class DockerExecTransport {
     this._started = true;
     this.logger.info(`[DockerExecTransport#${this._id}] START initiating exec`);
     const started = await this.startExec();
-    const { stream } = started;
-    const stdin = started.stdin || stream;
-    const stdout = started.stdout || undefined;
-    const stderr = started.stderr || undefined;
+    const stream = (started as { stream?: NodeJS.ReadWriteStream }).stream;
+    const stdin: NodeJS.WritableStream | undefined =
+      (started as { stdin?: NodeJS.WritableStream }).stdin || stream;
+    const stdout: NodeJS.ReadableStream | undefined = (started as { stdout?: NodeJS.ReadableStream }).stdout;
+    const stderr: NodeJS.ReadableStream | undefined = (started as { stderr?: NodeJS.ReadableStream }).stderr;
     if (!stdin) throw new Error('No stdin stream provided');
     this._stdin = stdin;
 
@@ -93,7 +94,7 @@ export class DockerExecTransport {
         this.logger.error(`[DockerExecTransport#${this._id} stderr]`, text.trim());
       }
     });
-    const closer = stream || stdout || this._stdout;
+    const closer: NodeJS.ReadableStream = (stream as NodeJS.ReadableStream) || stdout || this._stdout;
     closer.on('end', () => this.handleClose());
     closer.on('close', () => this.handleClose());
   }
@@ -113,7 +114,7 @@ export class DockerExecTransport {
 
   async send(message: JSONRPCMessage): Promise<void> {
     if (this._closed) throw new Error('Transport closed');
-    if (!this._stdin || (this._stdin as NodeJS.WritableStream).writableEnded || (this._stdin as NodeJS.WritableStream).destroyed) {
+    if (!this._stdin || (this._stdin as any).writableEnded || (this._stdin as any).destroyed) {
       throw new Error('Transport closed');
     }
     const payload = serializeMessageInline(message);
@@ -132,7 +133,7 @@ export class DockerExecTransport {
     if (this._closed) return;
     this._closed = true;
     try {
-      this._stdin.end();
+      if (this._stdin && typeof (this._stdin as any).end === 'function') (this._stdin as any).end();
     } catch {}
     this.logger.info(`[DockerExecTransport#${this._id}] CLOSED`);
     this.onclose?.();

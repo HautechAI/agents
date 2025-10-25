@@ -50,11 +50,14 @@ export class RunsController {
     const status = query?.status ?? 'all';
     const items = await this.runs.list(params.nodeId, status);
     return {
-      items: items.map(({ _id, ...rest }) => ({
-        ...rest,
-        startedAt: rest.startedAt.toISOString(),
-        updatedAt: rest.updatedAt.toISOString(),
-        ...(rest.expiresAt ? { expiresAt: rest.expiresAt.toISOString() } : {}),
+      items: items.map(({ _id, nodeId, threadId, runId, status, startedAt, updatedAt, expiresAt }) => ({
+        nodeId,
+        threadId,
+        runId,
+        status: String(status),
+        startedAt: startedAt.toISOString(),
+        updatedAt: updatedAt.toISOString(),
+        ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}),
       })),
     };
   }

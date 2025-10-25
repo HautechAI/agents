@@ -41,9 +41,8 @@ export class MemoryNode extends Node<MemoryNodeStaticConfig> {
 
   getMemoryService(opts: { threadId?: string }): MemoryService {
     const threadId = this.config.scope === 'perThread' ? opts.threadId : undefined;
-    const svc = this.moduleRef.create(MemoryService).init({ nodeId: this.nodeId, scope: this.config.scope, threadId });
-
-    return svc;
+    const svc = this.moduleRef.get(MemoryService, { strict: false });
+    return svc.init({ nodeId: this.nodeId, scope: this.config.scope, threadId });
   }
 
   getPortConfig() {

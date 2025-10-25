@@ -36,7 +36,7 @@ export const ShellToolStaticConfigSchema = z
   .strict();
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class ShellCommandNode extends BaseToolNode {
+export class ShellCommandNode extends BaseToolNode<z.infer<typeof ShellToolStaticConfigSchema>> {
   private containerProvider?: WorkspaceNode;
   private cfg?: z.infer<typeof ShellToolStaticConfigSchema>;
   private toolInstance?: ShellCommandTool;
@@ -47,10 +47,10 @@ export class ShellCommandNode extends BaseToolNode {
   getPortConfig() {
     return {
       targetPorts: {
-        $self: { kind: 'instance' },
-        workspace: { kind: 'method', create: 'setContainerProvider' },
+        $self: { kind: 'instance' as const },
+        workspace: { kind: 'method' as const, create: 'setContainerProvider' },
       },
-    };
+    } as const;
   }
 
   setContainerProvider(provider: WorkspaceNode | undefined): void {
@@ -89,10 +89,12 @@ export class ShellCommandNode extends BaseToolNode {
   }
 
   // Expose config for tool
-  get config() {
-    return this.cfg;
+  get config(): z.infer<typeof ShellToolStaticConfigSchema> {
+    return (this.cfg || { executionTimeoutMs: 60 * 60 * 1000, idleTimeoutMs: 60 * 1000 }) as z.infer<
+      typeof ShellToolStaticConfigSchema
+    >;
   }
-  get provider() {
+  get provider(): WorkspaceNode | undefined {
     return this.containerProvider;
   }
 }

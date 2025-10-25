@@ -11,11 +11,11 @@ import { EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
 import { ZodError } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
 import { LocalMCPServer } from '../nodes/mcp';
-import type { PersistedMcpState } from '../nodes/mcp/types';
+import type { PersistedMcpState, McpTool } from '../nodes/mcp/types';
 
 import { Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import { NodeStatusState } from '../nodes/base/Node';
+import type { NodeStatusState } from '../nodes/base/Node';
 
 import type Node from '../nodes/base/Node';
 import { Errors } from './errors';
@@ -363,7 +363,8 @@ export class LiveGraphRuntime {
           const tools = state.mcp.tools;
           const updatedAt = state.mcp.toolsUpdatedAt;
           try {
-            created.preloadCachedTools(tools, updatedAt);
+            // Tools may be stored as summaries; guard conversion if needed.
+            created.preloadCachedTools((tools as any) as McpTool[], updatedAt);
           } catch (e) {
             this.logger.error('Error during MCP cache preload for node %s', node.id, e);
           }

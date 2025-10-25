@@ -5,7 +5,7 @@ export class Loop<S, C> {
   constructor(private reducers: Record<string, Reducer<S, C>>) {}
 
   async invoke(state: S, ctx: C, params: { start: string }): Promise<S> {
-    let workingState = state;
+    let workingState: S = state;
     let currentId: string | null = params.start;
     const visited = new Set<string>();
 
@@ -15,7 +15,7 @@ export class Loop<S, C> {
       }
       visited.add(currentId);
 
-      const reducer = this.reducers[currentId];
+      const reducer: Reducer<S, C> | undefined = this.reducers[currentId];
       if (!reducer) {
         throw new Error(`No reducer found for id: ${currentId}`);
       }
@@ -27,12 +27,12 @@ export class Loop<S, C> {
       if (!reducer.hasNext()) {
         break;
       }
-      const router = reducer.getNextRouter();
+      const router: Router<S, C> | undefined = reducer.getNextRouter();
       if (!router) break;
 
-      const result = await router.route(workingState, ctx);
+      const result: { state: S; next: string | null } = await router.route(workingState, ctx);
       workingState = result.state;
-      const nextId = result.next;
+      const nextId: string | null = result.next;
       if (!nextId) break;
 
       // validate nextId exists

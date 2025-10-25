@@ -19,7 +19,7 @@ export const MemoryToolNodeStaticConfigSchema = z
   .strict();
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class MemoryToolNode extends BaseToolNode {
+export class MemoryToolNode extends BaseToolNode<z.infer<typeof MemoryToolNodeStaticConfigSchema>> {
   private toolInstance?: UnifiedMemoryFunctionTool;
   private staticCfg: z.infer<typeof MemoryToolNodeStaticConfigSchema> = {};
   private memoryFactory?: (opts: { threadId?: string }) => MemoryService;

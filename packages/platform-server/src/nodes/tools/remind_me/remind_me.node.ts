@@ -6,7 +6,7 @@ import { AgentNode } from '../../agent/agent.node';
 import { Injectable, Scope } from '@nestjs/common';
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class RemindMeNode extends BaseToolNode {
+export class RemindMeNode extends BaseToolNode<z.infer<typeof RemindMeToolStaticConfigSchema>> {
   private toolInstance?: RemindMeFunctionTool;
   private callerAgent?: AgentNode; // set via port wiring
   private staticCfg: z.infer<typeof RemindMeToolStaticConfigSchema> = {};

@@ -12,7 +12,7 @@ import {
 } from '../types';
 import { z } from 'zod';
 import { GraphErrorCode } from '../errors';
-import { enforceMcpCommandMutationGuard } from '../graph.guard';
+import { GraphGuard } from '../graph.guard';
 
 // Helper to convert persisted graph to runtime GraphDefinition (mirrors src/index.ts)
 const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition => {
@@ -37,6 +37,7 @@ export class GraphPersistController {
     private readonly templates: TemplateRegistry,
     private readonly runtime: LiveGraphRuntime,
     private readonly graphs: GraphRepository,
+    private readonly guard: GraphGuard,
   ) {}
 
   @Get('graph')
@@ -72,7 +73,7 @@ async upsertGraph(
 
       // Guard against unsafe MCP command mutation
       try {
-        enforceMcpCommandMutationGuard(before, parsed, this.runtime);
+        this.guard.enforceMcpCommandMutationGuard(before, parsed, this.runtime);
       } catch (e: unknown) {
         if (e instanceof GraphError && e?.code === GraphErrorCode.McpCommandMutationForbidden) {
           // 409 with error code body
@@ -132,9 +133,9 @@ const UpsertSchema = z
         z.object({
           id: z.string().min(1),
           template: z.string().min(1),
-          config: z.record(z.unknown()).optional(),
-          dynamicConfig: z.record(z.unknown()).optional(),
-          state: z.record(z.unknown()).optional(),
+          config: z.record(z.string(), z.unknown()).optional(),
+          dynamicConfig: z.record(z.string(), z.unknown()).optional(),
+          state: z.record(z.string(), z.unknown()).optional(),
           position: z.object({ x: z.number(), y: z.number() }).optional(),
         }),
       )

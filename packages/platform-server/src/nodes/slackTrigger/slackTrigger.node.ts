@@ -4,7 +4,8 @@ import { LoggerService } from '../../core/services/logger.service';
 import { VaultService } from '../../infra/vault/vault.service';
 import { ReferenceFieldSchema, resolveTokenRef } from '../../utils/refs';
 import Node from '../base/Node';
-import { TriggerHumanMessage, TriggerListener } from './base.trigger';
+type TriggerHumanMessage = { kind: 'human'; content: string; info?: Record<string, unknown> };
+type TriggerListener = { invoke: (thread: string, messages: TriggerHumanMessage[]) => Promise<void> };
 import { Injectable, Scope } from '@nestjs/common';
 
 // Internal schema: accept either plain string or ReferenceField
@@ -151,16 +152,21 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   }
 
   // Fan-out of trigger messages
-  private listeners: TriggerListener[] = [];
+  private _listeners: TriggerListener[] = [];
   async subscribe(listener: TriggerListener): Promise<void> {
-    this.listeners.push(listener);
+    this._listeners.push(listener);
   }
   async unsubscribe(listener: TriggerListener): Promise<void> {
-    this.listeners = this.listeners.filter((l) => l !== listener);
+    this._listeners = this._listeners.filter((l) => l !== listener);
   }
   protected async notify(thread: string, messages: TriggerHumanMessage[]): Promise<void> {
     if (!messages.length) return;
-    await Promise.all(this.listeners.map(async (listener) => listener.invoke(thread, messages)));
+    await Promise.all(this._listeners.map(async (listener) => listener.invoke(thread, messages)));
+  }
+
+  // Expose listeners for base type compatibility via function
+  public listeners<K>(_eventName?: K): Function[] {
+    return this._listeners.map((l) => l.invoke);
   }
 
   getPortConfig() {

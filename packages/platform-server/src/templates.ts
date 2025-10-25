@@ -1,5 +1,7 @@
 import { toJSONSchema } from 'zod';
 import { TemplateRegistry } from './graph';
+import { ModuleRef } from '@nestjs/core';
+import type { TemplateCtor } from './graph/templateRegistry';
 import { AgentNode, AgentStaticConfigSchema } from './nodes/agent/agent.node';
 import { ContainerProviderExposedStaticConfigSchema, WorkspaceNode } from './nodes/workspace/workspace.node';
 
@@ -37,12 +39,11 @@ export interface TemplateRegistryDeps {
   mongoService: MongoService; // required for memory nodes
   provisioner: LLMProvisioner;
   ncpsKeyService?: NcpsKeyService;
-  // Provide NodeStateService deterministically; prefer provider to avoid construction cycles
-  nodeStateServiceProvider?: () => NodeStateService | undefined;
+  moduleRef: ModuleRef;
 }
 
-export function buildTemplateRegistry(): TemplateRegistry {
-  const registry = new TemplateRegistry();
+export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegistry {
+  const registry = new TemplateRegistry(deps.moduleRef);
   registry.register(
     'workspace',
     {
@@ -51,7 +52,7 @@ export function buildTemplateRegistry(): TemplateRegistry {
       capabilities: { staticConfigurable: true },
       staticConfigSchema: toJSONSchema(ContainerProviderExposedStaticConfigSchema),
     },
-    WorkspaceNode,
+    WorkspaceNode as unknown as TemplateCtor & (typeof WorkspaceNode),
   );
   registry.register(
     'shellTool',
@@ -61,7 +62,7 @@ export function buildTemplateRegistry(): TemplateRegistry {
       capabilities: { staticConfigurable: true },
       staticConfigSchema: toJSONSchema(ShellToolStaticConfigSchema),
     },
-    ShellCommandNode,
+    ShellCommandNode as unknown as TemplateCtor & (typeof ShellCommandNode),
   );
   registry.register(
     'githubCloneRepoTool',
@@ -70,7 +71,7 @@ export function buildTemplateRegistry(): TemplateRegistry {
       kind: 'tool',
       capabilities: { staticConfigurable: true },
     },
-    GithubCloneRepoNode,
+    GithubCloneRepoNode as unknown as TemplateCtor & (typeof GithubCloneRepoNode),
   );
   registry.register(
     'sendSlackMessageTool',
@@ -140,7 +141,7 @@ export function buildTemplateRegistry(): TemplateRegistry {
       capabilities: { pausable: true, staticConfigurable: true },
       staticConfigSchema: toJSONSchema(AgentStaticConfigSchema),
     },
-    AgentNode,
+    AgentNode as unknown as TemplateCtor & (typeof AgentNode),
   );
   // Register a single unified Memory tool
   registry.register(

@@ -191,7 +191,9 @@ export class GithubService {
    * mergeable_state: e.g. 'clean', 'dirty', 'behind', 'blocked', 'draft', 'unknown', 'unstable'
    */
   async getPullRequestMergeStatus(owner: string, repo: string, pull_number: number) {
-    const { data: pr } = await this.octokit.rest.pulls.get({
+    const ok = this.octokit;
+    if (!ok) throw new Error('GitHub client not initialized');
+    const { data: pr } = await ok.rest.pulls.get({
       owner,
       repo,
       pull_number,

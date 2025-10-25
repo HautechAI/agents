@@ -10,7 +10,7 @@ import {
 import { Injectable, Scope } from '@nestjs/common';
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class SendSlackMessageNode extends BaseToolNode {
+export class SendSlackMessageNode extends BaseToolNode<z.infer<typeof SendSlackMessageToolStaticConfigSchema>> {
   private toolInstance?: SendSlackMessageFunctionTool;
   private staticCfg: z.infer<typeof SendSlackMessageToolStaticConfigSchema> | null = null;
   constructor(

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { TemplateRegistry } from './templateRegistry';
 import { PortsRegistry } from './ports.registry';
 import { GraphRepository } from './graph.repository';
@@ -21,11 +22,16 @@ import { MongoService } from '../core/services/mongo.service';
 import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
 import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
 import { GraphDefinition, GraphError } from './types';
+import { GraphGuard } from './graph.guard';
 
 @Module({
   imports: [CoreModule, InfraModule, NodesModule, LLMModule],
   controllers: [RunsController, GraphPersistController, GraphController],
   providers: [
+    {
+      provide: GraphGuard,
+      useClass: GraphGuard,
+    },
     {
       provide: TemplateRegistry,
       useFactory: (
@@ -35,6 +41,7 @@ import { GraphDefinition, GraphError } from './types';
         mongoService: MongoService,
         provisioner: LLMProvisioner,
         ncpsKeyService: NcpsKeyService,
+      module: ModuleRef,
       ) =>
         buildTemplateRegistry({
           logger,
@@ -43,8 +50,9 @@ import { GraphDefinition, GraphError } from './types';
           mongoService,
           provisioner,
           ncpsKeyService,
+          moduleRef: module,
         }),
-      inject: [LoggerService, ContainerService, ConfigService, MongoService, LLMProvisioner, NcpsKeyService],
+      inject: [LoggerService, ContainerService, ConfigService, MongoService, LLMProvisioner, NcpsKeyService, ModuleRef],
     },
     PortsRegistry,
     {
@@ -71,14 +79,15 @@ import { GraphDefinition, GraphError } from './types';
       provide: LiveGraphRuntime,
       useFactory: async (
         logger: LoggerService,
-        graphs: GraphRepository,
         templateRegistry: TemplateRegistry,
+        graphs: GraphRepository,
+        moduleRef: ModuleRef,
       ) => {
-        const runtime = new LiveGraphRuntime(logger, templateRegistry, graphs);
+        const runtime = new LiveGraphRuntime(logger, templateRegistry, graphs, moduleRef);
         await runtime.load();
         return runtime;
       },
-      inject: [LoggerService, GraphRepository, TemplateRegistry],
+      inject: [LoggerService, TemplateRegistry, GraphRepository, ModuleRef],
     },
     // Load and apply persisted graph to runtime at startup
     // {

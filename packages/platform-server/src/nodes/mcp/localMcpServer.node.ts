@@ -13,7 +13,7 @@ import { LoggerService } from '../../core/services/logger.service';
 import { VaultService } from '../../infra/vault/vault.service';
 import { DockerExecTransport } from './dockerExecTransport';
 import { LocalMCPServerTool } from './localMcpServer.tool';
-import { DEFAULT_MCP_COMMAND, McpError, McpServer, McpTool, McpToolCallResult, PersistedMcpState } from './types';
+import { DEFAULT_MCP_COMMAND, McpError, McpServer, type McpTool, McpToolCallResult, PersistedMcpState } from './types';
 import { NodeStateService } from '../../graph/nodeState.service';
 import Node from '../base/Node';
 import { Injectable, Scope } from '@nestjs/common';
@@ -179,7 +179,10 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
               raw: res.raw,
             };
           },
-          getLogger: () => this.logger,
+          getLogger: () => ({
+            debug: (...a: unknown[]) => this.logger.debug(String(a[0] ?? ''), ...a.slice(1)),
+            error: (...a: unknown[]) => this.logger.error(String(a[0] ?? ''), ...a.slice(1)),
+          }),
         }),
       },
       convertJsonSchemaToZod({ ...tool.inputSchema, strict: false, additionalProperties: false }) as z.ZodObject,
@@ -507,7 +510,8 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
       }, hbInterval);
 
       // Call the tool
-      const result = await client.callTool({ name, arguments: args }, undefined, {
+      const argObj: Record<string, unknown> = args && typeof args === 'object' ? (args as Record<string, unknown>) : {};
+      const result: any = await client.callTool({ name, arguments: argObj }, undefined, {
         timeout: options?.timeoutMs ?? cfg.requestTimeoutMs ?? 30000,
       });
 
@@ -517,7 +521,7 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
           ? (rawResult as Record<string, unknown>).content
           : undefined
       ) as unknown;
-      const contentArr = Array.isArray(rawContent) ? rawContent : [];
+      const contentArr: unknown[] = Array.isArray(rawContent) ? (rawContent as unknown[]) : [];
       const flattened = contentArr
         .map((c: unknown) => {
           if (typeof c === 'string') return c;
@@ -533,6 +537,12 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
           }
         })
         .join('\n');
+      const structured =
+        rawResult &&
+        typeof rawResult === 'object' &&
+        'structuredContent' in (rawResult as Record<string, unknown>)
+          ? ((rawResult as Record<string, unknown>).structuredContent as Record<string, unknown>)
+          : undefined;
       return {
         isError: !!(
           rawResult &&
@@ -541,11 +551,7 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
           (rawResult as Record<string, unknown>).isError
         ),
         content: flattened,
-        structuredContent: (rawResult &&
-        typeof rawResult === 'object' &&
-        'structuredContent' in (rawResult as Record<string, unknown>)
-          ? (rawResult as Record<string, unknown>).structuredContent
-          : undefined) as unknown,
+        structuredContent: (structured ?? undefined) as { [x: string]: unknown } | undefined,
         raw: result,
       };
     } catch (e: unknown) {
@@ -652,7 +658,7 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
         else await this.pendingStart?.catch(() => {});
         if (this.started) this.setProvisionStatus({ state: 'ready' });
       } catch (err) {
-        this.setProvisionStatus({ state: 'error', details: err });
+        this.setProvisionStatus({ state: 'provisioning_error' });
       } finally {
         this._provInFlight = null;
       }
@@ -697,11 +703,11 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
     if (this.toolsDiscovered && this.toolsCache && !this._dynamicConfigZodSchema) {
       this._dynamicConfigZodSchema = this.buildDynamicConfigZodSchema();
     }
-    let normalized: Record<string, boolean> = cfg;
+    let normalized: Record<string, boolean> = (cfg || {}) as Record<string, boolean>;
     if (this._dynamicConfigZodSchema) {
       try {
         // New flat shape: tool names are top-level boolean properties
-        normalized = this._dynamicConfigZodSchema.parse(cfg) as Record<string, boolean>;
+        normalized = this._dynamicConfigZodSchema.parse(cfg ?? {}) as Record<string, boolean>;
       } catch (e) {
         this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed`, e);
       }

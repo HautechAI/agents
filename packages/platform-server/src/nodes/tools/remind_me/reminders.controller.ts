@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { LoggerService } from '../../../core/services/logger.service';
-import { RuntimeService } from '../../../graph/runtime.service';
+import { LiveGraphRuntime as RuntimeService } from '../../../graph/liveGraph.manager';
 import type { ActiveReminder } from './remind_me.tool';
 
 interface RemindMeInspectable { getActiveReminders(): ActiveReminder[] }
@@ -32,4 +32,3 @@ export class RemindersController {
     }
   }
 }
-
