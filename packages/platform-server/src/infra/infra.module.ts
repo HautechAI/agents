@@ -1,16 +1,16 @@
 import { Module } from '@nestjs/common';
-import { CoreModule } from '../core/core.module';
-import { ConfigService } from '../core/services/config.service';
-import { LoggerService } from '../core/services/logger.service';
-import { MongoService } from '../core/services/mongo.service';
-import { ContainerRegistry } from './container/container.registry';
-import { ContainerService } from './container/container.service';
-import { ContainerCleanupService } from './container/containerCleanup.job';
-import { GithubService } from './github/github.client';
-import { PRService } from './github/pr.usecase';
-import { NcpsKeyService } from './ncps/ncpsKey.service';
-import { NixController } from './ncps/nix.controller';
-import { VaultModule } from './vault/vault.module';
+import { CoreModule } from '../core/core.module.js';
+import { ConfigService } from '../core/services/config.service.js';
+import { LoggerService } from '../core/services/logger.service.js';
+import { MongoService } from '../core/services/mongo.service.js';
+import { ContainerRegistry } from './container/container.registry.js';
+import { ContainerService } from './container/container.service.js';
+import { ContainerCleanupService } from './container/containerCleanup.job.js';
+import { GithubService } from './github/github.client.js';
+import { PRService } from './github/pr.usecase.js';
+import { NcpsKeyService } from './ncps/ncpsKey.service.js';
+import { NixController } from './ncps/nix.controller.js';
+import { VaultModule } from './vault/vault.module.js';
 
 @Module({
   imports: [CoreModule, VaultModule],

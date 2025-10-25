@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { CoreModule } from "../../core/core.module";
-import { ConfigService } from "../../core/services/config.service";
-import { LoggerService } from "../../core/services/logger.service";
+import { CoreModule } from "../../core/core.module.js";
+import { ConfigService } from "../../core/services/config.service.js";
+import { LoggerService } from "../../core/services/logger.service.js";
 
-import { VaultService } from './vault.service';
-import { VaultController } from './vault.controller';
-import { VaultEnabledGuard } from './vault-enabled.guard';
+import { VaultService } from './vault.service.js';
+import { VaultController } from './vault.controller.js';
+import { VaultEnabledGuard } from './vault-enabled.guard.js';
 
 @Module({
   imports: [CoreModule],

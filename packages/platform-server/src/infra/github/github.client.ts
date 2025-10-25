@@ -4,8 +4,8 @@ import { createAppAuth } from "@octokit/auth-app";
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import * as path from "path";
-import { LoggerService } from "../../core/services/logger.service";
-import { ConfigService } from "../../core/services/config.service";
+import { LoggerService } from "../../core/services/logger.service.js";
+import { ConfigService } from "../../core/services/config.service.js";
 
 @Injectable()
 export class GithubService {

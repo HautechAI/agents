@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { ContainerRegistry as ContainerRegistryService } from './container.registry';
+import type { ContainerRegistry as ContainerRegistryService } from './container.registry.js';
 import type { ContainerService } from './container.service';
 import { Injectable } from '@nestjs/common';
 import pLimit from 'p-limit';
-import { LoggerService } from '../../core/services/logger.service';
+import { LoggerService } from '../../core/services/logger.service.js';
 
 @Injectable()
 export class ContainerCleanupService {

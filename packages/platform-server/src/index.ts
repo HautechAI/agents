@@ -12,11 +12,11 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { ValidationPipe } from '@nestjs/common';
 import cors from '@fastify/cors';
 
-import { LoggerService } from './core/services/logger.service';
-import { ContainerCleanupService } from './infra/container/containerCleanup.job';
+import { LoggerService } from './core/services/logger.service.js';
+import { ContainerCleanupService } from './infra/container/containerCleanup.job.js';
 
-import { AppModule } from './bootstrap/app.module';
-import { MongoService } from './core/services/mongo.service';
+import { AppModule } from './bootstrap/app.module.js';
+import { MongoService } from './core/services/mongo.service.js';
 // Remove central platform.services.factory usage; rely on DI providers
 
 // Graceful shutdown after 60 seconds

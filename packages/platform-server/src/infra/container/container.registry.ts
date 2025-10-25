@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Db, Collection, WithId, UpdateFilter, Filter } from 'mongodb';
-import { LoggerService } from '../../core/services/logger.service';
+import { LoggerService } from '../../core/services/logger.service.js';
 
 export type ContainerStatus = 'running' | 'stopped' | 'terminating' | 'failed';
 

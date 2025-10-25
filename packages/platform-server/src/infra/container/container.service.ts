@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
-import { ContainerHandle } from './container.handle';
-import { LoggerService } from '../../core/services/logger.service';
-import { PLATFORM_LABEL, type Platform } from '../../constants';
+import { ContainerHandle } from './container.handle.js';
+import { LoggerService } from '../../core/services/logger.service.js';
+import { PLATFORM_LABEL, type Platform } from '../../constants.js';
 import {
   isExecTimeoutError,
   ExecTimeoutError,
@@ -11,7 +11,7 @@ import {
   isExecIdleTimeoutError,
 } from '../../utils/execTimeout';
 import type { ContainerRegistry as ContainerRegistryService } from './container.registry';
-import { createUtf8Collector, demuxDockerMultiplex } from './containerStream.util';
+import { createUtf8Collector, demuxDockerMultiplex } from './containerStream.util.js';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
 

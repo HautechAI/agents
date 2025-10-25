@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from './services/config.service';
-import { LoggerService } from './services/logger.service';
-import { MongoService } from './services/mongo.service';
-import { PrismaService } from './services/prisma.service';
+import { ConfigService } from './services/config.service.js';
+import { LoggerService } from './services/logger.service.js';
+import { MongoService } from './services/mongo.service.js';
+import { PrismaService } from './services/prisma.service.js';
 
 @Module({
   providers: [

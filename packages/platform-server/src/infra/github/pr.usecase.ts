@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { GithubService } from "./github.client";
+import { GithubService } from "./github.client.js";
 
 @Injectable()
 export class PRService {

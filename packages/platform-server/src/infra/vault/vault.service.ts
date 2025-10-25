@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { LoggerService } from '../../core/services/logger.service';
-import { ConfigService } from '../../core/services/config.service';
+import { LoggerService } from '../../core/services/logger.service.js';
+import { ConfigService } from '../../core/services/config.service.js';
 
 // Typed KV v2 response shapes
 type KvV2MountsResponse = Record<string, { type?: string; options?: { version?: string | number } }>;

@@ -193,8 +193,8 @@ function messageToAttributes(msg: ContextMessage | ToolCallMessage): Record<stri
       role: 'ai',
       content: msg.text,
       toolCalls: msg.output
-        .filter((m) => m instanceof ToolCallMessage)
-        .map((m) => ({
+        .filter((m): m is ToolCallMessage => m instanceof ToolCallMessage)
+        .map((m: ToolCallMessage) => ({
           id: m.callId,
           name: m.name,
           arguments: m.args,
