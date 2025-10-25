@@ -24,6 +24,7 @@
   ],
   "exclude": [
     "node_modules",
+    "dist",
     "src/graph/**",
     "src/llm/**",
     "src/nodes/**",

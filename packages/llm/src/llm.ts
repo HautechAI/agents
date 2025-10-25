@@ -7,8 +7,8 @@ import {
   ToolCallMessage,
   ToolCallOutputMessage,
   ResponseMessage,
-} from './messages';
-import { FunctionTool } from './functionTool';
+} from './messages/index.js';
+import { FunctionTool } from './functionTool.js';
 
 export type LLMInput =
   | HumanMessage

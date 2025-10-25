@@ -1,4 +1,4 @@
-import { Router } from './router';
+import { Router } from './router.js';
 
 /**
  * Base Reducer: performs a transformation over state given a context.

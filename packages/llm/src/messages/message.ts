@@ -1,10 +1,10 @@
 import { EasyInputMessage, ResponseInputItem } from 'openai/resources/responses/responses.mjs';
-import { AIMessage } from './aiMessage';
-import { HumanMessage } from './humanMessage';
-import { SystemMessage } from './systemMessage';
-import { ToolCallMessage } from './toolCallMessage';
-import { ToolCallOutputMessage } from './toolCallOutputMessage';
-import { ReasoningMessage } from './reasoningMessage';
+import { AIMessage } from './aiMessage.js';
+import { HumanMessage } from './humanMessage.js';
+import { SystemMessage } from './systemMessage.js';
+import { ToolCallMessage } from './toolCallMessage.js';
+import { ToolCallOutputMessage } from './toolCallOutputMessage.js';
+import { ReasoningMessage } from './reasoningMessage.js';
 
 // Exclude EasyInputMessage because it overlaps with ResponseInputItem.Message and ResponseOutputMessage
 // Add ResponseInputItem.Message back because exclusion removes it

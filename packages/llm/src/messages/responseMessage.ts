@@ -1,8 +1,8 @@
 import { Response } from 'openai/resources/responses/responses.mjs';
-import { Message } from './message';
-import { AIMessage } from './aiMessage';
-import { ToolCallMessage } from './toolCallMessage';
-import { ReasoningMessage } from './reasoningMessage';
+import { Message } from './message.js';
+import { AIMessage } from './aiMessage.js';
+import { ToolCallMessage } from './toolCallMessage.js';
+import { ReasoningMessage } from './reasoningMessage.js';
 
 export class ResponseMessage {
   private _source: { output: Response['output'] };

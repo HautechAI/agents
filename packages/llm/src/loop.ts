@@ -1,5 +1,5 @@
-import { Reducer } from './reducer';
-import { Router } from './router';
+import { Reducer } from './reducer.js';
+import { Router } from './router.js';
 
 export class Loop<S, C> {
   constructor(private reducers: Record<string, Reducer<S, C>>) {}
