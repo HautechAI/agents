@@ -3,6 +3,7 @@ import type { ContainerRegistryService } from './containerRegistry.service';
 import type { ContainerService } from './container.service';
 import { Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
+import pLimit from 'p-limit';
 
 @Injectable()
 export class ContainerCleanupService {
@@ -48,7 +49,6 @@ export class ContainerCleanupService {
     this.logger.info(`ContainerCleanup: found ${expired.length} expired containers`);
 
     // Controlled concurrency to avoid long sequential sweeps
-    const { default: pLimit } = await import('p-limit');
     const limit = pLimit(5);
 
     await Promise.allSettled(

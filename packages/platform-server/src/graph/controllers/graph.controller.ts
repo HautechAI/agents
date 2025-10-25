@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Param, Body, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, HttpCode, HttpException, HttpStatus } from '@nestjs/common';
+import { z } from 'zod';
 import { TemplateRegistry } from '../templateRegistry';
 import { LiveGraphRuntime } from '../liveGraph.manager';
 import { LoggerService } from '../../core/services/logger.service';
@@ -25,9 +26,13 @@ export class GraphController {
   @HttpCode(204)
   async postNodeAction(
     @Param('nodeId') nodeId: string,
-    @Body() body: { action?: string },
+    @Body() body: unknown,
   ): Promise<null | { error: string }> {
     try {
+      const ActionSchema = z.object({ action: z.enum(['pause', 'resume', 'provision', 'deprovision', 'refresh_mcp_tools']) });
+      const parsed = ActionSchema.safeParse(body);
+      if (!parsed.success) throw new HttpException({ error: 'bad_action_payload' }, HttpStatus.BAD_REQUEST);
+      const action = parsed.data.action;
       switch (body?.action) {
         case 'pause':
           await this.runtime.pauseNode(nodeId);
@@ -47,12 +52,10 @@ export class GraphController {
           const inst = this.runtime.getNodeInstance<unknown>(nodeId);
           const hasDiscover = !!inst && typeof (inst as Record<string, unknown>)['discoverTools'] === 'function';
           if (!hasDiscover) {
-            const { HttpException, HttpStatus } = await import('@nestjs/common');
             throw new HttpException({ error: 'not_mcp_node' }, HttpStatus.BAD_REQUEST);
           }
           const inFlight = !!inst && typeof (inst as Record<string, unknown>)['pendingStart'] !== 'undefined';
           if (inFlight) {
-            const { HttpException, HttpStatus } = await import('@nestjs/common');
             throw new HttpException({ error: 'discovery_in_flight' }, HttpStatus.CONFLICT);
           }
           try {
@@ -61,13 +64,11 @@ export class GraphController {
             const onFn = (inst as Record<string, unknown>)['on'];
             if (typeof onFn === 'function') (onFn as Function).call(inst, 'ready', () => {});
           } catch (e: any) {
-            const { HttpException, HttpStatus } = await import('@nestjs/common');
             throw new HttpException({ error: e?.message || 'refresh_failed' }, HttpStatus.INTERNAL_SERVER_ERROR);
           }
           break;
         }
         default: {
-          const { HttpException, HttpStatus } = await import('@nestjs/common');
           throw new HttpException({ error: 'unknown_action' }, HttpStatus.BAD_REQUEST);
         }
       }
@@ -76,7 +77,6 @@ export class GraphController {
     } catch (e: any) {
       // Preserve 500 { error: 'action_failed' } on unexpected errors
       if (e && e instanceof Error && (e as any).status) throw e; // already HttpException with a status
-      const { HttpException, HttpStatus } = await import('@nestjs/common');
       throw new HttpException({ error: e?.message || 'action_failed' }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
@@ -86,14 +86,12 @@ export class GraphController {
     try {
       const inst = (this.runtime as any).getNodeInstance?.(nodeId) || (this.runtime as any)['getNodeInstance']?.(nodeId);
       if (!inst) {
-        const { HttpException, HttpStatus } = await import('@nestjs/common');
         throw new HttpException({ error: 'node_not_found' }, HttpStatus.NOT_FOUND);
       }
       const ready = typeof (inst as any).isDynamicConfigReady === 'function' ? !!(inst as any).isDynamicConfigReady() : false;
       const schema = ready && typeof (inst as any).getDynamicConfigSchema === 'function' ? (inst as any).getDynamicConfigSchema() : undefined;
       return { ready, schema } as const;
     } catch (e: any) {
-      const { HttpException, HttpStatus } = await import('@nestjs/common');
       throw new HttpException({ error: e?.message || 'dynamic_config_schema_error' }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }

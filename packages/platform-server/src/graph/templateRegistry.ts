@@ -14,13 +14,13 @@ export interface TemplateMeta {
 
 @Injectable()
 export class TemplateRegistry {
-  private classes = new Map<string, new (...args: any[]) => Node>();
+  private classes = new Map<string, new (...args: unknown[]) => Node>();
   private meta = new Map<string, TemplateMeta>();
 
   constructor(private readonly moduleRef: ModuleRef) {}
 
   // Register associates template -> node class and meta (ports are read from instance via getPortConfig)
-  register(template: string, meta: TemplateMeta, nodeClass: new (...args: any[]) => Node): this {
+  register(template: string, meta: TemplateMeta, nodeClass: new (...args: unknown[]) => Node): this {
     if (this.classes.has(template)) {
       // Allow override deliberately; could warn here if desired
     }
@@ -30,7 +30,7 @@ export class TemplateRegistry {
   }
 
   // Provide class lookup for runtime
-  getClass(template: string): (new (...args: any[]) => Node) | undefined {
+  getClass(template: string): (new (...args: unknown[]) => Node) | undefined {
     return this.classes.get(template);
   }
 
@@ -43,16 +43,13 @@ export class TemplateRegistry {
       // Attempt DI instantiation to read ports from instance
       try {
         const cls = this.classes.get(name)!;
-        let inst: Node;
+        let inst: Node | undefined;
         try {
-          inst = this.moduleRef.get<Node>(cls);
+          inst = this.moduleRef.get<Node>(cls, { strict: false });
         } catch {
-          // Fallback for test environments without DI bindings
-          try {
-            inst = new (cls as any)();
-          } catch {}
+          // Do not fallback to non-DI instantiation; ports discovery requires DI-only
         }
-        if (inst && typeof inst.getPortConfig === 'function') {
+        if (inst && typeof (inst as Node).getPortConfig === 'function') {
           const cfg = (inst.getPortConfig?.() || {}) as TemplatePortConfig;
           sourcePorts = cfg?.sourcePorts ? Object.keys(cfg.sourcePorts) : [];
           targetPorts = cfg?.targetPorts ? Object.keys(cfg.targetPorts) : [];
@@ -61,11 +58,13 @@ export class TemplateRegistry {
         // ignore instance creation errors for schema generation; fall back to no ports
       }
       const meta = this.meta.get(name) ?? { title: name, kind: 'tool' as TemplateKind };
-      const clsAny = this.classes.get(name)! as any;
-      const caps =
-        clsAny && clsAny.capabilities ? (clsAny.capabilities as TemplateNodeSchema['capabilities']) : undefined;
-      const staticSchema =
-        clsAny && clsAny.staticConfigSchema ? (clsAny.staticConfigSchema as JSONSchema.BaseSchema) : undefined;
+      const clsAny = this.classes.get(name)! as unknown as Record<string, unknown>;
+      const caps = (clsAny && clsAny['capabilities'])
+        ? (clsAny['capabilities'] as TemplateNodeSchema['capabilities'])
+        : undefined;
+      const staticSchema = (clsAny && clsAny['staticConfigSchema'])
+        ? (clsAny['staticConfigSchema'] as JSONSchema.BaseSchema)
+        : undefined;
       schemas.push({
         name,
         title: meta.title,

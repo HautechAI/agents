@@ -17,7 +17,7 @@ export interface ContainerDoc {
   kill_after_at: string | null; // ISO string or null
   termination_reason: string | null;
   deleted_at: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -238,7 +238,7 @@ export class ContainerRegistry {
           if (existing) {
             // Existing record: do not bump last_used_at; optionally recompute kill_after_at if missing.
             // Preserve unrelated metadata fields (e.g., lastError, retryAfter, terminationAttempts) by updating dotted paths only.
-            const setFields: Partial<ContainerDoc> & Record<string, unknown> = {
+    const setFields: Partial<ContainerDoc> & Record<string, unknown> = {
               container_id: item.id,
               node_id: nodeId,
               thread_id: threadId,

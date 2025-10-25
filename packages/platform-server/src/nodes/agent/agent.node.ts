@@ -169,25 +169,27 @@ export class AgentNode extends Node<AgentStaticConfig> {
     );
 
     // summarize -> call_model
-    reducers['summarize'] = new SummarizationLLMReducer(llm)
+    reducers['summarize'] = (await this.moduleRef.create(SummarizationLLMReducer))
       .init({
+        llm,
         model: this.config.model ?? 'gpt-5',
         keepTokens: this.config.summarizationKeepTokens ?? 1000,
         maxTokens: this.config.summarizationMaxTokens ?? 10000,
         systemPrompt:
           'You update a running summary of a conversation. Keep key facts, goals, decisions, constraints, names, deadlines, and follow-ups. Be concise; use compact sentences; omit chit-chat. Structure summary with 3 high level sections: initial task, plan (if any), context (progress, findings, observations).',
       })
-      .next(new StaticLLMRouter('call_model'));
+      .next((await this.moduleRef.create(StaticLLMRouter)).init('call_model'));
 
     // call_model -> branch (call_tools | save)
-    reducers['call_model'] = new CallModelLLMReducer(llm)
+    reducers['call_model'] = (await this.moduleRef.create(CallModelLLMReducer))
       .init({
+        llm,
         model: this.config.model ?? 'gpt-5',
         systemPrompt: this.config.systemPrompt ?? 'You are a helpful AI assistant.',
         tools,
       })
       .next(
-        new ConditionalLLMRouter((state) => {
+        (await this.moduleRef.create(ConditionalLLMRouter)).init((state) => {
           const last = state.messages.at(-1);
           if (last instanceof ResponseMessage && last.output.find((o) => o instanceof ToolCallMessage)) {
             return 'call_tools';
@@ -197,21 +199,25 @@ export class AgentNode extends Node<AgentStaticConfig> {
       );
 
     // call_tools -> tools_save (static)
-    reducers['call_tools'] = new CallToolsLLMReducer(this.logger)
+    reducers['call_tools'] = (await this.moduleRef.create(CallToolsLLMReducer))
       .init({ tools })
-      .next(new StaticLLMRouter('tools_save'));
+      .next((await this.moduleRef.create(StaticLLMRouter)).init('tools_save'));
     // tools_save -> summarize (static)
-    reducers['tools_save'] = new SaveLLMReducer(this.logger).next(new StaticLLMRouter('summarize'));
+    reducers['tools_save'] = (await this.moduleRef.create(SaveLLMReducer)).next(
+      (await this.moduleRef.create(StaticLLMRouter)).init('summarize'),
+    );
 
     // save -> enforceTools (if enabled) or end (static)
-    reducers['save'] = new SaveLLMReducer(this.logger).next(
-      new StaticLLMRouter(this.config.restrictOutput ? 'enforceTools' : null),
+    reducers['save'] = (await this.moduleRef.create(SaveLLMReducer)).next(
+      (await this.moduleRef.create(ConditionalLLMRouter)).init((_state, _ctx) =>
+        this.config.restrictOutput ? 'enforceTools' : null,
+      ),
     );
 
     // enforceTools -> summarize OR end (conditional) if enabled
     if (this.config.restrictOutput) {
-      reducers['enforceTools'] = new EnforceToolsLLMReducer(this.logger).next(
-        new ConditionalLLMRouter((state) => {
+      reducers['enforceTools'] = (await this.moduleRef.create(EnforceToolsLLMReducer)).next(
+        (await this.moduleRef.create(ConditionalLLMRouter)).init((state) => {
           const injected = state.meta?.restrictionInjected === true;
           const injections = state.meta?.restrictionInjectionCount ?? 0;
           if (injected && injections >= 1) return 'summarize';

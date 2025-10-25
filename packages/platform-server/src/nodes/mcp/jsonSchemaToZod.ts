@@ -75,7 +75,7 @@ export function jsonSchemaToZod(schema: JSONSchema | undefined): ZodTypeAny {
     default: {
       // Try structural cues
       if (schema.properties) {
-        const shape: Record<string, ZodTypeAny> = {};
+      const shape: Record<string, ZodTypeAny> = {};
         const req = new Set(schema.required || []);
         for (const [k, v] of Object.entries(schema.properties)) {
           let prop = jsonSchemaToZod(v);

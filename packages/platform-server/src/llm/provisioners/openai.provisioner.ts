@@ -18,7 +18,7 @@ export class OpenAILLMProvisioner extends LLMProvisioner {
     if (!apiKey) throw new Error('openai_provider_missing_key');
     const baseUrl = this.cfg.openaiBaseUrl;
     const client = new OpenAI({ apiKey, baseURL: baseUrl });
-    this.llm = new LLM(client as any);
+    this.llm = new LLM(client);
     return this.llm;
   }
 }

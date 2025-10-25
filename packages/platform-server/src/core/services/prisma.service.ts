@@ -1,7 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import { LoggerService } from './logger.service';
 import { ConfigService } from './config.service';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class PrismaService {
   private prisma: PrismaClient | null = null;
 

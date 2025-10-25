@@ -10,8 +10,8 @@ export interface MemoryDoc extends Document {
   // Note: Real Mongo $set with dotted paths (e.g. "data.a.b") creates nested objects.
   // Some legacy docs may have flat dotted keys.
   // Support both shapes for reads/lists.
-  data: Record<string, any>;
-  dirs: Record<string, any>;
+  data: Record<string, string | Record<string, unknown>>;
+  dirs: Record<string, true | Record<string, unknown>>;
 }
 
 export interface StatResult {
@@ -143,14 +143,14 @@ export class MemoryService {
   }
 
   // Traverse nested object by dotted key. Uses loose typing to support nested-object persistence.
-  private getNested(obj: any, dottedKey: string): { exists: boolean; node?: any } {
+  private getNested(obj: unknown, dottedKey: string): { exists: boolean; node?: unknown } {
     if (dottedKey === '') return { exists: true, node: obj };
     if (obj == null || typeof obj !== 'object') return { exists: false };
     const segs = dottedKey.split('.');
-    let curr: any = obj;
+    let curr: unknown = obj as Record<string, unknown>;
     for (const s of segs) {
-      if (curr == null || typeof curr !== 'object' || !(s in curr)) return { exists: false };
-      curr = curr[s];
+      if (curr == null || typeof curr !== 'object' || !(s in (curr as Record<string, unknown>))) return { exists: false };
+      curr = (curr as Record<string, unknown>)[s];
     }
     return { exists: true, node: curr };
   }
@@ -166,10 +166,10 @@ export class MemoryService {
   }
 
   // Build immediate children listing from a nested object node
-  private listNestedChildren(obj: any): ListEntry[] {
+  private listNestedChildren(obj: unknown): ListEntry[] {
     if (obj == null || typeof obj !== 'object') return [];
     const out: ListEntry[] = [];
-    for (const [name, value] of Object.entries(obj)) {
+    for (const [name, value] of Object.entries(obj as Record<string, unknown>)) {
       out.push({ name, kind: typeof value === 'string' ? 'file' : 'dir' });
     }
     return out;

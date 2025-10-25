@@ -5,20 +5,25 @@ import { LLMContext, LLMState } from '../types';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
-  constructor(private llm: LLM) {
+  constructor() {
     super();
   }
 
   private tools: FunctionTool[] = [];
   private params: { model: string; systemPrompt: string } = { model: '', systemPrompt: '' };
+  private llm?: LLM;
 
-  init(params: { model: string; systemPrompt: string; tools: FunctionTool[] }) {
+  init(params: { llm: LLM; model: string; systemPrompt: string; tools: FunctionTool[] }) {
+    this.llm = params.llm;
     this.params = { model: params.model, systemPrompt: params.systemPrompt };
     this.tools = params.tools || [];
     return this;
   }
 
   async invoke(state: LLMState, _ctx: LLMContext): Promise<LLMState> {
+    if (!this.llm || !this.params.model || !this.params.systemPrompt) {
+      throw new Error('CallModelLLMReducer not initialized');
+    }
     const input = [
       SystemMessage.fromText(this.params.systemPrompt), //
       ...state.messages,

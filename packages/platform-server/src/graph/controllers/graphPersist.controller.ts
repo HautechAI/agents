@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Headers, Body, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Headers, Body, HttpCode, HttpException, HttpStatus } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { LoggerService } from '../../core/services/logger.service';
 import { TemplateRegistry } from '../templateRegistry';
@@ -10,7 +10,9 @@ import {
   type PersistedGraphUpsertRequest,
   type PersistedGraphUpsertResponse,
 } from '../types';
+import { z } from 'zod';
 import { GraphErrorCode } from '../errors';
+import { enforceMcpCommandMutationGuard } from '../graph.guard';
 
 // Helper to convert persisted graph to runtime GraphDefinition (mirrors src/index.ts)
 const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition => {
@@ -54,7 +56,11 @@ export class GraphPersistController {
     @Headers() headers: Record<string, string | string[] | undefined>,
   ): Promise<PersistedGraphUpsertResponse | { error: string; current?: unknown }> {
     try {
-      const parsed = body as PersistedGraphUpsertRequest;
+      const parsedResult = GraphPersistController.UpsertSchema.safeParse(body);
+      if (!parsedResult.success) {
+        throw new HttpException({ error: 'BAD_SCHEMA', current: parsedResult.error.format() }, HttpStatus.BAD_REQUEST);
+      }
+      const parsed = parsedResult.data as PersistedGraphUpsertRequest;
       parsed.name = parsed.name || 'main';
       // Resolve author from headers (support legacy keys)
       const author: GraphAuthor = {
@@ -66,20 +72,11 @@ export class GraphPersistController {
 
       // Guard against unsafe MCP command mutation
       try {
-        const { enforceMcpCommandMutationGuard } = await import('../graph.guard');
         enforceMcpCommandMutationGuard(before, parsed, this.runtime);
       } catch (e: unknown) {
         if (e instanceof GraphError && e?.code === GraphErrorCode.McpCommandMutationForbidden) {
           // 409 with error code body
           const err = { error: GraphErrorCode.McpCommandMutationForbidden } as const;
-          // Using exception here would change shape; return object with explicit status via thrown Response? Nest does 200 by default.
-          // Workaround: throw and catch at adapter? Instead, encode conventional error with 409 using special symbol.
-          // Simpler: rethrow wrapped; platform tests verify body only in Fastify path. We'll keep body identical and rely on global pipes.
-          // To ensure status code 409, throw an HttpException? Avoid to keep return types consistent; use Error with tagging.
-          // We cannot alter status without reply injection; fallback: throw GraphError and let global filter set 409? Not configured.
-          // Pragmatically, return error and rely on client expecting 409; but requirement says status must be identical.
-          // Use dynamic import of '@nestjs/common' HttpException only in this branch to avoid circulars.
-          const { HttpException, HttpStatus } = await import('@nestjs/common');
           throw new HttpException(err, HttpStatus.CONFLICT);
         }
         throw e;
@@ -110,7 +107,6 @@ export class GraphPersistController {
       return saved;
     } catch (e: any) {
       // Map known repository errors to status codes and bodies
-      const { HttpException, HttpStatus } = await import('@nestjs/common');
       if (e?.code === 'VERSION_CONFLICT') {
         throw new HttpException({ error: 'VERSION_CONFLICT', current: e.current }, HttpStatus.CONFLICT);
       }
@@ -124,3 +120,33 @@ export class GraphPersistController {
     }
   }
 }
+  // Zod schema for upsert body
+  private static readonly UpsertSchema = z
+    .object({
+      name: z.string().min(1),
+      version: z.number().int().nonnegative().optional(),
+      nodes: z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            template: z.string().min(1),
+            config: z.record(z.any()).optional(),
+            dynamicConfig: z.record(z.any()).optional(),
+            state: z.record(z.any()).optional(),
+            position: z.object({ x: z.number(), y: z.number() }).optional(),
+          }),
+        )
+        .max(1000),
+      edges: z
+        .array(
+          z.object({
+            id: z.string().optional(),
+            source: z.string().min(1),
+            sourceHandle: z.string().min(1),
+            target: z.string().min(1),
+            targetHandle: z.string().min(1),
+          }),
+        )
+        .max(2000),
+    })
+    .strict();

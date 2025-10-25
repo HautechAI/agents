@@ -3,22 +3,22 @@ import { logger as tracingLogger } from '@agyn/tracing';
 
 @Injectable()
 export class LoggerService {
-  info(message: string, ...optionalParams: any[]) {
+  info(message: string, ...optionalParams: unknown[]) {
     console.info(`[INFO] ${message}`, ...optionalParams);
     tracingLogger().info(`${message}\n${this.serialize(optionalParams)}`);
   }
 
-  debug(message: string, ...optionalParams: any[]) {
+  debug(message: string, ...optionalParams: unknown[]) {
     console.debug(`[DEBUG] ${message}`, ...optionalParams);
     tracingLogger().debug(`${message}\n${this.serialize(optionalParams)}`);
   }
 
-  error(message: string, ...optionalParams: any[]) {
+  error(message: string, ...optionalParams: unknown[]) {
     console.error(`[ERROR] ${message}`, ...optionalParams);
     tracingLogger().error(`${message}\n${this.serialize(optionalParams)}`);
   }
 
-  private serialize(params: any[]) {
+  private serialize(params: unknown[]) {
     const redactKeyRe = /(authorization|token|accessToken|api[_-]?key|password|secret)/i;
     // Value pattern redaction (ghp_, github_pat_, Bearer tokens)
     const redactValuePatterns: RegExp[] = [
@@ -53,11 +53,11 @@ export class LoggerService {
       return out;
     };
 
-    const toSafe = (v: any, depth = 0): any => {
+    const toSafe = (v: unknown, depth = 0): unknown => {
       if (v instanceof Error) {
         // Redact and truncate error fields, guard cause depth
-        const cause: any = (v as any).cause;
-        const safe: any = {
+        const cause: unknown = (v as any).cause;
+        const safe: Record<string, unknown> = {
           name: v.name,
           message: redactString(String(v.message || '')),
           stack: v.stack ? redactString(String(v.stack)) : undefined,
@@ -71,14 +71,15 @@ export class LoggerService {
         return safe;
       }
       if (v && typeof v === 'object') {
-        if (seen.has(v)) return '[Circular]';
-        seen.add(v);
-        if (Array.isArray(v)) return v.slice(0, MAX_KEYS).map((x) => toSafe(x, depth + 1));
-        const out: Record<string, any> = {} as any;
+        const obj = v as Record<string, unknown>;
+        if (seen.has(obj)) return '[Circular]';
+        seen.add(obj);
+        if (Array.isArray(v)) return (v as unknown[]).slice(0, MAX_KEYS).map((x) => toSafe(x, depth + 1));
+        const out: Record<string, unknown> = {};
         let count = 0;
-        for (const [k, val] of Object.entries(v as Record<string, any>)) {
+        for (const [k, val] of Object.entries(obj)) {
           if (count++ >= MAX_KEYS) {
-            out['__truncated__'] = `[+${Object.keys(v as any).length - MAX_KEYS} keys omitted]`;
+            out['__truncated__'] = `[+${Object.keys(obj).length - MAX_KEYS} keys omitted]`;
             break;
           }
           out[k] = redactKeyRe.test(k) ? '[REDACTED]' : toSafe(val, depth + 1);
@@ -96,7 +97,7 @@ export class LoggerService {
       return json;
     } catch (err) {
       try {
-        const s = String(params);
+        const s = String(params as unknown as string);
         return s.length > MAX_JSON ? s.slice(0, MAX_JSON) + '…' : s;
       } catch {
         return '[unserializable]';
