@@ -4,8 +4,7 @@ import { CallAgentTool } from '../src/nodes/tools/call_agent/call_agent.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { BaseAgent } from '../src/nodes/agent/agent.node';
 import { DynamicStructuredTool } from '@langchain/core/tools';
-import { TemplateRegistry } from '../src/graph/templateRegistry';
-import type { ModuleRef } from '@nestjs/core';
+import { TemplateRegistry, type ModuleRefLike } from '../src/graph/templateRegistry';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -164,8 +163,8 @@ describe('CallAgentTool graph wiring', () => {
     class FakeAgent2 extends FakeAgent {}
 
     // Minimal TemplateRegistry with agent and callAgentTool
-    const moduleRef = { create: (Cls: any) => new Cls() } as ModuleRef;
-    const registry = new TemplateRegistry(moduleRef as unknown as any);
+    const moduleRef: ModuleRefLike = { create: (Cls: any) => new Cls() };
+    const registry = new TemplateRegistry(moduleRef);
     class FakeAgentWithTools extends FakeAgent2 {
       addTool(_tool: unknown) {}
       removeTool(_tool: unknown) {}

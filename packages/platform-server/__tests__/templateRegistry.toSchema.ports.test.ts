@@ -2,13 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { Injectable, Scope } from '@nestjs/common';
 import type { TemplatePortConfig } from '../src/graph/ports.types';
 import type { TemplateNodeSchema } from '../src/graph/types';
-import { TemplateRegistry } from '../src/graph/templateRegistry';
+import { TemplateRegistry, type ModuleRefLike } from '../src/graph/templateRegistry';
 import Node from '../src/nodes/base/Node';
 
 // Minimal ModuleRef shape used by TemplateRegistry for creation
-interface ModuleRefCreateOnly {
-  create<T>(cls: new () => T): Promise<T> | T;
-}
+interface ModuleRefCreateOnly extends ModuleRefLike {}
 
 // Define a minimal DummyNode class matching Node contract
 @Injectable({ scope: Scope.TRANSIENT })
@@ -30,7 +28,7 @@ describe('TemplateRegistry.toSchema port names via ModuleRef.create', () => {
     };
 
     // Construct registry with stub moduleRef
-    const registry = new TemplateRegistry(moduleRef as unknown as any);
+    const registry = new TemplateRegistry(moduleRef);
 
     // Register DummyNode under a template name
     registry.register('dummy', { title: 'Dummy', kind: 'tool' }, DummyNode);
@@ -43,4 +41,3 @@ describe('TemplateRegistry.toSchema port names via ModuleRef.create', () => {
     expect(entry?.targetPorts).toEqual(['inp']);
   });
 });
-

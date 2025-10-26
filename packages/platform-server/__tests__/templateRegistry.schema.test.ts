@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TemplateRegistry } from '../src/graph/templateRegistry';
-import type { ModuleRef } from '@nestjs/core';
+import { TemplateRegistry, type ModuleRefLike } from '../src/graph/templateRegistry';
 import type { TemplateNodeSchema, TemplateKind } from '../src/graph/types';
 class DummyNode { getPortConfig() { return { sourcePorts: { out: { kind: 'instance' as const } }, targetPorts: { inp: { kind: 'instance' as const } } }; } }
 
@@ -13,7 +12,7 @@ const dummyPorts = {
 
 describe('TemplateRegistry.toSchema without legacy capabilities/staticConfigSchema', () => {
   it('ignores capabilities/staticConfigSchema even when provided in meta', async () => {
-    const moduleRef = { create: <T>(cls: new () => T): T => new cls() } as ModuleRef;
+    const moduleRef: ModuleRefLike = { create: <T>(cls: new () => T): T => new cls() };
     const reg = new TemplateRegistry(moduleRef);
     reg.register('withMeta', {
       title: 'With Meta',
@@ -28,7 +27,7 @@ describe('TemplateRegistry.toSchema without legacy capabilities/staticConfigSche
   });
 
   it('defaults to undefined when not provided in meta', async () => {
-    const moduleRef = { create: <T>(cls: new () => T): T => new cls() } as ModuleRef;
+    const moduleRef: ModuleRefLike = { create: <T>(cls: new () => T): T => new cls() };
     const reg = new TemplateRegistry(moduleRef);
     reg.register('noMeta', { title: 'No Meta', kind: 'service' as TemplateKind }, DummyNode as any);
 

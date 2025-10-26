@@ -4,7 +4,7 @@ import { LoggerService } from '../src/core/services/logger.service.js';
 import { BaseAgent } from '../src/nodes/agent/agent.node';
 import { ManageTool } from '../src/tools/manage.tool';
 import { DynamicStructuredTool } from '@langchain/core/tools';
-import { TemplateRegistry } from '../src/graph/templateRegistry';
+import { TemplateRegistry, type ModuleRefLike } from '../src/graph/templateRegistry';
 import type { ModuleRef } from '@nestjs/core';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 
@@ -137,7 +137,7 @@ describe('ManageTool graph wiring', () => {
     const logger = new LoggerService();
     class FakeAgent2 extends FakeAgent {}
     class FakeAgentWithTools extends FakeAgent2 { addTool(_: unknown) {}; removeTool(_: unknown) {} }
-    const moduleRef = { create: (Cls: any) => new Cls() } as ModuleRef;
+    const moduleRef: ModuleRefLike = { create: (Cls: any) => new Cls() };
     const registry = new TemplateRegistry(moduleRef);
 
     registry
@@ -146,7 +146,7 @@ describe('ManageTool graph wiring', () => {
 
     const runtime = new LiveGraphRuntime(
       logger,
-      registry as any,
+      registry,
       { initIfNeeded: async () => {}, get: async () => null, upsert: async () => { throw new Error('not-implemented'); }, upsertNodeState: async () => {} } as any,
       { create: (Cls: any) => new Cls() } as any,
     );
@@ -165,7 +165,7 @@ describe('ManageTool graph wiring', () => {
     await runtime.apply(graph);
     const nodes = runtime.getNodes();
     const toolNode = nodes.find((n) => (n as any).id === 'M') as any;
-    const toolInst = toolNode?.instance as unknown as ManageTool;
+    const toolInst: ManageTool = toolNode?.instance as ManageTool;
 
     const dyn = toolInst.init();
     const list: string[] = (await dyn.invoke(

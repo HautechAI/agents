@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
-import { TemplateRegistry } from '../src/graph/templateRegistry';
+import { TemplateRegistry, type ModuleRefLike } from '../src/graph/templateRegistry';
 import type { FactoryFn } from '../src/graph/types';
+import Node from '../src/nodes/base/Node';
 // Capabilities removed; test updated to use Node lifecycle
 import { LoggerService } from '../src/core/services/logger.service.js';
 
@@ -12,10 +13,15 @@ class MockLogger extends LoggerService {
 }
 
 function makeRuntimeAndRegistry() {
-  const moduleRef = { create: (Cls: any) => new Cls() } as any;
+  const moduleRef: ModuleRefLike = { create: (Cls: any) => new Cls() };
   const registry = new TemplateRegistry(moduleRef);
   const logger = new MockLogger() as any as LoggerService;
-  const runtime = new LiveGraphRuntime(logger, registry as any, { initIfNeeded: async()=>{}, get: async()=>null, upsert: async()=>{ throw new Error('not-implemented'); }, upsertNodeState: async()=>{} } as any, { create: (Cls: any) => new Cls() } as any);
+  const runtime = new LiveGraphRuntime(
+    logger,
+    registry,
+    { initIfNeeded: async()=>{}, get: async()=>null, upsert: async()=>{ throw new Error('not-implemented'); }, upsertNodeState: async()=>{} } as any,
+    { create: (Cls: any) => new Cls() } as any,
+  );
   return { registry, runtime, logger };
 }
 
@@ -24,7 +30,9 @@ describe('Runtime helpers and GraphRepository API surfaces', () => {
     const { registry, runtime } = makeRuntimeAndRegistry();
 
     // Mock node impl
-    class MockNode { setConfig = vi.fn(async (_cfg: Record<string, unknown>) => {}); async provision() {}; async deprovision() {}; }
+    class MockNode extends Node<Record<string, unknown>> {
+      getPortConfig() { return {}; }
+    }
 
     const factory: FactoryFn = async () => new MockNode() as any;
     class MockNodeClass extends MockNode {}
@@ -46,11 +54,15 @@ describe('Runtime helpers and GraphRepository API surfaces', () => {
     const { registry, runtime } = makeRuntimeAndRegistry();
 
     // Expand template with capabilities and static schema
-    class Dyn1 { setConfig = async () => {}; }
+    class Dyn1 extends Node<Record<string, unknown>> { setConfig = async () => {}; getPortConfig() { return {}; } }
     registry.register('dyn', { title: 'Dyn', kind: 'tool' }, Dyn1 as any);
 
     // Create a mock dyn-configurable node instance
-    class DynNode { setDynamicConfig = vi.fn((_cfg: Record<string, unknown>) => {}); setConfig = vi.fn(async (_cfg: Record<string, unknown>) => {}); }
+    class DynNode extends Node<Record<string, unknown>> {
+      setDynamicConfig = vi.fn((_cfg: Record<string, unknown>) => {});
+      setConfig = vi.fn(async (_cfg: Record<string, unknown>) => {});
+      getPortConfig() { return {}; }
+    }
     registry.register('dyn2', { title: 'Dyn2', kind: 'tool' }, DynNode as any);
 
     // Runtime graph
@@ -68,7 +80,7 @@ describe('Runtime helpers and GraphRepository API surfaces', () => {
     // pause/resume removed from runtime APIs
 
     // Dynamic config routing on dyn2 via runtime instance
-    const instB: any = runtime.getNodeInstance('b');
+    const instB = runtime.getNodeInstance('b') as DynNode;
     instB.setDynamicConfig = vi.fn();
     await instB.setDynamicConfig({ a: true });
     expect(instB.setDynamicConfig).toHaveBeenCalledWith({ a: true });

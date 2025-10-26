@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TemplateRegistry } from '../src/graph/templateRegistry';
-import type { ModuleRef } from '@nestjs/core';
+import { TemplateRegistry, type ModuleRefLike } from '../src/graph/templateRegistry';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { GraphDefinition, GraphError } from '../src/graph/types';
 import { LoggerService } from '../src/core/services/logger.service.js';
@@ -23,8 +22,8 @@ class StrictNode {
 }
 
 const makeRuntime = () => {
-  const moduleRef = { create: (Cls: any) => new Cls() } as ModuleRef;
-  const templates = new TemplateRegistry(moduleRef as unknown as any);
+  const moduleRef: ModuleRefLike = { create: (Cls: any) => new Cls() };
+  const templates = new TemplateRegistry(moduleRef);
   templates.register('Strict', { title: 'Strict', kind: 'tool' }, StrictNode as any);
   class StubRepo extends GraphRepository { async initIfNeeded(): Promise<void> {} async get(): Promise<any> { return null; } async upsert(): Promise<any> { throw new Error('not-implemented'); } async upsertNodeState(): Promise<void> {} }
   const runtime = new LiveGraphRuntime(new LoggerService(), templates, new StubRepo(), { create: (Cls: any) => new Cls() } as any);
