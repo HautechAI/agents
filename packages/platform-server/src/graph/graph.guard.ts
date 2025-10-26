@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { PersistedGraph, PersistedGraphUpsertRequest } from './types';
 import { GraphErrorCode } from './errors';
 import type { LiveGraphRuntime } from './liveGraph.manager';

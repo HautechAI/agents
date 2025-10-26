@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
 import { ConfigService } from '../../core/services/config.service';
 import type { Dispatcher } from 'undici';
@@ -21,8 +21,8 @@ export class NcpsKeyService {
   ) => Promise<Response> = (input, init) => fetch(input, init);
 
   constructor(
-    private cfg: ConfigService,
-    private logger: LoggerService,
+    @Inject(ConfigService) private cfg: ConfigService,
+    @Inject(LoggerService) private logger: LoggerService,
   ) {}
 
   hasKey(): boolean {

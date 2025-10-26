@@ -4,7 +4,7 @@ import { LoggerService } from '../../../core/services/logger.service';
 
 import { CallAgentFunctionTool } from './call_agent.tool';
 import { AgentNode } from '../../agent/agent.node';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 export const CallAgentToolStaticConfigSchema = z
   .object({
@@ -25,7 +25,7 @@ export class CallAgentNode extends BaseToolNode<z.infer<typeof CallAgentToolStat
   private targetAgent: AgentNode | undefined;
   private responseMode: 'sync' | 'async' | 'ignore' = 'sync';
   private toolInstance?: CallAgentFunctionTool;
-  constructor(private logger: LoggerService) {
+  constructor(@Inject(LoggerService) private logger: LoggerService) {
     super();
   }
 

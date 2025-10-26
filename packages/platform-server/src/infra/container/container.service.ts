@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
 import { ContainerHandle } from './container.handle';
@@ -10,7 +10,7 @@ import {
   ExecIdleTimeoutError,
   isExecIdleTimeoutError,
 } from '../../utils/execTimeout';
-import type { ContainerRegistry as ContainerRegistryService } from './container.registry';
+import { ContainerRegistry as ContainerRegistryService } from './container.registry';
 import { createUtf8Collector, demuxDockerMultiplex } from './containerStream.util';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
@@ -59,8 +59,8 @@ export class ContainerService {
   private docker: Docker;
 
   constructor(
-    private logger: LoggerService,
-    private registry: ContainerRegistryService,
+    @Inject(LoggerService) private logger: LoggerService,
+    @Inject(ContainerRegistryService) private registry: ContainerRegistryService,
   ) {
     this.docker = new Docker({
       ...(process.env.DOCKER_SOCKET

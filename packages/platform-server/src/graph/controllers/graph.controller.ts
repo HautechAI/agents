@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, HttpCode, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, HttpCode, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { z } from 'zod';
 import { TemplateRegistry } from '../templateRegistry';
 import { LiveGraphRuntime } from '../liveGraph.manager';
@@ -7,9 +7,9 @@ import { LoggerService } from '../../core/services/logger.service';
 @Controller('graph')
 export class GraphController {
   constructor(
-    private readonly templateRegistry: TemplateRegistry,
-    private readonly runtime: LiveGraphRuntime,
-    private readonly logger: LoggerService,
+    @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
+    @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
+    @Inject(LoggerService) private readonly logger: LoggerService,
   ) {}
 
   @Get('templates')

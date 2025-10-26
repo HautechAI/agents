@@ -13,7 +13,7 @@ import { LoggerService } from '../core/services/logger.service';
 import { LocalMCPServer } from '../nodes/mcp';
 import type { PersistedMcpState, McpTool } from '../nodes/mcp/types';
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { NodeStatusState } from '../nodes/base/Node';
 
@@ -46,9 +46,9 @@ export class LiveGraphRuntime {
   private portsRegistry: PortsRegistry;
 
   constructor(
-    private readonly logger: LoggerService,
-    private readonly templateRegistry: TemplateRegistry,
-    private readonly graphs: GraphRepository,
+    @Inject(LoggerService) private readonly logger: LoggerService,
+    @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
+    @Inject(GraphRepository) private readonly graphs: GraphRepository,
     private readonly moduleRef: ModuleRef,
   ) {
     this.portsRegistry = new PortsRegistry();

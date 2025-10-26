@@ -3,7 +3,7 @@ import { LoggerService } from '../../../core/services/logger.service';
 import { MemoryService } from '../../../nodes/memory.repository';
 import { BaseToolNode } from '../baseToolNode';
 import { UnifiedMemoryFunctionTool } from './memory.tool';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 // Node-level static config for the tool instance (UI). Mirrors call_agent pattern.
 export const MemoryToolNodeStaticConfigSchema = z
@@ -23,7 +23,7 @@ export class MemoryToolNode extends BaseToolNode<z.infer<typeof MemoryToolNodeSt
   private toolInstance?: UnifiedMemoryFunctionTool;
   private staticCfg: z.infer<typeof MemoryToolNodeStaticConfigSchema> = {};
   private memoryFactory?: (opts: { threadId?: string }) => MemoryService;
-  constructor(private logger: LoggerService) {
+  constructor(@Inject(LoggerService) private logger: LoggerService) {
     super();
   }
   setMemorySource(

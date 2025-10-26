@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ContainerRegistry as ContainerRegistryService } from './container.registry';
-import type { ContainerService } from './container.service';
-import { Injectable } from '@nestjs/common';
+import { ContainerService } from './container.service';
+import { Inject, Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
 import pLimit from 'p-limit';
 
@@ -11,9 +11,9 @@ export class ContainerCleanupService {
   private enabled: boolean;
 
   constructor(
-    private registry: ContainerRegistryService,
-    private containers: ContainerService,
-    private logger: LoggerService,
+    @Inject(ContainerRegistryService) private registry: ContainerRegistryService,
+    @Inject(ContainerService) private containers: ContainerService,
+    @Inject(LoggerService) private logger: LoggerService,
   ) {
     const env = process.env.CONTAINERS_CLEANUP_ENABLED;
     this.enabled = env == null ? true : String(env).toLowerCase() === 'true';

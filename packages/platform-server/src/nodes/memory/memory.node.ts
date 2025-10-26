@@ -2,7 +2,7 @@ import { Db } from 'mongodb';
 import { z } from 'zod';
 import { MemoryService, MemoryScope } from '../../nodes/memory.repository';
 import Node from '../base/Node';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 
 export interface MemoryNodeConfig {
@@ -29,7 +29,7 @@ export type MemoryNodeStaticConfig = z.infer<typeof MemoryNodeStaticConfigSchema
 @Injectable({ scope: Scope.TRANSIENT })
 export class MemoryNode extends Node<MemoryNodeStaticConfig> {
   constructor(
-    private db: Db,
+    @Inject(Db as any) private db: Db,
     private moduleRef: ModuleRef,
   ) {
     super();

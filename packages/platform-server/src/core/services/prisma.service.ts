@@ -1,6 +1,6 @@
 import { LoggerService } from './logger.service';
 import { ConfigService } from './config.service';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 // Define a minimal client interface used by our repositories.
 // Avoid importing Prisma types so compilation succeeds even without prisma generate.
@@ -24,8 +24,8 @@ export class PrismaService {
   private prisma: unknown | null = null;
 
   constructor(
-    private logger: LoggerService,
-    private cfg: ConfigService,
+    @Inject(LoggerService) private logger: LoggerService,
+    @Inject(ConfigService) private cfg: ConfigService,
   ) {}
 
   /**

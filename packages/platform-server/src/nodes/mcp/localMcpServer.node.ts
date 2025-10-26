@@ -16,7 +16,7 @@ import { LocalMCPServerTool } from './localMcpServer.tool';
 import { DEFAULT_MCP_COMMAND, McpError, McpServer, type McpTool, McpToolCallResult, PersistedMcpState } from './types';
 import { NodeStateService } from '../../graph/nodeState.service';
 import Node from '../base/Node';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 const EnvItemSchema = z
   .object({
@@ -141,12 +141,12 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
   private _globalStaleTimeoutMs = 0;
 
   constructor(
-    private containerService: ContainerService,
-    private logger: LoggerService,
-    private vault: VaultService,
-    private envService: EnvService,
-    private configService: ConfigService,
-    private nodeStateService?: NodeStateService,
+    @Inject(ContainerService) private containerService: ContainerService,
+    @Inject(LoggerService) private logger: LoggerService,
+    @Inject(VaultService) private vault: VaultService,
+    @Inject(EnvService) private envService: EnvService,
+    @Inject(ConfigService) private configService: ConfigService,
+    @Inject(NodeStateService) private nodeStateService?: NodeStateService,
   ) {
     super();
   }

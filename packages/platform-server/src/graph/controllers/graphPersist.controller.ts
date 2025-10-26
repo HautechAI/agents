@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Headers, Body, HttpCode, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Headers, Body, HttpCode, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { LoggerService } from '../../core/services/logger.service';
 import { TemplateRegistry } from '../templateRegistry';
@@ -33,11 +33,11 @@ const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition 
 @Controller('api')
 export class GraphPersistController {
   constructor(
-    private readonly logger: LoggerService,
-    private readonly templates: TemplateRegistry,
-    private readonly runtime: LiveGraphRuntime,
-    private readonly graphs: GraphRepository,
-    private readonly guard: GraphGuard,
+    @Inject(LoggerService) private readonly logger: LoggerService,
+    @Inject(TemplateRegistry) private readonly templates: TemplateRegistry,
+    @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
+    @Inject(GraphRepository) private readonly graphs: GraphRepository,
+    @Inject(GraphGuard) private readonly guard: GraphGuard,
   ) {}
 
   @Get('graph')

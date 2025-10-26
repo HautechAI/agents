@@ -7,6 +7,7 @@ import {
   HttpCode,
   NotFoundException,
   ConflictException,
+  Inject,
 } from '@nestjs/common';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { AgentRunService } from '../../nodes/agentRun.repository';
@@ -40,7 +41,10 @@ export class TerminateByThreadParamsDto {
 
 @Controller('graph/nodes')
 export class RunsController {
-  constructor(private readonly runs: AgentRunService, private readonly runtime: LiveGraphRuntime) {}
+  constructor(
+    @Inject(AgentRunService) private readonly runs: AgentRunService,
+    @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
+  ) {}
 
   @Get(':nodeId/runs')
   async listRuns(

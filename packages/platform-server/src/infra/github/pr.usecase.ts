@@ -1,9 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { GithubService } from "./github.client";
 
 @Injectable()
 export class PRService {
-  constructor(private github: GithubService) {
+  constructor(@Inject(GithubService) private github: GithubService) {
     this.github = github;
   }
 
