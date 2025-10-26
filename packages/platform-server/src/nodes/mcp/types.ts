@@ -1,5 +1,4 @@
 import { FunctionTool } from '@agyn/llm';
-// z is not used here
 import { JSONSchema } from 'zod/v4/core';
 
 // If upstream exports JSONRPCMessage directly later, replace this with that import.
@@ -35,7 +34,6 @@ export interface PersistedMcpToolSummary {
   description?: string;
 }
 
-// unified type alias removed; use interface McpTool
 export interface PersistedMcpState {
   tools?: PersistedMcpToolSummary[];
   toolsUpdatedAt?: string | number; // ISO string or epoch ms

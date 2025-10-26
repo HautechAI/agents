@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { toJSONSchema, z } from 'zod';
-import { convertJsonSchemaToZod } from 'zod-from-json-schema';
+import { jsonSchemaToZod } from '@agyn/json-schema-to-zod';
 import { JSONSchema } from 'zod/v4/core';
 import { WorkspaceNode } from '../workspace/workspace.node';
 // Legacy capabilities removed; rely on Node lifecycle/state
@@ -130,12 +130,7 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
   private _provInFlight: Promise<void> | null = null;
 
   // Dynamic config: enabled tools (if undefined => all enabled by default)
-  private _enabledTools: Set<string> | undefined;
-  // Cached dynamic config zod schema (rebuilt after discovery)
-  private _dynamicConfigZodSchema?: z.ZodTypeAny;
-  // Dynamic config change listeners (normalized config record)
-  private _dynCfgListeners: Array<(cfg: Record<string, boolean>) => void> = [];
-  private _lastEnabledSig?: string; // signature of last emitted enabled set for change detection
+  // Dynamic tool filtering removed per strictness spec; always expose all cached tools
   private _globalStaleTimeoutMs = 0;
 
   constructor(
@@ -183,13 +178,14 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
           }),
         }),
       },
-      convertJsonSchemaToZod({ ...tool.inputSchema, strict: false, additionalProperties: false }) as z.ZodObject,
+      jsonSchemaToZod({ ...(tool.inputSchema as any), strict: false, additionalProperties: false }) as z.ZodObject,
     );
   }
 
-  preloadCachedTools(tools: Array<McpTool> | undefined | null, updatedAt?: number | string | Date): void {
+  preloadCachedToolSummaries(tools: Array<{ name: string; description?: string }> | undefined | null, updatedAt?: number | string | Date): void {
     if (tools && Array.isArray(tools) && tools.length > 0) {
-      this.toolsCache = tools.map((t) => this.createLocalTool(t));
+      // Create tool shells without schemas; discovery will rebuild with full schemas later
+      this.toolsCache = tools.map((t) => this.createLocalTool({ name: t.name, description: t.description, inputSchema: { type: 'object', properties: {}, additionalProperties: false } as any } as McpTool));
       this.toolsDiscovered = true; // consider discovered for initial dynamic schema availability
     }
     if (updatedAt !== undefined) {
@@ -285,24 +281,6 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
       this.logger.info(`[MCP:${this.namespace}] [disc:${discoveryId}] Discovered ${this.toolsCache.length} tools`);
       this.toolsDiscovered = true;
       this.lastToolsUpdatedAt = Date.now();
-      // Invalidate dynamic schema cache so it will be rebuilt including newly discovered tools
-      this._dynamicConfigZodSchema = undefined;
-      // If user supplied a dynamic config before discovery completed, we preserve it.
-      // Only default to "all enabled" when no prior config was set (i.e. _enabledTools is undefined).
-      // (Earlier implementation unconditionally reset _enabledTools which discarded early user config
-      // and prevented onDynamicConfigChanged from firing post-discovery.)
-      if (this._enabledTools === undefined) {
-        // Leave as undefined meaning "all enabled".
-      } else {
-        // We have a pre-existing enabled set provided earlier; emit change now that tools are known.
-        const sig = this.enabledSignature();
-        if (sig !== this._lastEnabledSig) {
-          this._lastEnabledSig = sig;
-          // Emit without logging verbose diff here (setDynamicConfig already logs when invoked) –
-          // this path only occurs for early configs applied pre-discovery.
-          this.emitDynamicConfigChanged();
-        }
-      }
       // Persist state using NodeStateService (if available)
       try {
         const state: { mcp: PersistedMcpState } = {
@@ -428,9 +406,7 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
   listTools(_force = false): LocalMCPServerTool[] {
     // Passive: Only return cached tools. `force` no longer changes discovery behavior post-refactor.
     const allTools: LocalMCPServerTool[] = this.toolsCache ? [...this.toolsCache] : [];
-    if (!this._enabledTools) return allTools;
-    const enabled = this._enabledTools;
-    return allTools.filter((t) => enabled.has(t.name));
+    return allTools;
   }
 
   async callTool(
@@ -656,139 +632,21 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
     this.toolsDiscovered = false;
     this.restartAttempts = 0;
     this.pendingStart = undefined;
-    this._enabledTools = undefined;
     this.setStatus('not_ready');
   }
 
   // -------- DynamicConfig (internal, no external capability) --------
-  isDynamicConfigReady(): boolean {
-    return this.toolsDiscovered;
-  }
-
-  getDynamicConfigSchema(): JSONSchema.BaseSchema | undefined {
-    if (!this.toolsDiscovered || !this.toolsCache) return undefined;
-    // Lazily build and cache zod schema
-    if (!this._dynamicConfigZodSchema) this._dynamicConfigZodSchema = this.buildDynamicConfigZodSchema();
-    return toJSONSchema(this._dynamicConfigZodSchema);
-  }
-
-  setDynamicConfig(cfg: Record<string, boolean>): void {
-    if (!this.toolsDiscovered || !this.toolsCache) {
-      // accept config but will only apply once discovered
-    }
-    // Ensure schema exists (for validation & defaults)
-    if (this.toolsDiscovered && this.toolsCache && !this._dynamicConfigZodSchema) {
-      this._dynamicConfigZodSchema = this.buildDynamicConfigZodSchema();
-    }
-    let normalized: Record<string, boolean> = (cfg || {}) as Record<string, boolean>;
-    if (this._dynamicConfigZodSchema) {
-      try {
-        // New flat shape: tool names are top-level boolean properties
-        normalized = this._dynamicConfigZodSchema.parse(cfg ?? {}) as Record<string, boolean>;
-      } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] Dynamic config validation failed`, e);
-      }
-    }
-    const enabled = new Set<string>();
-    for (const [name, on] of Object.entries(normalized || {})) {
-      if (on) enabled.add(name);
-    }
-    this._enabledTools = enabled;
-
-    // Emit change event if discovery done and enabled set actually changed
-    if (this.toolsDiscovered && this.toolsCache) {
-      const sig = this.enabledSignature();
-      if (sig !== this._lastEnabledSig) {
-        this._lastEnabledSig = sig;
-        const enabledList = this.currentNormalizedDynamicConfig();
-        const on = Object.entries(enabledList)
-          .filter(([, v]) => v)
-          .map(([k]) => k);
-        const off = Object.entries(enabledList)
-          .filter(([, v]) => !v)
-          .map(([k]) => k);
-        this.logger.info(
-          `[MCP:${this.namespace}] Dynamic config changed: enabled=[${on.join(', ')}] disabled=[${off.join(', ')}]`,
-        );
-        this.emitDynamicConfigChanged();
-      }
-    }
-  }
-
-  // Build zod schema representing dynamic config: flat shape { toolName?: boolean } (default true)
-  private buildDynamicConfigZodSchema(): z.ZodTypeAny {
-    const shape: Record<string, z.ZodTypeAny> = {};
-    for (const t of this.toolsCache || []) {
-      shape[t.name] = z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(t.description || '');
-    }
-    return z.object(shape).strict();
-  }
-
-  // Provide subscription for dynamic config changes (interface optional method)
-  onDynamicConfigChanged(listener: (cfg: Record<string, boolean>) => void): () => void {
-    this._dynCfgListeners.push(listener);
-    // If we already have discovery + an enabled signature, emit current immediately so listeners can sync
-    if (this.toolsDiscovered && this.toolsCache) {
-      const current = this.currentNormalizedDynamicConfig();
-      try {
-        listener(current);
-      } catch {}
-    }
-    return () => {
-      this._dynCfgListeners = this._dynCfgListeners.filter((l) => l !== listener);
-    };
-  }
-
-  private emitDynamicConfigChanged() {
-    const cfg = this.currentNormalizedDynamicConfig();
-    for (const l of this._dynCfgListeners) {
-      try {
-        l(cfg);
-      } catch (e) {
-        this.logger.error(`[MCP:${this.namespace}] dynamic config listener error`, e);
-      }
-    }
-    // Notify external listeners to reconcile current enabled tools
-    this.notifyToolsUpdated(Date.now());
-  }
-
-  // Build an authoritative list of currently enabled tool instances
-  private getEnabledToolsSnapshot(): LocalMCPServerTool[] {
-    const all = this.toolsCache ? [...this.toolsCache] : [];
-    if (!this._enabledTools) return all;
-    const enabled = this._enabledTools;
-    return all.filter((t) => enabled.has(t.name));
-  }
+  // Dynamic config APIs removed; tools_updated emitted on cache change only
 
   // Emit the unified tools update event with typed payload
   private notifyToolsUpdated(updatedAt: number): void {
-    const tools = this.getEnabledToolsSnapshot();
+    const tools = this.toolsCache ? [...this.toolsCache] : [];
     const ts = Number.isFinite(updatedAt) ? updatedAt : Date.now();
     try {
       this.emitter.emit('mcp.tools_updated', { tools, updatedAt: ts });
     } catch (e) {
       this.logger.error(`[MCP:${this.namespace}] Error emitting tools_updated`, e);
     }
-  }
-
-  private currentNormalizedDynamicConfig(): Record<string, boolean> {
-    const out: Record<string, boolean> = {};
-    for (const t of this.toolsCache || []) {
-      out[t.name] = this._enabledTools ? this._enabledTools.has(t.name) : true;
-    }
-    return out;
-  }
-
-  private enabledSignature(): string {
-    if (!this.toolsCache) return 'none';
-    return (this.toolsCache || [])
-      .map((t) => `${t.name}:${this._enabledTools ? (this._enabledTools.has(t.name) ? 1 : 0) : 1}`)
-      .sort()
-      .join('|');
   }
 
   // ----------------- Resilient start internals -----------------

@@ -8,7 +8,7 @@ import {
 } from './liveGraph.types';
 import { EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
 // Ports based reversible universal edges
-import { ZodError } from 'zod';
+import { ZodError, type ZodIssue } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
 import { LocalMCPServer } from '../nodes/mcp';
 import type { PersistedMcpState, McpTool } from '../nodes/mcp/types';
@@ -139,9 +139,9 @@ export class LiveGraphRuntime {
     }
   }
 
-  // Return the live node instance (if present). Authoritative API used by routes (no any casts).
-  getNodeInstance<T = unknown>(id: string): T | undefined {
-    return this.state.nodes.get(id)?.instance as T | undefined;
+  // Return the live node instance (if present).
+  getNodeInstance(id: string): Node | undefined {
+    return this.state.nodes.get(id)?.instance;
   }
 
   async apply(graph: GraphDefinition): Promise<GraphDiffResult> {
@@ -205,9 +205,6 @@ export class LiveGraphRuntime {
       if (!live) continue;
       try {
         const cfg = nodeDef.data.config || {};
-        await (live.instance as any).configure(cfg);
-        live.config = cfg;
-
         const cleaned = await this.applyConfigWithUnknownKeyStripping(live.instance, 'setConfig', cfg, nodeId);
         // set live.config to cleaned object only on success
         live.config = cleaned;
@@ -355,16 +352,22 @@ export class LiveGraphRuntime {
       }
       await created.provision();
 
-      // Fix: Create LocalMCPServerTool instances from McpTool if present in state.mcp.tools
+      // Fix: Preload MCP tool summaries if present in state; avoid unsafe casts
       if (created instanceof LocalMCPServer) {
         const state = node.data.state as { mcp?: PersistedMcpState } | undefined;
 
         if (state?.mcp && state.mcp.tools) {
-          const tools = state.mcp.tools;
+          const summaries = state.mcp.tools;
           const updatedAt = state.mcp.toolsUpdatedAt;
           try {
-            // Tools may be stored as summaries; guard conversion if needed.
-            created.preloadCachedTools((tools as any) as McpTool[], updatedAt);
+            if (typeof (created as unknown as { preloadCachedToolSummaries?: (s: Array<{ name: string; description?: string }>, u?: number | string | Date) => void }).preloadCachedToolSummaries === 'function') {
+              (created as unknown as { preloadCachedToolSummaries: (s: Array<{ name: string; description?: string }>, u?: number | string | Date) => void }).preloadCachedToolSummaries(
+                summaries,
+                updatedAt,
+              );
+            } else {
+              // TODO: add typed preloadCachedToolSummaries method on LocalMCPServer to avoid unsafe casts
+            }
           } catch (e) {
             this.logger.error('Error during MCP cache preload for node %s', node.id, e);
           }
@@ -400,19 +403,21 @@ export class LiveGraphRuntime {
         return current; // success
       } catch (err) {
         if (err instanceof ZodError) {
-          const issues = err.issues || [];
-          const unknownRoot = issues.filter((i: unknown) => {
-            const z: any = i as any;
-            if (!z || typeof z !== 'object') return false;
-            if (z.code !== 'unrecognized_keys') return false;
-            const hasKeys = Array.isArray(z.keys as unknown[]);
-            const path = z.path as unknown;
+          const issues: ZodIssue[] = err.issues || [];
+          const unknownRoot = issues.filter((i: ZodIssue) => {
+            if (!i || typeof i !== 'object') return false;
+            if (i.code !== 'unrecognized_keys') return false;
+            const hasKeys = Array.isArray((i as { keys?: unknown }).keys);
+            const path = (i as { path?: unknown }).path;
             const pathOk = Array.isArray(path as unknown[]) ? (path as unknown[]).length === 0 : true;
             return hasKeys && pathOk;
           });
           if (unknownRoot.length > 0) {
             const keys = new Set<string>();
-            for (const i of unknownRoot) for (const k of (i as any).keys as string[]) keys.add(k);
+            for (const i of unknownRoot) {
+              const ks = (i as { keys?: string[] }).keys;
+              if (Array.isArray(ks)) for (const k of ks) keys.add(k);
+            }
             if (keys.size > 0) {
               const next: Record<string, unknown> = {};
               for (const [k, v] of Object.entries(current)) if (!keys.has(k)) next[k] = v;
@@ -452,9 +457,9 @@ export class LiveGraphRuntime {
     }
     // Call lifecycle teardown if present
     const inst = live.instance;
-    if (inst && typeof (inst as any).deprovision === 'function') {
+    if (inst && typeof inst.deprovision === 'function') {
       try {
-        await (inst as any).deprovision();
+        await inst.deprovision();
       } catch {}
     }
     this.state.nodes.delete(nodeId);
@@ -493,10 +498,17 @@ export class LiveGraphRuntime {
     const argValue = instanceSide.instance; // basic rule: pass the other instance
     const key = edgeKey(edge);
 
-    {
-      const createFn = (methodSide.instance as any)[methodCfg.create];
-      if (typeof createFn === 'function') await (createFn as Function).call(methodSide.instance, argValue);
-    }
+    type Callable = (arg: unknown) => unknown | Promise<unknown>;
+    type InstanceMethodMap = Record<string, Callable>;
+    const getMethod = (inst: object, name?: string): Callable | undefined => {
+      if (!name) return undefined;
+      const map = inst as unknown as InstanceMethodMap;
+      const fn = map[name];
+      return typeof fn === 'function' ? fn : undefined;
+    };
+
+    const createFn = getMethod(methodSide.instance, methodCfg.create);
+    if (createFn) await createFn.call(methodSide.instance, argValue);
 
     const record: ExecutedEdgeRecord = {
       key,
@@ -507,13 +519,11 @@ export class LiveGraphRuntime {
       reversible: true,
       argumentSnapshot: argValue,
       reversal: async () => {
-        if (methodCfg.destroy) {
-          const destroyFn = (methodSide.instance as any)[methodCfg.destroy];
-          if (typeof destroyFn === 'function') await (destroyFn as Function).call(methodSide.instance, argValue);
-        } else {
-          // Fallback: call create with undefined to signal disconnection
-          const createFn = (methodSide.instance as any)[methodCfg.create];
-          if (typeof createFn === 'function') await (createFn as Function).call(methodSide.instance, undefined);
+        const destroyFn = getMethod(methodSide.instance, methodCfg.destroy);
+        if (destroyFn) await destroyFn.call(methodSide.instance, argValue);
+        else {
+          const c = getMethod(methodSide.instance, methodCfg.create);
+          if (c) await c.call(methodSide.instance, undefined);
         }
       },
     };

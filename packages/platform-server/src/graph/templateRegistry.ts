@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { TemplatePortConfig } from './ports.types';
 import type { TemplateKind, TemplateNodeSchema } from './types';
 import Node from '../nodes/base/Node';
+import type { Constructor } from 'type-fest';
 import { ModuleRef } from '@nestjs/core';
 
 export interface TemplateMeta {
@@ -9,7 +10,7 @@ export interface TemplateMeta {
   kind: TemplateKind;
 }
 
-export type TemplateCtor = new (...args: unknown[]) => Node<any>;
+export type TemplateCtor = Constructor<Node>;
 
 @Injectable()
 export class TemplateRegistry {

@@ -18,7 +18,7 @@ describe('LocalMCPServer preload + staleness + persist', () => {
 
   it('preloads cached tools and persists after discovery', async () => {
     // Preload
-    server.preloadCachedTools([{ name: 'cached' } as any], Date.now() - 1000);
+    server.preloadCachedToolSummaries([{ name: 'cached' } as any], Date.now() - 1000);
     // Force discovery by marking stale
     server.setGlobalStaleTimeoutMs(1);
     // Stub discoverTools to avoid docker
