@@ -1,4 +1,4 @@
-import { TriggerMessage } from '../slackTrigger';
+export type TriggerMessage = { kind: 'human'; content: string; info?: Record<string, unknown> };
 
 export enum ProcessBuffer {
   OneByOne = 'oneByOne',

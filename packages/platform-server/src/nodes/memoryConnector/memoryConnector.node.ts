@@ -22,11 +22,11 @@ export class MemoryConnectorNode extends Node<MemoryConnectorStaticConfig> {
     super();
   }
 
-  init(params: { getMemoryService: (opts: { threadId?: string }) => MemoryService }): void {
-    this.getMemoryServiceFn = params.getMemoryService;
+  init(params: { nodeId: string }): void {
+    super.init(params);
   }
 
-  private config: MemoryConnectorStaticConfig = { placement: 'after_system', content: 'tree', maxChars: 4000 };
+  protected _config: MemoryConnectorStaticConfig = { placement: 'after_system', content: 'tree', maxChars: 4000 } as MemoryConnectorStaticConfig;
 
   async setConfig(cfg: Record<string, unknown>): Promise<void> {
     const next: Partial<MemoryConnectorStaticConfig> = {};
@@ -34,11 +34,11 @@ export class MemoryConnectorNode extends Node<MemoryConnectorStaticConfig> {
     if (o.placement !== undefined) next.placement = o.placement;
     if (o.content !== undefined) next.content = o.content as any;
     if (o.maxChars !== undefined) next.maxChars = o.maxChars as any;
-    this.config = { ...this.config, ...next } as MemoryConnectorStaticConfig;
+    this._config = { ...this._config, ...next } as MemoryConnectorStaticConfig;
   }
 
   getPlacement(): MemoryConnectorStaticConfig['placement'] {
-    return this.config.placement;
+    return this._config.placement;
   }
 
   private toSystemMessage(text: string | null) {
@@ -73,10 +73,10 @@ export class MemoryConnectorNode extends Node<MemoryConnectorStaticConfig> {
 
   async renderMessage(opts: { threadId?: string; path?: string }): Promise<SystemMessage | null> {
     const path = opts.path || '/';
-    const max = this.config.maxChars ?? 4000;
+    const max = this._config.maxChars ?? 4000;
 
     let text: string = '';
-    if (this.config.content === 'full') {
+    if (this._config.content === 'full') {
       text = await this.buildFull();
 
       if (text.length > max) {
@@ -95,5 +95,10 @@ export class MemoryConnectorNode extends Node<MemoryConnectorStaticConfig> {
       targetPorts: { $memory: { kind: 'method', create: 'setMemorySource' } },
       sourcePorts: { $self: { kind: 'instance' } },
     } as const;
+  }
+  setMemorySource(source: { getMemoryService: (opts: { threadId?: string }) => MemoryService } | ((opts: { threadId?: string }) => MemoryService)) {
+    if (typeof source === 'function') this.getMemoryServiceFn = source as (opts: { threadId?: string }) => MemoryService;
+    else if (source && typeof source.getMemoryService === 'function') this.getMemoryServiceFn = (opts) => source.getMemoryService(opts);
+    else throw new Error('Invalid memory source');
   }
 }

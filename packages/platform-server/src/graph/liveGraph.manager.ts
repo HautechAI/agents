@@ -11,17 +11,18 @@ import { EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
 import { ZodError } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
 import { LocalMCPServer } from '../nodes/mcp';
-import type { PersistedMcpState } from '../nodes/mcp/types';
+import type { PersistedMcpState, McpTool } from '../nodes/mcp/types';
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import { NodeStatusState } from '../nodes/base/Node';
+import type { NodeStatusState } from '../nodes/base/Node';
 
 import type Node from '../nodes/base/Node';
 import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
 import type { TemplatePortConfig } from './ports.types';
 import { TemplateRegistry } from './templateRegistry';
+import { isNodeLifecycle } from '../nodes/types';
 // hasSetDynamicConfig guard is optional; check presence inline to avoid hard dependency
 import { GraphRepository } from './graph.repository';
 
@@ -45,9 +46,9 @@ export class LiveGraphRuntime {
   private portsRegistry: PortsRegistry;
 
   constructor(
-    private readonly logger: LoggerService,
-    private readonly templateRegistry: TemplateRegistry,
-    private readonly graphs: GraphRepository,
+    @Inject(LoggerService) private readonly logger: LoggerService,
+    @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
+    @Inject(GraphRepository) private readonly graphs: GraphRepository,
     private readonly moduleRef: ModuleRef,
   ) {
     this.portsRegistry = new PortsRegistry();
@@ -362,7 +363,8 @@ export class LiveGraphRuntime {
           const tools = state.mcp.tools;
           const updatedAt = state.mcp.toolsUpdatedAt;
           try {
-            created.preloadCachedTools(tools, updatedAt);
+            // Tools may be stored as summaries; guard conversion if needed.
+            created.preloadCachedTools((tools as any) as McpTool[], updatedAt);
           } catch (e) {
             this.logger.error('Error during MCP cache preload for node %s', node.id, e);
           }
@@ -452,7 +454,6 @@ export class LiveGraphRuntime {
     const inst = live.instance as unknown;
     if (inst) {
       try {
-        const { isNodeLifecycle } = await import('../nodes/types');
         if (isNodeLifecycle(inst)) {
           try {
             await inst.stop();
@@ -480,7 +481,7 @@ export class LiveGraphRuntime {
           }
         }
       } catch {
-        // fallback to legacy behavior above if import fails
+        // fallback to legacy behavior above if type guard fails
         const destroy = (inst as Record<string, unknown>)['destroy'];
         if (typeof destroy === 'function') {
           try {
@@ -558,7 +559,7 @@ export class LiveGraphRuntime {
   // Stop and delete all live nodes that implement lifecycle; ignore errors and always clear state
   async shutdown(): Promise<void> {
     const nodes = Array.from(this.state.nodes.values());
-    const { isNodeLifecycle } = await import('../nodes/types');
+    // imported at top: isNodeLifecycle
     await Promise.all(
       nodes.map(async (live) => {
         const inst = live.instance;

@@ -3,14 +3,14 @@ import { LoggerService } from '../../../core/services/logger.service';
 import { RemindMeFunctionTool, RemindMeToolStaticConfigSchema } from './remind_me.tool';
 import z from 'zod';
 import { AgentNode } from '../../agent/agent.node';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class RemindMeNode extends BaseToolNode {
+export class RemindMeNode extends BaseToolNode<z.infer<typeof RemindMeToolStaticConfigSchema>> {
   private toolInstance?: RemindMeFunctionTool;
   private callerAgent?: AgentNode; // set via port wiring
   private staticCfg: z.infer<typeof RemindMeToolStaticConfigSchema> = {};
-  constructor(private logger: LoggerService) {
+  constructor(@Inject(LoggerService) private logger: LoggerService) {
     super();
   }
 

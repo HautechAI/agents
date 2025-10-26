@@ -1,11 +1,12 @@
 import { SocketModeClient } from '@slack/socket-mode';
 import { z } from 'zod';
 import { LoggerService } from '../../core/services/logger.service';
-import { VaultService } from '../../infra/vault/vault.service';
+import { VaultService } from '../../vault/vault.service';
 import { ReferenceFieldSchema, resolveTokenRef } from '../../utils/refs';
 import Node from '../base/Node';
-import { TriggerHumanMessage, TriggerListener } from './base.trigger';
-import { Injectable, Scope } from '@nestjs/common';
+type TriggerHumanMessage = { kind: 'human'; content: string; info?: Record<string, unknown> };
+type TriggerListener = { invoke: (thread: string, messages: TriggerHumanMessage[]) => Promise<void> };
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 // Internal schema: accept either plain string or ReferenceField
 export const SlackTriggerStaticConfigSchema = z
@@ -43,14 +44,12 @@ type SlackTriggerConfig = { app_token: SlackTokenRef };
 export class SlackTrigger extends Node<SlackTriggerConfig> {
   private cfg: SlackTriggerConfig | null = null;
   private client: SocketModeClient | null = null;
-  private vault?: VaultService;
 
   constructor(
-    private readonly logger: LoggerService,
-    vault?: VaultService,
+    @Inject(LoggerService) private readonly logger: LoggerService,
+    @Inject(VaultService) private readonly vault: VaultService,
   ) {
     super();
-    this.vault = vault;
   }
 
   private async resolveAppToken(): Promise<string> {
@@ -151,16 +150,21 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   }
 
   // Fan-out of trigger messages
-  private listeners: TriggerListener[] = [];
+  private _listeners: TriggerListener[] = [];
   async subscribe(listener: TriggerListener): Promise<void> {
-    this.listeners.push(listener);
+    this._listeners.push(listener);
   }
   async unsubscribe(listener: TriggerListener): Promise<void> {
-    this.listeners = this.listeners.filter((l) => l !== listener);
+    this._listeners = this._listeners.filter((l) => l !== listener);
   }
   protected async notify(thread: string, messages: TriggerHumanMessage[]): Promise<void> {
     if (!messages.length) return;
-    await Promise.all(this.listeners.map(async (listener) => listener.invoke(thread, messages)));
+    await Promise.all(this._listeners.map(async (listener) => listener.invoke(thread, messages)));
+  }
+
+  // Expose listeners for base type compatibility via function
+  public listeners<K>(_eventName?: K): Function[] {
+    return this._listeners.map((l) => l.invoke);
   }
 
   getPortConfig() {

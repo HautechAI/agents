@@ -28,8 +28,9 @@ export function jsonSchemaToZod(schema: JSONSchema | undefined): ZodTypeAny {
   if (schema.enum && schema.enum.length) {
     // If mixed types, fallback to union of literals; if single type, z.enum when all strings
     const allStrings = schema.enum.every((e) => typeof e === 'string');
-    if (allStrings) return z.enum([...new Set(schema.enum)] as [string, ...string[]]);
-    return z.union(schema.enum.map((v) => z.literal(v)) as [z.ZodTypeAny, ...z.ZodTypeAny[]]);
+    if (allStrings) return z.enum([...(new Set(schema.enum) as Set<string>)] as [string, ...string[]]);
+    const lits = schema.enum.map((v) => z.literal(v as any)) as unknown as [ZodTypeAny, ...ZodTypeAny[]];
+    return z.union(lits);
   }
 
   // Support type arrays (anyOf semantics over primitive types)
@@ -75,7 +76,7 @@ export function jsonSchemaToZod(schema: JSONSchema | undefined): ZodTypeAny {
     default: {
       // Try structural cues
       if (schema.properties) {
-        const shape: Record<string, ZodTypeAny> = {};
+      const shape: Record<string, ZodTypeAny> = {};
         const req = new Set(schema.required || []);
         for (const [k, v] of Object.entries(schema.properties)) {
           let prop = jsonSchemaToZod(v);

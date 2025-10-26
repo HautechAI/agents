@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
 import { ContainerHandle } from './container.handle';
@@ -10,7 +10,7 @@ import {
   ExecIdleTimeoutError,
   isExecIdleTimeoutError,
 } from '../../utils/execTimeout';
-import type { ContainerRegistry as ContainerRegistryService } from './container.registry';
+import { ContainerRegistry } from './container.registry';
 import { createUtf8Collector, demuxDockerMultiplex } from './containerStream.util';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
@@ -59,8 +59,8 @@ export class ContainerService {
   private docker: Docker;
 
   constructor(
-    private logger: LoggerService,
-    private registry: ContainerRegistryService,
+    @Inject(LoggerService) private logger: LoggerService,
+    @Inject(ContainerRegistry) private registry: ContainerRegistry,
   ) {
     this.docker = new Docker({
       ...(process.env.DOCKER_SOCKET
@@ -69,6 +69,10 @@ export class ContainerService {
           }
         : {}),
     });
+  }
+
+  async init() {
+    await this.registry.backfillFromDocker(this); // TODO: move backfillFromDocker into ContainerService in order to fully eliminate circular dependency
   }
 
   /** Public helper to touch last-used timestamp for a container */

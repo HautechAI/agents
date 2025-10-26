@@ -11,11 +11,11 @@ import {
   ToolCallOutputMessage,
 } from '@agyn/llm';
 import { stringify } from 'yaml';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Scope } from '@nestjs/common';
 
-@Injectable()
+@Injectable({ scope: Scope.TRANSIENT })
 export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
-  constructor(private llm: LLM) {
+  constructor() {
     super();
   }
 
@@ -25,9 +25,16 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
     maxTokens: 0,
     systemPrompt: '',
   };
+  private llm?: LLM;
 
-  init(params: { model: string; keepTokens: number; maxTokens: number; systemPrompt: string }) {
-    this.params = params;
+  init(params: { llm: LLM; model: string; keepTokens: number; maxTokens: number; systemPrompt: string }) {
+    this.llm = params.llm;
+    this.params = {
+      model: params.model,
+      keepTokens: params.keepTokens,
+      maxTokens: params.maxTokens,
+      systemPrompt: params.systemPrompt,
+    };
     return this;
   }
 
@@ -78,6 +85,7 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
         oldContextTokensCount: await this.countTokensFromMessages(state.messages),
       },
       async () => {
+        if (!this.llm) throw new Error('SummarizationLLMReducer not initialized');
         const response = await this.llm.call({
           model,
           input: [

@@ -15,6 +15,16 @@ type PlainMessage =
 
 export type PlainLLMState = { messages: PlainMessage[]; summary?: string };
 
+export function isPlainLLMState(v: unknown): v is PlainLLMState {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as { messages?: unknown };
+  if (!Array.isArray(o.messages)) return false;
+  // shallow check of first element
+  if (o.messages.length === 0) return true;
+  const m = o.messages[0] as any;
+  return m && typeof m === 'object' && 'kind' in m && 'value' in m;
+}
+
 export function serializeState(state: LLMState): PlainLLMState {
   const messages: PlainMessage[] = state.messages.map((m) => {
     if (m instanceof HumanMessage) return { kind: 'human', value: m.toPlain() as PlainHuman };

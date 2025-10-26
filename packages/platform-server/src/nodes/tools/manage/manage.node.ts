@@ -3,7 +3,7 @@ import { BaseToolNode } from '../baseToolNode';
 import { ManageFunctionTool } from './manage.tool';
 import { LoggerService } from '../../../core/services/logger.service';
 import { AgentNode } from '../../agent/agent.node';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 
 export const ManageToolStaticConfigSchema = z
@@ -23,7 +23,7 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
   private readonly workers: { name: string; agent: AgentNode }[] = [];
 
   constructor(
-    private readonly logger: LoggerService,
+    @Inject(LoggerService) private readonly logger: LoggerService,
     private readonly module: ModuleRef,
   ) {
     super();

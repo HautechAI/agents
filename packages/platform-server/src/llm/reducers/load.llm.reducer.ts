@@ -1,17 +1,17 @@
 import { Reducer } from '@agyn/llm';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';
 import { ConversationStateRepository } from '../repositories/conversationState.repository';
 import type { LLMContext, LLMState } from '../types';
 
 import { LoggerService } from '../../core/services/logger.service';
-import { deserializeState } from '../utils/serialization';
+import { deserializeState, isPlainLLMState } from '../utils/serialization';
 
 @Injectable()
 export class LoadLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(
-    private logger: LoggerService,
-    private prismaService: PrismaService,
+    @Inject(LoggerService) private logger: LoggerService,
+    @Inject(PrismaService) private prismaService: PrismaService,
   ) {
     super();
   }
@@ -25,6 +25,7 @@ export class LoadLLMReducer extends Reducer<LLMState, LLMContext> {
       const existing = await repo.get(ctx.threadId, nodeId);
       if (!existing?.state) return state;
       // Merge: existing.messages + incoming messages; keep latest summary
+      if (!isPlainLLMState(existing.state)) return state;
       const persisted = deserializeState(existing.state);
 
       const merged: LLMState = {

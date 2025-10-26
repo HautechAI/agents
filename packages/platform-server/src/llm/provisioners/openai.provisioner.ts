@@ -1,5 +1,5 @@
 import { LLM } from '@agyn/llm';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import { ConfigService } from '../../core/services/config.service';
 import { LLMProvisioner } from './llm.provisioner';
@@ -8,6 +8,10 @@ import { LLMProvisioner } from './llm.provisioner';
 export class OpenAILLMProvisioner extends LLMProvisioner {
   private llm?: LLM;
   constructor(private cfg: ConfigService) {
+    // Explicit injection for tsx runtime without emitDecoratorMetadata
+    // ConfigService is provided by CoreModule
+    // Nest resolves via token, not string
+    // no-op
     super();
   }
 
@@ -18,7 +22,7 @@ export class OpenAILLMProvisioner extends LLMProvisioner {
     if (!apiKey) throw new Error('openai_provider_missing_key');
     const baseUrl = this.cfg.openaiBaseUrl;
     const client = new OpenAI({ apiKey, baseURL: baseUrl });
-    this.llm = new LLM(client as any);
+    this.llm = new LLM(client);
     return this.llm;
   }
 }

@@ -3,7 +3,7 @@ import z from 'zod';
 import { FunctionTool } from '@agyn/llm';
 import { ManageToolNode } from './manage.node';
 import { LoggerService } from '../../../core/services/logger.service';
-import { TriggerMessage } from '../../slackTrigger/base.trigger';
+type TriggerMessage = { content: string; info?: Record<string, unknown> };
 
 export const ManageInvocationSchema = z
   .object({

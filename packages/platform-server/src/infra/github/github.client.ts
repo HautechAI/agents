@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { spawn } from "child_process";
@@ -13,8 +13,8 @@ export class GithubService {
   private personalOctokit?: Octokit;
 
   constructor(
-    private config: ConfigService,
-    private logger: LoggerService,
+    @Inject(ConfigService) private config: ConfigService,
+    @Inject(LoggerService) private logger: LoggerService,
   ) {
     if (!this.isEnabled()) {
       this.logger.info('GithubService: integration disabled (no credentials)');
@@ -191,7 +191,9 @@ export class GithubService {
    * mergeable_state: e.g. 'clean', 'dirty', 'behind', 'blocked', 'draft', 'unknown', 'unstable'
    */
   async getPullRequestMergeStatus(owner: string, repo: string, pull_number: number) {
-    const { data: pr } = await this.octokit.rest.pulls.get({
+    const ok = this.octokit;
+    if (!ok) throw new Error('GitHub client not initialized');
+    const { data: pr } = await ok.rest.pulls.get({
       owner,
       repo,
       pull_number,

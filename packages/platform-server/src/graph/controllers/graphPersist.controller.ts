@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Headers, Body, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Headers, Body, HttpCode, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { LoggerService } from '../../core/services/logger.service';
 import { TemplateRegistry } from '../templateRegistry';
@@ -10,7 +10,9 @@ import {
   type PersistedGraphUpsertRequest,
   type PersistedGraphUpsertResponse,
 } from '../types';
+import { z } from 'zod';
 import { GraphErrorCode } from '../errors';
+import { GraphGuard } from '../graph.guard';
 
 // Helper to convert persisted graph to runtime GraphDefinition (mirrors src/index.ts)
 const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition => {
@@ -31,10 +33,11 @@ const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition 
 @Controller('api')
 export class GraphPersistController {
   constructor(
-    private readonly logger: LoggerService,
-    private readonly templates: TemplateRegistry,
-    private readonly runtime: LiveGraphRuntime,
-    private readonly graphs: GraphRepository,
+    @Inject(LoggerService) private readonly logger: LoggerService,
+    @Inject(TemplateRegistry) private readonly templates: TemplateRegistry,
+    @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
+    @Inject(GraphRepository) private readonly graphs: GraphRepository,
+    @Inject(GraphGuard) private readonly guard: GraphGuard,
   ) {}
 
   @Get('graph')
@@ -47,14 +50,18 @@ export class GraphPersistController {
     return graph;
   }
 
-  @Post('graph')
-  @HttpCode(200)
-  async upsertGraph(
-    @Body() body: PersistedGraphUpsertRequest,
-    @Headers() headers: Record<string, string | string[] | undefined>,
-  ): Promise<PersistedGraphUpsertResponse | { error: string; current?: unknown }> {
+@Post('graph')
+@HttpCode(200)
+async upsertGraph(
+  @Body() body: unknown,
+  @Headers() headers: Record<string, string | string[] | undefined>,
+): Promise<PersistedGraphUpsertResponse | { error: string; current?: unknown }> {
     try {
-      const parsed = body as PersistedGraphUpsertRequest;
+      const parsedResult = UpsertSchema.safeParse(body);
+      if (!parsedResult.success) {
+        throw new HttpException({ error: 'BAD_SCHEMA', current: parsedResult.error.format() }, HttpStatus.BAD_REQUEST);
+      }
+      const parsed = parsedResult.data as PersistedGraphUpsertRequest;
       parsed.name = parsed.name || 'main';
       // Resolve author from headers (support legacy keys)
       const author: GraphAuthor = {
@@ -66,20 +73,11 @@ export class GraphPersistController {
 
       // Guard against unsafe MCP command mutation
       try {
-        const { enforceMcpCommandMutationGuard } = await import('../graph.guard');
-        enforceMcpCommandMutationGuard(before, parsed, this.runtime);
+        this.guard.enforceMcpCommandMutationGuard(before, parsed, this.runtime);
       } catch (e: unknown) {
         if (e instanceof GraphError && e?.code === GraphErrorCode.McpCommandMutationForbidden) {
           // 409 with error code body
           const err = { error: GraphErrorCode.McpCommandMutationForbidden } as const;
-          // Using exception here would change shape; return object with explicit status via thrown Response? Nest does 200 by default.
-          // Workaround: throw and catch at adapter? Instead, encode conventional error with 409 using special symbol.
-          // Simpler: rethrow wrapped; platform tests verify body only in Fastify path. We'll keep body identical and rely on global pipes.
-          // To ensure status code 409, throw an HttpException? Avoid to keep return types consistent; use Error with tagging.
-          // We cannot alter status without reply injection; fallback: throw GraphError and let global filter set 409? Not configured.
-          // Pragmatically, return error and rely on client expecting 409; but requirement says status must be identical.
-          // Use dynamic import of '@nestjs/common' HttpException only in this branch to avoid circulars.
-          const { HttpException, HttpStatus } = await import('@nestjs/common');
           throw new HttpException(err, HttpStatus.CONFLICT);
         }
         throw e;
@@ -108,19 +106,50 @@ export class GraphPersistController {
         }
       }
       return saved;
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Map known repository errors to status codes and bodies
-      const { HttpException, HttpStatus } = await import('@nestjs/common');
-      if (e?.code === 'VERSION_CONFLICT') {
-        throw new HttpException({ error: 'VERSION_CONFLICT', current: e.current }, HttpStatus.CONFLICT);
+      const err = e as { code?: string; current?: unknown; message?: string };
+      if (err?.code === 'VERSION_CONFLICT') {
+        throw new HttpException({ error: 'VERSION_CONFLICT', current: err.current }, HttpStatus.CONFLICT);
       }
-      if (e?.code === 'LOCK_TIMEOUT') {
+      if (err?.code === 'LOCK_TIMEOUT') {
         throw new HttpException({ error: 'LOCK_TIMEOUT' }, HttpStatus.CONFLICT);
       }
-      if (e?.code === 'COMMIT_FAILED') {
+      if (err?.code === 'COMMIT_FAILED') {
         throw new HttpException({ error: 'COMMIT_FAILED' }, HttpStatus.INTERNAL_SERVER_ERROR);
       }
-      throw new HttpException({ error: e?.message || 'Bad Request' }, HttpStatus.BAD_REQUEST);
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new HttpException({ error: msg || 'Bad Request' }, HttpStatus.BAD_REQUEST);
     }
   }
 }
+// Zod schema for upsert body (controller boundary schema)
+const UpsertSchema = z
+  .object({
+    name: z.string().min(1),
+    version: z.number().int().nonnegative().optional(),
+    nodes: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          template: z.string().min(1),
+          config: z.record(z.string(), z.unknown()).optional(),
+          dynamicConfig: z.record(z.string(), z.unknown()).optional(),
+          state: z.record(z.string(), z.unknown()).optional(),
+          position: z.object({ x: z.number(), y: z.number() }).optional(),
+        }),
+      )
+      .max(1000),
+    edges: z
+      .array(
+        z.object({
+          id: z.string().optional(),
+          source: z.string().min(1),
+          sourceHandle: z.string().min(1),
+          target: z.string().min(1),
+          targetHandle: z.string().min(1),
+        }),
+      )
+      .max(2000),
+  })
+  .strict();

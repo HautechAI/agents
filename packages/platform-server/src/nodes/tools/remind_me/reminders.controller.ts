@@ -1,6 +1,6 @@
-import { Controller, Get, Param, Query, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Param, Query, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { LoggerService } from '../../../core/services/logger.service';
-import { RuntimeService } from '../../../graph/runtime.service';
+import { LiveGraphRuntime as RuntimeService } from '../../../graph/liveGraph.manager';
 import type { ActiveReminder } from './remind_me.tool';
 
 interface RemindMeInspectable { getActiveReminders(): ActiveReminder[] }
@@ -10,7 +10,10 @@ function isRemindMeInspectable(x: unknown): x is RemindMeInspectable {
 
 @Controller('graph/nodes')
 export class RemindersController {
-  constructor(private readonly logger: LoggerService, private readonly runtimeService: RuntimeService) {}
+  constructor(
+    @Inject(LoggerService) private readonly logger: LoggerService,
+    @Inject(RuntimeService) private readonly runtimeService: RuntimeService,
+  ) {}
 
   @Get(':nodeId/reminders')
   async getReminders(
@@ -32,4 +35,3 @@ export class RemindersController {
     }
   }
 }
-

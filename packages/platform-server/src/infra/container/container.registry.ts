@@ -17,7 +17,7 @@ export interface ContainerDoc {
   kill_after_at: string | null; // ISO string or null
   termination_reason: string | null;
   deleted_at: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -83,7 +83,8 @@ export class ContainerRegistry {
 
   async updateLastUsed(containerId: string, now: Date = new Date(), ttlOverrideSeconds?: number): Promise<void> {
     const doc = await this.col.findOne({ container_id: containerId });
-    const ttl = typeof ttlOverrideSeconds === 'number' ? ttlOverrideSeconds : (doc?.metadata?.ttlSeconds ?? 86400);
+    const ttlMeta = doc?.metadata?.ttlSeconds;
+    const ttl = typeof ttlOverrideSeconds === 'number' ? ttlOverrideSeconds : (typeof ttlMeta === 'number' ? ttlMeta : 86400);
     const nowIso = now.toISOString();
     const kill = this.computeKillAfter(nowIso, ttl);
     const update: UpdateFilter<ContainerDoc> = {
@@ -161,7 +162,7 @@ export class ContainerRegistry {
     const now = Date.now();
     // Read current attempts to compute backoff
     const doc = await this.col.findOne({ container_id: containerId });
-    const attempts = (doc?.metadata?.terminationAttempts as number | undefined) ?? 0;
+    const attempts = typeof doc?.metadata?.terminationAttempts === 'number' ? (doc!.metadata!.terminationAttempts as number) : 0;
     const nextAttempts = attempts + 1;
     // Exponential backoff in seconds: min(2^attempts, 900s)
     const delayMs = Math.min(Math.pow(2, attempts) * 1000, 15 * 60 * 1000);
@@ -238,7 +239,7 @@ export class ContainerRegistry {
           if (existing) {
             // Existing record: do not bump last_used_at; optionally recompute kill_after_at if missing.
             // Preserve unrelated metadata fields (e.g., lastError, retryAfter, terminationAttempts) by updating dotted paths only.
-            const setFields: Partial<ContainerDoc> & Record<string, unknown> = {
+    const setFields: Partial<ContainerDoc> & Record<string, unknown> = {
               container_id: item.id,
               node_id: nodeId,
               thread_id: threadId,
@@ -269,7 +270,7 @@ export class ContainerRegistry {
             }
             // Preserve existing ttlSeconds; only set default when absent.
             if (typeof existing.metadata?.ttlSeconds !== 'number') setFields['metadata.ttlSeconds'] = 86400;
-            const updateExisting: UpdateFilter<ContainerDoc> = { $set: setFields };
+            const updateExisting: UpdateFilter<ContainerDoc> = { $set: setFields as any };
             await this.col.updateOne({ container_id: item.id }, updateExisting, { upsert: false });
           } else {
             // New record: set last_used_at on insert and compute kill_after_at

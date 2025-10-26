@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { ConfigService } from '../../core/services/config.service';
 import { LoggerService } from '../../core/services/logger.service';
 import { LLMProvisioner } from './llm.provisioner';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 type ProvisionResult = { apiKey?: string; baseUrl?: string };
 
@@ -12,8 +12,8 @@ export class LiteLLMProvisioner extends LLMProvisioner {
   private llm?: LLM;
 
   constructor(
-    private cfg: ConfigService,
-    private logger: LoggerService,
+    @Inject(ConfigService) private cfg: ConfigService,
+    @Inject(LoggerService) private logger: LoggerService,
   ) {
     super();
   }

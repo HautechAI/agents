@@ -11,6 +11,14 @@ export abstract class BaseTool {
 }
 
 // Helper to wrap an async function with zod schema using LangChain's tool()
-export function simpleTool<T extends z.ZodTypeAny>(fn: (args: z.infer<T>) => Promise<unknown>, opts: { name: string; description?: string; schema: T }) {
-  return lcToolFn(fn as unknown as (input: unknown) => Promise<unknown>, { name: opts.name, description: opts.description || '', schema: opts.schema });
+export function simpleTool<T extends z.ZodTypeAny>(
+  fn: (args: z.infer<T>) => Promise<unknown>,
+  opts: { name: string; description?: string; schema: T },
+) {
+  const wrapper = async (input: unknown): Promise<unknown> => {
+    const parsed = opts.schema.safeParse(input);
+    if (!parsed.success) throw parsed.error;
+    return await fn(parsed.data as z.infer<T>);
+  };
+  return lcToolFn(wrapper, { name: opts.name, description: opts.description || '', schema: opts.schema });
 }

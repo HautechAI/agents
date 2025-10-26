@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { ConversationStateClient } from '../../core/services/prisma.service';
 
 export type ConversationStateRecord = {
   threadId: string;
@@ -8,7 +8,7 @@ export type ConversationStateRecord = {
 
 @Injectable()
 export class ConversationStateRepository {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: ConversationStateClient) {}
 
   async get(threadId: string, nodeId: string): Promise<ConversationStateRecord | null> {
     const found = await this.prisma.conversationState.findUnique({ where: { threadId_nodeId: { threadId, nodeId } } });

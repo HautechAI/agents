@@ -1,13 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import { LoggerService } from './logger.service';
 import { ConfigService } from './config.service';
+import { Inject, Injectable } from '@nestjs/common';
 
+@Injectable()
 export class PrismaService {
   private prisma: PrismaClient | null = null;
 
   constructor(
-    private logger: LoggerService,
-    private cfg: ConfigService,
+    @Inject(LoggerService) private logger: LoggerService,
+    @Inject(ConfigService) private cfg: ConfigService,
   ) {}
 
   getClient(): PrismaClient | null {

@@ -3,15 +3,15 @@ import { ToolCallResponse, withToolCall } from '@agyn/tracing';
 import { LLMContext, LLMMessage, LLMState } from '../types';
 import { FunctionTool, Reducer, ResponseMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { LoggerService } from '../../core/services/logger.service';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
-  constructor(private logger: LoggerService) {
+  constructor(@Inject(LoggerService) private logger: LoggerService) {
     super();
   }
 
-  private tools: FunctionTool[] = [];
+  private tools?: FunctionTool[];
 
   init(params: { tools: FunctionTool[] }) {
     this.tools = params.tools || [];
@@ -34,6 +34,7 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
   }
 
   createToolsMap() {
+    if (!this.tools) throw new Error('CallToolsLLMReducer not initialized');
     const toolsMap = new Map<string, FunctionTool>();
     this.tools.forEach((t) => toolsMap.set(t.name, t));
     return toolsMap;

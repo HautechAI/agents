@@ -3,7 +3,7 @@ import z from 'zod';
 import { FunctionTool } from '@agyn/llm';
 import { WebClient, type ChatPostEphemeralResponse, type ChatPostMessageResponse } from '@slack/web-api';
 import { LoggerService } from '../../../core/services/logger.service';
-import { VaultService } from '../../../infra/vault/vault.service';
+import { VaultService } from '../../../vault/vault.service';
 import { ReferenceFieldSchema, normalizeTokenRef, parseVaultRef, resolveTokenRef } from '../../../utils/refs';
 
 export const SendSlackMessageToolStaticConfigSchema = z
@@ -87,13 +87,14 @@ export class SendSlackMessageFunctionTool extends FunctionTool<typeof sendSlackI
         if (!resp.ok) return JSON.stringify({ ok: false, error: resp.error });
         return JSON.stringify({ ok: true, channel, message_ts: resp.message_ts, ephemeral: true });
       }
-      const resp: ChatPostMessageResponse = await client.chat.postMessage({
-        channel,
-        text,
-        attachments: [],
-        ...(thread_ts ? { thread_ts } : {}),
-        ...(thread_ts && broadcast ? { reply_broadcast: true } : {}),
-      });
+      const resp: ChatPostMessageResponse = await client.chat.postMessage(
+        {
+          channel,
+          text,
+          attachments: [],
+          ...(thread_ts ? { thread_ts } : {}),
+        } as any,
+      );
       if (!resp.ok) return JSON.stringify({ ok: false, error: resp.error });
       const thread =
         (resp.message && 'thread_ts' in resp.message

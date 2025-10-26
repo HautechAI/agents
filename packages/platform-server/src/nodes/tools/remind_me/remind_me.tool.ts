@@ -19,7 +19,7 @@ export const remindMeInvocationSchema = z
 
 export const RemindMeToolStaticConfigSchema = z.object({}).strict();
 
-type ActiveReminder = { id: string; threadId: string; note: string; at: string };
+export type ActiveReminder = { id: string; threadId: string; note: string; at: string };
 
 export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocationSchema> {
   private active: Map<string, { timer: ReturnType<typeof setTimeout>; reminder: ActiveReminder }> = new Map();
@@ -59,11 +59,10 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
       if (!exists) return;
       this.active.delete(id);
       try {
-        await ctx.callerAgent.invoke(parentThreadId, [
-          { kind: 'system', content: note, info: { reason: 'reminded' } },
-        ]);
+        await ctx.callerAgent.invoke(parentThreadId, [{ kind: 'system', content: note } as any]);
       } catch (e: unknown) {
-        logger.error('RemindMe scheduled invoke error', e?.message || String(e));
+        const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : String(e);
+        logger.error('RemindMe scheduled invoke error', msg);
       }
     }, boundedDelay);
     this.active.set(id, { timer, reminder: { id, threadId: parentThreadId, note, at: eta } });

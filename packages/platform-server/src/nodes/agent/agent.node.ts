@@ -94,7 +94,7 @@ export type AgentStaticConfig = z.infer<typeof AgentStaticConfigSchema>;
 export type WhenBusyMode = 'wait' | 'injectAfterTools';
 
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 import type { TemplatePortConfig } from '../../graph/ports.types';
 import type { RuntimeContext } from '../../graph/runtimeContext';
 import Node from '../base/Node';
@@ -109,9 +109,9 @@ export class AgentNode extends Node<AgentStaticConfig> {
   private tools: Set<FunctionTool> = new Set();
 
   constructor(
-    protected configService: ConfigService,
-    protected logger: LoggerService,
-    protected llmProvisioner: LLMProvisioner,
+    @Inject(ConfigService) protected configService: ConfigService,
+    @Inject(LoggerService) protected logger: LoggerService,
+    @Inject(LLMProvisioner) protected llmProvisioner: LLMProvisioner,
     private readonly moduleRef: ModuleRef,
   ) {
     super();
@@ -169,25 +169,27 @@ export class AgentNode extends Node<AgentStaticConfig> {
     );
 
     // summarize -> call_model
-    reducers['summarize'] = new SummarizationLLMReducer(llm)
+    reducers['summarize'] = (await this.moduleRef.create(SummarizationLLMReducer))
       .init({
+        llm,
         model: this.config.model ?? 'gpt-5',
         keepTokens: this.config.summarizationKeepTokens ?? 1000,
         maxTokens: this.config.summarizationMaxTokens ?? 10000,
         systemPrompt:
           'You update a running summary of a conversation. Keep key facts, goals, decisions, constraints, names, deadlines, and follow-ups. Be concise; use compact sentences; omit chit-chat. Structure summary with 3 high level sections: initial task, plan (if any), context (progress, findings, observations).',
       })
-      .next(new StaticLLMRouter('call_model'));
+      .next((await this.moduleRef.create(StaticLLMRouter)).init('call_model'));
 
     // call_model -> branch (call_tools | save)
-    reducers['call_model'] = new CallModelLLMReducer(llm)
+    reducers['call_model'] = (await this.moduleRef.create(CallModelLLMReducer))
       .init({
+        llm,
         model: this.config.model ?? 'gpt-5',
         systemPrompt: this.config.systemPrompt ?? 'You are a helpful AI assistant.',
         tools,
       })
       .next(
-        new ConditionalLLMRouter((state) => {
+        (await this.moduleRef.create(ConditionalLLMRouter)).init((state) => {
           const last = state.messages.at(-1);
           if (last instanceof ResponseMessage && last.output.find((o) => o instanceof ToolCallMessage)) {
             return 'call_tools';
@@ -197,21 +199,25 @@ export class AgentNode extends Node<AgentStaticConfig> {
       );
 
     // call_tools -> tools_save (static)
-    reducers['call_tools'] = new CallToolsLLMReducer(this.logger)
+    reducers['call_tools'] = (await this.moduleRef.create(CallToolsLLMReducer))
       .init({ tools })
-      .next(new StaticLLMRouter('tools_save'));
+      .next((await this.moduleRef.create(StaticLLMRouter)).init('tools_save'));
     // tools_save -> summarize (static)
-    reducers['tools_save'] = new SaveLLMReducer(this.logger).next(new StaticLLMRouter('summarize'));
+    reducers['tools_save'] = (await this.moduleRef.create(SaveLLMReducer)).next(
+      (await this.moduleRef.create(StaticLLMRouter)).init('summarize'),
+    );
 
     // save -> enforceTools (if enabled) or end (static)
-    reducers['save'] = new SaveLLMReducer(this.logger).next(
-      new StaticLLMRouter(this.config.restrictOutput ? 'enforceTools' : null),
+    reducers['save'] = (await this.moduleRef.create(SaveLLMReducer)).next(
+      (await this.moduleRef.create(ConditionalLLMRouter)).init((_state, _ctx) =>
+        this.config.restrictOutput ? 'enforceTools' : null,
+      ),
     );
 
     // enforceTools -> summarize OR end (conditional) if enabled
     if (this.config.restrictOutput) {
-      reducers['enforceTools'] = new EnforceToolsLLMReducer(this.logger).next(
-        new ConditionalLLMRouter((state) => {
+      reducers['enforceTools'] = (await this.moduleRef.create(EnforceToolsLLMReducer)).next(
+        (await this.moduleRef.create(ConditionalLLMRouter)).init((state) => {
           const injected = state.meta?.restrictionInjected === true;
           const injections = state.meta?.restrictionInjectionCount ?? 0;
           if (injected && injections >= 1) return 'summarize';
@@ -225,13 +231,17 @@ export class AgentNode extends Node<AgentStaticConfig> {
   }
   async invoke(
     thread: string,
-    messages: TriggerMessage[] | TriggerMessage,
+    messages:
+      | Array<{ content: string; info?: Record<string, unknown> }>
+      | { content: string; info?: Record<string, unknown> },
   ): Promise<ResponseMessage | ToolCallOutputMessage> {
     return await withAgent(
       { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
       async () => {
         const loop = await this.prepareLoop();
-        const incoming: TriggerMessage[] = Array.isArray(messages) ? messages : [messages];
+        const incoming: Array<{ content: string; info?: Record<string, unknown> }> = Array.isArray(messages)
+          ? messages
+          : [messages];
         const history: HumanMessage[] = incoming.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
         const finishSignal = new Signal();
 
@@ -261,12 +271,12 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return 'not_running';
   }
 
-  addTool(toolNode: BaseToolNode): void {
+  addTool(toolNode: BaseToolNode<any>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.add(tool);
     this.logger.info(`Tool added to Agent: ${toolNode?.constructor?.name || 'UnknownTool'}`);
   }
-  removeTool(toolNode: BaseToolNode): void {
+  removeTool(toolNode: BaseToolNode<any>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.delete(tool);
     this.logger.info(`Tool removed from Agent: ${toolNode?.constructor?.name || 'UnknownTool'}`);

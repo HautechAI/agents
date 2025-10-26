@@ -1,21 +1,21 @@
 import z from 'zod';
 import { BaseToolNode } from '../baseToolNode';
 import { LoggerService } from '../../../core/services/logger.service';
-import { VaultService } from '../../../infra/vault/vault.service';
+import { VaultService } from '../../../vault/vault.service';
 import {
   SendSlackMessageFunctionTool,
   SendSlackMessageToolStaticConfigSchema,
   SendSlackMessageToolExposedStaticConfigSchema,
 } from './send_slack_message.tool';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class SendSlackMessageNode extends BaseToolNode {
+export class SendSlackMessageNode extends BaseToolNode<z.infer<typeof SendSlackMessageToolStaticConfigSchema>> {
   private toolInstance?: SendSlackMessageFunctionTool;
   private staticCfg: z.infer<typeof SendSlackMessageToolStaticConfigSchema> | null = null;
   constructor(
-    private logger: LoggerService,
-    private vault?: VaultService,
+    @Inject(LoggerService) private logger: LoggerService,
+    @Inject(VaultService) private vault?: VaultService,
   ) {
     super();
   }

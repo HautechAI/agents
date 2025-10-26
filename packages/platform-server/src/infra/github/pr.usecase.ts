@@ -1,9 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { GithubService } from "./github.client";
 
 @Injectable()
 export class PRService {
-  constructor(private github: GithubService) {
+  constructor(@Inject(GithubService) private github: GithubService) {
     this.github = github;
   }
 
@@ -105,8 +105,8 @@ export class PRService {
       event: "review",
       state: r.state,
       body: r.body,
-      submitted_at: r.submitted_at,
-      created_at: r.submitted_at || r.submitted_at,
+      submitted_at: r.submitted_at || undefined,
+      created_at: r.submitted_at ?? new Date().toISOString(),
       type: "review",
     }));
 
@@ -115,7 +115,7 @@ export class PRService {
       id: commit.sha,
       actor: commit.author ? { login: commit.author.login, type: commit.author.type } : undefined,
       event: "commit",
-      created_at: commit.commit.author.date,
+      created_at: commit.commit?.author?.date || new Date().toISOString(),
       message: commit.commit.message,
       type: "commit",
       url: commit.html_url,

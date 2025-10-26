@@ -6,7 +6,7 @@ export interface McpExecDelegate {
   callTool: (
     name: string,
     args: unknown,
-  ) => Promise<{ isError?: boolean; content?: string; structuredContent?: unknown; raw?: unknown }>;
+  ) => Promise<{ isError?: boolean; content?: string; structuredContent?: { [x: string]: unknown } | undefined; raw?: unknown }>;
   getLogger: () => { debug: (...a: unknown[]) => void; error: (...a: unknown[]) => void }; // minimal logger surface
 }
 

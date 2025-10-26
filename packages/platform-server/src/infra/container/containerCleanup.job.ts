@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { ContainerRegistryService } from './containerRegistry.service';
-import type { ContainerService } from './container.service';
-import { Injectable } from '@nestjs/common';
+import { ContainerRegistry as ContainerRegistryService } from './container.registry';
+import { ContainerService } from './container.service';
+import { Inject, Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
+import pLimit from 'p-limit';
 
 @Injectable()
 export class ContainerCleanupService {
@@ -10,9 +11,9 @@ export class ContainerCleanupService {
   private enabled: boolean;
 
   constructor(
-    private registry: ContainerRegistryService,
-    private containers: ContainerService,
-    private logger: LoggerService,
+    @Inject(ContainerRegistryService) private registry: ContainerRegistryService,
+    @Inject(ContainerService) private containers: ContainerService,
+    @Inject(LoggerService) private logger: LoggerService,
   ) {
     const env = process.env.CONTAINERS_CLEANUP_ENABLED;
     this.enabled = env == null ? true : String(env).toLowerCase() === 'true';
@@ -48,7 +49,6 @@ export class ContainerCleanupService {
     this.logger.info(`ContainerCleanup: found ${expired.length} expired containers`);
 
     // Controlled concurrency to avoid long sequential sweeps
-    const { default: pLimit } = await import('p-limit');
     const limit = pLimit(5);
 
     await Promise.allSettled(

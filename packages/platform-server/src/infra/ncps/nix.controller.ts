@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import semver from 'semver';
@@ -97,7 +97,7 @@ export class NixController {
     .object({ name: z.string().max(200).regex(SAFE_IDENT), version: z.string().max(100) })
     .strict();
 
-  constructor(private cfg: ConfigService) {
+  constructor(@Inject(ConfigService) private cfg: ConfigService) {
     this.timeoutMs = cfg.nixHttpTimeoutMs;
     this.cache = new LruCache<unknown>(cfg.nixCacheMax, cfg.nixCacheTtlMs);
   }
@@ -305,4 +305,3 @@ export class NixController {
     }
   }
 }
-

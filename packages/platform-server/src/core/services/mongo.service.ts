@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { MongoClient, Db } from 'mongodb';
 import { ConfigService } from './config.service';
 import { LoggerService } from './logger.service';
@@ -9,8 +9,8 @@ export class MongoService {
   private db?: Db;
 
   constructor(
-    private configService: ConfigService,
-    private logger: LoggerService,
+    @Inject(ConfigService) private configService: ConfigService,
+    @Inject(LoggerService) private logger: LoggerService,
   ) {}
 
   async connect() {
