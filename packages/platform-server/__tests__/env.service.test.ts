@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EnvService, EnvError, type EnvItem } from '../src/env/env.service';
-import { VaultService, type VaultConfig } from '../src/vault/vault.service';
+import type { VaultConfig } from '../src/vault/vault.service';
+import { LoggerService } from '../src/core/services/logger.service.js';
 
 // Helper to build a real VaultService with desired enabled state
-function makeVault(cfg: Partial<VaultConfig>): VaultService {
+function makeVault(cfg: Partial<VaultConfig>): { isEnabled(): boolean; getSecret(ref: { mount: string; path: string; key: string }): Promise<string | undefined> } {
   const base: VaultConfig = {
     enabled: false,
     addr: 'http://localhost:8200',
@@ -11,7 +12,11 @@ function makeVault(cfg: Partial<VaultConfig>): VaultService {
     timeoutMs: 50,
     defaultMounts: ['secret'],
   };
-  return new VaultService({ ...base, ...cfg });
+  const conf = { ...base, ...cfg };
+  return {
+    isEnabled: () => !!conf.enabled,
+    getSecret: async (_ref) => undefined,
+  };
 }
 
 describe('EnvService', () => {
@@ -36,7 +41,7 @@ describe('EnvService', () => {
 
   it('resolveEnvItems: vault disabled error', async () => {
     const vault = makeVault({ enabled: false });
-    const svc = new EnvService(vault);
+    const svc = new EnvService(vault as any);
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'secret/x/y', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_unavailable' });
   });
 
@@ -49,7 +54,7 @@ describe('EnvService', () => {
   it('resolveEnvItems: missing secret error', async () => {
     const vault = makeVault({ enabled: true, token: 't' });
     vi.spyOn(vault, 'getSecret').mockResolvedValue(undefined);
-    const svc = new EnvService(vault);
+    const svc = new EnvService(vault as any);
     await expect(svc.resolveEnvItems([{ key: 'A', value: 'secret/app/db/PASSWORD', source: 'vault' }])).rejects.toMatchObject({ code: 'vault_secret_missing' });
   });
 
@@ -63,7 +68,7 @@ describe('EnvService', () => {
       const k = `${ref.mount}/${ref.path}/${ref.key}`.replace(/\/+/g, '/');
       return map[k];
     });
-    const svc = new EnvService(vault);
+    const svc = new EnvService(vault as any);
     const res = await svc.resolveEnvItems([
       { key: 'A', value: 'secret/app/db/PASSWORD', source: 'vault' },
       { key: 'B', value: 'secret/app/api/TOKEN', source: 'vault' },
