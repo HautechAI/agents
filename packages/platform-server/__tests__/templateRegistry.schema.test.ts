@@ -32,7 +32,7 @@ describe('TemplateRegistry.toSchema without legacy capabilities/staticConfigSche
     const schema = await reg.toSchema();
     const entry = schema.find((s) => s.name === 'noMeta') as TemplateNodeSchema;
     expect(entry).toBeTruthy();
-    expect(entry.capabilities).toBeUndefined();
-    expect(entry.staticConfigSchema).toBeUndefined();
+    expect((entry as any).capabilities).toBeUndefined();
+    expect((entry as any).staticConfigSchema).toBeUndefined();
   });
 });

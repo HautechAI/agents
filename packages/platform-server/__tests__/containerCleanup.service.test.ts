@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
-import { ContainerRegistryService } from '../infra/container/container.registry';
+import { ContainerRegistry } from '../src/infra/container/container.registry';
 import { ContainerCleanupService } from '../infra/container/containerCleanup.job';
 import { LoggerService } from '../core/services/logger.service';
 
@@ -16,7 +16,7 @@ class FakeContainerService {
 describe('ContainerCleanupService', () => {
   let mongod: MongoMemoryServer;
   let client: MongoClient;
-  let registry: ContainerRegistryService;
+  let registry: ContainerRegistry;
   const logger = new LoggerService();
   const fakeSvc = new FakeContainerService() as any;
   let setupOk = true;
@@ -26,7 +26,7 @@ describe('ContainerCleanupService', () => {
     try {
       mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } });
       client = await MongoClient.connect(mongod.getUri());
-      registry = new ContainerRegistryService(client.db('test'), logger);
+      registry = new ContainerRegistry(client.db('test'), logger);
       await registry.ensureIndexes();
     } catch (e: any) {
       // common in environments without AVX support

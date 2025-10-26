@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildTemplateRegistry } from '../src/templates';
-import { LocalMCPServer } from '../src/mcp/localMcpServer';
+import { LocalMCPServer } from '../src/nodes/mcp/localMcpServer.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
-import { ContainerService } from '../src/core/services/container.service.js';
+import { ContainerService } from '../src/infra/container/container.service';
 import { ConfigService } from '../src/core/services/config.service.js';
 import { CheckpointerService } from '../src/services/checkpointer.service';
 import { LiveGraphRuntime, GraphDefinition } from '../src/graph';

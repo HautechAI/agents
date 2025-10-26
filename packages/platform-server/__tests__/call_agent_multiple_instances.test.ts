@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AIMessage } from '@langchain/core/messages';
-import { CallAgentTool } from '../src/tools/call_agent.tool';
+import { CallAgentTool } from '../src/nodes/tools/call_agent/call_agent.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 
 class FakeAgent {

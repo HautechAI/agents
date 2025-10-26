@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Agent } from '../src/nodes/agent/agent.node';
-import { LocalMCPServer } from '../src/mcp/localMcpServer';
+import { LocalMCPServer } from '../src/nodes/mcp/localMcpServer.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { ConfigService } from '../src/core/services/config.service.js';
 import { CheckpointerService } from '../src/services/checkpointer.service';

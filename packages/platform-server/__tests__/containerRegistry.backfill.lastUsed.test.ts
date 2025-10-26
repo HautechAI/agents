@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
-import { ContainerRegistryService } from '../infra/container/container.registry';
+import { ContainerRegistry } from '../src/infra/container/container.registry';
 import { LoggerService } from '../core/services/logger.service';
 
 describe('ContainerRegistryService backfill last_used behavior', () => {
   let mongod: MongoMemoryServer;
   let client: MongoClient;
-  let registry: ContainerRegistryService;
+  let registry: ContainerRegistry;
   const logger = new LoggerService();
   let setupOk = true;
 
@@ -15,7 +15,7 @@ describe('ContainerRegistryService backfill last_used behavior', () => {
     try {
       mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } });
       client = await MongoClient.connect(mongod.getUri());
-      registry = new ContainerRegistryService(client.db('test'), logger);
+      registry = new ContainerRegistry(client.db('test'), logger);
       await registry.ensureIndexes();
     } catch (e: unknown) {
       setupOk = false;
@@ -53,7 +53,7 @@ describe('ContainerRegistryService backfill last_used behavior', () => {
     });
 
     // Narrow types to the adapter used by backfill
-    type Adapter = Parameters<ContainerRegistryService['backfillFromDocker']>[0];
+    type Adapter = Parameters<ContainerRegistry['backfillFromDocker']>[0];
     type FindByLabelsResult = Awaited<ReturnType<Adapter['findContainersByLabels']>>;
     const list: FindByLabelsResult = [{ id: cid }];
     type DockerLike = ReturnType<Adapter['getDocker']>;
@@ -79,7 +79,7 @@ describe('ContainerRegistryService backfill last_used behavior', () => {
     const col = client.db('test').collection('containers');
     const cid = 'new-1';
     const now = Date.now();
-    type Adapter = Parameters<ContainerRegistryService['backfillFromDocker']>[0];
+    type Adapter = Parameters<ContainerRegistry['backfillFromDocker']>[0];
     type FindByLabelsResult = Awaited<ReturnType<Adapter['findContainersByLabels']>>;
     const list: FindByLabelsResult = [{ id: cid }];
     type DockerLike = ReturnType<Adapter['getDocker']>;
@@ -128,7 +128,7 @@ describe('ContainerRegistryService backfill last_used behavior', () => {
       metadata: { ttlSeconds: 600, labels: { 'hautech.ai/role': 'workspace' } },
     });
 
-    type Adapter = Parameters<ContainerRegistryService['backfillFromDocker']>[0];
+    type Adapter = Parameters<ContainerRegistry['backfillFromDocker']>[0];
     type FindByLabelsResult = Awaited<ReturnType<Adapter['findContainersByLabels']>>;
     const list: FindByLabelsResult = [{ id: cid }];
     type DockerLike = ReturnType<Adapter['getDocker']>;

@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
-import { ContainerRegistryService } from '../infra/container/container.registry';
+import { ContainerRegistry } from '../src/infra/container/container.registry';
 import { LoggerService } from '../core/services/logger.service';
 
 describe('ContainerRegistryService', () => {
   let mongod: MongoMemoryServer;
   let client: MongoClient;
-  let registry: ContainerRegistryService;
+  let registry: ContainerRegistry;
   const logger = new LoggerService();
   let setupOk = true;
 
@@ -15,7 +15,7 @@ describe('ContainerRegistryService', () => {
     try {
       mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } });
       client = await MongoClient.connect(mongod.getUri());
-      registry = new ContainerRegistryService(client.db('test'), logger);
+      registry = new ContainerRegistry(client.db('test'), logger);
       await registry.ensureIndexes();
     } catch (e: unknown) {
       setupOk = false;
@@ -79,7 +79,7 @@ describe('ContainerRegistryService', () => {
   it('backfill is idempotent and only includes role=workspace', async () => {
     if (!setupOk) return;
     // Fake container service to emulate docker
-    type Adapter = Parameters<ContainerRegistryService['backfillFromDocker']>[0];
+    type Adapter = Parameters<ContainerRegistry['backfillFromDocker']>[0];
     const fake: Adapter = {
       findContainersByLabels: async (_labels: Record<string, string>, _opts?: { all?: boolean }) => [
         { id: 'w1' },

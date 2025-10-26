@@ -13,9 +13,9 @@ describe('templates: memory registration and agent memory port', () => {
       logger: {} as unknown as LoggerService,
       containerService: {} as unknown as ContainerService,
       configService: {} as unknown as ConfigService,
-      slackService: {} as unknown as any,
-      checkpointerService: {} as unknown as CheckpointerService,
       mongoService: { getDb: () => ({} as any) } as unknown as MongoService,
+      provisioner: {} as any,
+      moduleRef: {} as any,
     };
 
     const reg = buildTemplateRegistry(deps);
@@ -58,11 +58,8 @@ describe('templates: memory registration and agent memory port', () => {
     expect(memToolPorts).toBeTruthy();
     expect(memToolPorts?.targetPorts).toEqual(expect.arrayContaining(['$self','$memory']));
 
-    // memoryTool exposes node-level static config schema with name/description/title
-    const memToolSchema = entry?.staticConfigSchema as any;
-    expect(memToolSchema?.type).toBe('object');
-    const propKeys = Object.keys(memToolSchema?.properties || {});
-    expect(propKeys).toEqual(expect.arrayContaining(['name','description','title']));
+    // palette no longer surfaces staticConfigSchema or capabilities
+    expect((entry as any)?.staticConfigSchema).toBeUndefined();
 
     const agentTargets = agentSchema?.targetPorts || [];
     expect(agentTargets).toContain('memory');

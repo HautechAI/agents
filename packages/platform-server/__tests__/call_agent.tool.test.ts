@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AIMessage } from '@langchain/core/messages';
-import { CallAgentTool } from '../src/tools/call_agent.tool';
+import { CallAgentTool } from '../src/nodes/tools/call_agent/call_agent.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { BaseAgent } from '../src/nodes/agent/agent.node';
 import { DynamicStructuredTool } from '@langchain/core/tools';
