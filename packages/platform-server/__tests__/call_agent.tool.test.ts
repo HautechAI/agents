@@ -5,6 +5,7 @@ import { LoggerService } from '../src/core/services/logger.service.js';
 import { BaseAgent } from '../src/nodes/agent/agent.node';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
+import type { ModuleRef } from '@nestjs/core';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -163,7 +164,8 @@ describe('CallAgentTool graph wiring', () => {
     class FakeAgent2 extends FakeAgent {}
 
     // Minimal TemplateRegistry with agent and callAgentTool
-    const registry = new TemplateRegistry();
+    const moduleRef = { create: (Cls: any) => new Cls() } as ModuleRef;
+    const registry = new TemplateRegistry(moduleRef as unknown as any);
     class FakeAgentWithTools extends FakeAgent2 {
       addTool(_tool: unknown) {}
       removeTool(_tool: unknown) {}
@@ -174,7 +176,7 @@ describe('CallAgentTool graph wiring', () => {
       .register('callAgentTool', { title: 'Call agent', kind: 'tool' }, (() => new CallAgentTool(logger)) as any);
 
     class StubRepo2 extends GraphRepository { async initIfNeeded(): Promise<void> {} async get(): Promise<any> { return null; } async upsert(): Promise<any> { throw new Error('not-implemented'); } async upsertNodeState(): Promise<void> {} }
-    const runtime = new LiveGraphRuntime(logger, registry, new StubRepo2(), { create: (Cls: any) => new Cls() } as any);
+    const runtime = new LiveGraphRuntime(logger, registry as any, new StubRepo2(), { create: (Cls: any) => new Cls() } as any);
 
     const graph = {
       nodes: [

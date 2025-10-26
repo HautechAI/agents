@@ -5,6 +5,7 @@ import { BaseAgent } from '../src/nodes/agent/agent.node';
 import { ManageTool } from '../src/tools/manage.tool';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
+import type { ModuleRef } from '@nestjs/core';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 
 type Msg = { content: string; info: Record<string, unknown> };
@@ -136,13 +137,19 @@ describe('ManageTool graph wiring', () => {
     const logger = new LoggerService();
     class FakeAgent2 extends FakeAgent {}
     class FakeAgentWithTools extends FakeAgent2 { addTool(_: unknown) {}; removeTool(_: unknown) {} }
-    const registry = new TemplateRegistry();
+    const moduleRef = { create: (Cls: any) => new Cls() } as ModuleRef;
+    const registry = new TemplateRegistry(moduleRef);
 
     registry
       .register('agent', { title: 'Agent', kind: 'agent' }, (() => new FakeAgentWithTools(logger) as any) as any)
       .register('manageTool', { title: 'Manage', kind: 'tool' }, (() => new ManageTool(logger)) as any);
 
-    const runtime = new LiveGraphRuntime(logger, registry as any, { initIfNeeded: async()=>{}, get: async()=>null, upsert: async()=>{ throw new Error('not-implemented'); }, upsertNodeState: async()=>{} } as any, { create: (Cls: any) => new Cls() } as any);
+    const runtime = new LiveGraphRuntime(
+      logger,
+      registry as any,
+      { initIfNeeded: async () => {}, get: async () => null, upsert: async () => { throw new Error('not-implemented'); }, upsertNodeState: async () => {} } as any,
+      { create: (Cls: any) => new Cls() } as any,
+    );
     const graph = {
       nodes: [
         { id: 'A', data: { template: 'agent', config: {} } },

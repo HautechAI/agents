@@ -5,6 +5,11 @@ import Node from '../nodes/base/Node';
 import type { Constructor } from 'type-fest';
 import { ModuleRef } from '@nestjs/core';
 
+// Minimal interface required from Nest ModuleRef for our usage (creation only)
+export interface ModuleRefLike {
+  create<T>(type: new (...args: never[]) => T): Promise<T> | T;
+}
+
 export interface TemplateMeta {
   title: string;
   kind: TemplateKind;
@@ -17,7 +22,7 @@ export class TemplateRegistry {
   private classes = new Map<string, TemplateCtor>();
   private meta = new Map<string, TemplateMeta>();
 
-  constructor(@Inject(ModuleRef) private readonly moduleRef: ModuleRef) {}
+  constructor(@Inject(ModuleRef) private readonly moduleRef: ModuleRefLike) {}
 
   // Register associates template -> node class and meta (ports are read from instance via getPortConfig)
   register(template: string, meta: TemplateMeta, nodeClass: TemplateCtor): this {
@@ -45,19 +50,19 @@ export class TemplateRegistry {
         const cls = this.classes.get(name)!;
         let inst: Node | undefined;
         try {
-          inst = this.moduleRef.get<Node>(cls, { strict: false });
+          inst = await this.moduleRef.create<Node>(cls);
         } catch {
-          // Do not fallback to non-DI instantiation; ports discovery requires DI-only
+          // If DI creation fails, safely continue with empty ports
         }
-        if (inst && typeof (inst as Node).getPortConfig === 'function') {
-          const cfg = (inst.getPortConfig?.() || {}) as TemplatePortConfig;
-          sourcePorts = cfg?.sourcePorts ? Object.keys(cfg.sourcePorts) : [];
-          targetPorts = cfg?.targetPorts ? Object.keys(cfg.targetPorts) : [];
+        if (inst) {
+          const cfg: TemplatePortConfig = inst.getPortConfig();
+          sourcePorts = cfg.sourcePorts ? Object.keys(cfg.sourcePorts) : [];
+          targetPorts = cfg.targetPorts ? Object.keys(cfg.targetPorts) : [];
         }
       } catch {
         // ignore instance creation errors for schema generation; fall back to no ports
       }
-      const meta = this.meta.get(name) ?? { title: name, kind: 'tool' as TemplateKind };
+      const meta: TemplateMeta = this.meta.get(name) ?? { title: name, kind: 'tool' };
       schemas.push({
         name,
         title: meta.title,
