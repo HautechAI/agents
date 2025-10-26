@@ -26,7 +26,7 @@ async function main() {
   await withAgent({ threadId: 'demo-thread', agentName: 'demo-agent' }, async () => {
       // Loop 1: existing rich context -> tool
       const weatherToolCallId1 = 'tc_weather_1';
-      const richContext: any[] = [
+      const richContext = [
         { role: 'system', content: 'You are a helpful assistant specializing in weather and reminders.' },
         { role: 'human', content: 'Hi assistant!' },
         { role: 'ai', content: 'Hello! How can I help you today?' },
@@ -86,7 +86,9 @@ async function main() {
         const resp = new LLMResponse({
           raw,
           content: 'I will look up the weather for NYC including Brooklyn details.',
-          toolCalls: [{ id: weatherToolCallId1, name: 'weather', arguments: { city: 'NYC' } }],
+          toolCalls: [
+            { type: 'function_call', call_id: weatherToolCallId1, name: 'weather', arguments: JSON.stringify({ city: 'NYC' }) } as any,
+          ],
         });
         llmResult1Content = resp.content;
         return resp;
@@ -124,11 +126,7 @@ async function main() {
             raw: { text: 'Computing advisories.' },
             content: 'Based on current conditions I will compute advisory.',
             toolCalls: [
-              {
-                id: advisoryToolCallId,
-                name: 'advisory',
-                arguments: { tempC: weather1.tempC, humidity: weather1.humidity },
-              },
+              { type: 'function_call', call_id: advisoryToolCallId, name: 'advisory', arguments: JSON.stringify({ tempC: weather1.tempC, humidity: weather1.humidity }) } as any,
             ],
           });
           llmResult2Content = resp.content;
@@ -163,11 +161,7 @@ async function main() {
               raw: { text: 'About to invoke failing tool.' },
               content: 'Attempting failing tool call now.',
               toolCalls: [
-                {
-                  id: failingToolCallId,
-                  name: 'unstable_tool',
-                  arguments: { simulate: 'failure' },
-                },
+                { type: 'function_call', call_id: failingToolCallId, name: 'unstable_tool', arguments: JSON.stringify({ simulate: 'failure' }) } as any,
               ],
             });
           },
@@ -203,11 +197,7 @@ async function main() {
             raw: { text: 'Preparing explicit error tool call' },
             content: 'Calling checker tool which will return an error structure.',
             toolCalls: [
-              {
-                id: explicitErrorToolCallId,
-                name: 'checker',
-                arguments: { mode: 'validate', payloadSize: 0 },
-              },
+              { type: 'function_call', call_id: explicitErrorToolCallId, name: 'checker', arguments: JSON.stringify({ mode: 'validate', payloadSize: 0 }) } as any,
             ],
           }),
       );
