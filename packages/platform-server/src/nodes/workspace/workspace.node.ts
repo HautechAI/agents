@@ -8,7 +8,7 @@ import { ConfigService } from '../../core/services/config.service';
 import { NcpsKeyService } from '../../infra/ncps/ncpsKey.service';
 import { EnvService, type EnvItem } from '../../graph/env.service';
 import { LoggerService } from '../../core/services/logger.service';
-import { Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
@@ -98,9 +98,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
 
   private envService: EnvService;
   constructor(
-    private containerService: ContainerService,
-    private configService?: ConfigService,
-    private ncpsKeyService?: NcpsKeyService,
+    @Inject(ContainerService) private containerService: ContainerService,
+    @Inject(ConfigService) private configService?: ConfigService,
+    @Inject(NcpsKeyService) private ncpsKeyService?: NcpsKeyService,
   ) {
     super();
     this.opts = {} as any;
