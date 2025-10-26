@@ -8,7 +8,7 @@ import { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { GraphDefinition } from '../src/graph/types';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { MemoryService } from '../src/nodes/memory.repository';
-import { CallModelNode } from '../src/lgnodes/callModel.lgnode';
+// Updated tests should not use legacy lgnodes; adjust to reducers/AgentNode patterns if needed.
 import { BaseTool } from '../src/tools/base.tool';
 
 // Fake LLM: replace ChatOpenAI to avoid network and capture messages

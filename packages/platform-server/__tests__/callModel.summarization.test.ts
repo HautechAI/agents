@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
-import { CallModelNode } from '../src/lgnodes/callModel.lgnode';
+import { CallModelLLMReducer } from '../src/llm/reducers/callModel.llm.reducer';
+import { SummarizationLLMReducer } from '../src/llm/reducers/summarization.llm.reducer';
 
 // Mock OpenAI LLM to avoid network
 vi.mock('@langchain/openai', () => {
@@ -13,22 +14,20 @@ vi.mock('@langchain/openai', () => {
   return { ChatOpenAI: MockChatOpenAI } as any;
 });
 
-describe('CallModelNode behavior', () => {
+describe('CallModel reducers behavior', () => {
   it('invokes LLM using provided messages and system prompt', async () => {
-    const fakeLLM: any = { withConfig: () => ({ invoke: async () => new AIMessage('ok') }) };
-    const node = new CallModelNode([], fakeLLM);
-    node.setSystemPrompt('SYS');
-    const state = { messages: [new HumanMessage('a')], summary: 'sum' };
-    const res = await node.action(state as any, {} as any);
-  expect(res.messages?.items.length).toBe(1);
+    const reducer = new CallModelLLMReducer(new LoggerService() as any);
+    const state = { messages: [new HumanMessage('a')], summary: 'sum' } as any;
+    const ctx = { callerAgent: { config: { systemPrompt: 'SYS' } } } as any;
+    const res = await reducer.invoke(state, ctx);
+    expect(res.messages.at(-1)).toBeInstanceOf(AIMessage);
   });
 
   it('without summary in state, still returns one AI message', async () => {
-    const fakeLLM: any = { withConfig: () => ({ invoke: async () => new AIMessage('ok') }) };
-    const node = new CallModelNode([], fakeLLM);
-    node.setSystemPrompt('SYS');
-    const state = { messages: [new HumanMessage('a')] };
-    const res = await node.action(state as any, {} as any);
-  expect(res.messages?.items.length).toBe(1);
+    const reducer = new CallModelLLMReducer(new LoggerService() as any);
+    const state = { messages: [new HumanMessage('a')] } as any;
+    const ctx = { callerAgent: { config: { systemPrompt: 'SYS' } } } as any;
+    const res = await reducer.invoke(state, ctx);
+    expect(res.messages.at(-1)).toBeInstanceOf(AIMessage);
   });
 });
