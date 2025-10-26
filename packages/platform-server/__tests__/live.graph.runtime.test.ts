@@ -40,7 +40,7 @@ const makeRuntime = () => {
     .register('A', { title: 'A', kind: 'service' as any }, A as any)
     .register('B', { title: 'B', kind: 'service' as any }, B as any);
   class StubRepo extends GraphRepository { async initIfNeeded(): Promise<void> {} async get(): Promise<any> { return null; } async upsert(): Promise<any> { throw new Error('not-implemented'); } async upsertNodeState(): Promise<void> {} }
-  const runtime = new LiveGraphRuntime(new LoggerService(), templates, new StubRepo());
+  const runtime = new LiveGraphRuntime(new LoggerService(), templates, new StubRepo(), { create: (Cls: any) => new Cls() } as any);
   return runtime;
 };
 

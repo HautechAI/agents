@@ -17,13 +17,16 @@ describe('CallAgentTool configurable name', () => {
     await toolDocs.setConfig({ description: 'docs', name: 'call_agent_docs' });
     toolDocs.setAgent(new FakeAgent() as any);
     const dynDocs = toolDocs.init({ nodeId: 'call-agent-1' });
+    expect(dynDocs).toBeTruthy();
+    expect(dynDocs.name).toBeDefined();
+    expect(dynDocs.name).toBe('call_agent_docs');
 
     const toolOps = new CallAgentTool(logger);
     await toolOps.setConfig({ description: 'ops', name: 'call_agent_ops' });
     toolOps.setAgent(new FakeAgent() as any);
     const dynOps = toolOps.init({ nodeId: 'call-agent-2' });
-
-    expect(dynDocs.name).toBe('call_agent_docs');
+    expect(dynOps).toBeTruthy();
+    expect(dynOps.name).toBeDefined();
     expect(dynOps.name).toBe('call_agent_ops');
 
     const out1 = await dynDocs.invoke({ input: 'x', childThreadId: 'docs' }, { configurable: { thread_id: 'p' } } as any);
