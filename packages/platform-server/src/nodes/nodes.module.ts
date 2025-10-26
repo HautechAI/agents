@@ -59,12 +59,6 @@ import { ShellCommandNode } from './tools/shell_command/shell_command.node';
     ShellCommandNode,
     GithubCloneRepoNode,
     RemindMeNode,
-    {
-      provide: 'NODES_REGISTER',
-      useFactory: () => {
-        throw new Error('NODES_REGISTER provider is deprecated');
-      },
-    },
   ],
   exports: [AgentRunService],
 })
