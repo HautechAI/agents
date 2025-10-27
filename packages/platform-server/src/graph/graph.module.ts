@@ -100,7 +100,6 @@ import { NodeStateService } from './nodeState.service';
     //         id: string;
     //         template: string;
     //         config?: Record<string, unknown>;
-    //         dynamicConfig?: Record<string, unknown>;
     //         state?: Record<string, unknown>;
     //       }>;
     //       edges: Array<{ source: string; sourceHandle: string; target: string; targetHandle: string }>;
@@ -108,7 +107,7 @@ import { NodeStateService } from './nodeState.service';
     //       ({
     //         nodes: saved.nodes.map((n) => ({
     //           id: n.id,
-    //           data: { template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, state: n.state },
+    //           data: { template: n.template, config: n.config, state: n.state },
     //         })),
     //         edges: saved.edges.map((e) => ({
     //           source: e.source,

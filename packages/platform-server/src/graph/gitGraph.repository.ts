@@ -243,7 +243,6 @@ export class GitGraphRepository extends GraphRepository {
       id: n.id,
       template: n.template,
       config: n.config,
-      dynamicConfig: n.dynamicConfig,
       state: n.state,
       position: n.position,
     };
