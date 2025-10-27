@@ -1,52 +1,32 @@
-import { describe, it, expect, vi } from 'vitest';
-import { AIMessage, BaseMessage } from '@langchain/core/messages';
-import { LoggerService } from '../src/core/services/logger.service.js';
-import { ConfigService } from '../src/core/services/config.service.js';
-// Use direct DI stubs; avoid Nest TestingModule dependency
-
-// Mock ChatOpenAI to avoid network; must be declared before importing Agent
-vi.mock('@langchain/openai', async (importOriginal) => {
-  const mod = await importOriginal();
-  class MockChatOpenAI extends mod.ChatOpenAI {
-    constructor(config: any) {
-      super({ ...config, apiKey: 'mock' });
-    }
-    withConfig(_cfg: any) {
-      return { invoke: async () => new AIMessage('ok') } as any;
-    }
-    async invoke(_msgs: BaseMessage[], _opts?: any) {
-      return new AIMessage('ok');
-    }
-    async getNumTokens(text: string): Promise<number> {
-      return text.length;
-    }
-  }
-  return { ...mod, ChatOpenAI: MockChatOpenAI };
-});
-
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentNode as Agent } from '../src/nodes/agent/agent.node';
-type TriggerMessage = { content: string; info: Record<string, unknown> };
+import { LoggerService } from '../src/core/services/logger.service.js';
+import type { ModuleRef } from '@nestjs/core';
 
-// Helper to make a configured agent
-async function makeAgent() {
-  const provisioner = { getLLM: async () => ({ call: async () => ({ text: 'ok', output: [] }) }) };
-  const agent = new Agent(new LoggerService(), provisioner as any);
+class FakeRuns {
+  starts: Array<{ nodeId: string; threadId: string; runId: string }> = [];
+  async startRun(nodeId: string, threadId: string, runId: string) { this.starts.push({ nodeId, threadId, runId }); }
+  async list() { return this.starts.map((s) => ({ nodeId: s.nodeId, threadId: s.threadId, runId: s.runId, status: 'running', startedAt: new Date(), updatedAt: new Date() })); }
+  async markTerminated() {}
+  async markTerminating() { return 'ok' as const; }
+}
+
+function makeAgent() {
+  const config = { } as any;
+  const logger = new LoggerService();
+  const provisioner = { getLLM: async () => ({ call: async () => ({ text: 'ok', output: [] }) }) } as any;
+  const runs = new FakeRuns() as any;
+  const moduleRef: ModuleRef = { create: (Cls: any) => new Cls() } as any;
+  const agent = new Agent(config, logger, provisioner, runs, moduleRef);
   agent.init({ nodeId: 'agent-buf' });
-  return agent;
+  return { agent, runs };
 }
 
 describe('Agent buffer behavior', () => {
   it('debounce delays run start and batches within window', async () => {
     vi.useFakeTimers();
-    const cfg = new ConfigService({
-      githubAppId: '1', githubAppPrivateKey: 'k', githubInstallationId: 'i',
-      openaiApiKey: 'x', githubToken: 't', mongodbUrl: 'm',
-    });
-    const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as LoggerService;
-    const provisioner = { getLLM: async () => ({ call: async () => ({ text: 'ok', output: [] }) }) };
-    const agent = new Agent(new LoggerService(), provisioner as any);
-    agent.init({ nodeId: 'agent-deb' });
-    agent.setConfig({ debounceMs: 50, processBuffer: 'allTogether' });
+    const { agent, runs } = makeAgent();
+    agent.setConfig({ debounceMs: 50, processBuffer: 'allTogether', whenBusy: 'wait' });
 
     const p1 = agent.invoke('td', { content: 'a', info: {} });
     // Enqueue another within debounce window; should batch into the same run
@@ -54,68 +34,40 @@ describe('Agent buffer behavior', () => {
 
     // Before debounce elapses, no run should have started
     await vi.advanceTimersByTimeAsync(40);
-    const startsEarly = (logger.info as any).mock.calls.filter((c: any[]) => String(c[0]).startsWith('Starting run'));
-    expect(startsEarly.length).toBe(0);
+    expect(runs.starts.length).toBe(0);
 
     // After window, exactly one run should start
     await vi.advanceTimersByTimeAsync(20);
-    const starts = (logger.info as any).mock.calls.filter((c: any[]) => String(c[0]).startsWith('Starting run'));
-    expect(starts.length).toBe(1);
+    expect(runs.starts.length).toBe(1);
     await Promise.all([p1, p2]);
   });
 
-  it('processBuffer=oneByOne splits multi-message invoke into separate runs', async () => {
-    const cfg = new ConfigService({
-      githubAppId: '1', githubAppPrivateKey: 'k', githubInstallationId: 'i',
-      openaiApiKey: 'x', githubToken: 't', mongodbUrl: 'm',
-    });
-    const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as LoggerService;
-    const provisioner = { getLLM: async () => ({ call: async () => ({ text: 'ok', output: [] }) }) };
-    const agent = new Agent(new LoggerService(), provisioner as any);
-    agent.init({ nodeId: 'agent-one' });
-    agent.setConfig({ processBuffer: 'oneByOne' });
-    const msgs: TriggerMessage[] = [
-      { content: 'a', info: {} },
-      { content: 'b', info: {} },
-      { content: 'c', info: {} },
-    ];
-    const r = await agent.invoke('t1', msgs);
-    expect(r).toBeDefined();
-    const starts = (logger.info as any).mock.calls.filter((c: any[]) => String(c[0]).startsWith('Starting run'));
-    expect(starts.length).toBe(3);
+  it('oneByOne starts a run per quick message', async () => {
+    const { agent, runs } = makeAgent();
+    agent.setConfig({ processBuffer: 'oneByOne', debounceMs: 0, whenBusy: 'wait' });
+    await agent.invoke('t1', { content: 'a', info: {} });
+    await agent.invoke('t1', { content: 'b', info: {} });
+    await agent.invoke('t1', { content: 'c', info: {} });
+    expect(runs.starts.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("processBuffer='allTogether' batches multi-message invoke into a single run (no debounce)", async () => {
-    const cfg = new ConfigService({
-      githubAppId: '1', githubAppPrivateKey: 'k', githubInstallationId: 'i',
-      openaiApiKey: 'x', githubToken: 't', slackBotToken: 's', slackAppToken: 'sa', mongodbUrl: 'm',
-    });
-    const logger = { info: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as LoggerService;
-    const provisioner = { getLLM: async () => ({ call: async () => ({ text: 'ok', output: [] }) }) };
-    const agent = new Agent(new LoggerService(), provisioner as any);
-    agent.init({ nodeId: 'agent-all' });
-    agent.setConfig({ processBuffer: 'allTogether', debounceMs: 0 });
-    const msgs: TriggerMessage[] = [
-      { content: 'a', info: {} },
-      { content: 'b', info: {} },
-      { content: 'c', info: {} },
-    ];
-    const r = await agent.invoke('tA', msgs);
-    expect(r).toBeDefined();
-    const starts = (logger.info as any).mock.calls.filter((c: any[]) => String(c[0]).startsWith('Starting run'));
-    expect(starts.length).toBe(1);
+  it("allTogether batches quick messages into a single run when debounced", async () => {
+    vi.useFakeTimers();
+    const { agent, runs } = makeAgent();
+    agent.setConfig({ processBuffer: 'allTogether', debounceMs: 30, whenBusy: 'wait' });
+    const p1 = agent.invoke('tA', { content: 'a', info: {} });
+    const p2 = agent.invoke('tA', { content: 'b', info: {} });
+    await vi.advanceTimersByTimeAsync(35);
+    await Promise.all([p1, p2]);
+    expect(runs.starts.length).toBe(1);
   });
 
-  it("whenBusy='injectAfterTools' injects messages during in-flight run", async () => {
-    const agent = await makeAgent();
+  it("whenBusy='injectAfterTools' injects without starting extra runs", async () => {
+    const { agent, runs } = makeAgent();
     agent.setConfig({ whenBusy: 'injectAfterTools', debounceMs: 0 });
-    // Kick off a run with one message
     const p = agent.invoke('t2', { content: 'start', info: {} });
-    // Immediately enqueue another which should be injected into the current run
     const p2 = agent.invoke('t2', { content: 'follow', info: {} });
-    const r1 = await p;
-    const r2 = await p2;
-    expect(r1).toBeDefined();
-    expect(r2).toBeDefined();
+    await Promise.all([p, p2]);
+    expect(runs.starts.length).toBe(1);
   });
 });

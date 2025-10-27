@@ -208,13 +208,31 @@ export class AgentNode extends Node<AgentStaticConfig> {
       );
 
     // call_tools -> tools_save (static)
-    reducers['call_tools'] = (await this.moduleRef.create(CallToolsLLMReducer))
-      .init({ tools })
-      .next((await this.moduleRef.create(StaticLLMRouter)).init('tools_save'));
+    const callTools = await this.moduleRef.create(CallToolsLLMReducer);
+    await callTools.init({ tools });
+    // Inject queued messages at boundary whenBusy=injectAfterTools
+    const toolsRouter = await this.moduleRef.create(StaticLLMRouter);
+    toolsRouter.init('tools_save');
+    callTools.next(toolsRouter);
     // tools_save -> summarize (static)
-    reducers['tools_save'] = (await this.moduleRef.create(SaveLLMReducer)).next(
-      (await this.moduleRef.create(StaticLLMRouter)).init('summarize'),
-    );
+    const toolsSave = await this.moduleRef.create(SaveLLMReducer);
+    const toSummarize = await this.moduleRef.create(StaticLLMRouter);
+    toSummarize.init('summarize');
+    // Wrap tools_save to inject after-tools messages into state before summarization
+    toolsSave.next({
+      async route(state, ctx) {
+        if ((this as any).agent?.config?.whenBusy === 'injectAfterTools') {
+          const drained = (this as any).agent?.buffer?.tryDrain(ctx.threadId, ProcessBuffer.AllTogether) || [];
+          if (drained.length > 0) {
+            const injected = drained.map((d) => HumanMessage.fromText(JSON.stringify(d)));
+            state = { ...state, messages: [...state.messages, ...injected] };
+          }
+        }
+        return { state, next: 'summarize' };
+      },
+      hasNext() { return true; },
+      getNextRouter() { return toSummarize; },
+    } as any);
 
     // save -> enforceTools (if enabled) or end (static)
     reducers['save'] = (await this.moduleRef.create(SaveLLMReducer)).next(
