@@ -249,7 +249,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
       ? messages
       : [messages];
     this.buffer.setDebounceMs(this.config.debounceMs ?? 0);
-    this.buffer.enqueue(thread, incoming.map((m) => ({ kind: 'human', content: m.content, info: m.info })) as any);
+    this.buffer.enqueue(thread, incoming.map((m) => ({ kind: 'human', content: m.content, info: m.info })));
     // Generate run id for persistence
     const runId = `${thread}/${Date.now()}`;
     await this.runs.startRun(this.nodeId, thread, runId);
@@ -260,9 +260,9 @@ export class AgentNode extends Node<AgentStaticConfig> {
         const loop = await this.prepareLoop();
         // Drain buffer per config
         const mode = (this.config.processBuffer ?? 'allTogether') === 'allTogether' ? 'allTogether' : 'oneByOne';
-        const drained = this.buffer.tryDrain(thread, mode === 'allTogether' ? (0 as any) : (1 as any));
-        const toProcess = drained.length > 0 ? drained : incoming.map((msg) => ({ kind: 'human', content: msg.content, info: msg.info })) as any;
-        const history: HumanMessage[] = (toProcess as any[]).map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
+        const drained = this.buffer.tryDrain(thread, mode === 'allTogether' ? ProcessBuffer.AllTogether : ProcessBuffer.OneByOne);
+        const toProcess = drained.length > 0 ? drained : incoming.map((msg) => ({ kind: 'human', content: msg.content, info: msg.info }));
+        const history: HumanMessage[] = toProcess.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
         const finishSignal = new Signal();
 
         const newState = await loop.invoke(
@@ -293,7 +293,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
   async terminateRun(thread: string, runId?: string): Promise<'terminated' | 'not_running' | 'queued_canceled'> {
     // Cancel queued items
-    const queuedBefore = this.buffer.tryDrain(thread, 'allTogether' as any);
+    const queuedBefore = this.buffer.tryDrain(thread, ProcessBuffer.AllTogether);
     if (queuedBefore.length > 0) {
       this.buffer.clearThread(thread);
       return 'queued_canceled';

@@ -492,7 +492,7 @@ export class LocalMCPServer extends Node<z.infer<typeof LocalMcpServerStaticConf
 
       // Call the tool
       const argObj: Record<string, unknown> = args && typeof args === 'object' ? (args as Record<string, unknown>) : {};
-      const result: any = await client.callTool({ name, arguments: argObj }, undefined, {
+      const result = await client.callTool({ name, arguments: argObj }, undefined, {
         timeout: options?.timeoutMs ?? cfg.requestTimeoutMs ?? 30000,
       });
 

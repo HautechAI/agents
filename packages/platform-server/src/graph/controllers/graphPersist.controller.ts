@@ -15,7 +15,7 @@ import { GraphErrorCode } from '../errors';
 import { GraphGuard } from '../graph.guard';
 
 // Helper to convert persisted graph to runtime GraphDefinition (mirrors src/index.ts)
-const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition => {
+const toRuntimeGraph = (saved: { nodes: Array<{ id: string; template: string; config?: Record<string, unknown>; state?: Record<string, unknown> }>; edges: Array<{ source: string; sourceHandle: string; target: string; targetHandle: string }> }): GraphDefinition => {
   return {
     nodes: saved.nodes.map((n) => ({
       id: n.id,

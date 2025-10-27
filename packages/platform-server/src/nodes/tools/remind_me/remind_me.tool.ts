@@ -59,7 +59,7 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
       if (!exists) return;
       this.active.delete(id);
       try {
-        await ctx.callerAgent.invoke(parentThreadId, [{ kind: 'system', content: note } as any]);
+        await ctx.callerAgent.invoke(parentThreadId, [{ kind: 'human', content: note }]);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : JSON.stringify(e);
         logger.error('RemindMe scheduled invoke error', msg);
