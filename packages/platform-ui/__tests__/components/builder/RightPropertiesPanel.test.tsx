@@ -9,7 +9,7 @@ function makeNode(template: string, id = 'n1') {
     id,
     type: template,
     position: { x: 0, y: 0 },
-    data: { template, name: template, config: {}, dynamicConfig: {} },
+    data: { template, name: template, config: {}, state: {} },
     dragHandle: '.drag-handle',
     selected: true,
   } as any;

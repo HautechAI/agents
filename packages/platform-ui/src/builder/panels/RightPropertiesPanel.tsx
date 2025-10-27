@@ -9,7 +9,7 @@ import { useTemplatesCache } from '@/lib/graph/templates.provider';
 import { NodeStatusBadges } from '@/components/graph/NodeStatusBadges';
 import { NodeActionButtons } from '@/components/graph/NodeActionButtons';
 import { useNodeAction, useNodeStatus } from '@/lib/graph/hooks';
-import { canPause, canProvision } from '@/lib/graph/capabilities';
+import { canProvision } from '@/lib/graph/capabilities';
 import { NixPackagesSection } from '@/components/nix/NixPackagesSection';
 import { getConfigView } from '@/components/configViews/registry';
 // Registry is initialized once in main.tsx via initConfigViewsRegistry()
@@ -18,7 +18,7 @@ interface BuilderPanelNodeData {
   template: string;
   name?: string;
   config?: Record<string, unknown>;
-  dynamicConfig?: Record<string, unknown>;
+  state?: Record<string, unknown>;
 }
 interface Props {
   node: Node<BuilderPanelNodeData> | null;
@@ -47,21 +47,21 @@ function RightPropertiesPanelBody({
   // Derive readOnly/disabled from runtime status where applicable
   const { data: status } = useNodeStatus(node.id);
   const tpl = templates.find((t: TemplateNodeSchema) => t.name === data.template);
-  const cfg = (data.config || {}) as Record<string, unknown>;
-  const dynamicConfig = (data.dynamicConfig || {}) as Record<string, unknown>;
+  const cfg = useMemo(() => (data.config || {}) as Record<string, unknown>, [data.config]);
+  const nodeState = useMemo(() => (data.state || {}) as Record<string, unknown>, [data.state]);
   // No-op guard: only forward updates when they change values
   const update = useCallback(
     (patch: Partial<BuilderPanelNodeData>) => {
       const nextConfig = (patch.config ?? cfg) as Record<string, unknown>;
-      const nextDyn = (patch.dynamicConfig ?? dynamicConfig) as Record<string, unknown>;
+      const nextState = (patch.state ?? nodeState) as Record<string, unknown>;
       const sameConfig = JSON.stringify(cfg) === JSON.stringify(nextConfig);
-      const sameDyn = JSON.stringify(dynamicConfig) === JSON.stringify(nextDyn);
+      const sameState = JSON.stringify(nodeState) === JSON.stringify(nextState);
       const sameName = patch.name === undefined || patch.name === data.name;
       const sameTemplate = patch.template === undefined || patch.template === data.template;
-      if (sameConfig && sameDyn && sameName && sameTemplate) return; // no-op
+      if (sameConfig && sameState && sameName && sameTemplate) return; // no-op
       onChange(node.id, patch);
     },
-    [cfg, dynamicConfig, data.name, data.template, node.id, onChange],
+    [cfg, nodeState, data.name, data.template, node.id, onChange],
   );
 
   const runtimeTemplate = runtimeTemplates.getTemplate(data.template);
@@ -76,7 +76,6 @@ function RightPropertiesPanelBody({
     const action = useNodeAction(nodeId);
     const { getTemplate } = useTemplatesCache();
     const tmpl = getTemplate(templateName);
-    const pausable = false; // Pause/resume removed per server alignment
     const provisionable = tmpl ? canProvision(tmpl) : true;
     // Show block whenever lifecycle-managed kinds or provision status exists (parent gate handles kinds)
     const state = status?.provisionStatus?.state ?? 'not_ready';
@@ -85,8 +84,6 @@ function RightPropertiesPanelBody({
     const disableAll = state === 'deprovisioning';
     const canStart = provisionable && ['not_ready', 'error', 'provisioning_error', 'deprovisioning_error'].includes(state) && !disableAll;
     const canStop = provisionable && (state === 'ready' || state === 'provisioning') && !disableAll;
-    const canPauseBtn = false;
-    const canResumeBtn = false;
     return (
       <div className="space-y-3 text-xs">
         <NodeStatusBadges state={state} isPaused={isPaused} detail={detail} />
@@ -95,12 +92,8 @@ function RightPropertiesPanelBody({
           pausable={false}
           canStart={canStart}
           canStop={canStop}
-          canPauseBtn={false}
-          canResumeBtn={false}
           onStart={() => action.mutate('provision')}
           onStop={() => action.mutate('deprovision')}
-          onPause={() => {}}
-          onResume={() => {}}
         />
       </div>
     );
@@ -153,19 +146,19 @@ function RightPropertiesPanelBody({
         )}
       </div>
       <div className="space-y-2">
-        <div className="text-[10px] uppercase text-muted-foreground">Dynamic Configuration</div>
+        <div className="text-[10px] uppercase text-muted-foreground">Node State</div>
         {DynamicView ? (
           <DynamicView
             key={`dynamic-${node.id}`}
             nodeId={node.id}
             templateName={data.template}
-            value={dynamicConfig}
-            onChange={(next) => update({ dynamicConfig: next })}
+            value={nodeState}
+            onChange={(next) => update({ state: next })}
             readOnly={readOnly}
             disabled={!!disableAll}
           />
         ) : (
-          <div className="text-xs text-muted-foreground">No custom view registered for {data.template} (dynamic)</div>
+          <div className="text-xs text-muted-foreground">No custom view registered for {data.template} (state)</div>
         )}
       </div>
       {data.template === 'containerProvider' && (

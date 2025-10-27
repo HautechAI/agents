@@ -13,8 +13,6 @@ export default function NodeDetailsPanel({ nodeId, templateName }: Props) {
 
   // Default to not_ready (tests expect this baseline) until first fetch resolves
   const provisionState = status?.provisionStatus?.state || 'not_ready';
-  const isReady = provisionState === 'ready';
-  const isPaused = !!status?.isPaused;
   const canStart = ['not_ready', 'error', 'provisioning_error', 'deprovisioning_error'].includes(provisionState);
   const canStop = ['ready', 'provisioning'].includes(provisionState);
 

@@ -20,7 +20,7 @@ interface BuilderNodeData {
   template: string;
   name?: string;
   config?: Record<string, unknown>;
-  dynamicConfig?: Record<string, unknown>;
+  // dynamicConfig removed; use state at runtime
 }
 export type BuilderNode = Node<BuilderNodeData>;
 
@@ -74,7 +74,7 @@ export function useBuilderState(serverBase = getApiBase(), options?: BuilderOpti
           id: n.id,
           type: n.template, // reactflow node type equals template name for now
           position: n.position || { x: Math.random() * 400, y: Math.random() * 300 },
-          data: { template: n.template, name: n.template, config: n.config, dynamicConfig: n.dynamicConfig },
+          data: { template: n.template, name: n.template, config: n.config, state: n.state },
           dragHandle: '.drag-handle',
         }));
         const rfEdges: Edge[] = graph.edges.map((e: PersistedGraph['edges'][number]) => ({
@@ -198,11 +198,11 @@ export function useBuilderState(serverBase = getApiBase(), options?: BuilderOpti
       const next = nds.map((n) => {
         if (n.id !== id) return n;
         const nextData: BuilderNodeData = { ...n.data, ...data } as BuilderNodeData;
-        // Guard no-op updates: shallow equal on template/name; deep-equal on config/dynamicConfig
+        // Guard no-op updates: shallow equal on template/name; deep-equal on config/state
         const sameTemplate = n.data.template === nextData.template;
         const sameName = n.data.name === nextData.name;
         const sameConfig = deepEqual(n.data.config, nextData.config);
-        const sameDynConfig = deepEqual(n.data.dynamicConfig, nextData.dynamicConfig);
+        const sameDynConfig = deepEqual(n.data.state, nextData.state);
         if (sameTemplate && sameName && sameConfig && sameDynConfig) {
           return n; // no-op
         }

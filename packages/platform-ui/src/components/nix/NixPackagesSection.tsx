@@ -69,7 +69,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
       for (const p of curr) if (p.version) next[p.name] = String(p.version);
       return next;
     });
-  }, [controlled, controlledValueKey, uncontrolledPkgsKey]);
+  }, [controlled, controlledValueKey, uncontrolledPkgsKey, props]);
 
   // Push updates into node config when selections/channels change
   useEffect(() => {
@@ -111,7 +111,7 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
         (props as UncontrolledProps).onUpdateConfig(next);
       }
     }
-  }, [selected, detailsByName, controlled, controlledValueKey, uncontrolledPkgsKey]);
+  }, [selected, detailsByName, controlled, controlledValueKey, uncontrolledPkgsKey, props]);
   const listboxRef = useRef<HTMLUListElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -285,14 +285,14 @@ function SelectedPackageItem({ pkg, chosen, onChoose, onRemove, onResolved }: { 
   });
 
   const label = pkg.name;
-  const versions = qVersions.data || [];
+  const versions = useMemo(() => qVersions.data || [], [qVersions.data]);
 
   // Optional: auto-select only when there is a single version available
   useEffect(() => {
     if (!chosen && versions.length === 1) {
       onChoose(versions[0]);
     }
-  }, [chosen, versions]);
+  }, [chosen, versions, onChoose]);
 
   // Resolve selected version -> commitHash/attributePath with cancellation to avoid races
   const resolveRef = useRef<AbortController | null>(null);

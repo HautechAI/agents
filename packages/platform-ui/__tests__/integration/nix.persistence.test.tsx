@@ -33,7 +33,7 @@ describe('Nix packages persistence in builder graph', () => {
       id: string;
       template: string;
       config?: { nix?: { packages?: { name: string; version: string; commitHash: string; attributePath: string }[] } } & Record<string, unknown>;
-      dynamicConfig?: Record<string, unknown>;
+      state?: Record<string, unknown>;
       position?: { x: number; y: number };
     }
     interface PostedGraphPayload {
@@ -54,13 +54,13 @@ describe('Nix packages persistence in builder graph', () => {
     // and renders the RightPropertiesPanel (avoids ReactFlow visibility quirks in JSDOM)
     function Harness() {
       const state = useBuilderState(undefined, { debounceMs: 200 });
-      useEffect(() => {
-        if (!state.loading && state.nodes.length > 0) {
-          const id = state.nodes[0].id;
-          const change: NodeSelectionChange = { id, type: 'select', selected: true };
-          state.onNodesChange([change]);
-        }
-      }, [state.loading, state.nodes.length]);
+  useEffect(() => {
+    if (!state.loading && state.nodes.length > 0) {
+      const id = state.nodes[0].id;
+      const change: NodeSelectionChange = { id, type: 'select', selected: true };
+      state.onNodesChange([change]);
+    }
+  }, [state, state.loading, state.nodes.length, state.onNodesChange]);
       return (
         <BuilderTemplatesProvider templates={state.templates}>
           <RightPropertiesPanel node={state.selectedNode} onChange={state.updateNodeData} />
