@@ -5,6 +5,7 @@ import { PersistedGraph, PersistedGraphEdge, PersistedGraphNode, PersistedGraphU
 import { validatePersistedGraph } from './graphSchema.validator';
 import { GraphRepository } from './graph.repository';
 import { ConfigService } from '../core/services/config.service';
+import { variableKeyRegex } from '../variables/variables.types';
 
 interface GraphDocument {
   _id: string; // name
@@ -40,6 +41,15 @@ export class MongoGraphRepository extends GraphRepository {
 
   async upsert(req: PersistedGraphUpsertRequest, _author?: { name?: string; email?: string }): Promise<PersistedGraphUpsertResponse> {
     validatePersistedGraph(req, await this.templateRegistry.toSchema());
+    // Validate variables uniqueness and key format here as well
+    if (req.variables?.items) {
+      const seen = new Set<string>();
+      for (const v of req.variables.items) {
+        if (seen.has(v.key)) throw new Error(`Duplicate variable key ${v.key}`);
+        seen.add(v.key);
+        if (!variableKeyRegex.test(v.key)) throw new Error(`Invalid variable key ${v.key}`);
+      }
+    }
     const now = new Date();
     const name = req.name;
     const existing = await this.collection!.findOne({ _id: name });
