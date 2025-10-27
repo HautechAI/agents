@@ -182,13 +182,21 @@ export class AgentNode extends Node<AgentStaticConfig> {
     reducers['summarize'] = summarize.next((await this.moduleRef.create(StaticLLMRouter)).init('call_model'));
 
     // call_model -> branch (call_tools | save)
-    reducers['call_model'] = (await this.moduleRef.create(CallModelLLMReducer))
-      .init({
-        llm,
-        model: this.config.model ?? 'gpt-5',
-        systemPrompt: this.config.systemPrompt ?? 'You are a helpful AI assistant.',
-        tools,
-      })
+    const callModel = await this.moduleRef.create(CallModelLLMReducer);
+    await callModel.init({
+      llm,
+      model: this.config.model ?? 'gpt-5',
+      systemPrompt: this.config.systemPrompt ?? 'You are a helpful AI assistant.',
+      tools,
+      memoryProvider: async (ctx, state) => {
+        if (!this.memoryConnector) return null;
+        const msg = await this.memoryConnector.renderMessage({ threadId: ctx.threadId });
+        if (!msg) return null;
+        const place = this.memoryConnector.getPlacement();
+        return { msg, place };
+      },
+    });
+    reducers['call_model'] = callModel
       .next(
         (await this.moduleRef.create(ConditionalLLMRouter)).init((state) => {
           const last = state.messages.at(-1);

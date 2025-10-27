@@ -62,18 +62,18 @@ export interface MethodEndpoint extends EndpointBase {
   type: 'method';
   key: string;
   fn: Function;
-  owner: any;  
+  owner: unknown;  
 }
 
 export interface PropertyEndpoint extends EndpointBase {
   type: 'property';
   key: string;
-  owner: any;  
+  owner: unknown;  
 }
 
 export interface SelfEndpoint extends EndpointBase {
   type: 'self';
-  owner: any;  
+  owner: unknown;  
 }
 
 export type Endpoint = MethodEndpoint | PropertyEndpoint | SelfEndpoint;
