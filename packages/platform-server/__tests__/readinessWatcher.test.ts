@@ -44,8 +44,8 @@ describe('ReadinessWatcher', () => {
     });
     const nodeId = 'n1';
     runtime.setSequence(nodeId, [
-      { provisionStatus: { state: 'starting' }, dynamicConfigReady: false },
-      { provisionStatus: { state: 'ready' }, dynamicConfigReady: false },
+      { provisionStatus: { state: 'starting' } },
+      { provisionStatus: { state: 'ready' } },
     ]);
 
     // Start twice immediately to verify debounce of concurrent watchers
@@ -68,9 +68,9 @@ describe('ReadinessWatcher', () => {
     });
     const nodeId = 'n2';
     runtime.setSequence(nodeId, [
-      { provisionStatus: { state: 'starting' }, dynamicConfigReady: false },
-      { provisionStatus: { state: 'starting' }, dynamicConfigReady: false },
-      { provisionStatus: { state: 'starting' }, dynamicConfigReady: false },
+      { provisionStatus: { state: 'starting' } },
+      { provisionStatus: { state: 'starting' } },
+      { provisionStatus: { state: 'starting' } },
     ]);
 
     watcher.start(nodeId);
@@ -88,8 +88,8 @@ describe('ReadinessWatcher', () => {
     });
     const nodeId = 'n3';
     runtime.setSequence(nodeId, [
-      { provisionStatus: { state: 'starting' }, dynamicConfigReady: false },
-      { provisionStatus: { state: 'starting' }, dynamicConfigReady: false },
+      { provisionStatus: { state: 'starting' } },
+      { provisionStatus: { state: 'starting' } },
     ]);
 
     watcher.start(nodeId);

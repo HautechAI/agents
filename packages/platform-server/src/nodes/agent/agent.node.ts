@@ -100,6 +100,7 @@ import type { RuntimeContext } from '../../graph/runtimeContext';
 import Node from '../base/Node';
 import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
 import { ModuleRef } from '@nestjs/core';
+import { AgentRunService } from '../agentRun.repository';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class AgentNode extends Node<AgentStaticConfig> {
@@ -112,6 +113,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     @Inject(ConfigService) protected configService: ConfigService,
     @Inject(LoggerService) protected logger: LoggerService,
     @Inject(LLMProvisioner) protected llmProvisioner: LLMProvisioner,
+    @Inject(AgentRunService) private readonly runs: AgentRunService,
     private readonly moduleRef: ModuleRef,
   ) {
     super();
@@ -234,14 +236,25 @@ export class AgentNode extends Node<AgentStaticConfig> {
       | Array<{ content: string; info?: Record<string, unknown> }>
       | { content: string; info?: Record<string, unknown> },
   ): Promise<ResponseMessage | ToolCallOutputMessage> {
+    // Buffering & run tracking: enqueue and drain respecting config
+    const incoming: Array<{ content: string; info?: Record<string, unknown> }> = Array.isArray(messages)
+      ? messages
+      : [messages];
+    this.buffer.setDebounceMs(this.config.debounceMs ?? 0);
+    this.buffer.enqueue(thread, incoming.map((m) => ({ kind: 'human', content: m.content, info: m.info })) as any);
+    // Generate run id for persistence
+    const runId = `${thread}/${Date.now()}`;
+    await this.runs.startRun(this.nodeId, thread, runId);
+
     return await withAgent(
       { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
       async () => {
         const loop = await this.prepareLoop();
-        const incoming: Array<{ content: string; info?: Record<string, unknown> }> = Array.isArray(messages)
-          ? messages
-          : [messages];
-        const history: HumanMessage[] = incoming.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
+        // Drain buffer per config
+        const mode = (this.config.processBuffer ?? 'allTogether') === 'allTogether' ? 'allTogether' : 'oneByOne';
+        const drained = this.buffer.tryDrain(thread, mode === 'allTogether' ? (0 as any) : (1 as any));
+        const toProcess = drained.length > 0 ? drained : incoming.map((msg) => ({ kind: 'human', content: msg.content, info: msg.info })) as any;
+        const history: HumanMessage[] = (toProcess as any[]).map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
         const finishSignal = new Signal();
 
         const newState = await loop.invoke(
@@ -254,6 +267,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
         if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
           this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
+          await this.runs.markTerminated(this.nodeId, runId);
           return result;
         }
 
@@ -262,11 +276,28 @@ export class AgentNode extends Node<AgentStaticConfig> {
     );
   }
 
-  public listActiveThreads(prefix?: string): string[] {
-    return [];
+  public async listActiveThreads(prefix?: string): Promise<string[]> {
+    const items = await this.runs.list(this.nodeId, 'all');
+    const ids = new Set<string>(items.map((i) => i.threadId));
+    const out = Array.from(ids.values());
+    return prefix ? out.filter((t) => t.startsWith(prefix)) : out;
   }
 
-  terminateRun(thread: string, runId?: string): 'ok' | 'not_running' | 'not_found' {
+  async terminateRun(thread: string, runId?: string): Promise<'terminated' | 'not_running' | 'queued_canceled'> {
+    // Cancel queued items
+    const queuedBefore = this.buffer.tryDrain(thread, 'allTogether' as any);
+    if (queuedBefore.length > 0) {
+      this.buffer.clearThread(thread);
+      return 'queued_canceled';
+    }
+    if (runId) {
+      const m = await this.runs.markTerminating(this.nodeId, runId);
+      if (m === 'ok' || m === 'already') {
+        await this.runs.markTerminated(this.nodeId, runId);
+        return 'terminated';
+      }
+      return 'not_running';
+    }
     return 'not_running';
   }
 

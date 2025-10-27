@@ -95,6 +95,14 @@ export class MessagesBuffer {
     return s.lastEnqueueAt + this.debounceMs;
   }
 
+  /** Clear queued items for a thread. */
+  clearThread(thread: string): void {
+    const s = this.threads.get(thread);
+    if (!s) return;
+    s.queue.length = 0;
+    s.lastEnqueueAt = 0;
+  }
+
   destroy(): void {
     this.threads.clear();
   }
