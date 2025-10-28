@@ -1,6 +1,6 @@
 import z from 'zod';
 
-import { FunctionTool } from '@agyn/llm';
+import { FunctionTool, SystemMessage } from '@agyn/llm';
 import { v4 as uuidv4 } from 'uuid';
 import { LoggerService } from '../../../core/services/logger.service';
 import { LLMContext } from '../../../llm/types';
@@ -59,7 +59,12 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
       if (!exists) return;
       this.active.delete(id);
       try {
-        await ctx.callerAgent.invoke(parentThreadId, [{ kind: 'human', content: note }]);
+        const msg = SystemMessage.fromText(note);
+        const raw = msg.toPlain();
+        // Ensure info.reason="reminded"
+        if (!raw.info || typeof raw.info !== 'object') raw.info = {} as Record<string, unknown>;
+        (raw.info as Record<string, unknown>)['reason'] = 'reminded';
+        await ctx.callerAgent.invoke(parentThreadId, [raw as { kind: 'system'; content: string; info: Record<string, unknown> }]);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : JSON.stringify(e);
         logger.error('RemindMe scheduled invoke error', msg);
