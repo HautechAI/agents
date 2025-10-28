@@ -5,15 +5,7 @@ import { LoggerService } from '../../core/services/logger.service';
 
 import { z } from 'zod';
 
-import {
-  FunctionTool,
-  HumanMessage,
-  Loop,
-  Reducer,
-  ResponseMessage,
-  ToolCallMessage,
-  ToolCallOutputMessage,
-} from '@agyn/llm';
+import { FunctionTool, HumanMessage, Loop, Reducer, ResponseMessage, ToolCallMessage, ToolCallOutputMessage, Router } from '@agyn/llm';
 import { withAgent } from '@agyn/tracing';
 
 import { LLMProvisioner } from '../../llm/provisioners/llm.provisioner';
@@ -220,7 +212,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     toSummarize.init('summarize');
     // Wrap tools_save to inject after-tools messages into state before summarization
     const self = this;
-    toolsSave.next(new (class extends (await import('../../llm/router')).Router<LLMState, LLMContext> {
+    class AfterToolsRouter extends Router<LLMState, LLMContext> {
       async route(state: LLMState, ctx: LLMContext): Promise<{ state: LLMState; next: string | null }> {
         if (self.config.whenBusy === 'injectAfterTools') {
           const drained = self.buffer.tryDrain(ctx.threadId, ProcessBuffer.AllTogether);
@@ -231,7 +223,8 @@ export class AgentNode extends Node<AgentStaticConfig> {
         }
         return { state, next: 'summarize' };
       }
-    })());
+    }
+    toolsSave.next(new AfterToolsRouter());
 
     // save -> enforceTools (if enabled) or end (static)
     reducers['save'] = (await this.moduleRef.create(SaveLLMReducer)).next(

@@ -138,10 +138,16 @@ describe('ManageTool graph wiring', () => {
       removeTool(_: unknown) {}
       getPortConfig() { return { sourcePorts: { tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' } }, targetPorts: { $self: { kind: 'instance' } } } as const; }
     }
-    const moduleRef: ModuleRef = {
-      create: (Cls: any) => new (Cls as any)(logger, new ManageFunctionTool(logger)),
-      get: (_token: any) => new ManageFunctionTool(logger),
-    } as unknown as ModuleRef;
+    const moduleRefLike = {
+      create: (Cls: unknown) => {
+        const C = Cls as new (...args: unknown[]) => unknown;
+        if (C === ManageToolNode) return new ManageToolNode(logger, new ManageFunctionTool(logger));
+        // Default construct without DI for FakeAgentWithTools
+        return new C();
+      },
+      get: (_token: unknown) => new ManageFunctionTool(logger),
+    } satisfies Pick<ModuleRef, 'create' | 'get'>;
+    const moduleRef = moduleRefLike as unknown as ModuleRef;
     const registry = new TemplateRegistry(moduleRef);
 
     registry
@@ -158,8 +164,8 @@ describe('ManageTool graph wiring', () => {
           throw new Error('not-implemented');
         },
         upsertNodeState: async () => {},
-      } as any,
-      { create: (Cls: any) => new (Cls as any)(logger, new ManageFunctionTool(logger)), get: (_token: any) => new ManageFunctionTool(logger) } as unknown as ModuleRef,
+      } as { initIfNeeded: () => Promise<void>; get: () => Promise<unknown>; upsert: () => Promise<never>; upsertNodeState: () => Promise<void> },
+      moduleRef,
     );
     const graph = {
       nodes: [
@@ -175,8 +181,8 @@ describe('ManageTool graph wiring', () => {
 
     await runtime.apply(graph);
     const nodes = runtime.getNodes();
-    const toolNode = nodes.find((n) => (n as any).id === 'M') as any;
-    const toolInst: ManageToolNode = toolNode?.instance as ManageToolNode;
+    const toolNode = nodes.find((n: any) => n.id === 'M') as unknown as { instance: ManageToolNode };
+    const toolInst: ManageToolNode = toolNode.instance;
 
     const tool = toolInst.getTool();
     const list = JSON.parse(await tool.execute({ command: 'list', parentThreadId: 'p' }));
