@@ -4,6 +4,7 @@ import { LLMContext, LLMMessage, LLMState } from '../types';
 import { FunctionTool, Reducer, ResponseMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { LoggerService } from '../../core/services/logger.service';
 import { Inject, Injectable, Scope } from '@nestjs/common';
+import { stringify as YamlStringify } from 'yaml';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
@@ -55,7 +56,7 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
             name: tool.name,
             toolCallId: t.callId,
             input,
-            nodeId: (ctx as any)?.callerAgent?.getAgentNodeId?.(),
+            nodeId: ctx?.callerAgent?.getAgentNodeId?.(),
           },
           async () => {
             try {
@@ -73,9 +74,18 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
             } catch (err: unknown) {
               this.logger.error('Error occurred while executing tool', err);
 
+              if (err instanceof Error) {
+                const message = YamlStringify(err.message);
+                return new ToolCallResponse({
+                  raw: message,
+                  output: message,
+                  status: 'error',
+                });
+              }
+
               return new ToolCallResponse({
-                raw: JSON.stringify(err),
-                output: JSON.stringify(err),
+                raw: 'Unknown error',
+                output: 'Unknown error',
                 status: 'error',
               });
             }
