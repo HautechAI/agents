@@ -20,7 +20,8 @@ describe('ShellTool timeout full inclusion when <=10k', () => {
     class FakeProvider { constructor(private logger: LoggerService) {} async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); } }
     const provider = new FakeProvider(logger);
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
-    const node = new ShellCommandNode(undefined as any, new LoggerService() as any, archiveStub as any);
+    const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
+    const node = new ShellCommandNode(undefined as any, new LoggerService() as any, moduleRefStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();

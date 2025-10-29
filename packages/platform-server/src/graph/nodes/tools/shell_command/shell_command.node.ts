@@ -5,8 +5,7 @@ import { BaseToolNode } from '../baseToolNode';
 import { ShellCommandTool } from './shell_command.tool';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LoggerService } from '../../../../core/services/logger.service';
-import { ArchiveService } from '../../../../infra/archive/archive.service';
-import { ContainerHandle } from '../../../../infra/container/container.handle';
+import { ModuleRef } from '@nestjs/core';
 
 // NOTE: ANSI stripping now handled in ShellCommandTool; keep schema exports here only.
 
@@ -50,7 +49,7 @@ export class ShellCommandNode extends BaseToolNode<z.infer<typeof ShellToolStati
   constructor(
     @Inject(EnvService) protected envService: EnvService,
     @Inject(LoggerService) protected logger: LoggerService,
-    @Inject(ArchiveService) protected archive: ArchiveService,
+    @Inject(ModuleRef) protected readonly moduleRef: ModuleRef,
   ) {
     super(logger);
   }
@@ -69,7 +68,9 @@ export class ShellCommandNode extends BaseToolNode<z.infer<typeof ShellToolStati
 
   getTool(): ShellCommandTool {
     if (!this.toolInstance) {
-      this.toolInstance = new ShellCommandTool(this);
+      const tool = this.moduleRef.create(ShellCommandTool);
+      tool.init(this);
+      this.toolInstance = tool;
     }
     return this.toolInstance;
   }
@@ -96,14 +97,4 @@ export class ShellCommandNode extends BaseToolNode<z.infer<typeof ShellToolStati
     return this.containerProvider;
   }
 
-  /** Save oversized combined output inside workspace container and return the plaintext path. */
-  async saveOversizedOutputInContainer(
-    container: ContainerHandle,
-    filename: string,
-    content: string,
-  ): Promise<string> {
-    const tar = await this.archive.createSingleFileTar(filename, content, 0o644);
-    await container.putArchive(tar, { path: '/tmp' });
-    return `/tmp/${filename}`;
-  }
 }
