@@ -18,8 +18,11 @@ describe('ShellTool output limit - combined stdout+stderr oversized', () => {
     const logger = new LoggerService();
     const provider = new FakeProvider();
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
-    const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
-    const node = new ShellCommandNode(undefined as any, logger as any, moduleRefStub as any);
+    const envStub = { resolveProviderEnv: async (_items: any, _provider: any, base?: Record<string,string>) => base } as const;
+    const moduleRefStub = {
+      create: (cls: any) => new (cls as any)(envStub, logger, moduleRefStub as any, archiveStub),
+    } as const;
+    const node = new ShellCommandNode(envStub as any, logger as any, moduleRefStub as any, archiveStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({ outputLimitChars: 1000 });
     const t = node.getTool();

@@ -8,7 +8,7 @@ import { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { ModuleRef } from '@nestjs/core';
 import type { GraphDefinition } from '../src/graph/types';
 import { LoggerService } from '../src/core/services/logger.service.js';
-import { MemoryService } from '../src/nodes/memory.repository';
+import { MemoryService } from '../src/graph/nodes/memory.repository';
 // Updated tests should not use legacy lgnodes; adjust to reducers/AgentNode patterns if needed.
 // Legacy BaseTool removed; adjust tests to reducers and FunctionTool replacements
 
@@ -43,7 +43,7 @@ function makeRuntime(db: Db, placement: 'after_system'|'last_message') {
   templates.register(
     'memory',
     async (ctx) => {
-      const mod = await import('../src/nodes/memoryConnector/memoryConnector.node');
+      const mod = await import('../src/graph/nodes/memoryConnector/memoryConnector.node');
       const MemoryConnectorNode = mod.MemoryConnectorNode;
       const factory = (opts: { threadId?: string }) => { const s = new MemoryService(db); s.init({ nodeId: ctx.nodeId, scope: opts.threadId ? 'perThread' : 'global', threadId: opts.threadId }); return s; };
       const n = new MemoryConnectorNode();
@@ -146,7 +146,7 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
     templates.register(
       'memory',
       async (ctx) => {
-      const mod = await import('../src/nodes/memoryConnector/memoryConnector.node');
+      const mod = await import('../src/graph/nodes/memoryConnector/memoryConnector.node');
       const MemoryConnectorNode = mod.MemoryConnectorNode;
       const factory = (opts: { threadId?: string }) => { const s = new MemoryService(db); s.init({ nodeId: ctx.nodeId, scope: opts.threadId ? 'perThread' : 'global', threadId: opts.threadId }); return s; };
       const n = new MemoryConnectorNode();
