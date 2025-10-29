@@ -16,7 +16,7 @@ export interface TemplateSchema {
   capabilities?: {
     pausable?: boolean;
     provisionable?: boolean;
-    dynamicConfigurable?: boolean;
+  // dynamicConfigurable removed; dynamic config eliminated
     staticConfigurable?: boolean;
   };
   staticConfigSchema?: unknown; // JSON Schema 7
@@ -30,7 +30,7 @@ export interface ProvisionStatus {
 export interface NodeStatus {
   isPaused?: boolean;
   provisionStatus?: ProvisionStatus;
-  dynamicConfigReady?: boolean;
+  // dynamicConfigReady removed
 }
 
 export interface NodeStatusEvent extends NodeStatus {

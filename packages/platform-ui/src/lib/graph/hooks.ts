@@ -27,21 +27,12 @@ export function useNodeStatus(nodeId: string) {
 
   useEffect(() => {
     graphSocket.connect();
-    const debounceMap = new Map<string, number>();
+    // dynamic config eliminated; no schema invalidation debounce needed
     const off = graphSocket.onNodeStatus(nodeId, (ev: NodeStatusEvent) => {
       // Authoritative event overwrites optimistic cache
       qc.setQueryData<NodeStatus>(['graph', 'node', nodeId, 'status'], (prev) => ({ ...(prev || {}), ...ev }));
 
-      // When dynamic config becomes ready for this node, proactively invalidate schema to refetch
-      if (ev.dynamicConfigReady === true) {
-        const key = `dyn:${nodeId}`;
-        const now = Date.now();
-        const last = debounceMap.get(key) || 0;
-        if (now - last > 300) {
-          debounceMap.set(key, now);
-          qc.invalidateQueries({ queryKey: ['graph', 'node', nodeId, 'dynamic', 'schema'] });
-        }
-      }
+      // dynamic config eliminated; no schema invalidation
     });
     return () => off();
   }, [nodeId, qc]);

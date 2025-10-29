@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { ConfigService } from '../src/core/services/config.service.js';
 import { AgentNode as Agent } from '../src/nodes/agent/agent.node';
-import { PrismaService } from '../src/core/services/prisma.service';
+// PrismaService removed from test harness; use minimal DI stubs
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 
 describe('Agent config restrictions', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import type { DynamicConfigViewProps } from './types';
-import { useNodeStatus, useDynamicConfig } from '@/lib/graph/hooks';
+import { useDynamicConfig } from '@/lib/graph/hooks';
 
 export default function McpServerDynamicConfigView({
   nodeId,
@@ -10,8 +10,7 @@ export default function McpServerDynamicConfigView({
   readOnly,
   disabled,
 }: DynamicConfigViewProps) {
-  const { data: status } = useNodeStatus(nodeId);
-  const ready = !!status?.dynamicConfigReady;
+  const ready = true; // dynamic config eliminated; schema always static/available
   const { schema } = useDynamicConfig(nodeId);
 
   const keys = useMemo(() => {

@@ -10,7 +10,7 @@ initTracing({
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
-import cors from '@fastify/cors';
+import fastifyCors, { FastifyCorsOptions } from '@fastify/cors';
 
 import { LoggerService } from './core/services/logger.service';
 import { ContainerCleanupService } from './infra/container/containerCleanup.job';
@@ -18,18 +18,15 @@ import { ContainerCleanupService } from './infra/container/containerCleanup.job'
 import { AppModule } from './bootstrap/app.module';
 import { MongoService } from './core/services/mongo.service';
 import { GraphSocketGateway } from './gateway/graph.socket.gateway';
+import { LiveGraphRuntime } from './graph';
 // Remove central platform.services.factory usage; rely on DI providers
-
-// Graceful shutdown after 60 seconds
-setTimeout(() => {
-  process.exit(0);
-}, 60000);
 
 async function bootstrap() {
   // NestJS HTTP bootstrap using FastifyAdapter and resolve services via DI
   const adapter = new FastifyAdapter();
   const fastify = adapter.getInstance();
-  await fastify.register(cors as any, { origin: true } as any);
+  const corsOptions: FastifyCorsOptions = { origin: true };
+  await fastify.register(fastifyCors, corsOptions);
 
   const app = await NestFactory.create(AppModule, adapter);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -46,6 +43,11 @@ async function bootstrap() {
   // Attach Socket.IO gateway via DI and explicit init
   const gateway = app.get(GraphSocketGateway);
   gateway.init({ server: fastify.server });
+
+  // Load graph
+  const liveGraphRuntime = app.get(LiveGraphRuntime);
+  logger.info('Loading live graph runtime...');
+  await liveGraphRuntime.load();
 
   const shutdown = async () => {
     logger.info('Shutting down...');

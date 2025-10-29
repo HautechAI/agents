@@ -1,16 +1,6 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  Query,
-  HttpCode,
-  NotFoundException,
-  ConflictException,
-  Inject,
-} from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, HttpCode, NotFoundException, ConflictException, Inject } from '@nestjs/common';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { AgentRunService } from '../../nodes/agentRun.repository';
+import { AgentRunService } from '../nodes/agentRun.repository';
 import { LiveGraphRuntime } from '../liveGraph.manager';
 
 // DTOs
@@ -71,19 +61,20 @@ export class RunsController {
   async terminateByRun(@Param() params: TerminateByRunParamsDto): Promise<{ status: 'terminating' }> {
     const runtime = this.runtime;
     type TerminableAgent = {
-      terminateRun: (threadId: string, runId?: string) => 'ok' | 'not_running' | 'not_found';
+      terminateRun: (threadId: string, runId?: string) => 'terminated' | 'not_running' | 'queued_canceled';
     };
-    const inst = runtime.getNodeInstance<TerminableAgent>(params.nodeId);
-    if (!inst || typeof inst.terminateRun !== 'function') throw new NotFoundException('not_terminable');
+    const nodeInst = runtime.getNodeInstance(params.nodeId);
+    const inst = nodeInst && (nodeInst as unknown as Record<string, unknown>);
+    const terminateFn = inst && (typeof inst['terminateRun'] === 'function' ? (inst['terminateRun'] as TerminableAgent['terminateRun']) : undefined);
+    if (!terminateFn) throw new NotFoundException('not_terminable');
     const doc = await this.runs.findByRunId(params.nodeId, params.runId);
     const threadId = doc?.threadId;
     if (!threadId) throw new NotFoundException('run_not_found');
-    const res = inst.terminateRun(threadId, params.runId);
-    if (res === 'ok') {
+    const res = terminateFn(threadId, params.runId);
+    if (res === 'terminated' || res === 'queued_canceled') {
       try { await this.runs.markTerminating(params.nodeId, params.runId); } catch {}
       return { status: 'terminating' } as const;
     }
-    if (res === 'not_found') throw new NotFoundException('run_not_found');
     throw new ConflictException('not_running');
   }
 
@@ -92,21 +83,23 @@ export class RunsController {
   async terminateByThread(@Param() params: TerminateByThreadParamsDto): Promise<{ status: 'terminating' }> {
     const runtime = this.runtime;
     type TerminableAgent = {
-      terminateRun: (threadId: string, runId?: string) => 'ok' | 'not_running' | 'not_found';
+      terminateRun: (threadId: string, runId?: string) => 'terminated' | 'not_running' | 'queued_canceled';
       getCurrentRunId?: (threadId: string) => string | undefined;
     };
-    const inst = runtime.getNodeInstance<TerminableAgent>(params.nodeId);
-    if (!inst || typeof inst.terminateRun !== 'function' || typeof inst.getCurrentRunId !== 'function') {
+    const nodeInst = runtime.getNodeInstance(params.nodeId);
+    const inst = nodeInst && (nodeInst as unknown as Record<string, unknown>);
+    const terminateFn = inst && (typeof inst['terminateRun'] === 'function' ? (inst['terminateRun'] as TerminableAgent['terminateRun']) : undefined);
+    const getCurrentRunId = inst && (typeof inst['getCurrentRunId'] === 'function' ? (inst['getCurrentRunId'] as TerminableAgent['getCurrentRunId']) : undefined);
+    if (!terminateFn || !getCurrentRunId) {
       throw new NotFoundException('not_terminable');
     }
-    const runId = inst.getCurrentRunId(params.threadId);
+    const runId = getCurrentRunId(params.threadId);
     if (!runId) throw new ConflictException('not_running');
-    const res = inst.terminateRun(params.threadId, runId);
-    if (res === 'ok') {
+    const res = terminateFn(params.threadId, runId);
+    if (res === 'terminated' || res === 'queued_canceled') {
       try { await this.runs.markTerminating(params.nodeId, runId); } catch {}
       return { status: 'terminating' } as const;
     }
-    if (res === 'not_found') throw new NotFoundException('run_not_found');
     throw new ConflictException('not_running');
   }
 }

@@ -6,26 +6,11 @@ export interface NodeActionButtonsProps {
   pausable: boolean;
   canStart: boolean;
   canStop: boolean;
-  canPauseBtn: boolean;
-  canResumeBtn: boolean;
   onStart: () => void;
   onStop: () => void;
-  onPause: () => void;
-  onResume: () => void;
 }
 
-export function NodeActionButtons({
-  provisionable,
-  pausable,
-  canStart,
-  canStop,
-  canPauseBtn,
-  canResumeBtn,
-  onStart,
-  onStop,
-  onPause,
-  onResume,
-}: NodeActionButtonsProps) {
+export function NodeActionButtons({ provisionable, pausable, canStart, canStop, onStart, onStop }: NodeActionButtonsProps) {
   if (!provisionable && !pausable) return null;
   return (
     <div className="space-y-1">

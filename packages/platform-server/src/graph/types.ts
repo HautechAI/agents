@@ -11,7 +11,6 @@ export interface NodeDef {
   data: {
     template: string; // template name registered in TemplateRegistry
     config?: Record<string, unknown>; // optional configuration passed via instance.setConfig
-    dynamicConfig?: Record<string, unknown>; // optional dynamic configuration passed via instance.setDynamicConfig
     state?: Record<string, unknown>; // optional persisted runtime state (per-node)
   };
 }
@@ -44,11 +43,6 @@ export interface Configurable {
 
 export type FactoryFn = (ctx: FactoryContext) => Configurable | Promise<Configurable>;
 
-// Minimal persistence interface used by NodeStateService to upsert per-node state
-export interface GraphStateUpsertService {
-  upsertNodeState(name: string, nodeId: string, patch: Record<string, unknown>): Promise<void>;
-}
-
 export interface TemplateRegistryLike {
   get(template: string): FactoryFn | undefined;
 }
@@ -63,18 +57,18 @@ export interface MethodEndpoint extends EndpointBase {
   type: 'method';
   key: string;
   fn: Function;
-  owner: any;  
+  owner: unknown;
 }
 
 export interface PropertyEndpoint extends EndpointBase {
   type: 'property';
   key: string;
-  owner: any;  
+  owner: unknown;
 }
 
 export interface SelfEndpoint extends EndpointBase {
   type: 'self';
-  owner: any;  
+  owner: unknown;
 }
 
 export type Endpoint = MethodEndpoint | PropertyEndpoint | SelfEndpoint;
@@ -133,7 +127,6 @@ export interface PersistedGraphNode {
   id: string;
   template: string;
   config?: Record<string, unknown>;
-  dynamicConfig?: Record<string, unknown>;
   state?: Record<string, unknown>;
   position?: { x: number; y: number }; // UI hint, optional server side
 }

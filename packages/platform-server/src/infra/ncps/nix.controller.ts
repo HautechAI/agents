@@ -106,7 +106,7 @@ export class NixController {
     const cached = this.cache.get(url);
     if (cached) return cached;
     const maxAttempts = 3; // 1 + 2 retries on transient errors
-    let lastErr: any;
+    let lastErr: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
@@ -118,15 +118,15 @@ export class NixController {
         const json = (await res.json()) as unknown;
         this.cache.set(url, json);
         return json;
-      } catch (e: any) {
+      } catch (e) {
         lastErr = e;
-        const msg = String(e?.message || '');
+        const msg = String((e as { message?: string })?.message || '');
         const retriable =
           msg.includes('upstream_502') ||
           msg.includes('upstream_503') ||
           msg.includes('upstream_504') ||
-          e?.name === 'FetchError' ||
-          e?.code === 'ECONNRESET';
+          (e as { name?: string })?.name === 'FetchError' ||
+          (e as { code?: string })?.code === 'ECONNRESET';
         if (attempt >= maxAttempts || !retriable) break;
         await new Promise((r) => setTimeout(r, Math.min(50 * attempt, 200)));
       }
@@ -193,7 +193,7 @@ export class NixController {
       }
     } catch (e) {
       const err = e as Error & { status?: number };
-      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as any);
+      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as Record<string, unknown>);
       if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };

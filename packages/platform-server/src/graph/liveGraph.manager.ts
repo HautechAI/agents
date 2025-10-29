@@ -10,14 +10,12 @@ import { EdgeDef, GraphDefinition, GraphError, NodeDef } from './types';
 // Ports based reversible universal edges
 import { ZodError, type ZodIssue } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
-import { LocalMCPServer } from '../nodes/mcp';
-import type { PersistedMcpState, McpTool } from '../nodes/mcp/types';
 
 import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import type { NodeStatusState, StatusChangedEvent } from '../nodes/base/Node';
+import type { NodeStatusState, StatusChangedEvent } from '../graph/nodes/base/Node';
 
-import type Node from '../nodes/base/Node';
+import type Node from '../graph/nodes/base/Node';
 import { Errors } from './errors';
 import { PortsRegistry } from './ports.registry';
 import type { TemplatePortConfig } from './ports.types';
@@ -52,7 +50,7 @@ export class LiveGraphRuntime {
     @Inject(LoggerService) private readonly logger: LoggerService,
     @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
     @Inject(GraphRepository) private readonly graphs: GraphRepository,
-    private readonly moduleRef: ModuleRef,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
   ) {
     this.portsRegistry = new PortsRegistry();
   }
@@ -87,7 +85,6 @@ export class LiveGraphRuntime {
         id: string;
         template: string;
         config?: Record<string, unknown>;
-        dynamicConfig?: Record<string, unknown>;
         state?: Record<string, unknown>;
       }>;
       edges: Array<{ source: string; sourceHandle: string; target: string; targetHandle: string }>;
@@ -96,7 +93,7 @@ export class LiveGraphRuntime {
       ({
         nodes: saved.nodes.map((n) => ({
           id: n.id,
-          data: { template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, state: n.state },
+          data: { template: n.template, config: n.config, state: n.state },
         })),
         edges: saved.edges.map((e) => ({
           source: e.source,
@@ -205,6 +202,7 @@ export class LiveGraphRuntime {
         pushError(e as GraphError);
       }
     }
+
     for (const nodeId of diff.recreatedNodeIds) {
       const old = this.state.nodes.get(nodeId);
       if (old) await this.disposeNode(nodeId); // ignore errors for now
@@ -231,25 +229,7 @@ export class LiveGraphRuntime {
         // non-fatal
       }
     }
-    // // 2b. Dynamic config updates
-    // TODO: should be replaced with state manipulation. No dedicated dynamicConfig after all.
-    // for (const nodeId of diff.dynamicConfigUpdateNodeIds || []) {
-    //   const nodeDef = next.nodes.find((n) => n.id === nodeId)!;
-    //   const live = this.state.nodes.get(nodeId);
-    //   if (!live) continue;
-    //   try {
-    //     if (hasSetDynamicConfig(live.instance)) {
-    //       await this.applyConfigWithUnknownKeyStripping(
-    //         live.instance,
-    //         'setDynamicConfig',
-    //         nodeDef.data.dynamicConfig || {},
-    //         nodeId,
-    //       );
-    //     }
-    //   } catch (e) {
-    //     logger?.error?.('Config update failed (setDynamicConfig)', nodeId, e);
-    //   }
-    // }
+    // 2b. Dynamic config removed: use node state mutations in future.
 
     // 3. Remove edges (reverse if needed) BEFORE removing nodes
     for (const rem of diff.removedEdges) {
@@ -289,7 +269,6 @@ export class LiveGraphRuntime {
       removedNodes: diff.removedNodeIds,
       recreatedNodes: diff.recreatedNodeIds,
       updatedConfigNodes: diff.configUpdateNodeIds,
-      updatedDynamicConfigNodes: diff.dynamicConfigUpdateNodeIds || [],
       addedEdges: diff.addedEdges.map(edgeKey),
       removedEdges: diff.removedEdges.map(edgeKey),
       errors,
@@ -305,7 +284,7 @@ export class LiveGraphRuntime {
     const removedNodeIds: string[] = [];
     const recreatedNodeIds: string[] = [];
     const configUpdateNodeIds: string[] = [];
-    const dynamicConfigUpdateNodeIds: string[] = [];
+    // dynamicConfig removed
 
     // Nodes
     for (const n of next.nodes) {
@@ -319,9 +298,7 @@ export class LiveGraphRuntime {
           const prevCfg = prevNode.data.config || {};
           const nextCfg = n.data.config || {};
           if (!configsEqual(prevCfg, nextCfg)) configUpdateNodeIds.push(n.id);
-          const prevDyn = prevNode.data.dynamicConfig || {};
-          const nextDyn = n.data.dynamicConfig || {};
-          if (!configsEqual(prevDyn, nextDyn)) dynamicConfigUpdateNodeIds.push(n.id);
+          // dynamicConfig removed
         }
       }
     }
@@ -342,7 +319,7 @@ export class LiveGraphRuntime {
       removedNodeIds,
       recreatedNodeIds,
       configUpdateNodeIds,
-      dynamicConfigUpdateNodeIds,
+      dynamicConfigUpdateNodeIds: [],
       addedEdges,
       removedEdges,
     } as InternalDiffComputation;
@@ -352,9 +329,7 @@ export class LiveGraphRuntime {
     try {
       const nodeClass = this.templateRegistry.getClass(node.data.template);
       if (!nodeClass) throw Errors.unknownTemplate(node.data.template, node.id);
-
       const created: Node = await this.moduleRef.create<Node>(nodeClass);
-
       const cfg = created.getPortConfig() as TemplatePortConfig;
       if (cfg) {
         this.portsRegistry.registerTemplatePorts(node.data.template, cfg);
@@ -376,21 +351,7 @@ export class LiveGraphRuntime {
       if (node.data.config) {
         await created.setConfig(node.data.config);
       }
-
-      if (created instanceof LocalMCPServer) {
-        const state = node.data.state as { mcp?: PersistedMcpState } | undefined;
-
-        if (state?.mcp && state.mcp.tools) {
-          const summaries = state.mcp.tools;
-          const updatedAt = state.mcp.toolsUpdatedAt;
-          try {
-            created.preloadCachedToolSummaries(summaries, updatedAt);
-          } catch (e) {
-            this.logger.error('Error during MCP cache preload for node %s', node.id, e);
-          }
-        }
-      }
-      // TODO: move preloadCachedToolSummaries logic completely inside localMcpServer provision
+      await created.setState(node.data.state ?? {});
       void created.provision();
     } catch (e) {
       // Factory creation or any init error should include nodeId
@@ -534,12 +495,11 @@ export class LiveGraphRuntime {
     const key = edgeKey(edge);
 
     type Callable = (arg: unknown) => unknown | Promise<unknown>;
-    type InstanceMethodMap = Record<string, Callable>;
     const getMethod = (inst: object, name?: string): Callable | undefined => {
       if (!name) return undefined;
-      const map = inst as unknown as InstanceMethodMap;
-      const fn = map[name];
-      return typeof fn === 'function' ? fn : undefined;
+      const rec = inst as Record<string, unknown>;
+      const cand = rec[name];
+      return typeof cand === 'function' ? (cand as Callable) : undefined;
     };
 
     const createFn = getMethod(methodSide.instance, methodCfg.create);
@@ -573,12 +533,9 @@ export class LiveGraphRuntime {
     const nodes = Array.from(this.state.nodes.values());
     await Promise.all(
       nodes.map(async (live) => {
-        const inst = live.instance as any;
-        if (inst && typeof inst.deprovision === 'function') {
-          try {
-            await inst.deprovision();
-          } catch {}
-        }
+        const inst = live.instance;
+        await inst.deprovision();
+
         const inbound = this.state.inboundEdges.get(live.id) || new Set<string>();
         const outbound = this.state.outboundEdges.get(live.id) || new Set<string>();
         const all = new Set<string>([...inbound, ...outbound]);

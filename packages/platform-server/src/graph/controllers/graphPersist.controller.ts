@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Headers, Body, HttpCode, HttpException, HttpStatus, Inject } from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
+// import type { FastifyReply } from 'fastify';
 import { LoggerService } from '../../core/services/logger.service';
 import { TemplateRegistry } from '../templateRegistry';
 import { LiveGraphRuntime } from '../liveGraph.manager';
@@ -15,11 +15,11 @@ import { GraphErrorCode } from '../errors';
 import { GraphGuard } from '../graph.guard';
 
 // Helper to convert persisted graph to runtime GraphDefinition (mirrors src/index.ts)
-const toRuntimeGraph = (saved: { nodes: any[]; edges: any[] }): GraphDefinition => {
+const toRuntimeGraph = (saved: { nodes: Array<{ id: string; template: string; config?: Record<string, unknown>; state?: Record<string, unknown> }>; edges: Array<{ source: string; sourceHandle: string; target: string; targetHandle: string }> }): GraphDefinition => {
   return {
     nodes: saved.nodes.map((n) => ({
       id: n.id,
-      data: { template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, state: n.state },
+      data: { template: n.template, config: n.config, state: n.state },
     })),
     edges: saved.edges.map((e) => ({
       source: e.source,
@@ -90,16 +90,13 @@ async upsertGraph(
         this.logger.debug('Failed to apply updated graph to runtime; rolling back persistence');
       }
 
-      // Emit node_config events for any node whose static or dynamic config changed
+      // Emit node_config events for any node whose static config changed
       if (before) {
         const beforeStatic = new Map(before.nodes.map((n) => [n.id, JSON.stringify(n.config || {})]));
-        const beforeDynamic = new Map(before.nodes.map((n) => [n.id, JSON.stringify(n.dynamicConfig || {})]));
         for (const n of saved.nodes) {
           const prevS = beforeStatic.get(n.id);
-          const prevD = beforeDynamic.get(n.id);
           const currS = JSON.stringify(n.config || {});
-          const currD = JSON.stringify(n.dynamicConfig || {});
-          if (prevS !== currS || prevD !== currD) {
+          if (prevS !== currS) {
             // Socket.io Gateway not wired in Nest yet; log and TODO
             this.logger.info('node_config changed for %s (v=%s) [TODO: emit via gateway]', n.id, String(saved.version));
           }
@@ -134,7 +131,6 @@ const UpsertSchema = z
           id: z.string().min(1),
           template: z.string().min(1),
           config: z.record(z.string(), z.unknown()).optional(),
-          dynamicConfig: z.record(z.string(), z.unknown()).optional(),
           state: z.record(z.string(), z.unknown()).optional(),
           position: z.object({ x: z.number(), y: z.number() }).optional(),
         }),

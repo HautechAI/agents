@@ -11,7 +11,7 @@ interface PersistedGraphNode {
   id: string;
   template: string;
   config?: unknown;
-  dynamicConfig?: unknown;
+  // dynamicConfig removed
   position?: { x: number; y: number };
 }
 interface PersistedGraphEdge {
@@ -21,13 +21,14 @@ interface PersistedGraphEdge {
   target: string;
   targetHandle: string;
 }
-interface PersistedGraph {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type PersistedGraph = {
   name: string;
   version: number;
   updatedAt: string;
   nodes: PersistedGraphNode[];
   edges: PersistedGraphEdge[];
-}
+};
 interface GraphDocument {
   _id: string;
   version: number;
@@ -151,7 +152,7 @@ async function main() {
     const det = edgeId(e);
     return { ...e, id: det };
   });
-  const normalizedNodes = (selected.nodes || []).map((n) => ({ id: n.id, template: n.template, config: n.config, dynamicConfig: n.dynamicConfig, position: n.position }));
+  const normalizedNodes = (selected.nodes || []).map((n) => ({ id: n.id, template: n.template, config: n.config, position: n.position }));
 
   // Ensure root layout
   await fs.mkdir(path.join(repoPath, 'nodes'), { recursive: true });

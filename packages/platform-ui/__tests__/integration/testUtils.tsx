@@ -23,7 +23,7 @@ export const mockTemplates: TemplateSchema[] = [
     kind: 'tool',
     sourcePorts: {},
     targetPorts: {},
-    capabilities: { pausable: true, staticConfigurable: true, dynamicConfigurable: true },
+    capabilities: { pausable: true, staticConfigurable: true },
     staticConfigSchema: {
       type: 'object',
       properties: { systemPrompt: { type: 'string', title: 'systemPrompt' } },
@@ -40,7 +40,7 @@ export const handlers = [
       nodeId,
       isPaused: false,
       provisionStatus: { state: 'not_ready' },
-      dynamicConfigReady: false,
+      // dynamicConfigReady removed
     });
   }),
   _http.post('/api/graph/nodes/:nodeId/actions', () => new _HttpResponse(null, { status: 204 })),

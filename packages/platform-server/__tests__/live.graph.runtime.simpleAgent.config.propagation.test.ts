@@ -6,7 +6,7 @@ import { LoggerService } from '../src/core/services/logger.service.js';
 import { ContainerService } from '../src/infra/container/container.service';
 import { ConfigService } from '../src/core/services/config.service.js';
 import type { Config } from '../src/core/services/config.service.js';
-import { PrismaService } from '../src/core/services/prisma.service';
+// PrismaService removed from test harness; use minimal DI stubs
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import type { MongoService } from '../src/core/services/mongo.service.js';
 
