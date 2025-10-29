@@ -25,7 +25,14 @@ async function bootstrap() {
   // NestJS HTTP bootstrap using FastifyAdapter and resolve services via DI
   const adapter = new FastifyAdapter();
   const fastify = adapter.getInstance();
-  const corsOptions: FastifyCorsOptions = { origin: true };
+  // CORS: allow UI preflight/PUT from configured origins
+  const originsEnv = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  const corsOptions: FastifyCorsOptions = {
+    origin: originsEnv.length > 0 ? originsEnv : true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    credentials: false,
+  };
   await fastify.register(fastifyCors, corsOptions);
 
   const app = await NestFactory.create(AppModule, adapter);

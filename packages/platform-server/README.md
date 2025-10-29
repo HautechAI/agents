@@ -2,6 +2,11 @@
 
 Runtime for graph-driven agents, tool adapters, triggers, and memory. See docs for architecture.
 
+CORS
+- Configure allowed origins via env `CORS_ORIGINS` (comma-separated). Example: `https://app.example.com,https://admin.example.com`.
+- If `CORS_ORIGINS` is empty or unset, the server allows any origin (dev convenience only). For production, set explicit origins.
+- Methods allowed: GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS. Headers allowed: Content-Type, Authorization, X-Requested-With, Accept. Credentials are disabled.
+
 Graph persistence
 - Configure via env:
   - GRAPH_STORE: `mongo` | `git` (default `mongo`)
