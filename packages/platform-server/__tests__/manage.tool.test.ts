@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { LoggerService } from '../src/core/services/logger.service.js';
-import { ManageToolNode, type ManageableAgent } from '../src/nodes/tools/manage/manage.node';
-import { ManageFunctionTool } from '../src/nodes/tools/manage/manage.tool';
+import { LoggerService } from '../src/core/services/logger.service';
+import { ManageToolNode } from '../src/graph/nodes/tools/manage/manage.node';
+import { ManageFunctionTool } from '../src/graph/nodes/tools/manage/manage.tool';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
+import Node from '../src/graph/nodes/base/Node';
 import type { ModuleRef } from '@nestjs/core';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 
 type Msg = { content: string; info?: Record<string, unknown> };
 
-class FakeAgent implements ManageableAgent {
+// Minimal fake AgentNode-compatible shape for tests
+class FakeAgent {
   public name?: string;
   private active: Set<string> = new Set();
   private id?: string;
@@ -39,7 +41,7 @@ class FakeAgent implements ManageableAgent {
 describe('ManageTool unit', () => {
   it('list: empty then after connecting multiple agents (use node ids when available)', async () => {
     const logger = new LoggerService();
-    const node = new ManageToolNode(logger, new ManageFunctionTool(logger));
+    const node = new ManageToolNode(new ManageFunctionTool(logger), logger);
     await node.setConfig({ description: 'desc' });
     const tool: ManageFunctionTool = node.getTool();
 
@@ -62,7 +64,7 @@ describe('ManageTool unit', () => {
 
   it('send_message: routes to `${parent}__${worker}` and returns text', async () => {
     const logger = new LoggerService();
-    const node = new ManageToolNode(logger, new ManageFunctionTool(logger));
+    const node = new ManageToolNode(new ManageFunctionTool(logger), logger);
     await node.setConfig({ description: 'desc' });
     const a = new FakeAgent('child-1');
     node.addWorker('child-1', a);
@@ -72,7 +74,7 @@ describe('ManageTool unit', () => {
   });
 
   it('send_message: parameter validation and unknown worker', async () => {
-    const node = new ManageToolNode(new LoggerService(), new ManageFunctionTool(new LoggerService()));
+    const node = new ManageToolNode(new ManageFunctionTool(new LoggerService()), new LoggerService());
     await node.setConfig({ description: 'd' });
     const tool = node.getTool();
     await expect(tool.execute({ command: 'send_message', worker: 'x', parentThreadId: 'p' })).rejects.toBeTruthy();
@@ -82,7 +84,7 @@ describe('ManageTool unit', () => {
   });
 
   it('check_status: aggregates active child threads scoped to current thread', async () => {
-    const node = new ManageToolNode(new LoggerService(), new ManageFunctionTool(new LoggerService()));
+    const node = new ManageToolNode(new ManageFunctionTool(new LoggerService()), new LoggerService());
     await node.setConfig({ description: 'desc' });
     const a1 = new FakeAgent('A');
     const a2 = new FakeAgent('B');
@@ -108,7 +110,7 @@ describe('ManageTool unit', () => {
   });
 
   it('throws when runtime configurable.thread_id is missing', async () => {
-    const node = new ManageToolNode(new LoggerService(), new ManageFunctionTool(new LoggerService()));
+    const node = new ManageToolNode(new ManageFunctionTool(new LoggerService()), new LoggerService());
     await node.setConfig({ description: 'desc' });
     const tool = node.getTool();
     await expect(tool.execute({ command: 'list' })).rejects.toBeTruthy();
@@ -116,7 +118,7 @@ describe('ManageTool unit', () => {
 
   it('throws when child agent invoke fails (send_message)', async () => {
     const logger = new LoggerService();
-    const node = new ManageToolNode(logger, new ManageFunctionTool(logger));
+    const node = new ManageToolNode(new ManageFunctionTool(logger), logger);
     await node.setConfig({ description: 'desc' });
     class ThrowingAgent extends FakeAgent {
       override async invoke(_thread: string, _messages: Msg[]): Promise<{ text: string }> {
@@ -133,15 +135,25 @@ describe('ManageTool unit', () => {
 describe('ManageTool graph wiring', () => {
   it('connect ManageTool to two agents via agent port; list returns their ids', async () => {
     const logger = new LoggerService();
-    class FakeAgentWithTools extends FakeAgent {
-      addTool(_: unknown) {}
-      removeTool(_: unknown) {}
-      getPortConfig() { return { sourcePorts: { tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' } }, targetPorts: { $self: { kind: 'instance' } } } as const; }
+    // Minimal Node-compatible agent to satisfy LiveGraphRuntime wiring
+    class FakeAgentWithTools extends Node<unknown> {
+      constructor() {
+        // Use the outer logger to satisfy DI-only construction
+        super(logger);
+      }
+      addTool(_t: unknown) {}
+      removeTool(_t: unknown) {}
+      getPortConfig() {
+        return {
+          sourcePorts: { tools: { kind: 'method', create: 'addTool', destroy: 'removeTool' } },
+          targetPorts: { $self: { kind: 'instance' } },
+        } as const;
+      }
     }
     const moduleRefLike = {
       create: (Cls: unknown) => {
         const C = Cls as new (...args: unknown[]) => unknown;
-        if (C === ManageToolNode) return new ManageToolNode(logger, new ManageFunctionTool(logger));
+        if (C === ManageToolNode) return new ManageToolNode(new ManageFunctionTool(logger), logger);
         // Default construct without DI for FakeAgentWithTools
         return new C();
       },
