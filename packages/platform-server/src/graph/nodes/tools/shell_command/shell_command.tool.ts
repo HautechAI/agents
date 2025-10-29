@@ -10,7 +10,7 @@ import {
 } from '../../../../utils/execTimeout';
 import { ShellCommandNode, ShellToolStaticConfigSchema } from './shell_command.node';
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { createSingleFileTar } from '../../../../utils/archive';
 
 // Schema for tool arguments
 export const bashCommandSchema = z.object({
@@ -101,7 +101,9 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
     if (limit > 0 && combined.length > limit) {
       const id = randomUUID();
       const path = `/tmp/${id}.txt`;
-      await fs.writeFile(path, combined, { mode: 0o600 });
+      const tar = await createSingleFileTar(`${id}.txt`, combined);
+      // Save inside workspace container at /tmp
+      await container.putArchive(tar, { path: '/tmp' });
       return `Error: output length exceeds ${limit} characters. It was saved on disk: ${path}`;
     }
     if (response.exitCode !== 0) {

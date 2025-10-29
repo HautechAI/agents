@@ -1,33 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import { ShellCommandNode } from '../../src/graph/nodes/tools/shell_command/shell_command.node';
 import { LoggerService } from '../../src/core/services/logger.service';
-import { promises as fs } from 'node:fs';
 
 class FakeContainer {
+  public lastPut?: { data: Buffer; options: { path: string } };
   async exec(_cmd: string, _opts?: unknown): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const out = 'A'.repeat(1200);
     return { stdout: out, stderr: '', exitCode: 0 };
   }
+  async putArchive(data: Buffer, options: { path: string }): Promise<void> { this.lastPut = { data, options }; }
 }
 class FakeProvider {
-  async provide(_t: string): Promise<FakeContainer> { return new FakeContainer(); }
+  public c = new FakeContainer();
+  async provide(_t: string): Promise<FakeContainer> { return this.c; }
 }
 
 describe('ShellTool output limit - stdout oversized', () => {
   it('writes oversized output to /tmp and returns short error', async () => {
     const logger = new LoggerService();
+    const provider = new FakeProvider();
     const node = new ShellCommandNode(undefined as any);
-    node.setContainerProvider(new FakeProvider() as any);
+    node.setContainerProvider(provider as any);
     await node.setConfig({ outputLimitChars: 1000 });
     const t = node.getTool();
 
     const msg = await t.execute({ command: 'echo BIG' } as any, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false } as any, callerAgent: {} as any } as any);
     expect(msg).toMatch(/^Error: output length exceeds 1000 characters\. It was saved on disk: \/tmp\/.+\.txt$/);
-    const path = msg.replace(/^Error: output length exceeds 1000 characters\. It was saved on disk: /, '');
-    const content = await fs.readFile(path, 'utf8');
-    expect(content.length).toBe(1200);
-    // Mode 0600
-    const stat = await fs.stat(path);
-    expect(stat.mode & 0o777).toBe(0o600);
+    // Ensure putArchive was called with tar buffer and path '/tmp'
+    expect(provider.c.lastPut?.options.path).toBe('/tmp');
+    expect(provider.c.lastPut?.data instanceof Buffer).toBe(true);
   });
 });
