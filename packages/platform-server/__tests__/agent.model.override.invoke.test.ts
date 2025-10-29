@@ -1,34 +1,24 @@
-import { describe, it, expect, vi } from 'vitest';
-import { AIMessage } from '@langchain/core/messages';
-import { LoggerService } from '../src/core/services/logger.service.js';
-import { ConfigService } from '../src/core/services/config.service.js';
-// Replace LLMFactoryService usage with provisioner stub per Issue #451
-
-// Mock ChatOpenAI to capture the model used at invoke time
-// No CheckpointerService or LLMFactoryService; use provisioner stub
-
-import { AgentNode as Agent } from '../src/nodes/agent/agent.node';
+import { describe, it, expect } from 'vitest';
+import { LoggerService } from '../src/core/services/logger.service';
+import { ConfigService } from '../src/core/services/config.service';
+import { AgentNode as Agent } from '../src/graph/nodes/agent/agent.node';
+import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
+import { ResponseMessage, AIMessage, HumanMessage } from '@agyn/llm';
 
 describe('Agent model override at runtime', () => {
   it('uses override model at invoke after setConfig', async () => {
-    const cfg = new ConfigService({
-      githubAppId: '1',
-      githubAppPrivateKey: 'k',
-      githubInstallationId: 'i',
-      openaiApiKey: 'x',
-      githubToken: 't',
-      mongodbUrl: 'm',
-    });
-    const provisioner = { getLLM: async () => ({ call: async ({ model }: any) => ({ text: `model:${model}`, output: [] }) }) };
-    const agent = new Agent(new LoggerService(), provisioner as any);
+    const provisioner = { getLLM: async () => ({ call: async ({ model }: { model: string }) => new ResponseMessage({ output: [AIMessage.fromText(`model:${model}`).toPlain()] }) }) };
+    // Minimal DI-less instantiation with stubs
+    const cfg = new ConfigService().init({
+      githubAppId: '1', githubAppPrivateKey: 'k', githubInstallationId: 'i', openaiApiKey: 'x', githubToken: 't', mongodbUrl: 'm',
+      llmProvider: 'openai', agentsDatabaseUrl: 'postgres://x', graphStore: 'mongo', graphRepoPath: './data/graph', graphBranch: 'graph-state',
+      dockerMirrorUrl: 'http://registry-mirror:5000', nixAllowedChannels: ['nixpkgs-unstable'], nixHttpTimeoutMs: 200, nixCacheTtlMs: 300000, nixCacheMax: 500,
+      mcpToolsStaleTimeoutMs: 0, ncpsEnabled: false, ncpsUrl: 'http://ncps:8501', ncpsUrlServer: 'http://ncps:8501', ncpsUrlContainer: 'http://ncps:8501', ncpsPubkeyPath: '/pubkey', ncpsFetchTimeoutMs: 3000, ncpsRefreshIntervalMs: 0, ncpsStartupMaxRetries: 8, ncpsRetryBackoffMs: 500, ncpsRetryBackoffFactor: 2, ncpsAllowStartWithoutKey: true,
+    } as any);
+    const agent = new Agent(cfg, new LoggerService(), provisioner as any, { startRun: async () => {}, markTerminated: async () => {}, markTerminating: async () => 'not_running', list: async () => [] } as any, { create: async (Cls: any) => new Cls() } as any);
     agent.init({ nodeId: 'agent-1' });
-    // Initial default should be gpt-5
-    const anyA: any = agent as any;
-    expect(anyA.llm.model).toBe('gpt-5');
-
-    agent.setConfig({ model: 'override-model' });
-
-    const res = await agent.invoke('thread-1', { content: 'hello', info: {} } as any);
-    expect(res?.content).toBe(`model:override-model`);
+    await agent.setConfig({ model: 'override-model' });
+    const res = await agent.invoke('thread-1', [HumanMessage.fromText('hello')]);
+    expect(res.text).toBe('model:override-model');
   });
 });
