@@ -19,7 +19,8 @@ describe('ShellTool timeout tail inclusion and ANSI stripping', () => {
     class FakeContainer extends ContainerHandle { override async exec(): Promise<never> { throw err; } }
     class FakeProvider { constructor(private logger: LoggerService) {} async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); } }
     const provider = new FakeProvider(logger);
-    const node = new ShellCommandNode(undefined as any);
+    const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
+    const node = new ShellCommandNode(undefined as any, logger as any, archiveStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();

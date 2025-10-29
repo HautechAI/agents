@@ -17,7 +17,8 @@ describe('ShellTool output limit - non-zero exit oversized', () => {
   it('overrides exit error formatting when oversized and writes file', async () => {
     const logger = new LoggerService();
     const provider = new FakeProvider();
-    const node = new ShellCommandNode(undefined as any);
+    const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
+    const node = new ShellCommandNode(undefined as any, logger as any, archiveStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({ outputLimitChars: 1000 });
     const t = node.getTool();

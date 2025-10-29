@@ -17,7 +17,8 @@ describe('ShellTool output limit - combined stdout+stderr oversized', () => {
   it('writes combined oversized output to /tmp and returns short error', async () => {
     const logger = new LoggerService();
     const provider = new FakeProvider();
-    const node = new ShellCommandNode(undefined as any);
+    const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
+    const node = new ShellCommandNode(undefined as any, logger as any, archiveStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({ outputLimitChars: 1000 });
     const t = node.getTool();
