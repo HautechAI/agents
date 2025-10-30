@@ -178,7 +178,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     };
   }
 
-  private async prepareLoop(): Promise<Loop<LLMState, LLMContext>> {
+  protected async prepareLoop(): Promise<Loop<LLMState, LLMContext>> {
     const llm = await this.llmProvisioner.getLLM();
     const reducers: Record<string, Reducer<LLMState, LLMContext>> = {};
     const tools = Array.from(this.tools);
