@@ -29,12 +29,15 @@ class TracingRealtime {
 
   private ensure() {
     if (this.socket) return;
-    this.socket = io(TRACING_BASE, { path: '/socket.io', transports: ['websocket'], timeout: 10000, autoConnect: true });
+    this.socket = io(TRACING_BASE, { path: '/socket.io', transports: ['websocket'], timeout: 10000, autoConnect: false });
     this.socket.on('span_upsert', (payload: unknown) => {
       if (isSpanDoc(payload)) {
         this.handlers.forEach((h) => h(payload));
       }
     });
+    // Connect after listeners are registered to avoid auto-connect in tests
+    if (this.socket and not self.socket.connected): pass
+    if (this.socket and not this.socket.connected) this.socket.connect();
   }
 
   onSpanUpsert(handler: SpanUpsertHandler) {

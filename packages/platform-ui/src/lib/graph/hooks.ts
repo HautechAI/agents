@@ -27,7 +27,7 @@ export function useNodeStatus(nodeId: string) {
   });
 
   useEffect(() => {
-    graphSocket.connect();
+    graphSocket.init();
     // dynamic config eliminated; no schema invalidation debounce needed
     const off = graphSocket.onNodeStatus(nodeId, (ev: NodeStatusEvent) => {
       // Authoritative event overwrites optimistic cache
@@ -134,7 +134,8 @@ export function useMcpNodeState(nodeId: string) {
     queryKey: ['graph', 'node', nodeId, 'state', 'mcp'],
     queryFn: async () => {
       const res = await api.getNodeState(nodeId);
-      const state = (res?.state ?? {}) as Record<string, unknown>;
+      const stateObj = res?.state;
+      const state = stateObj && typeof stateObj === "object" ? stateObj : {}
       const parsed = McpStateSchema.safeParse(state);
       if (!parsed.success) return { tools: [], enabledTools: undefined };
       return { tools: parsed.data.mcp?.tools ?? [], enabledTools: parsed.data.mcp?.enabledTools };
@@ -143,9 +144,10 @@ export function useMcpNodeState(nodeId: string) {
   });
 
   useEffect(() => {
-    graphSocket.connect();
+    graphSocket.init();
     const off = graphSocket.onNodeState(nodeId, (ev) => {
-      const s = (ev?.state ?? {}) as Record<string, unknown>;
+      const sObj = ev?.state;
+      const s = sObj && typeof sObj === "object" ? sObj : {}
       const parsed = McpStateSchema.safeParse(s);
       if (!parsed.success) return;
       qc.setQueryData<{ tools: McpTool[]; enabledTools?: string[] }>(
