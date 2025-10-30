@@ -9,6 +9,7 @@ initTracing({
 
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
+import type { FastifyTypeProviderDefault } from '@fastify/type-provider-default';
 import { ValidationPipe } from '@nestjs/common';
 import fastifyCors, { FastifyCorsOptions } from '@fastify/cors';
 
@@ -25,7 +26,7 @@ import { ConfigService } from './core/services/config.service';
 async function bootstrap() {
   // NestJS HTTP bootstrap using FastifyAdapter and resolve services via DI
   const adapter = new FastifyAdapter();
-  const fastify = adapter.getInstance();
+  const fastify = adapter.getInstance().withTypeProvider<FastifyTypeProviderDefault>();
 
   // CORS: allow dev UI preflight incl. PUT on /api/graph/nodes/:id/state
   // origins: source via ConfigService.fromEnv(); if unset, keep permissive true
@@ -51,11 +52,8 @@ async function bootstrap() {
     ],
     credentials: false,
   };
-  // Register CORS with a small typed wrapper to satisfy TS without casts
-  function registerCors(inst: { register: (plugin: unknown, opts: FastifyCorsOptions) => Promise<unknown> }, opts: FastifyCorsOptions) {
-    return inst.register(fastifyCors as unknown, opts);
-  }
-  await registerCors(fastify as any, corsOptions);
+  // Type-safe CORS registration on the Fastify instance
+  await fastify.register(fastifyCors, corsOptions);
 
   const app = await NestFactory.create(AppModule, adapter);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

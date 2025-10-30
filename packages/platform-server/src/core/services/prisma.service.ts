@@ -1,3 +1,4 @@
+import { PrismaClient } from '@prisma/client';
 import { LoggerService } from './logger.service';
 import { ConfigService } from './config.service';
 import { Inject, Injectable } from '@nestjs/common';
@@ -32,12 +33,8 @@ export class PrismaService {
     try {
       if (!this.prisma) {
         const url = this.cfg.agentsDatabaseUrl;
-        // Construct runtime client without compile-time Prisma types
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod: any = require('@prisma/client');
-        const PrismaCtor = mod?.PrismaClient;
-        if (!PrismaCtor) throw new Error('PrismaClient not available');
-        this.prisma = new PrismaCtor({ datasources: { db: { url } } }) as ConversationStateClient;
+        const client = new PrismaClient({ datasources: { db: { url } } });
+        this.prisma = client as unknown as ConversationStateClient;
       }
       return this.prisma;
     } catch (e) {
