@@ -593,9 +593,10 @@ export class ContainerService {
     try {
       await c.stop({ t: timeoutSec });
     } catch (e) {
-      if (e?.statusCode === 304) {
+      const sc = (e as { statusCode?: number } | undefined)?.statusCode;
+      if (sc === 304) {
         this.logger.debug(`Container already stopped cid=${containerId.substring(0, 12)}`);
-      } else if (e?.statusCode === 409) {
+            } else if (sc === 409) {
         // Conflict typically indicates removal already in progress; treat as benign
         this.logger.info(`Container stop conflict (likely removing) cid=${containerId.substring(0, 12)}`);
       } else {
@@ -611,7 +612,8 @@ export class ContainerService {
     try {
       await container.remove({ force });
     } catch (e) {
-      if (e?.statusCode === 404) {
+      const sc = (e as { statusCode?: number } | undefined)?.statusCode;
+      if (sc === 404) {
         // Already removed – benign
         this.logger.debug(`Container already removed cid=${containerId.substring(0, 12)}`);
       } else {
