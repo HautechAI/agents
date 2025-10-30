@@ -1,4 +1,5 @@
-import type { ConversationStateClient } from '../../core/services/prisma.service';
+import type { PrismaClient } from '@prisma/client';
+import { Injectable } from '@nestjs/common';
 
 export type ConversationStateRecord = {
   threadId: string;
@@ -8,7 +9,7 @@ export type ConversationStateRecord = {
 
 @Injectable()
 export class ConversationStateRepository {
-  constructor(private prisma: ConversationStateClient) {}
+  constructor(private prisma: PrismaClient) {}
 
   async get(threadId: string, nodeId: string): Promise<ConversationStateRecord | null> {
     const found = await this.prisma.conversationState.findUnique({ where: { threadId_nodeId: { threadId, nodeId } } });
@@ -24,4 +25,3 @@ export class ConversationStateRepository {
     });
   }
 }
-import { Injectable } from '@nestjs/common';
