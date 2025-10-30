@@ -39,6 +39,9 @@ export default function SimpleAgentConfigView({
     if (debounceMs < 0) errors.push('debounceMs must be >= 0');
     if (!['wait', 'injectAfterTools'].includes(whenBusy)) errors.push('whenBusy must be wait|injectAfterTools');
     if (!['allTogether', 'oneByOne'].includes(processBuffer)) errors.push('processBuffer must be allTogether|oneByOne');
+    if (whenBusy === 'injectAfterTools' && processBuffer === 'oneByOne') {
+      errors.push("processBuffer=oneByOne is not supported when whenBusy='injectAfterTools'");
+    }
     if (summarizationKeepTokens < 0) errors.push('summarizationKeepTokens must be >= 0');
     if (summarizationMaxTokens < 1) errors.push('summarizationMaxTokens must be >= 1');
     onValidate?.(errors);
@@ -119,7 +122,12 @@ export default function SimpleAgentConfigView({
         </div>
         <div>
           <label className="block text-xs text-muted-foreground mb-1">When busy</label>
-          <select className="w-full border rounded px-2 py-1 bg-background" value={whenBusy} onChange={(e) => setWhenBusy(e.target.value)} disabled={isDisabled}>
+          <select className="w-full border rounded px-2 py-1 bg-background" value={whenBusy} onChange={(e) => {
+            const next = e.target.value;
+            setWhenBusy(next);
+            // Enforce simplified injectAfterTools semantics: always allTogether
+            if (next === "injectAfterTools") setProcessBuffer("allTogether");
+          }} disabled={isDisabled}>
             <option value="wait">wait</option>
             <option value="injectAfterTools">injectAfterTools</option>
           </select>
@@ -130,7 +138,7 @@ export default function SimpleAgentConfigView({
           <label className="block text-xs text-muted-foreground mb-1">Process buffer</label>
           <select className="w-full border rounded px-2 py-1 bg-background" value={processBuffer} onChange={(e) => setProcessBuffer(e.target.value)} disabled={isDisabled}>
             <option value="allTogether">allTogether</option>
-            <option value="oneByOne">oneByOne</option>
+            <option value="oneByOne" disabled={whenBusy === "injectAfterTools"}>oneByOne</option>
           </select>
         </div>
         <div>
