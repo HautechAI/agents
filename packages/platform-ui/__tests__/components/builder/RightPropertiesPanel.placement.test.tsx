@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 import { RightPropertiesPanel } from '@/builder/panels/RightPropertiesPanel';
+import type { Node as RFNode } from 'reactflow';
 
-function makeNode(template: string, id = 'n1') {
+type TestNodeData = { template: string; name?: string; config?: Record<string, unknown>; state?: Record<string, unknown> };
+function makeNode(template: string, id = 'n1'): RFNode<TestNodeData> {
   return {
     id,
     type: template,
@@ -11,10 +13,10 @@ function makeNode(template: string, id = 'n1') {
     data: { template, name: template, config: {}, state: {} },
     dragHandle: '.drag-handle',
     selected: true,
-  } as unknown as import('reactflow').Node<any>;
+  };
 }
 
-const onChange = vi.fn();
+const onChange = vi.fn<(id: string, data: Partial<TestNodeData>) => void>();
 
 vi.mock('@/lib/graph/templates.provider', () => ({
   useTemplatesCache: () => ({
@@ -26,22 +28,13 @@ vi.mock('@/lib/graph/templates.provider', () => ({
   }),
 }));
 
-vi.mock('@/lib/graph/capabilities', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/graph/capabilities')>('@/lib/graph/capabilities');
-  return {
-    ...actual,
-    hasStaticConfigByName: () => true,
-    hasDynamicConfigByName: () => true,
-    canPause: () => false,
-    canProvision: () => true,
-  };
-});
+// No capabilities mock needed; provisionable via template provider mock above
 
 // Avoid requiring QueryClientProvider in this shallow unit test
 const statusMock = { provisionStatus: { state: 'not_ready' as const } };
 vi.mock('@/lib/graph/hooks', () => ({
   useNodeStatus: () => ({ data: statusMock }),
-  useNodeAction: () => ({ mutate: () => {} }),
+  useNodeAction: () => ({ mutate: (_action: 'provision' | 'deprovision') => {} }),
 }));
 
 describe('RightPropertiesPanel placement and enablement', () => {
@@ -70,4 +63,3 @@ describe('RightPropertiesPanel placement and enablement', () => {
     expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled();
   });
 });
-

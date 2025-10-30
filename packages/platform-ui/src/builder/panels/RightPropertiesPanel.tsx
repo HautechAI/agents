@@ -69,13 +69,10 @@ function RightPropertiesPanelBody({
   const kind = runtimeTemplate?.kind as string | undefined;
   // Show Runtime Status if lifecycle-managed kinds or if status has provisionStatus
   const lifecycleKinds = new Set(['mcp', 'trigger', 'service']);
-  const { data: statusForGate } = useNodeStatus(node.id);
-  const hasRuntimeCaps = lifecycleKinds.has(kind || '') || !!statusForGate?.provisionStatus;
+  const hasRuntimeCaps = lifecycleKinds.has(kind || '') || !!status?.provisionStatus;
 
-  function RuntimeNodeSection({ nodeId, templateName }: { nodeId: string; templateName: string }) {
+  function RuntimeNodeSection({ nodeId }: { nodeId: string }) {
     const { data: status } = useNodeStatus(nodeId);
-    const { getTemplate } = useTemplatesCache();
-    const tmpl = getTemplate(templateName);
     const state = status?.provisionStatus?.state ?? 'not_ready';
     const isPaused = !!status?.isPaused;
     const detail = status?.provisionStatus?.details;
@@ -114,7 +111,7 @@ function RightPropertiesPanelBody({
       {hasRuntimeCaps && (
         <div className="space-y-2">
           <div className="text-[10px] uppercase text-muted-foreground">Runtime Status</div>
-          <RuntimeNodeSection nodeId={node.id} templateName={data.template} />
+          <RuntimeNodeSection nodeId={node.id} />
         </div>
       )}
       <div className="space-y-2">
@@ -151,7 +148,7 @@ function RightPropertiesPanelBody({
         {/* Start/Stop actions relocated under Node State per issue #519 */}
         {(() => {
           const tmpl = runtimeTemplates.getTemplate(data.template);
-          const provisionable = tmpl ? canProvision(tmpl) : true;
+          const provisionable = tmpl ? canProvision(tmpl) : false;
           const state = status?.provisionStatus?.state ?? 'not_ready';
           const disableActions = state === 'deprovisioning';
           const canStart =

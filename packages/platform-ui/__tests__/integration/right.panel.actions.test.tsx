@@ -4,8 +4,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { emitNodeStatus, server, TestProviders } from './testUtils';
 import { http as _http, HttpResponse as _HttpResponse } from 'msw';
 import { RightPropertiesPanel } from '../../src/builder/panels/RightPropertiesPanel';
+import type { Node as RFNode } from 'reactflow';
 
-function makeNode(template: string, id = 'n1') {
+type TestNodeData = { template: string; name?: string; config?: Record<string, unknown>; state?: Record<string, unknown> };
+function makeNode(template: string, id = 'n1'): RFNode<TestNodeData> {
   return {
     id,
     type: template,
@@ -13,7 +15,7 @@ function makeNode(template: string, id = 'n1') {
     data: { template, name: template, config: {}, state: {} },
     dragHandle: '.drag-handle',
     selected: true,
-  } as unknown as import('reactflow').Node<any>;
+  };
 }
 
 describe('Right panel actions: Start/Stop optimistic and reconcile', () => {
