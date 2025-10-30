@@ -53,8 +53,7 @@ describe('Agent busy gating (wait mode)', () => {
     const r1 = await p1; // first run completes
     expect(r1.text).toBe('done');
 
-    // Manually trigger next run (simulates scheduler)
-    await agent.invoke('t', []);
+    await new Promise((r) => setTimeout(r, 50));
     expect(runs.starts).toBeGreaterThanOrEqual(2);
   });
 });

@@ -57,9 +57,9 @@ export class CallAgentFunctionTool extends FunctionTool<typeof callAgentInvocati
     try {
       if (responseMode === 'sync') {
         // Busy handling: if target thread is running, do not start a loop
-        const current = targetAgent.getCurrentRunId?.(targetThreadId);
-        if (current) {
-          return JSON.stringify({ error: 'agent_busy', threadId: targetThreadId });
+        const busy = typeof (targetAgent as any).isThreadRunning === 'function' ? (targetAgent as any).isThreadRunning(targetThreadId) : false;
+        if (busy) {
+          return 'queued';
         }
         const res = await targetAgent.invoke(targetThreadId, [message]);
         return res.text;

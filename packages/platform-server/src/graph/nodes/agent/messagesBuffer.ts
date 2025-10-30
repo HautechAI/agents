@@ -90,34 +90,6 @@ export class MessagesBuffer {
     return { messages, tokenParts };
   }
 
-
-  /**
-   * Drain only messages that match the provided tokenId.
-   * Respects debounce window like tryDrain.
-   * - AllTogether: remove all queued items for the token
-   * - OneByOne: remove a single queued item for the token
-   */
-  tryDrainByToken(thread: string, tokenId: string, mode: ProcessBuffer, now = Date.now()): BufferMessage[] {
-    const s = this.threads.get(thread);
-    if (!s || s.queue.length === 0) return [];
-    if (this.debounceMs > 0 && now - s.lastEnqueueAt < this.debounceMs) return [];
-    if (mode === ProcessBuffer.AllTogether) {
-      const keep: any[] = [];
-      const out: any[] = [];
-      for (const q of s.queue) {
-        if ((q as any).tokenId === tokenId) out.push(q);
-        else keep.push(q);
-      }
-      (s as any).queue = keep as any;
-      return out.map((q: any) => q.msg);
-    } else {
-      const idx = s.queue.findIndex((q) => (q as any).tokenId === tokenId);
-      if (idx === -1) return [];
-      const [item] = (s as any).queue.splice(idx, 1);
-      return [item.msg];
-    }
-  }
-
   nextReadyAt(thread: string, now = Date.now()): number | undefined {
     const s = this.threads.get(thread);
     if (!s || s.queue.length === 0) return undefined;
