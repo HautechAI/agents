@@ -3,18 +3,12 @@ import { setupServer } from 'msw/node';
 import { http as _http, HttpResponse as _HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TemplatesProvider } from '../../src/lib/graph/templates.provider';
-import * as socketModule from '../../src/lib/graph/socket';
-import type { NodeStatusEvent, TemplateSchema } from '../../src/lib/graph/types';
+import type { TemplateSchema } from '../../src/lib/graph/types';
 import { TooltipProvider } from '@agyn/ui';
+import { emitNodeStatus } from '../mocks/emitters';
 
-// Mock socket emitter
-export const emitted: Array<NodeStatusEvent> = [];
-export function emitNodeStatus(ev: NodeStatusEvent) {
-  emitted.push(ev);
-  const anySock: any = socketModule.graphSocket as any;
-  const set = (anySock.listeners as Map<string, Set<(...args: unknown[]) => unknown>>).get(ev.nodeId);
-  if (set) for (const fn of set) fn(ev);
-}
+// Re-export emitter for convenience in integration tests
+export { emitNodeStatus };
 
 export const mockTemplates: TemplateSchema[] = [
   {
@@ -88,6 +82,8 @@ export const handlers = [
     if (!name || !version) return new _HttpResponse(null, { status: 400 });
     return _HttpResponse.json({ name, version, commitHash: 'abcd1234', attributePath: `${name}` });
   }),
+  // Tracing spans used by runningStore and NodeObsSidebar seeding
+  _http.get('http://localhost:4319/v1/spans', () => _HttpResponse.json({ items: [] })),
 ];
 
 export const server = setupServer(...handlers);

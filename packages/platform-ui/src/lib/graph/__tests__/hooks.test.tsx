@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { useNodeStatus, useTemplates, useNodeReminders } from '../../graph/hooks';
-import { graphSocket } from '../../graph/socket';
+import { emitNodeStatus } from '../../../../__tests__/mocks/emitters';
 
 const g: any = globalThis;
 
@@ -35,18 +35,14 @@ describe('graph hooks', () => {
     const wrapper = ({ children }: any) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 
     // intercept socket and emit
-    const off = graphSocket.onNodeStatus('n1', () => {});
-    off(); // ensure registry works
+    // Ensure hook subscribes without emitting
 
     const { result } = renderHook(() => useNodeStatus('n1'), { wrapper });
     await waitFor(() => expect(result.current.data).toBeTruthy());
     expect(result.current.data?.isPaused).toBe(false);
 
-    // simulate socket event
-    const anySock: any = graphSocket as any;
-    for (const [nodeId, set] of anySock.listeners as Map<string, Set<(...args: unknown[]) => unknown>>) {
-      if (nodeId === 'n1') for (const fn of set) fn({ nodeId: 'n1', isPaused: true });
-    }
+    // simulate socket event via emitter
+    emitNodeStatus({ nodeId: 'n1', isPaused: true });
 
     await waitFor(() => expect(result.current.data?.isPaused).toBe(true));
   });

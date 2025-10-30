@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useNodeAction, useNodeStatus } from '../../graph/hooks';
-import { graphSocket } from '../../graph/socket';
+import { emitNodeStatus } from '../../../../__tests__/mocks/emitters';
 import type { NodeStatusEvent } from '../../graph/types';
 
 vi.mock('../../graph/api', () => ({
@@ -36,11 +36,8 @@ describe('optimistic actions with socket reconciliation', () => {
     // cache should show provisioning
     await waitFor(() => expect(statusQ.current.data?.provisionStatus?.state).toBe('provisioning'));
 
-    // Simulate socket event to ready
-    const anySock: any = graphSocket as any;
-    for (const [nodeId, set] of anySock.listeners as Map<string, Set<(...args: unknown[]) => unknown>>) {
-      if (nodeId === 'n1') for (const fn of set) fn({ nodeId: 'n1', provisionStatus: { state: 'ready' } } as NodeStatusEvent);
-    }
+    // Simulate socket event to ready via emitter
+    emitNodeStatus({ nodeId: 'n1', provisionStatus: { state: 'ready' } } as NodeStatusEvent);
 
     await waitFor(() => expect(statusQ.current.data?.provisionStatus?.state).toBe('ready'));
   });
