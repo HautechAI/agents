@@ -13,8 +13,9 @@ import {
   HumanMessage,
   ToolCallOutputMessage,
   ToolCallMessage,
+  AIMessage,
+  ResponseMessage,
 } from '@agyn/tracing';
-import { AIMessage, ResponseMessage } from '@agyn/tracing';
 
 async function main() {
   const endpoint = process.env.TRACING_SERVER_URL || 'http://localhost:4319';
