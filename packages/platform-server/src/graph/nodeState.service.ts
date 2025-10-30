@@ -3,7 +3,7 @@ import { LoggerService } from '../core/services/logger.service';
 import { LiveGraphRuntime } from './liveGraph.manager';
 import { GraphSocketGateway } from '../gateway/graph.socket.gateway';
 import { GraphRepository } from './graph.repository';
-import deepmerge from 'deepmerge';
+import { mergeWith, isArray } from 'lodash-es';
 
 /**
  * Centralized service to persist per-node runtime state && reflect changes in the in-memory runtime snapshot.
@@ -27,7 +27,10 @@ export class NodeStateService {
     try {
       // Deep-merge previous snapshot with incoming patch (arrays replace)
       const prev = this.runtime.getNodeStateSnapshot(nodeId) || {};
-      const merged = deepmerge(prev, patch, { arrayMerge: (_dest, source) => source });
+      const merged = mergeWith({}, prev, patch, (objValue, srcValue) => {
+      if (isArray(objValue) && isArray(srcValue)) return srcValue;
+      return undefined;
+    });
       // Persist merged via repository, update runtime with merged
       await this.graphRepository.upsertNodeState(name, nodeId, merged);
       this.runtime.updateNodeState(nodeId, merged);
