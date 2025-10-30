@@ -6,8 +6,7 @@ import { LoggerService } from '../../../core/services/logger.service';
 import { z } from 'zod';
 
 import {
-  FunctionTool,
-  HumanMessage,
+  FunctionTool, HumanMessage, AIMessage,
   Loop,
   Reducer,
   ResponseMessage,
@@ -109,6 +108,8 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
   private mcpServerTools: Map<LocalMCPServerNode, FunctionTool[]> = new Map();
   private tools: Set<FunctionTool> = new Set();
+  private runningThreads: Set<string> = new Set();
+  private currentRunIds: Map<string, string> = new Map();
 
   constructor(
     @Inject(ConfigService) protected configService: ConfigService,
@@ -224,13 +225,6 @@ export class AgentNode extends Node<AgentStaticConfig> {
         if (ctx.finishSignal.isActive) {
           return { state, next: null };
         }
-        if (self.config.whenBusy === 'injectAfterTools') {
-          const drained = self.buffer.tryDrain(ctx.threadId, ProcessBuffer.AllTogether);
-          if (drained.length > 0) {
-            const injected = drained.map((d) => HumanMessage.fromText(JSON.stringify(d)));
-            state = { ...state, messages: [...state.messages, ...injected] };
-          }
-        }
         return { state, next: 'summarize' };
       }
     }
@@ -260,25 +254,28 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return loop;
   }
   async invoke(thread: string, messages: BufferMessage[]): Promise<ResponseMessage | ToolCallOutputMessage> {
-    // Buffering & run tracking: enqueue and drain respecting config
-
+    // Busy gating: enqueue first, then decide whether to start a new run
     this.buffer.setDebounceMs(this.config.debounceMs ?? 0);
-    this.buffer.enqueue(thread, messages);
-    // Generate run id for persistence
+    const busy = this.runningThreads.has(thread);
+    if (busy) {
+      this.buffer.enqueue(thread, messages);
+      return new ResponseMessage({ output: [AIMessage.fromText('queued').toPlain()] });
+    }
+
+    // Idle: record run, buffer inputs (pre-run, no token), and start loop
     const runId = `${thread}/${Date.now()}`;
+    this.runningThreads.add(thread);
+    this.currentRunIds.set(thread, runId);
+    if (messages && messages.length) this.buffer.enqueue(thread, messages);
     await this.runs.startRun(this.nodeId, thread, runId);
 
+    const mode = (this.config.processBuffer ?? 'allTogether') === 'oneByOne' ? ProcessBuffer.OneByOne : ProcessBuffer.AllTogether;
     return await withAgent(
       { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
       async () => {
         const loop = await this.prepareLoop();
-        // Drain buffer per config
-        const mode = (this.config.processBuffer ?? 'allTogether') === 'allTogether' ? 'allTogether' : 'oneByOne';
-        const drained: BufferMessage[] = this.buffer.tryDrain(
-          thread,
-          mode === 'allTogether' ? ProcessBuffer.AllTogether : ProcessBuffer.OneByOne,
-        );
-        const toProcess: BufferMessage[] = drained.length > 0 ? drained : messages;
+        // Process provided messages immediately; if none provided (auto-run), drain the queue
+        let toProcess: BufferMessage[] = (messages && messages.length > 0) ? messages : this.buffer.tryDrain(thread, mode);
         const history: HumanMessage[] = toProcess.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
         const finishSignal = new Signal();
 
@@ -293,16 +290,26 @@ export class AgentNode extends Node<AgentStaticConfig> {
         if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
           this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
           await this.runs.markTerminated(this.nodeId, runId);
+          // Clear busy and schedule next run if buffer has messages
+          this.runningThreads.delete(thread);
+          this.currentRunIds.delete(thread);
+          const readyAt = this.buffer.nextReadyAt(thread);
+          if (typeof readyAt === 'number') {
+            const delay = Math.max(0, readyAt - Date.now());
+            setTimeout(() => void this.invoke(thread, []), delay);
+          }
           return result;
         }
 
+        this.runningThreads.delete(thread);
+          this.currentRunIds.delete(thread);
         throw new Error('Agent did not produce a valid response message.');
       },
     );
   }
 
   public async listActiveThreads(prefix?: string): Promise<string[]> {
-    const items = await this.runs.list(this.nodeId, 'all');
+    const items = await this.runs.list(this.nodeId, 'running');
     const ids = new Set<string>(items.map((i) => i.threadId));
     const out = Array.from(ids.values());
     return prefix ? out.filter((t) => t.startsWith(prefix)) : out;
@@ -395,6 +402,16 @@ export class AgentNode extends Node<AgentStaticConfig> {
     } catch (e: unknown) {
       this.logger.error?.('Agent: syncMcpToolsFromServer error', e);
     }
+  }
+
+
+  isThreadRunning(threadId: string): boolean {
+    return this.runningThreads.has(threadId);
+  }
+
+
+  getCurrentRunId(threadId: string): string | undefined {
+    return this.currentRunIds.get(threadId);
   }
 
   // Static introspection removed per hotfix; rely on TemplateRegistry meta.
