@@ -68,6 +68,6 @@ describe('RightPropertiesPanel', () => {
   it('renders fallback placeholders when view missing', () => {
     render(<RightPropertiesPanel node={makeNode('missing')} onChange={onChange} />);
     expect(screen.getByText(/No custom view registered for missing \(static\)/)).toBeInTheDocument();
-    expect(screen.getByText(/No custom view registered for missing \(dynamic\)/)).toBeInTheDocument();
+    expect(screen.getByText(/No custom view registered for missing \(state\)/)).toBeInTheDocument();
   });
 });

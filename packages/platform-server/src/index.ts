@@ -51,7 +51,11 @@ async function bootstrap() {
     ],
     credentials: false,
   };
-  await fastify.register(fastifyCors, corsOptions);
+  // Register CORS with a small typed wrapper to satisfy TS without casts
+  function registerCors(inst: { register: (plugin: unknown, opts: FastifyCorsOptions) => Promise<unknown> }, opts: FastifyCorsOptions) {
+    return inst.register(fastifyCors as unknown, opts);
+  }
+  await registerCors(fastify as any, corsOptions);
 
   const app = await NestFactory.create(AppModule, adapter);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
