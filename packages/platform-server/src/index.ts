@@ -7,20 +7,18 @@ initTracing({
   defaultAttributes: { service: 'server' },
 });
 
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
-import { ValidationPipe } from '@nestjs/common';
 import type { FastifyTypeProviderDefault } from 'fastify';
 // CORS is enabled via Nest's app.enableCors to avoid type-provider mismatches
 
 import { LoggerService } from './core/services/logger.service';
-import { ContainerCleanupService } from './infra/container/containerCleanup.job';
 
 import { AppModule } from './bootstrap/app.module';
-import { MongoService } from './core/services/mongo.service';
+import { ConfigService } from './core/services/config.service';
 import { GraphSocketGateway } from './gateway/graph.socket.gateway';
 import { LiveGraphRuntime } from './graph';
-import { ConfigService } from './core/services/config.service';
 // Remove central platform.services.factory usage; rely on DI providers
 
 async function bootstrap() {
@@ -35,21 +33,8 @@ async function bootstrap() {
 
   const corsOptions = {
     origin: allowedOrigins.length ? allowedOrigins : true,
-    methods: [
-      'GET',
-      'HEAD',
-      'PUT',
-      'PATCH',
-      'POST',
-      'DELETE',
-      'OPTIONS',
-    ],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'Accept',
-    ],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
     credentials: false,
   };
   // Enable CORS via Nest to avoid Fastify type-provider generic mismatches

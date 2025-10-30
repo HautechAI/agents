@@ -1,4 +1,4 @@
-import { HumanMessage, ResponseMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
+import { AIMessage, HumanMessage, ResponseMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 
@@ -182,6 +182,7 @@ function now() {
 
 function messageToAttributes(msg: ContextMessage | ToolCallMessage): Record<string, unknown> {
   if (msg instanceof HumanMessage || msg instanceof SystemMessage) {
+    console.log(JSON.stringify(msg));
     return {
       role: msg.role,
       content: msg.text,
@@ -499,6 +500,7 @@ export function withSystem<T>(attributes: { label: string; [k: string]: unknown 
 export type ContextMessage =
   | SystemMessage //
   | HumanMessage
+  | AIMessage
   | ResponseMessage
   | ToolCallOutputMessage;
 
