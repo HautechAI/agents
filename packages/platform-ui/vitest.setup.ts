@@ -16,7 +16,7 @@ if (typeof g.ResizeObserver === 'undefined') {
 }
 
 // Test harness: mock socket.io-client to avoid JSDOM network calls
-import { vi } from 'vitest';
+import { vi, afterAll } from 'vitest';
 
 type Handler = (...args: unknown[]) => void;
 interface SocketStub {
@@ -34,4 +34,14 @@ vi.mock('socket.io-client', () => {
   return {
     io: (_url?: string, _opts?: unknown) => sock,
   };
+});
+
+// Ensure any fake timers are reset and cleared after all tests
+afterAll(() => {
+  try {
+    vi.useRealTimers();
+  } catch {}
+  try {
+    vi.clearAllTimers();
+  } catch {}
 });
