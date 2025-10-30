@@ -36,4 +36,37 @@ describe('ShellToolConfigView payload', () => {
     expect(cfg.idleTimeoutMs).toBe(2000);
     expect(cfg.outputLimitChars).toBe(12345);
   });
+
+  it('validates outputLimitChars: accepts 0 and large positive, rejects negative', () => {
+    let cfg: any = {};
+    let errors: string[] = [];
+    render(
+      <TooltipProvider delayDuration={0}>
+        <ShellToolConfigView
+          templateName="shellTool"
+          value={{}}
+          onChange={(v) => (cfg = v)}
+          readOnly={false}
+          disabled={false}
+          onValidate={(e) => (errors = e)}
+        />
+      </TooltipProvider>,
+    );
+    const outLimit = screen.getByLabelText('Output limit (characters)') as HTMLInputElement;
+
+    // Accept 0
+    fireEvent.change(outLimit, { target: { value: '0' } });
+    expect(cfg.outputLimitChars).toBe(0);
+    expect(errors.includes('outputLimitChars must be 0 or a positive integer')).toBe(false);
+
+    // Accept large value
+    fireEvent.change(outLimit, { target: { value: '10000000' } });
+    expect(cfg.outputLimitChars).toBe(10000000);
+    expect(errors.includes('outputLimitChars must be 0 or a positive integer')).toBe(false);
+
+    // Reject negative
+    fireEvent.change(outLimit, { target: { value: '-1' } });
+    // Validation should surface error
+    expect(errors.includes('outputLimitChars must be 0 or a positive integer')).toBe(true);
+  });
 });

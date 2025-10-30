@@ -25,8 +25,8 @@ export default function ShellToolConfigView({ value, onChange, readOnly, disable
     const inRange = (v: number) => v === 0 || (Number.isInteger(v) && v >= 1000 && v <= 86400000);
     if (!inRange(executionTimeoutMs)) errors.push('executionTimeoutMs must be 0 or 1000-86400000');
     if (!inRange(idleTimeoutMs)) errors.push('idleTimeoutMs must be 0 or 1000-86400000');
-    const outputLimitInRange = (v: number) => v === 0 || (Number.isInteger(v) && v >= 1 && v <= 500000);
-    if (!outputLimitInRange(outputLimitChars)) errors.push('outputLimitChars must be 0 or 1-500000');
+    const outputLimitInRange = (v: number) => v === 0 || (Number.isInteger(v) && v > 0);
+    if (!outputLimitInRange(outputLimitChars)) errors.push('outputLimitChars must be 0 or a positive integer');
     onValidate?.(errors);
   }, [workdir, executionTimeoutMs, idleTimeoutMs, outputLimitChars, onValidate]);
 
