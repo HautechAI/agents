@@ -19,6 +19,7 @@ class DummyRuns {
 }
 
 class TestAgent extends AgentNode {
+  public shouldThrow = false;
   public bufferPublic(): MessagesBuffer { return (this as any).buffer as MessagesBuffer; }
   protected async prepareLoop(): Promise<Loop<LLMState, LLMContext>> {
     const reducerId = 'load';
@@ -27,6 +28,7 @@ class TestAgent extends AgentNode {
       async invoke(state: LLMState, _ctx: LLMContext): Promise<LLMState> {
         const ai = AIMessage.fromText('ok');
         const resp = new ResponseMessage({ output: [ai.toPlain()] });
+        if (self.shouldThrow) { throw new Error("boom"); }
         return { ...state, messages: [...state.messages, resp] };
       }
     })();
@@ -72,5 +74,35 @@ describe('Agent busy-mode serialization (wait)', () => {
 
     expect(r1.text).toBe('ok');
     expect(r2.text).toBe('ok');
+  });
+});
+
+
+describe('Agent injectAfterTools without tools: pre-exit safeguard', () => {
+  it('continues within same run and schedules follow-up if capped', async () => {
+    const agent = makeAgent({ whenBusy: 'injectAfterTools', processBuffer: 'allTogether', maxContinueIterations: 1 });
+    const t = 't-inject';
+    const m0 = HumanMessage.fromText('m0');
+    const p = agent.invoke(t, [m0]);
+    // Enqueue additional messages during run
+    agent.bufferPublic().enqueue(t, [HumanMessage.fromText('m1'), HumanMessage.fromText('m2')]);
+    const r = await p;
+    expect(r.text).toBe('ok');
+    // Give time for any scheduled follow-up to run
+    await new Promise((res) => setTimeout(res, 10));
+    expect(agent.bufferPublic().size(t)).toBe(0);
+  });
+});
+
+describe('Agent error path: lock releases and buffer consistent', () => {
+  it('on failure, next invoke proceeds', async () => {
+    const agent = makeAgent({ whenBusy: 'wait' });
+    const t = 't-error';
+    (agent as any).shouldThrow = true;
+    const m = HumanMessage.fromText('x');
+    await expect(agent.invoke(t, [m])).rejects.toBeInstanceOf(Error);
+    (agent as any).shouldThrow = false;
+    const r = await agent.invoke(t, [HumanMessage.fromText('y')]);
+    expect(r.text).toBe('ok');
   });
 });
