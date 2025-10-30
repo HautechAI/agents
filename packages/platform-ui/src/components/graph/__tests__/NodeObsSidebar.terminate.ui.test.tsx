@@ -8,6 +8,8 @@ vi.mock('../../../lib/graph/templates.provider', () => ({
   useTemplatesCache: () => ({ getTemplate: (_name: string) => ({ kind: 'agent' }) }),
 }));
 vi.mock('../../../lib/graph/hooks', () => ({ useNodeReminders: () => ({ isLoading: false, data: { items: [] } }) }));
+// Avoid real network for tracing spans seeding
+vi.mock('../../../lib/tracing/api', () => ({ fetchSpansInRange: async () => ({ items: [] }) }));
 vi.mock('../../../lib/graph/api', () => ({
   api: {
     listNodeRuns: vi.fn(async () => ({ items: [{ nodeId: 'n', threadId: 't', runId: 't/run-1', status: 'running', startedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }] })),
