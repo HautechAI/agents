@@ -12,7 +12,8 @@
     "start": "node dist/index.cjs"
   },
   "dependencies": {
-    "@agyn/tracing": "workspace:*"
+    "@agyn/tracing": "workspace:*",
+    "@agyn/llm": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.23.1",
