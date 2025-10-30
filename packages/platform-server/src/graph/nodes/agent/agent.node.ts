@@ -32,6 +32,7 @@ import { Signal } from '../../../signal';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { MessagesBuffer, ProcessBuffer, BufferMessage } from './messagesBuffer';
+import { ThreadLockService, LockLease } from './threadLock.service';
 
 /**
  * Zod schema describing static configuration for Agent.
@@ -55,11 +56,25 @@ export const AgentStaticConfigSchema = z
         "When agent is busy: 'wait' queues new messages for next run; 'injectAfterTools' injects them into the current run after tools stage.",
       )
       .meta({ 'ui:widget': 'select' }),
+    maxBatchSize: z.number().int().min(1).optional().describe('Optional cap for messages consumed per drain.'),
+    maxContinueIterations: z
+      .number()
+      .int()
+      .min(0)
+      .default(1)
+      .describe('Max in-run continue cycles for injectAfterTools safeguard (0 to disable).'),
     processBuffer: z
       .enum(['allTogether', 'oneByOne'])
       .default('allTogether')
       .describe('Drain mode: process all queued messages together vs one message per run.')
       .meta({ 'ui:widget': 'select' }),
+    maxBatchSize: z.number().int().min(1).optional().describe('Optional cap for messages consumed per drain.'),
+    maxContinueIterations: z
+      .number()
+      .int()
+      .min(0)
+      .default(1)
+      .describe('Max in-run continue cycles for injectAfterTools safeguard (0 to disable).'),
     summarizationKeepTokens: z
       .number()
       .int()
@@ -115,6 +130,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     @Inject(LoggerService) protected logger: LoggerService,
     @Inject(LLMProvisioner) protected llmProvisioner: LLMProvisioner,
     @Inject(AgentRunService) protected readonly runs: AgentRunService,
+    @Inject(ThreadLockService) private readonly locks: ThreadLockService,
     @Inject(ModuleRef) protected readonly moduleRef: ModuleRef,
   ) {
     super(logger);
@@ -225,7 +241,9 @@ export class AgentNode extends Node<AgentStaticConfig> {
           return { state, next: null };
         }
         if (self.config.whenBusy === 'injectAfterTools') {
-          const drained = self.buffer.tryDrain(ctx.threadId, ProcessBuffer.AllTogether);
+          const mode = (self.config.processBuffer ?? 'allTogether') === 'allTogether' ? ProcessBuffer.AllTogether : ProcessBuffer.OneByOne;
+          const maxBatch = self.config.maxBatchSize;
+          const drained = mode === ProcessBuffer.AllTogether ? self.buffer.drainAll(ctx.threadId, maxBatch) : self.buffer.drainOne(ctx.threadId);
           if (drained.length > 0) {
             const injected = drained.map((d) => HumanMessage.fromText(JSON.stringify(d)));
             state = { ...state, messages: [...state.messages, ...injected] };
@@ -237,12 +255,25 @@ export class AgentNode extends Node<AgentStaticConfig> {
     toolsSave.next(new AfterToolsRouter());
     reducers['tools_save'] = toolsSave;
 
-    // save -> enforceTools (if enabled) or end (static)
-    reducers['save'] = (await this.moduleRef.create(SaveLLMReducer)).next(
-      (await this.moduleRef.create(ConditionalLLMRouter)).init((_state, _ctx) =>
-        this.config.restrictOutput ? 'enforceTools' : null,
-      ),
-    );
+    // save -> enforceTools (if enabled) or end (static). Also inject checkpoint for no-tools path.
+    const saveNoTools = await this.moduleRef.create(SaveLLMReducer);
+    class AfterSaveRouter extends Router<LLMState, LLMContext> {
+      async route(state: LLMState, ctx: LLMContext): Promise<{ state: LLMState; next: string | null }> {
+        if (ctx.finishSignal.isActive) return { state, next: null };
+        if (self.config.whenBusy === 'injectAfterTools') {
+          const mode = (self.config.processBuffer ?? 'allTogether') === 'allTogether' ? ProcessBuffer.AllTogether : ProcessBuffer.OneByOne;
+          const maxBatch = self.config.maxBatchSize;
+          const drained = mode === ProcessBuffer.AllTogether ? self.buffer.drainAll(ctx.threadId, maxBatch) : self.buffer.drainOne(ctx.threadId);
+          if (drained.length > 0) {
+            const injected = drained.map((d) => HumanMessage.fromText(JSON.stringify(d)));
+            state = { ...state, messages: [...state.messages, ...injected] };
+          }
+        }
+        return { state, next: self.config.restrictOutput ? 'enforceTools' : null };
+      }
+    }
+    saveNoTools.next(new AfterSaveRouter());
+    reducers['save'] = saveNoTools;
 
     // enforceTools -> summarize OR end (conditional) if enabled
     if (this.config.restrictOutput) {
@@ -260,48 +291,96 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return loop;
   }
   async invoke(thread: string, messages: BufferMessage[]): Promise<ResponseMessage | ToolCallOutputMessage> {
-    // Buffering & run tracking: enqueue and drain respecting config
-
+    // Enqueue incoming messages into the single queue
     this.buffer.setDebounceMs(this.config.debounceMs ?? 0);
-    this.buffer.enqueue(thread, messages);
-    // Generate run id for persistence
+    if (messages.length > 0) this.buffer.enqueue(thread, messages);
+
+    const whenBusy = (this.config.whenBusy ?? 'wait') as WhenBusyMode;
     const runId = `${thread}/${Date.now()}`;
+
+    // Busy handling
+    if (whenBusy === 'injectAfterTools' && this.locks.isHeld(thread)) {
+      // Join current run; resolve with its final result
+      const join = this.locks.join(thread, []);
+      const resultP = this.locks.currentResult(thread);
+      if (!resultP) {
+        // No active run result yet; wait until processed then fall through to acquire
+        await join.processed;
+      } else {
+        await join.processed;
+        return await resultP;
+      }
+    }
+
+    // Acquire lock (wait if needed in 'wait' mode or after joined run completed)
+    const lease: LockLease = await this.locks.acquire(thread, runId);
     await this.runs.startRun(this.nodeId, thread, runId);
 
-    return await withAgent(
-      { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
-      async () => {
+    try {
+      return await withAgent({ threadId: thread, nodeId: this.nodeId, runId }, async () => {
         const loop = await this.prepareLoop();
-        // Drain buffer per config
-        const mode = (this.config.processBuffer ?? 'allTogether') === 'allTogether' ? 'allTogether' : 'oneByOne';
-        const drained: BufferMessage[] = this.buffer.tryDrain(
-          thread,
-          mode === 'allTogether' ? ProcessBuffer.AllTogether : ProcessBuffer.OneByOne,
-        );
-        const toProcess: BufferMessage[] = drained.length > 0 ? drained : messages;
-        const history: HumanMessage[] = toProcess.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
-        const finishSignal = new Signal();
 
-        const newState = await loop.invoke(
-          { messages: history },
-          { threadId: thread, finishSignal, callerAgent: this },
-          { start: 'load' },
-        );
+        const mode = (this.config.processBuffer ?? 'allTogether') === 'allTogether' ? ProcessBuffer.AllTogether : ProcessBuffer.OneByOne;
+        const maxBatch = this.config.maxBatchSize;
+        // Initial drain after acquiring lock
+        const initial: BufferMessage[] = mode === ProcessBuffer.AllTogether
+          ? this.buffer.drainAll(thread, maxBatch)
+          : this.buffer.drainOne(thread);
+        const toProcess = initial.length > 0 ? initial : messages;
 
-        const result = newState.messages.at(-1);
+        const runOnce = async (batch: BufferMessage[]): Promise<ResponseMessage | ToolCallOutputMessage> => {
+          const history: HumanMessage[] = batch.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
+          const finishSignal = new Signal();
+          const newState = await loop.invoke(
+            { messages: history },
+            { threadId: thread, finishSignal, callerAgent: this },
+            { start: 'load' },
+          );
+          const result = newState.messages.at(-1);
+          if (
+            (finishSignal.isActive && result instanceof ToolCallOutputMessage) ||
+            result instanceof ResponseMessage
+          ) {
+            return result as ResponseMessage | ToolCallOutputMessage;
+          }
+          throw new Error('Agent did not produce a valid response message.');
+        };
 
-        if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
-          this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
-          await this.runs.markTerminated(this.nodeId, runId);
-          return result;
+        let finalResult = await runOnce(toProcess);
+
+        // Pre-exit safeguard for injectAfterTools: bounded continue loop
+        if (whenBusy === 'injectAfterTools') {
+          const maxIters = Math.max(0, this.config.maxContinueIterations ?? 1);
+          let iter = 0;
+          while (iter < maxIters && this.buffer.hasPending(thread)) {
+            const nextBatch = mode === ProcessBuffer.AllTogether
+              ? this.buffer.drainAll(thread, maxBatch)
+              : this.buffer.drainOne(thread);
+            if (nextBatch.length === 0) break;
+            finalResult = await runOnce(nextBatch);
+            iter++;
+          }
+          // If still pending, schedule a follow-up run to avoid stuck messages
+          if (this.buffer.hasPending(thread)) {
+            setTimeout(() => {
+              void this.invoke(thread, []);
+            }, 0);
+          }
         }
 
-        throw new Error('Agent did not produce a valid response message.');
-      },
-    );
+        // Publish result for joiners
+        this.locks.setResult(thread, finalResult);
+        this.logger.info(`Agent response in thread ${thread}: ${finalResult?.text}`);
+        await this.runs.markTerminated(this.nodeId, runId);
+        return finalResult;
+      });
+    } catch (e) {
+      throw e;
+    } finally {
+      this.locks.release(lease);
+    }
   }
-
-  public async listActiveThreads(prefix?: string): Promise<string[]> {
+public async listActiveThreads(prefix?: string): Promise<string[]> {
     const items = await this.runs.list(this.nodeId, 'all');
     const ids = new Set<string>(items.map((i) => i.threadId));
     const out = Array.from(ids.values());
