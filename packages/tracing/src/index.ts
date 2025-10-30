@@ -182,7 +182,6 @@ function now() {
 
 function messageToAttributes(msg: ContextMessage | ToolCallMessage): Record<string, unknown> {
   if (msg instanceof HumanMessage || msg instanceof SystemMessage) {
-    console.log(JSON.stringify(msg));
     return {
       role: msg.role,
       content: msg.text,
