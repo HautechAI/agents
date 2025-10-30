@@ -27,7 +27,7 @@ export class LocalMCPServerTool extends FunctionTool<z.ZodObject> {
     super();
   }
   get name() {
-    return `${this.node.config.namespace}_${this._name}`;
+    return this.node.config.namespace ? `${this.node.config.namespace}_${this._name}` : this._name;
   }
   get description() {
     return this._description;

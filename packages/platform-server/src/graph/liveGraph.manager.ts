@@ -195,6 +195,7 @@ export class LiveGraphRuntime {
     };
 
     // 1. Add / Recreate nodes
+    this.logger.debug('Instantiating nodes');
     for (const nodeDef of diff.addedNodes) {
       try {
         await this.instantiateNode(nodeDef);
@@ -215,6 +216,7 @@ export class LiveGraphRuntime {
     }
 
     // 2. Config updates
+    this.logger.debug('Configuring nodes');
     for (const nodeId of diff.configUpdateNodeIds) {
       const nodeDef = next.nodes.find((n) => n.id === nodeId)!;
       const live = this.state.nodes.get(nodeId);
@@ -232,6 +234,7 @@ export class LiveGraphRuntime {
     // 2b. Dynamic config removed: use node state mutations in future.
 
     // 3. Remove edges (reverse if needed) BEFORE removing nodes
+    this.logger.debug('Remove edges');
     for (const rem of diff.removedEdges) {
       const key = edgeKey(rem);
       const rec = this.state.executedEdges.get(key);
@@ -247,11 +250,13 @@ export class LiveGraphRuntime {
     }
 
     // 4. Remove nodes (and any residual edges referencing them)
+    this.logger.debug('Remove nodes');
     for (const nodeId of diff.removedNodeIds) {
       await this.disposeNode(nodeId).catch((err) => pushError(err as GraphError));
     }
 
     // 5. Add edges
+    this.logger.debug('Add edges');
     for (const edge of diff.addedEdges) {
       try {
         await this.executeEdge(edge, next);
@@ -260,7 +265,16 @@ export class LiveGraphRuntime {
       }
     }
 
-    // 6. Update state metadata
+    // 6. Provision nodes
+    this.logger.debug('Provision nodes');
+    await Promise.all(
+      [...this.state.nodes.values()].map(async (live) => {
+        await live.instance.provision();
+      }),
+    );
+
+    // 7. Update state metadata
+    this.logger.debug('Updating state metadata');
     this.state.version += 1;
     this.state.lastGraph = next;
 
@@ -352,7 +366,6 @@ export class LiveGraphRuntime {
         await created.setConfig(node.data.config);
       }
       await created.setState(node.data.state ?? {});
-      void created.provision();
     } catch (e) {
       // Factory creation or any init error should include nodeId
       if (e instanceof GraphError) throw e; // already enriched

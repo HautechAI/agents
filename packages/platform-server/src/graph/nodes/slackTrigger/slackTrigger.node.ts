@@ -158,6 +158,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     this._listeners = this._listeners.filter((l) => l !== listener);
   }
   protected async notify(thread: string, messages: TriggerHumanMessage[]): Promise<void> {
+    this.logger.debug(`[SlackTrigger.notify] thread=${thread} messages=${YamlStringify(messages)}`);
     if (!messages.length) return;
     await Promise.all(
       this._listeners.map(async (listener) =>

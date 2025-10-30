@@ -218,7 +218,6 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
     // tools_save -> branch (summarize | exit)
     const toolsSave = await this.moduleRef.create(SaveLLMReducer);
-    const self = this;
     class AfterToolsRouter extends Router<LLMState, LLMContext> {
       async route(state: LLMState, ctx: LLMContext): Promise<{ state: LLMState; next: string | null }> {
         if (ctx.finishSignal.isActive) {
@@ -303,12 +302,12 @@ export class AgentNode extends Node<AgentStaticConfig> {
   addTool(toolNode: BaseToolNode<any>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.add(tool);
-    this.logger.info(`Tool added to Agent: ${tool.name} (${toolNode.constructor.name})`);
+    this.logger.debug(`[Agent: ${this.config.title}] Tool added: ${tool.name} (${toolNode.constructor.name})`);
   }
   removeTool(toolNode: BaseToolNode<any>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.delete(tool);
-    this.logger.info(`Tool removed from Agent: ${tool.name} (${toolNode.constructor.name})`);
+    this.logger.debug(`[Agent: ${this.config.title}] Tool removed: ${tool.name} (${toolNode.constructor.name})`);
   }
 
   async addMcpServer(server: LocalMCPServerNode): Promise<void> {
@@ -351,7 +350,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
       for (const t of prev) {
         if (!latestNames.has(t.name)) {
           this.tools.delete(t);
-          this.logger.debug?.(`Agent: MCP tool removed (${namespace}/${t.name})`);
+          this.logger.debug?.(`[Agent: ${this.config.title}] MCP tool removed (${namespace}/${t.name})`);
         }
       }
 
@@ -360,7 +359,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
       for (const t of latest) {
         if (!prevNames.has(t.name)) {
           this.tools.add(t);
-          this.logger.debug(`Agent: MCP tool added ${t.name}`);
+          this.logger.debug(`[Agent: ${this.config.title}] MCP tool added ${t.name}`);
         }
       }
 
