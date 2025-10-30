@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, act } from '@testing-library/react';
 import React, { useEffect } from 'react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './testUtils';
@@ -44,13 +44,15 @@ describe('Builder autosave hydration gating', () => {
 
     let exposed: ReturnType<typeof useBuilderState> | null = null;
 
-    render(
-      <React.StrictMode>
-        <TestProviders>
-          <BuilderHarness expose={(api) => (exposed = api)} />
-        </TestProviders>
-      </React.StrictMode>,
-    );
+    await act(async () => {
+      render(
+        <React.StrictMode>
+          <TestProviders>
+            <BuilderHarness expose={(api) => (exposed = api)} />
+          </TestProviders>
+        </React.StrictMode>,
+      );
+    });
 
     await waitFor(() => {
       // Wait until hook reports ready
@@ -62,7 +64,7 @@ describe('Builder autosave hydration gating', () => {
     expect(postSpy.count).toBe(0);
 
     // Perform a user-initiated change: update node data
-    exposed!.updateNodeData('n1', { name: 'edited' });
+    await act(async () => { exposed!.updateNodeData('n1', { name: 'edited' }); });
 
     // Wait beyond debounce
     await new Promise((r) => setTimeout(r, 150));

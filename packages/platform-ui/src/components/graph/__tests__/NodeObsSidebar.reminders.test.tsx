@@ -28,8 +28,8 @@ describe('NodeObsSidebar Active Reminders', () => {
 
   it('renders Active Reminders section and items', async () => {
     render(<NodeObsSidebar node={node} />);
-    expect(screen.getByText('Active Reminders')).toBeInTheDocument();
-    expect(screen.getByText('Check back')).toBeInTheDocument();
+    expect(await screen.findByText('Active Reminders')).toBeInTheDocument();
+    expect(await screen.findByText('Check back')).toBeInTheDocument();
     // Thread id appears inside an aria-label and split text; use label to assert
     expect(screen.getByLabelText('Reminder for thread t-1')).toBeInTheDocument();
   });

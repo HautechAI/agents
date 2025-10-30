@@ -3,7 +3,7 @@ import type { NodeStatusEvent as NodeStatusEventSrc } from '../../src/lib/graph/
 import type { SpanDoc as SpanDocSrc } from '../../src/lib/tracing/api';
 
 // Local explicit interfaces to avoid any implicit anys
-export interface NodeStatusEvent extends NodeStatusEventSrc {}
+export type NodeStatusEvent = NodeStatusEventSrc;
 
 export interface NodeStateEvent {
   nodeId: string;
@@ -27,7 +27,7 @@ export interface InitialPayload {
   items: ServerCheckpointWrite[];
 }
 
-export interface SpanDoc extends SpanDocSrc {}
+export type SpanDoc = SpanDocSrc;
 
 // Zod schemas to validate unknown inputs
 const provisionState = z.enum([

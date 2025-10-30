@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeAll, afterAll, afterEach, describe, it, expect } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from '../../integration/testUtils';
@@ -29,13 +29,13 @@ describe('Builder toolbar + popover + DnD', () => {
 
   it('renders floating toolbar and popover content is unmounted by default, mounts on open', async () => {
     mockApi();
-    render(
+    await act(async () => { await act(async () => { await act(async () => { render(
       <TestProviders>
         <TooltipProvider>
           <AgentBuilder />
         </TooltipProvider>
       </TestProviders>,
-    );
+    ); }); }); });
     const toolbar = await screen.findByTestId('builder-toolbar');
     expect(toolbar).toBeInTheDocument();
     // Pointer-events overlay vs toolbar
@@ -48,7 +48,7 @@ describe('Builder toolbar + popover + DnD', () => {
 
     // Open popover
     const addBtn = screen.getByTestId('add-node-button');
-    fireEvent.click(addBtn);
+    await act(async () => { fireEvent.click(addBtn); });
 
     // Content appears with data-state attributes driving classes (from @agyn/ui wrapper)
     const dialog = await screen.findByRole('dialog');
@@ -57,14 +57,14 @@ describe('Builder toolbar + popover + DnD', () => {
 
   it('supports keyboard navigation and insert on Enter', async () => {
     mockApi();
-    render(
+    await act(async () => { render(
       <TestProviders>
         <TooltipProvider>
           <AgentBuilder />
         </TooltipProvider>
       </TestProviders>,
-    );
-    fireEvent.click(await screen.findByTestId('add-node-button'));
+    ); });
+    await act(async () => { await act(async () => { fireEvent.click(await screen.findByTestId('add-node-button')); }); });
     await screen.findByRole('dialog');
     const options = await screen.findAllByRole('option');
     // Ensure real focus is placed on the first option before keyboarding
@@ -72,8 +72,8 @@ describe('Builder toolbar + popover + DnD', () => {
     first.focus();
     expect(first).toHaveFocus();
     // ArrowDown then Enter
-    fireEvent.keyDown(first, { key: 'ArrowDown' });
-    fireEvent.keyDown(first, { key: 'Enter' });
+    await act(async () => { fireEvent.keyDown(first, { key: 'ArrowDown' }); });
+    await act(async () => { fireEvent.keyDown(first, { key: 'Enter' }); });
     // After insert, popover content should be unmounted
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -83,13 +83,13 @@ describe('Builder toolbar + popover + DnD', () => {
 
   it('ESC closes popover and returns focus to trigger', async () => {
     mockApi();
-    render(
+    await act(async () => { render(
       <TestProviders>
         <TooltipProvider>
           <AgentBuilder />
         </TooltipProvider>
       </TestProviders>,
-    );
+    ); });
     const addBtn = await screen.findByTestId('add-node-button');
     await userEvent.click(addBtn);
     await screen.findByRole('dialog');
@@ -104,13 +104,13 @@ describe('Builder toolbar + popover + DnD', () => {
 
   it('Space on focused item inserts and closes popover', async () => {
     mockApi();
-    render(
+    await act(async () => { render(
       <TestProviders>
         <TooltipProvider>
           <AgentBuilder />
         </TooltipProvider>
       </TestProviders>,
-    );
+    ); });
     const addBtn = await screen.findByTestId('add-node-button');
     await userEvent.click(addBtn);
     await screen.findByRole('dialog');
@@ -127,18 +127,18 @@ describe('Builder toolbar + popover + DnD', () => {
 
   it('list items are DnD sources (data-testid present) and click insert works', async () => {
     mockApi();
-    render(
+    await act(async () => { render(
       <TestProviders>
         <TooltipProvider>
           <AgentBuilder />
         </TooltipProvider>
       </TestProviders>,
-    );
-    fireEvent.click(await screen.findByTestId('add-node-button'));
+    ); });
+    await act(async () => { await act(async () => { fireEvent.click(await screen.findByTestId('add-node-button')); }); });
     const item = await screen.findByTestId('template-agent.basic');
     expect(item).toBeInTheDocument();
     expect(item).toHaveAttribute('draggable', 'true');
-    fireEvent.click(item);
+    await act(async () => { fireEvent.click(item); });
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });

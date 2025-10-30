@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import React, { useState } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { server, TestProviders } from '../../integration/testUtils';
 import NixPackagesSection from '@/components/nix/NixPackagesSection';
 import type { NixPackageSelection } from '@/components/nix/types';
@@ -20,16 +20,16 @@ describe('NixPackagesSection (controlled)', () => {
   afterAll(() => server.close());
 
   it('adds, selects channel, and removes packages via onChange', async () => {
-    render(<Harness />);
+    await act(async () => { render(<Harness />); });
 
     const input = screen.getByLabelText('Search Nix packages') as HTMLInputElement;
     // Focus is required for the listbox to open (component checks document.activeElement)
     input.focus();
-    fireEvent.change(input, { target: { value: 'gi' } });
+    await act(async () => { fireEvent.change(input, { target: { value: 'gi' } }); });
 
     // Wait for suggestion to appear and click it
     await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
-    fireEvent.click(await screen.findByRole('option', { name: /gi/ }));
+    await act(async () => { fireEvent.click(await screen.findByRole('option', { name: /gi/ })); });
 
     // Selected list shows chosen item
     const selectedList = await screen.findByRole('list', { name: 'Selected Nix packages' });
@@ -40,10 +40,10 @@ describe('NixPackagesSection (controlled)', () => {
     const select = screen.getByLabelText(/Select version for gi/) as HTMLSelectElement;
     // MSW returns versions: ['1.2.3','1.0.0']
     await waitFor(() => expect(select.querySelector('option[value="1.2.3"]')).not.toBeNull());
-    fireEvent.change(select, { target: { value: '1.2.3' } });
+    await act(async () => { fireEvent.change(select, { target: { value: '1.2.3' } }); });
 
     // Remove the package
-    fireEvent.click(screen.getByLabelText('Remove gi'));
+    await act(async () => { fireEvent.click(screen.getByLabelText('Remove gi')); });
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Selected Nix packages' })).not.toBeInTheDocument());
   });
 });

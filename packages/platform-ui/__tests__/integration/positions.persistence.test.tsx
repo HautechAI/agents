@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, act } from '@testing-library/react';
 import React, { useEffect } from 'react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './testUtils';
@@ -36,11 +36,13 @@ describe('Builder position persistence', () => {
     );
 
     let api: ReturnType<typeof useBuilderState> | null = null;
-    render(
-      <TestProviders>
-        <Harness expose={(a) => (api = a)} />
-      </TestProviders>,
-    );
+    await act(async () => {
+      render(
+        <TestProviders>
+          <Harness expose={(a) => (api = a)} />
+        </TestProviders>,
+      );
+    });
     await waitFor(() => expect(api?.loading).toBe(false));
     // Trigger a save by changing name (data change)
     api!.updateNodeData('n1', { name: 'changed' });
@@ -56,11 +58,13 @@ describe('Builder position persistence', () => {
       ),
     );
     // Re-render hook to simulate reload
-    render(
-      <TestProviders>
-        <Harness expose={(a) => (api = a)} />
-      </TestProviders>,
-    );
+    await act(async () => {
+      render(
+        <TestProviders>
+          <Harness expose={(a) => (api = a)} />
+        </TestProviders>,
+      );
+    });
     await waitFor(() => expect(api?.loading).toBe(false));
     const nodeAfter = api!.nodes.find((n) => n.id === 'n1');
     expect(nodeAfter?.position).toEqual({ x: 10, y: 15 });
