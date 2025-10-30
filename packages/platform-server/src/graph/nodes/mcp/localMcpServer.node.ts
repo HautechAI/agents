@@ -16,6 +16,7 @@ import { NodeStateService } from '../../../graph/nodeState.service';
 import Node from '../base/Node';
 import { ConsoleLogger, Inject, Injectable, Scope } from '@nestjs/common';
 import { jsonSchemaToZod } from '@agyn/json-schema-to-zod';
+import { isEqual } from 'lodash-es';
 
 const EnvItemSchema = z
   .object({
@@ -184,16 +185,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     const nextEnabled = Array.isArray(rawEnabled) && rawEnabled.every((v) => typeof v === 'string')
       ? (rawEnabled as string[])
       : undefined;
-    const eq = (a?: string[], b?: string[]): boolean => {
-      if (!a && !b) return true;
-      const A = a ?? [];
-      const B = b ?? [];
-      if (A.length !== B.length) return false;
-      const setA = new Set(A);
-      for (const x of B) if (!setA.has(x)) return false;
-      return true;
-    };
-    if (!eq(this._lastEnabledTools, nextEnabled)) {
+    if (!isEqual(this._lastEnabledTools, nextEnabled)) {
       this._lastEnabledTools = nextEnabled ? [...nextEnabled] : undefined;
       this.notifyToolsUpdated(Date.now());
     }
