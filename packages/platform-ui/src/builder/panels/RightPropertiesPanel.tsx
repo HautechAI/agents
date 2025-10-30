@@ -42,6 +42,7 @@ function RightPropertiesPanelBody({
 }) {
   const { templates } = useTemplates();
   const runtimeTemplates = useTemplatesCache();
+  const action = useNodeAction(node.id);
 
   const { data } = node;
   // Derive readOnly/disabled from runtime status where applicable
@@ -73,31 +74,15 @@ function RightPropertiesPanelBody({
 
   function RuntimeNodeSection({ nodeId, templateName }: { nodeId: string; templateName: string }) {
     const { data: status } = useNodeStatus(nodeId);
-    const action = useNodeAction(nodeId);
     const { getTemplate } = useTemplatesCache();
     const tmpl = getTemplate(templateName);
-    const provisionable = tmpl ? canProvision(tmpl) : true;
-    // Show block whenever lifecycle-managed kinds or provision status exists (parent gate handles kinds)
     const state = status?.provisionStatus?.state ?? 'not_ready';
     const isPaused = !!status?.isPaused;
     const detail = status?.provisionStatus?.details;
-    const disableAll = state === 'deprovisioning';
-    const canStart =
-      provisionable &&
-      ['not_ready', 'error', 'provisioning_error', 'deprovisioning_error'].includes(state) &&
-      !disableAll;
-    const canStop = provisionable && (state === 'ready' || state === 'provisioning') && !disableAll;
+    // Runtime section only shows status badges per issue #519
     return (
       <div className="space-y-3 text-xs">
         <NodeStatusBadges state={state} isPaused={isPaused} detail={detail} />
-        <NodeActionButtons
-          provisionable={provisionable}
-          pausable={false}
-          canStart={canStart}
-          canStop={canStop}
-          onStart={() => action.mutate('provision')}
-          onStop={() => action.mutate('deprovision')}
-        />
       </div>
     );
   }
@@ -163,6 +148,28 @@ function RightPropertiesPanelBody({
         ) : (
           <div className="text-xs text-muted-foreground">No custom view registered for {data.template} (state)</div>
         )}
+        {/* Start/Stop actions relocated under Node State per issue #519 */}
+        {(() => {
+          const tmpl = runtimeTemplates.getTemplate(data.template);
+          const provisionable = tmpl ? canProvision(tmpl) : true;
+          const state = status?.provisionStatus?.state ?? 'not_ready';
+          const disableActions = state === 'deprovisioning';
+          const canStart =
+            provisionable &&
+            ['not_ready', 'error', 'provisioning_error', 'deprovisioning_error'].includes(state) &&
+            !disableActions;
+          const canStop = provisionable && (state === 'ready' || state === 'provisioning') && !disableActions;
+          return (
+            <NodeActionButtons
+              provisionable={provisionable}
+              pausable={false}
+              canStart={canStart}
+              canStop={canStop}
+              onStart={() => action.mutate('provision')}
+              onStop={() => action.mutate('deprovision')}
+            />
+          );
+        })()}
       </div>
       {data.template === 'containerProvider' && (
         <div className="space-y-2">
