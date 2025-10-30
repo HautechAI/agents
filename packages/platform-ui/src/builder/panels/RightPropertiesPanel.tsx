@@ -14,7 +14,7 @@ import { NixPackagesSection } from '@/components/nix/NixPackagesSection';
 import { getConfigView } from '@/components/configViews/registry';
 // Registry is initialized once in main.tsx via initConfigViewsRegistry()
 
-interface BuilderPanelNodeData {
+export interface BuilderPanelNodeData {
   template: string;
   name?: string;
   config?: Record<string, unknown>;
