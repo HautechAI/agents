@@ -41,6 +41,7 @@ import { ShellCommandNode } from './nodes/tools/shell_command/shell_command.node
 import { GithubCloneRepoNode } from './nodes/tools/github_clone_repo/github_clone_repo.node';
 import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
 import { AgentRunService } from './nodes/agentRun.repository';
+import { BusyThreadsService } from './nodes/agent/busyThreads.service';
 
 @Module({
   imports: [CoreModule, InfraModule, LLMModule, EnvModule],
@@ -110,6 +111,7 @@ import { AgentRunService } from './nodes/agentRun.repository';
       },
       inject: [MongoService, LoggerService],
     },
+    BusyThreadsService,
     // MemoryService removed from providers; created transiently via ModuleRef
     // nodes
     AgentNode,

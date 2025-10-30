@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Fastify from 'fastify';
+import { ResponseMessage } from '@agyn/llm';
 import { RemindMeFunctionTool } from '../src/graph/nodes/tools/remind_me/remind_me.tool';
 import { RemindersController } from '../src/graph/nodes/tools/remind_me/reminders.controller';
 import type { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
@@ -15,7 +16,7 @@ describe('GET /graph/nodes/:nodeId/reminders', () => {
     const fastify = Fastify({ logger: false });
     const logger = new LoggerService();
     const tool = new RemindMeFunctionTool(logger);
-    const caller_agent: AgentNode = { invoke: vi.fn(async () => undefined) } as unknown as AgentNode;
+    const caller_agent: AgentNode = { invoke: vi.fn(async () => new ResponseMessage({ output: [] })) } as unknown as AgentNode;
     await tool.execute({ delayMs: 10_000, note: 'Soon' }, { threadId: 't-1', callerAgent: caller_agent, finishSignal: new Signal() });
 
     // schedule a far reminder so it stays active

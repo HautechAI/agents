@@ -102,6 +102,7 @@ import Node from '../base/Node';
 import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
 import { ModuleRef } from '@nestjs/core';
 import { AgentRunService } from '../agentRun.repository';
+import { BusyThreadsService } from './busyThreads.service';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class AgentNode extends Node<AgentStaticConfig> {
@@ -109,6 +110,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
   private mcpServerTools: Map<LocalMCPServerNode, FunctionTool[]> = new Map();
   private tools: Set<FunctionTool> = new Set();
+  private deferredByToken: Map<string, Array<(v: ResponseMessage | ToolCallOutputMessage) => void>> = new Map();
 
   constructor(
     @Inject(ConfigService) protected configService: ConfigService,
@@ -116,6 +118,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     @Inject(LLMProvisioner) protected llmProvisioner: LLMProvisioner,
     @Inject(AgentRunService) protected readonly runs: AgentRunService,
     @Inject(ModuleRef) protected readonly moduleRef: ModuleRef,
+    @Inject(BusyThreadsService) private readonly busy: BusyThreadsService,
   ) {
     super(logger);
   }
@@ -225,10 +228,17 @@ export class AgentNode extends Node<AgentStaticConfig> {
           return { state, next: null };
         }
         if (self.config.whenBusy === 'injectAfterTools') {
-          const drained = self.buffer.tryDrain(ctx.threadId, ProcessBuffer.AllTogether);
-          if (drained.length > 0) {
-            const injected = drained.map((d) => HumanMessage.fromText(JSON.stringify(d)));
-            state = { ...state, messages: [...state.messages, ...injected] };
+          const mode = (self.config.processBuffer ?? 'allTogether') === 'oneByOne' ? ProcessBuffer.OneByOne : ProcessBuffer.AllTogether;
+          const desc = self.buffer.tryDrainDescriptor(ctx.threadId, mode);
+          if (desc.messages.length > 0) {
+            const nextMeta = {
+              ...(state.meta ?? {}),
+              bufferTokensConsumed: [
+                ...((state.meta?.bufferTokensConsumed as string[] | undefined) ?? []),
+                ...desc.tokenParts.map((t) => t.tokenId),
+              ],
+            };
+            state = { ...state, messages: [...state.messages, ...desc.messages], meta: nextMeta };
           }
         }
         return { state, next: 'summarize' };
@@ -260,45 +270,66 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return loop;
   }
   async invoke(thread: string, messages: BufferMessage[]): Promise<ResponseMessage | ToolCallOutputMessage> {
-    // Buffering & run tracking: enqueue and drain respecting config
-
     this.buffer.setDebounceMs(this.config.debounceMs ?? 0);
-    this.buffer.enqueue(thread, messages);
-    // Generate run id for persistence
+    const tokenId = `${this.nodeId}:${thread}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    this.buffer.enqueueWithToken(thread, tokenId, messages);
+    const promise = new Promise<ResponseMessage | ToolCallOutputMessage>((resolve) => {
+      const arr = this.deferredByToken.get(tokenId) ?? [];
+      arr.push(resolve);
+      this.deferredByToken.set(tokenId, arr);
+    });
+    if (this.busy.tryAcquire(this.nodeId, thread)) {
+      void this.processThread(thread).catch((e) => this.logger.error?.('Agent processThread error', e));
+    }
+    return promise;
+  }
+
+  async processThread(thread: string): Promise<void> {
+    const startDesc = this.buffer.tryDrainDescriptor(
+      thread,
+      (this.config.processBuffer ?? 'allTogether') === 'oneByOne' ? ProcessBuffer.OneByOne : ProcessBuffer.AllTogether,
+    );
+    if (startDesc.messages.length === 0) {
+      this.busy.release(this.nodeId, thread);
+      return;
+    }
     const runId = `${thread}/${Date.now()}`;
     await this.runs.startRun(this.nodeId, thread, runId);
-
-    return await withAgent(
-      { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
-      async () => {
-        const loop = await this.prepareLoop();
-        // Drain buffer per config
-        const mode = (this.config.processBuffer ?? 'allTogether') === 'allTogether' ? 'allTogether' : 'oneByOne';
-        const drained: BufferMessage[] = this.buffer.tryDrain(
-          thread,
-          mode === 'allTogether' ? ProcessBuffer.AllTogether : ProcessBuffer.OneByOne,
-        );
-        const toProcess: BufferMessage[] = drained.length > 0 ? drained : messages;
-        const history: HumanMessage[] = toProcess.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
-        const finishSignal = new Signal();
-
-        const newState = await loop.invoke(
-          { messages: history },
+    const loop = await this.prepareLoop();
+    const history = startDesc.messages;
+    const finishSignal = new Signal();
+    const newState = await withAgent(
+      { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages: history }] },
+      async () =>
+        await loop.invoke(
+          { messages: history, meta: { bufferTokensConsumed: startDesc.tokenParts.map((t) => t.tokenId) } },
           { threadId: thread, finishSignal, callerAgent: this },
           { start: 'load' },
-        );
-
-        const result = newState.messages.at(-1);
-
-        if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
-          this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
-          await this.runs.markTerminated(this.nodeId, runId);
-          return result;
-        }
-
-        throw new Error('Agent did not produce a valid response message.');
-      },
+        ),
     );
+    const result = newState.messages.at(-1);
+    if (!((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage)) {
+      this.busy.release(this.nodeId, thread);
+      await this.runs.markTerminated(this.nodeId, runId);
+      throw new Error('Agent did not produce a valid response message.');
+    }
+    const tokenIds = new Set<string>(newState.meta?.bufferTokensConsumed ?? []);
+    for (const tokenId of tokenIds) {
+      const resolvers = this.deferredByToken.get(tokenId) ?? [];
+      for (const r of resolvers) r(result);
+      this.deferredByToken.delete(tokenId);
+    }
+    this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
+    await this.runs.markTerminated(this.nodeId, runId);
+    this.busy.release(this.nodeId, thread);
+    const nextReady = this.buffer.nextReadyAt(thread);
+    if (typeof nextReady === 'number') {
+      setTimeout(() => {
+        if (this.busy.tryAcquire(this.nodeId, thread)) {
+          void this.processThread(thread).catch((e) => this.logger.error?.('Agent processThread error', e));
+        }
+      }, Math.max(0, nextReady - Date.now()));
+    }
   }
 
   public async listActiveThreads(prefix?: string): Promise<string[]> {

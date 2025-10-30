@@ -21,7 +21,7 @@
 //   | ResponseCustomToolCall
 //   | ResponseInputItem.ItemReference;
 
-import { HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
+import { AIMessage, HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { Signal } from '../signal';
 import { AgentNode } from '../graph/nodes/agent/agent.node';
 
@@ -42,7 +42,7 @@ import { AgentNode } from '../graph/nodes/agent/agent.node';
 
 ///////////
 
-export type LLMMessage = HumanMessage | SystemMessage | ResponseMessage | ToolCallOutputMessage;
+export type LLMMessage = HumanMessage | SystemMessage | ResponseMessage | ToolCallOutputMessage | AIMessage;
 
 export type LLMState = {
   messages: LLMMessage[];
@@ -51,6 +51,7 @@ export type LLMState = {
   meta?: {
     restrictionInjectionCount?: number;
     restrictionInjected?: boolean;
+    bufferTokensConsumed?: string[];
   };
 };
 
