@@ -82,21 +82,20 @@ export class GraphVariablesController {
     // Local override update
     if (parsed.local !== undefined) {
       const prisma = this.prisma();
-      const val = parsed.local ?? '';
+      const val = (parsed.local ?? '').trim();
       if (!val) {
         // delete override if exists
-        try {
-          await prisma.variableLocal.delete({ where: { key } });
-        } catch {
-          /* ignore missing */
-        }
+        await prisma.variableLocal.deleteMany({ where: { key } });
       } else {
         await prisma.variableLocal.upsert({ where: { key }, update: { value: val }, create: { key, value: val } });
       }
     }
     const out: { key: string; graph?: string | null; local?: string | null } = { key };
     if (parsed.graph !== undefined) out.graph = parsed.graph;
-    if (parsed.local !== undefined) out.local = parsed.local ?? null;
+    if (parsed.local !== undefined) {
+      const normalizedLocal = (parsed.local ?? '').trim();
+      out.local = normalizedLocal ? normalizedLocal : null;
+    }
     return out;
   }
 
@@ -118,11 +117,7 @@ export class GraphVariablesController {
     }
     // Delete local override if present
     const prisma = this.prisma();
-    try {
-      await prisma.variableLocal.delete({ where: { key } });
-    } catch {
-      /* ignore missing */
-    }
+    await prisma.variableLocal.deleteMany({ where: { key } });
   }
 
   private prisma(): PrismaClient {

@@ -10,12 +10,13 @@ class InMemoryPrismaClient {
     async findMany() { return Array.from(this.data.values()); },
     async upsert(args: { where: { key: string }; update: { value: string }; create: { key: string; value: string } }) {
       const key = args.where.key;
-      const existing = this.variableLocal.data.get(key);
-      if (existing) { this.variableLocal.data.set(key, { key, value: args.update.value }); return { key, value: args.update.value }; }
-      this.variableLocal.data.set(key, { key, value: args.create.value });
+      const existing = this.data.get(key);
+      if (existing) { this.data.set(key, { key, value: args.update.value }); return { key, value: args.update.value }; }
+      this.data.set(key, { key, value: args.create.value });
       return { key, value: args.create.value };
     },
-    async delete(args: { where: { key: string } }) { this.variableLocal.data.delete(args.where.key); return {}; },
+    async delete(args: { where: { key: string } }) { this.data.delete(args.where.key); return {}; },
+    async deleteMany(args: { where: { key: string } }) { const existed = this.data.delete(args.where.key); return { count: existed ? 1 : 0 }; },
   };
 }
 
@@ -46,7 +47,16 @@ describe('GraphVariablesController routes', () => {
     prismaSvc.client.variableLocal.data.set('B', { key: 'B', value: 'LB' }); prismaSvc.client.variableLocal.data.set('C', { key: 'C', value: 'LC' });
     controller = new GraphVariablesController(repo as unknown as GraphRepository, prismaSvc as any);
     fastify.get('/api/graph/variables', async (_req, res) => res.send(await controller.list()));
-    fastify.post('/api/graph/variables', async (req, res) => { try { const body = await controller.create(req.body); return res.send(body); } catch (e) { const status = (e as any)?.status || 400; return res.status(status).send({ error: (e as any)?.response?.error || 'error' }); } });
+    // POST should return 201 like Nest's @HttpCode(201)
+    fastify.post('/api/graph/variables', async (req, res) => {
+      try {
+        const body = await controller.create(req.body);
+        return res.status(201).send(body);
+      } catch (e) {
+        const status = (e as any)?.status || 400;
+        return res.status(status).send({ error: (e as any)?.response?.error || 'error' });
+      }
+    });
     fastify.put('/api/graph/variables/:key', async (req, res) => { const p = req.params as any; const b = req.body as any; try { const body = await controller.update(p.key, b); return res.send(body); } catch (e) { const status = (e as any)?.status || 400; return res.status(status).send({ error: (e as any)?.response?.error || 'error' }); } });
     fastify.delete('/api/graph/variables/:key', async (req, res) => { const p = req.params as any; try { await controller.remove(p.key); return res.status(204).send(); } catch (e) { const status = (e as any)?.status || 400; return res.status(status).send({ error: (e as any)?.response?.error || 'error' }); } });
   });
