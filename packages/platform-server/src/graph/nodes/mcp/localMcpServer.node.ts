@@ -372,14 +372,50 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
 
   // Return legacy McpTool shape for interface compliance; callers needing function tools can access toolsCache directly.
   listTools(_force = false): LocalMCPServerTool[] {
-    // Passive: Only return cached tools filtered by NodeState enabledTools if present.
+    // Passive: Only return cached tools filtered by enabledTools.
     const allTools: LocalMCPServerTool[] = this.toolsCache ? [...this.toolsCache] : [];
+    const ns = this.namespace;
+
+    // Normalize a raw or namespaced enabledTool name to the runtime LocalMCPServerTool.name
+    const toRuntimeName = (name: string): string => {
+      const prefix = ns ? `${ns}_` : '';
+      if (prefix && name.startsWith(prefix)) return name; // already namespaced for this server
+      if (!prefix) return name; // no namespace -> runtime == raw
+      // Accept raw names and map to runtime namespaced form
+      return `${prefix}${name}`;
+    };
+
+    // Prefer NodeStateService snapshot
+    let enabledList: string[] | undefined;
     try {
       const snap = this.nodeStateService?.getSnapshot(this.nodeId) as { mcp?: { enabledTools?: string[] } } | undefined;
-      // Treat presence of enabledTools (even empty) as authoritative; undefined => all
-      const enabled = Array.isArray(snap?.mcp?.enabledTools) ? new Set<string>(snap!.mcp!.enabledTools!) : undefined;
-      if (enabled !== undefined) return allTools.filter((t) => enabled.has(t.name));
-    } catch {}
+      if (snap && snap.mcp && Array.isArray(snap.mcp.enabledTools)) {
+        enabledList = [...snap.mcp.enabledTools];
+      }
+    } catch {
+      // ignore snapshot errors
+    }
+
+    // Fallback to last enabledTools captured via setState if snapshot not ready
+    if (!enabledList && Array.isArray(this._lastEnabledTools)) {
+      enabledList = [...this._lastEnabledTools];
+    }
+
+    // If enabledTools present (including empty array), filter accordingly
+    if (enabledList) {
+      const wantedRuntimeNames = new Set<string>(enabledList.map((n) => toRuntimeName(String(n))));
+      const availableNames = new Set(allTools.map((t) => t.name));
+      // Log and ignore unknown names
+      const unknown: string[] = Array.from(wantedRuntimeNames).filter((n) => !availableNames.has(n));
+      if (unknown.length) {
+        this.logger.info(
+          `[MCP:${ns}] enabledTools contains unknown tool(s); ignoring`,
+          { unknown, available: Array.from(availableNames) },
+        );
+      }
+      return allTools.filter((t) => wantedRuntimeNames.has(t.name));
+    }
+
     return allTools;
   }
 

@@ -255,6 +255,11 @@ export class LiveGraphRuntime {
       await this.disposeNode(nodeId).catch((err) => pushError(err as GraphError));
     }
 
+    // Persist next graph snapshot early so dependent services (e.g., NodeStateService)
+    // can read initial state during first edge attachment and provisioning.
+    // This ensures boot-time agent↔MCP sync uses the persisted state.
+    this.state.lastGraph = next;
+
     // 5. Add edges
     this.logger.debug('Add edges');
     for (const edge of diff.addedEdges) {
@@ -276,7 +281,7 @@ export class LiveGraphRuntime {
     // 7. Update state metadata
     this.logger.debug('Updating state metadata');
     this.state.version += 1;
-    this.state.lastGraph = next;
+    // lastGraph already set earlier to allow boot-time consumers to read snapshot
 
     const result: GraphDiffResult = {
       addedNodes: diff.addedNodes.map((n) => n.id),
