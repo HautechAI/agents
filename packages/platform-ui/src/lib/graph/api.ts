@@ -20,6 +20,7 @@ function isLikelyJsonSchemaRoot(obj: unknown): obj is Record<string, unknown> {
 // Normalize legacy UI config shapes to server-aligned templates
 type TemplateName =
   | 'containerProvider'
+  | 'workspace'
   | 'shellTool'
   | 'sendSlackMessageTool'
   | 'slackTrigger'
@@ -52,6 +53,18 @@ function normalizeConfigByTemplate(
       // Remove fields no longer in schema
       delete (c as Record<string, unknown>).note; // FinishTool carryover
       if (!c.image) delete (c as Record<string, unknown>).image; // optional
+      return c;
+    }
+    case 'workspace': {
+      // Mirror containerProvider normalization for modern alias
+      if (c.env && !Array.isArray(c.env) && typeof c.env === 'object') {
+        c.env = Object.entries(c.env as Record<string, string>).map(
+          ([k, v]) => ({ key: k, value: v, source: 'static' }) as EnvItem,
+        );
+      }
+      if ('workingDir' in c) delete (c as Record<string, unknown>).workingDir;
+      delete (c as Record<string, unknown>).note;
+      if (!c.image) delete (c as Record<string, unknown>).image;
       return c;
     }
     case 'callAgentTool': {

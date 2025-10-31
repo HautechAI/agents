@@ -8,6 +8,7 @@ describe('normalizeConfigByTemplate idempotence and behavior', () => {
     const nodes = [
       { id: '1', template: 'shellTool', config: { workingDir: '/w', env: { A: '1' } } },
       { id: '2', template: 'containerProvider', config: { env: { B: '2' }, workingDir: '/x', note: 'n' } },
+      { id: '2b', template: 'workspace', config: { env: { BW: '22' }, workingDir: '/x', note: 'nw' } },
       { id: '3', template: 'sendSlackMessageTool', config: { bot_token: 'xoxb-123', note: 'x' } },
       { id: '4', template: 'slackTrigger', config: { app_token: 'xapp-abc', bot_token: 'x', default_channel: '#g' } },
       { id: '5', template: 'githubCloneRepoTool', config: { token: 'tok', repoUrl: 'x', destPath: 'y', authToken: 'z' } },
@@ -32,26 +33,31 @@ describe('normalizeConfigByTemplate idempotence and behavior', () => {
     expect(cfg2.workingDir).toBeUndefined();
     expect(cfg2.note).toBeUndefined();
 
-    const cfg3 = body.nodes[2].config;
+    const cfg2b = body.nodes[2].config;
+    expect(cfg2b.env[0]).toEqual({ key: 'BW', value: '22', source: 'static' });
+    expect(cfg2b.workingDir).toBeUndefined();
+    expect(cfg2b.note).toBeUndefined();
+
+    const cfg3 = body.nodes[3].config;
     expect(cfg3.bot_token).toEqual({ value: 'xoxb-123', source: 'static' });
 
-    const cfg4 = body.nodes[3].config;
+    const cfg4 = body.nodes[4].config;
     expect(cfg4.app_token).toEqual({ value: 'xapp-abc', source: 'static' });
     expect(cfg4.bot_token).toBeUndefined();
     expect(cfg4.default_channel).toBeUndefined();
 
-    const cfg5 = body.nodes[4].config;
+    const cfg5 = body.nodes[5].config;
     expect(cfg5.token).toEqual({ value: 'tok', source: 'static' });
     expect(cfg5.repoUrl).toBeUndefined();
 
-    const cfg6 = body.nodes[5].config;
+    const cfg6 = body.nodes[6].config;
     expect(cfg6.env[0]).toEqual({ key: 'C', value: '3', source: 'static' });
     expect(cfg6.image).toBeUndefined();
     expect(cfg6.toolDiscoveryTimeoutMs).toBeUndefined();
 
-    const cfg7 = body.nodes[6].config;
+    const cfg7 = body.nodes[7].config;
     expect(cfg7.note).toBeUndefined();
-    const cfg8 = body.nodes[7].config;
+    const cfg8 = body.nodes[8].config;
     expect(cfg8.maxActive).toBeUndefined();
   });
 

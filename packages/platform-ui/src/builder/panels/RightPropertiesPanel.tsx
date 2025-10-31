@@ -156,7 +156,7 @@ function RightPropertiesPanelBody({
           );
         })()}
       </div>
-      {data.template === 'containerProvider' && (
+      {(data.template === 'containerProvider' || data.template === 'workspace') && (
         <div className="space-y-2">
           <NixPackagesSection config={cfg} onUpdateConfig={(next) => update({ config: next })} />
         </div>

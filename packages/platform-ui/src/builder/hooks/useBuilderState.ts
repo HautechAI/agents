@@ -72,13 +72,22 @@ export function useBuilderState(serverBase = getApiBase(), options?: BuilderOpti
         setTemplates(tplRes as TemplateNodeSchema[]);
         const graph = graphRes as PersistedGraph;
         versionRef.current = graph.version || 0;
-        const rfNodes: BuilderNode[] = graph.nodes.map((n: PersistedGraph['nodes'][number]) => ({
-          id: n.id,
-          type: n.template, // reactflow node type equals template name for now
-          position: n.position ?? { x: 0, y: 0 },
-          data: { template: n.template, name: n.template, config: n.config, state: n.state as Record<string, unknown> | undefined },
-          dragHandle: '.drag-handle',
-        }));
+        const rfNodes: BuilderNode[] = graph.nodes.map((n: PersistedGraph['nodes'][number]) => {
+          // Normalize legacy template alias: containerProvider -> workspace
+          const normalizedTemplate = n.template === 'containerProvider' ? 'workspace' : n.template;
+          return {
+            id: n.id,
+            type: normalizedTemplate, // reactflow node type equals template name for now
+            position: n.position ?? { x: 0, y: 0 },
+            data: {
+              template: normalizedTemplate,
+              name: normalizedTemplate,
+              config: n.config,
+              state: n.state as Record<string, unknown> | undefined,
+            },
+            dragHandle: '.drag-handle',
+          };
+        });
         const rfEdges: Edge[] = graph.edges.map((e: PersistedGraph['edges'][number]) => ({
           id: `${e.source}-${e.sourceHandle}__${e.target}-${e.targetHandle}`,
           source: e.source,
