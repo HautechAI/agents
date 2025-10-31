@@ -62,5 +62,59 @@ describe('LocalMCPServerNode listTools enabledTools filtering', () => {
     const noneListed = serverNone.listTools();
     expect(noneListed.length).toBe(0);
   });
-});
 
+  it('falls back to _lastEnabledTools when snapshot throws', async () => {
+    const throwingStateService = { getSnapshot: (_id: string) => { throw new Error('snapshot error'); } };
+    const server = createServer({ nodeStateService: throwingStateService, namespace: 'ns' });
+    (server as any).init({ nodeId: 'node-3' });
+    await server.setConfig({ namespace: 'ns' } as any);
+    (server as any).preloadCachedTools([{ name: 'toolA' }, { name: 'toolB' }], Date.now());
+    // Seed lastEnabled via setState
+    await server.setState({ mcp: { enabledTools: ['toolB'] } } as any);
+    const listed = server.listTools();
+    expect(listed.map((t) => t.name)).toEqual(['ns_toolB']);
+  });
+
+  it('does not match namespaced enabled entries when namespace is empty', async () => {
+    const nodeStateService = { getSnapshot: (_id: string) => ({ mcp: { enabledTools: ['ns_toolA', 'toolB'] } }) };
+    const server = createServer({ nodeStateService, namespace: '' });
+    (server as any).init({ nodeId: 'node-4' });
+    await server.setConfig({ namespace: '' } as any);
+    (server as any).preloadCachedTools([{ name: 'toolA' }, { name: 'toolB' }], Date.now());
+    const listed = server.listTools();
+    // Only raw toolB should match; ns_toolA should not match when server has no namespace
+    expect(listed.map((t) => t.name).sort()).toEqual(['toolB']);
+  });
+
+  it('ignores other namespace entries and supports raw matches', async () => {
+    const nodeStateService = { getSnapshot: (_id: string) => ({ mcp: { enabledTools: ['other_toolB', 'toolB'] } }) };
+    const server = createServer({ nodeStateService, namespace: 'ns' });
+    (server as any).init({ nodeId: 'node-5' });
+    await server.setConfig({ namespace: 'ns' } as any);
+    (server as any).preloadCachedTools([{ name: 'toolA' }, { name: 'toolB' }], Date.now());
+    const listed = server.listTools();
+    expect(listed.map((t) => t.name).sort()).toEqual(['ns_toolB']);
+  });
+
+  it('returns [] when cache is empty regardless of enabledTools', async () => {
+    const nodeStateService = { getSnapshot: (_id: string) => ({ mcp: { enabledTools: ['toolA'] } }) };
+    const server = createServer({ nodeStateService, namespace: 'ns' });
+    (server as any).init({ nodeId: 'node-6' });
+    await server.setConfig({ namespace: 'ns' } as any);
+    // No preload -> empty cache
+    const listed = server.listTools();
+    expect(listed.length).toBe(0);
+  });
+
+  it('handles duplicates in enabledTools without duplicating results', async () => {
+    const nodeStateService = {
+      getSnapshot: (_id: string) => ({ mcp: { enabledTools: ['toolA', 'ns_toolA', 'toolA'] } }),
+    };
+    const server = createServer({ nodeStateService, namespace: 'ns' });
+    (server as any).init({ nodeId: 'node-7' });
+    await server.setConfig({ namespace: 'ns' } as any);
+    (server as any).preloadCachedTools([{ name: 'toolA' }, { name: 'toolB' }], Date.now());
+    const listed = server.listTools();
+    expect(listed.map((t) => t.name)).toEqual(['ns_toolA']);
+  });
+});

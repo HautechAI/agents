@@ -32,6 +32,8 @@ export interface PersistedMcpState {
   tools?: McpTool[];
   toolsUpdatedAt?: string | number; // ISO string or epoch ms
   toolsEtag?: string;
+  // Optional list of enabled tool names (can be raw or namespaced)
+  enabledTools?: string[];
 }
 
 export interface McpServerConfig {

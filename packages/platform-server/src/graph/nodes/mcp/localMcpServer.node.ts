@@ -377,10 +377,13 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     // Resolve enabledTools from snapshot, falling back to last seen state set by setState()
     let enabledArr: string[] | undefined;
     try {
-      const snap = this.nodeStateService?.getSnapshot(this.nodeId) as { mcp?: { enabledTools?: string[] } } | undefined;
-      if (Array.isArray(snap?.mcp?.enabledTools)) {
-        enabledArr = [...(snap!.mcp!.enabledTools as string[])];
-      } else {
+      const snap: unknown = this.nodeStateService?.getSnapshot(this.nodeId);
+      const arr =
+        snap && typeof snap === 'object' && snap !== null && 'mcp' in (snap as Record<string, unknown>)
+          ? ((snap as { mcp?: { enabledTools?: unknown } }).mcp?.enabledTools as unknown)
+          : undefined;
+      enabledArr = Array.isArray(arr) && arr.every((v) => typeof v === 'string') ? ([...arr] as string[]) : undefined;
+      if (enabledArr === undefined) {
         enabledArr = this._lastEnabledTools ? [...this._lastEnabledTools] : undefined;
       }
     } catch {
@@ -391,12 +394,14 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     // When undefined: expose all tools (default behavior)
     if (enabledArr === undefined) return allTools;
 
-    const enabled = new Set<string>(enabledArr);
     const nsPrefix = this.namespace ? `${this.namespace}_` : '';
     const toBase = (n: string) => (nsPrefix && n.startsWith(nsPrefix) ? n.substring(nsPrefix.length) : n);
+    const normalizeEnabled = (n: string) => (nsPrefix && n.startsWith(nsPrefix) ? n.substring(nsPrefix.length) : n);
+    // Normalize enabled entries relative to this namespace to ensure symmetric matching
+    const enabledBase = new Set<string>(enabledArr.map(normalizeEnabled));
 
-    // Filter: include if enabled contains namespaced full name OR raw/base name
-    return allTools.filter((t) => enabled.has(t.name) || enabled.has(toBase(t.name)));
+    // Filter: include if normalized base name is enabled for this namespace
+    return allTools.filter((t) => enabledBase.has(toBase(t.name)));
   }
 
   async callTool(
