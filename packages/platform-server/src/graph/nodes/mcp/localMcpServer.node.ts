@@ -374,13 +374,29 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
   listTools(_force = false): LocalMCPServerTool[] {
     // Passive: Only return cached tools filtered by NodeState enabledTools if present.
     const allTools: LocalMCPServerTool[] = this.toolsCache ? [...this.toolsCache] : [];
+    // Resolve enabledTools from snapshot, falling back to last seen state set by setState()
+    let enabledArr: string[] | undefined;
     try {
       const snap = this.nodeStateService?.getSnapshot(this.nodeId) as { mcp?: { enabledTools?: string[] } } | undefined;
-      // Treat presence of enabledTools (even empty) as authoritative; undefined => all
-      const enabled = Array.isArray(snap?.mcp?.enabledTools) ? new Set<string>(snap!.mcp!.enabledTools!) : undefined;
-      if (enabled !== undefined) return allTools.filter((t) => enabled.has(t.name));
-    } catch {}
-    return allTools;
+      if (Array.isArray(snap?.mcp?.enabledTools)) {
+        enabledArr = [...(snap!.mcp!.enabledTools as string[])];
+      } else {
+        enabledArr = this._lastEnabledTools ? [...this._lastEnabledTools] : undefined;
+      }
+    } catch {
+      // On any snapshot access error, fall back to in-memory lastEnabledTools
+      enabledArr = this._lastEnabledTools ? [...this._lastEnabledTools] : undefined;
+    }
+
+    // When undefined: expose all tools (default behavior)
+    if (enabledArr === undefined) return allTools;
+
+    const enabled = new Set<string>(enabledArr);
+    const nsPrefix = this.namespace ? `${this.namespace}_` : '';
+    const toBase = (n: string) => (nsPrefix && n.startsWith(nsPrefix) ? n.substring(nsPrefix.length) : n);
+
+    // Filter: include if enabled contains namespaced full name OR raw/base name
+    return allTools.filter((t) => enabled.has(t.name) || enabled.has(toBase(t.name)));
   }
 
   async callTool(
