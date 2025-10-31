@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
-import { Button, Input, Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@agyn/ui';
+import { Button, Input, Table, TableHead, TableRow, TableBody, TableCell } from '@agyn/ui';
 import { notifyError, notifySuccess } from '../lib/notify';
 
 type VarItem = { key: string; graph: string | null; local: string | null };
@@ -93,14 +93,14 @@ export function SettingsVariables() {
       </div>
 
       <Table>
-        <TableHeader>
+        <TableHead>
           <TableRow>
-            <TableHead>Key</TableHead>
-            <TableHead>Graph</TableHead>
-            <TableHead>Local</TableHead>
-            <TableHead></TableHead>
+            <TableCell>Key</TableCell>
+            <TableCell>Graph</TableCell>
+            <TableCell>Local</TableCell>
+            <TableCell></TableCell>
           </TableRow>
-        </TableHeader>
+        </TableHead>
         <TableBody>
           {isLoading ? (
             <TableRow>
