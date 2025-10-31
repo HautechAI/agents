@@ -135,10 +135,15 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
    * If a delegate is provided, it is used (for discovered tools); otherwise, a fallback delegate is used (for preloaded tools).
    */
   private createLocalTool(tool: McpTool): LocalMCPServerTool {
+    // Narrow the schema type instead of using `any` to satisfy jsonSchemaToZod input contract.
+    const schemaObj: Record<string, unknown> =
+      typeof tool.inputSchema === 'object' && tool.inputSchema !== null
+        ? (tool.inputSchema as Record<string, unknown>)
+        : {};
     return new LocalMCPServerTool(
       tool.name,
       tool.description || 'MCP tool',
-      jsonSchemaToZod({ ...(tool.inputSchema as any), strict: false, additionalProperties: false }) as z.ZodObject,
+      jsonSchemaToZod({ ...schemaObj, strict: false, additionalProperties: false }) as z.ZodObject,
       this,
     );
   }

@@ -113,15 +113,20 @@ export class DockerExecTransport {
 
   async send(message: JSONRPCMessage): Promise<void> {
     if (this._closed) throw new Error('Transport closed');
-    if (!this._stdin || (this._stdin as any).writableEnded || (this._stdin as any).destroyed) {
+    type WritableLike = NodeJS.WritableStream & {
+      writableEnded?: boolean;
+      destroyed?: boolean;
+    };
+    const ws = this._stdin as WritableLike;
+    if (!ws || ws.writableEnded || ws.destroyed) {
       throw new Error('Transport closed');
     }
     const payload = serializeMessageInline(message);
     // console.debug('[DockerExecTransport send]', payload.trim());
     return new Promise((resolve, reject) => {
       try {
-        const ok = this._stdin.write(payload, (err: unknown) => (err ? reject(err) : resolve()));
-        if (!ok) this._stdin.once('drain', resolve);
+        const ok = ws.write(payload, (err: unknown) => (err ? reject(err) : resolve()));
+        if (!ok) ws.once('drain', resolve);
       } catch (e) {
         reject(e);
       }
@@ -132,7 +137,8 @@ export class DockerExecTransport {
     if (this._closed) return;
     this._closed = true;
     try {
-      if (this._stdin && typeof (this._stdin as any).end === 'function') (this._stdin as any).end();
+      const ws = this._stdin as NodeJS.WritableStream & { end?: (...a: unknown[]) => void };
+      if (ws && typeof ws.end === 'function') ws.end();
     } catch {}
     this.logger.info(`[DockerExecTransport#${this._id}] CLOSED`);
     this.onclose?.();

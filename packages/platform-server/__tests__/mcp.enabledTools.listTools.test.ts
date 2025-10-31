@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createTestLocalMcpServerNode, type NodeStateServiceStub } from '../src/graph/nodes/mcp/testUtils';
+import { createTestLocalMcpServerNode, type NodeStateServiceStub } from './helpers/mcpTestUtils';
 
 describe('LocalMCPServerNode listTools enabledTools filtering', () => {
   function createServer(opts: { nodeStateService?: NodeStateServiceStub; namespace?: string }) {
