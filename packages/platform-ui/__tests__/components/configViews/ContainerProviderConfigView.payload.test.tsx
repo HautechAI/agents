@@ -9,7 +9,7 @@ describe('ContainerProviderConfigView payload', () => {
     render(
       <TooltipProvider delayDuration={0}>
         <ContainerProviderConfigView
-          templateName="containerProvider"
+          templateName="workspace"
           value={{}}
           onChange={(v) => (cfg = v)}
           readOnly={false}

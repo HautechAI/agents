@@ -18,7 +18,9 @@ export function installDefaultConfigViews(register: (entry: ConfigViewRegistrati
   register({ template: 'agent', mode: 'static', component: SimpleAgentConfigView });
   register({ template: 'mcpServer', mode: 'dynamic', component: McpServerDynamicConfigView });
   register({ template: 'mcpServer', mode: 'static', component: McpServerStaticConfigView });
-  register({ template: 'containerProvider', mode: 'static', component: ContainerProviderConfigView });
+  // Register Workspace config view under new template name 'workspace'
+  // Component remains ContainerProviderConfigView for now
+  register({ template: 'workspace', mode: 'static', component: ContainerProviderConfigView });
   register({ template: 'shellTool', mode: 'static', component: ShellToolConfigView });
   register({ template: 'githubCloneRepoTool', mode: 'static', component: GithubCloneRepoToolConfigView });
   register({ template: 'sendSlackMessageTool', mode: 'static', component: SendSlackMessageToolConfigView });
