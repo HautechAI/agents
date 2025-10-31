@@ -18,7 +18,7 @@ export function SettingsVariables() {
   const [newKey, setNewKey] = useState('');
   const [newGraph, setNewGraph] = useState('');
 
-  const createMut = useMutation({
+  const createMut = useMutation<{ key: string; graph: string }, Error, { key: string; graph: string }>({
     mutationFn: async (payload: { key: string; graph: string }) => {
       const res = await fetch('/api/graph/variables', {
         method: 'POST',
@@ -32,7 +32,7 @@ export function SettingsVariables() {
       return await res.json();
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['variables'] }); notifySuccess('Variable added'); },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       const msg = String(e?.message || 'Create failed');
       if (msg === 'DUPLICATE_KEY') notifyError('Key already exists');
       else if (msg === 'VERSION_CONFLICT') notifyError('Version conflict, please retry');
@@ -40,7 +40,7 @@ export function SettingsVariables() {
     },
   });
 
-  const updateMut = useMutation({
+  const updateMut = useMutation<{ key: string; graph?: string | null; local?: string | null }, Error, { key: string; patch: { graph?: string | null; local?: string | null } }>({
     mutationFn: async (args: { key: string; patch: { graph?: string | null; local?: string | null } }) => {
       const res = await fetch(`/api/graph/variables/${encodeURIComponent(args.key)}`, {
         method: 'PUT',
@@ -54,7 +54,7 @@ export function SettingsVariables() {
       return await res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['variables'] }),
-    onError: (e: any) => {
+    onError: (e: Error) => {
       const msg = String(e?.message || 'Update failed');
       if (msg === 'BAD_VALUE') notifyError('Value cannot be empty');
       else if (msg === 'VERSION_CONFLICT') notifyError('Version conflict, please retry');
