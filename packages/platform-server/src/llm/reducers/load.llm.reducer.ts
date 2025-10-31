@@ -19,7 +19,6 @@ export class LoadLLMReducer extends PersistenceBaseLLMReducer {
   async invoke(state: LLMState, ctx: LLMContext): Promise<LLMState> {
     try {
       const prisma = this.prismaService.getClient();
-      if (!prisma) return state; // persistence disabled
       const repo = new ConversationStateRepository(prisma);
       const nodeId = ctx.callerAgent.getAgentNodeId?.() || 'agent';
       const existing = await repo.get(ctx.threadId, nodeId);

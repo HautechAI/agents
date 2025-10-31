@@ -6,7 +6,7 @@ import type { ResponseInputItem, Response } from 'openai/resources/responses/res
 
 type PlainMessage = {
   kind: 'human' | 'system' | 'response' | 'tool_call_output';
-  value: Prisma.InputJsonValue;
+  value: Prisma.InputJsonValue | null;
 };
 
 type PlainLLMState = {
@@ -15,16 +15,17 @@ type PlainLLMState = {
 };
 
 export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMContext> {
-  protected toJsonValue(input: unknown): Prisma.InputJsonValue {
+  protected toJsonValue(input: unknown): Prisma.InputJsonValue | null {
     if (this.isInputJsonValue(input)) return input;
-    if (input === null) throw new Error('Null is not allowed for InputJsonValue');
+    if (input === null) return null;
     if (typeof input === 'string' || typeof input === 'number' || typeof input === 'boolean') return input;
     if (Array.isArray(input)) return input.map((el) => this.toJsonValue(el));
     if (this.isPlainObject(input)) {
-      const out: Record<string, Prisma.InputJsonValue> = {};
+      const out: Record<string, Prisma.InputJsonValue | null> = {};
       for (const [k, v] of Object.entries(input)) {
-        if (typeof v === 'function' || typeof v === 'symbol' || typeof v === 'bigint' || typeof v === 'undefined') {
-          throw new Error('Unable to convert value to JSON: non-serializable property');
+        if (typeof v === 'undefined') continue;
+        if (typeof v === 'function' || typeof v === 'symbol' || typeof v === 'bigint') {
+          throw new Error(`Unable to convert value to JSON: non-serializable property ${k} of type ${typeof v}`);
         }
         out[k] = this.toJsonValue(v);
       }
@@ -101,7 +102,10 @@ export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMCon
     return v !== null && typeof v === 'object';
   }
 
-  protected hasKey<K extends string>(obj: Record<string, unknown>, key: K): obj is Record<string, unknown> & { [P in K]: unknown } {
+  protected hasKey<K extends string>(
+    obj: Record<string, unknown>,
+    key: K,
+  ): obj is Record<string, unknown> & { [P in K]: unknown } {
     return key in obj;
   }
 

@@ -5,14 +5,14 @@ import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
 export class PrismaService {
-  private prisma: PrismaClient | null = null;
+  private prisma?: PrismaClient;
 
   constructor(
     @Inject(LoggerService) private logger: LoggerService,
     @Inject(ConfigService) private cfg: ConfigService,
   ) {}
 
-  getClient(): PrismaClient | null {
+  getClient(): PrismaClient {
     try {
       if (!this.prisma) {
         const url = this.cfg.agentsDatabaseUrl;
