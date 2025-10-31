@@ -1,4 +1,4 @@
-import { HumanMessage, ResponseMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
+import { AIMessage, HumanMessage, ResponseMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 
@@ -499,6 +499,7 @@ export function withSystem<T>(attributes: { label: string; [k: string]: unknown 
 export type ContextMessage =
   | SystemMessage //
   | HumanMessage
+  | AIMessage
   | ResponseMessage
   | ToolCallOutputMessage;
 

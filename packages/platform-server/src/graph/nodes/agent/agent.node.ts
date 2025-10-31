@@ -6,15 +6,14 @@ import { LoggerService } from '../../../core/services/logger.service';
 import { z } from 'zod';
 
 import {
-  FunctionTool,
-  HumanMessage,
   AIMessage,
+  FunctionTool,
   Loop,
   Reducer,
   ResponseMessage,
+  Router,
   ToolCallMessage,
   ToolCallOutputMessage,
-  Router,
 } from '@agyn/llm';
 import { withAgent } from '@agyn/tracing';
 
@@ -32,7 +31,7 @@ import { SummarizationLLMReducer } from '../../../llm/reducers/summarization.llm
 import { Signal } from '../../../signal';
 
 import { BaseToolNode } from '../tools/baseToolNode';
-import { MessagesBuffer, ProcessBuffer, BufferMessage } from './messagesBuffer';
+import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
 
 /**
  * Zod schema describing static configuration for Agent.
@@ -97,11 +96,11 @@ export type WhenBusyMode = 'wait' | 'injectAfterTools';
 
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
 import { Inject, Injectable, Scope } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { TemplatePortConfig } from '../../../graph/ports.types';
 import type { RuntimeContext } from '../../../graph/runtimeContext';
 import Node from '../base/Node';
 import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
-import { ModuleRef } from '@nestjs/core';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class AgentNode extends Node<AgentStaticConfig> {
@@ -252,7 +251,6 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return loop;
   }
   async invoke(thread: string, messages: BufferMessage[]): Promise<ResponseMessage | ToolCallOutputMessage> {
-    // Busy gating: enqueue first, then decide whether to start a new run
     this.buffer.setDebounceMs(this.config.debounceMs ?? 0);
     const busy = this.runningThreads.has(thread);
     if (busy) {
@@ -267,12 +265,10 @@ export class AgentNode extends Node<AgentStaticConfig> {
         { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
         async () => {
           const loop = await this.prepareLoop();
-          // Process provided messages immediately; if none provided (auto-run), drain the queue
-          const history: HumanMessage[] = messages.map((msg) => HumanMessage.fromText(JSON.stringify(msg)));
-          const finishSignal = new Signal();
 
+          const finishSignal = new Signal();
           const newState = await loop.invoke(
-            { messages: history },
+            { messages },
             { threadId: thread, finishSignal, callerAgent: this },
             { start: 'load' },
           );
