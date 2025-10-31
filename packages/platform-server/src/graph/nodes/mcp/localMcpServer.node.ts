@@ -12,6 +12,7 @@ import { VaultService } from '../../../vault/vault.service';
 import { DockerExecTransport } from './dockerExecTransport';
 import { LocalMCPServerTool } from './localMcpServer.tool';
 import { DEFAULT_MCP_COMMAND, McpError, type McpTool, McpToolCallResult, PersistedMcpState } from './types';
+import { stripNsPrefix } from './util';
 import { NodeStateService } from '../../../graph/nodeState.service';
 import Node from '../base/Node';
 import { Inject, Injectable, Scope } from '@nestjs/common';
@@ -394,14 +395,12 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     // When undefined: expose all tools (default behavior)
     if (enabledArr === undefined) return allTools;
 
-    const nsPrefix = this.namespace ? `${this.namespace}_` : '';
-    const toBase = (n: string) => (nsPrefix && n.startsWith(nsPrefix) ? n.substring(nsPrefix.length) : n);
-    const normalizeEnabled = (n: string) => (nsPrefix && n.startsWith(nsPrefix) ? n.substring(nsPrefix.length) : n);
+    const ns = this.namespace;
     // Normalize enabled entries relative to this namespace to ensure symmetric matching
-    const enabledBase = new Set<string>(enabledArr.map(normalizeEnabled));
+    const enabledBase = new Set<string>(enabledArr.map((n) => stripNsPrefix(ns, n)));
 
     // Filter: include if normalized base name is enabled for this namespace
-    return allTools.filter((t) => enabledBase.has(toBase(t.name)));
+    return allTools.filter((t) => enabledBase.has(stripNsPrefix(ns, t.name)));
   }
 
   async callTool(
