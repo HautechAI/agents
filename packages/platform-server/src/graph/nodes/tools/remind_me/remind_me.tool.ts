@@ -69,9 +69,7 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
       if (!exists) return;
       this.active.delete(id);
       // Registry size decreased; notify
-      try {
-        this.onRegistryChanged?.(this.active.size);
-      } catch {}
+      this.onRegistryChanged?.(this.active.size);
       try {
         const msg = HumanMessage.fromText(`Reminder: ${note}`);
         await ctx.callerAgent.invoke(threadId, [msg]);
@@ -82,9 +80,7 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     }, delayMs);
     this.active.set(id, { timer, reminder: { id, threadId: threadId, note, at: eta } });
     // Registry size increased; notify
-    try {
-      this.onRegistryChanged?.(this.active.size);
-    } catch {}
+    this.onRegistryChanged?.(this.active.size);
     return JSON.stringify({ status: 'scheduled', etaMs: delayMs, at: eta, id });
   }
 }
