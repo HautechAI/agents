@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import type { Prisma, PrismaClient, MessageKind, RunStatus, RunMessageType } from '@prisma/client';
+import { Prisma, PrismaClient, MessageKind, RunStatus, RunMessageType } from '@prisma/client';
 import { PrismaService } from '../core/services/prisma.service';
 
 export type RunStartResult = { runId: string };
@@ -22,29 +22,37 @@ export class AgentsPersistenceService {
 
   async beginRun(threadAlias: string, inputMessages: Prisma.InputJsonValue[]): Promise<RunStartResult> {
     const threadId = await this.ensureThreadByAlias(threadAlias);
-    const run = await this.prisma.run.create({ data: { threadId, status: 'running' as RunStatus } });
-    for (const msg of inputMessages) {
-      const { kind, text } = this.extractKindText(msg);
-      const created = await this.prisma.message.create({ data: { kind, text, source: msg } });
-      await this.prisma.runMessage.create({ data: { runId: run.id, messageId: created.id, type: 'input' as RunMessageType } });
-    }
+    const run = await this.prisma.run.create({ data: { threadId, status: RunStatus.running } });
+    await Promise.all(
+      inputMessages.map(async (msg) => {
+        const { kind, text } = this.extractKindText(msg);
+        const created = await this.prisma.message.create({ data: { kind, text, source: msg } });
+        await this.prisma.runMessage.create({
+          data: { runId: run.id, messageId: created.id, type: RunMessageType.input },
+        });
+      }),
+    );
     return { runId: run.id };
   }
 
   async recordInjected(runId: string, injectedMessages: Prisma.InputJsonValue[]): Promise<void> {
-    for (const msg of injectedMessages) {
-      const { kind, text } = this.extractKindText(msg);
-      const created = await this.prisma.message.create({ data: { kind, text, source: msg } });
-      await this.prisma.runMessage.create({ data: { runId, messageId: created.id, type: 'injected' as RunMessageType } });
-    }
+    await Promise.all(
+      injectedMessages.map(async (msg) => {
+        const { kind, text } = this.extractKindText(msg);
+        const created = await this.prisma.message.create({ data: { kind, text, source: msg } });
+        await this.prisma.runMessage.create({ data: { runId, messageId: created.id, type: RunMessageType.injected } });
+      }),
+    );
   }
 
   async completeRun(runId: string, status: RunStatus, outputMessages: Prisma.InputJsonValue[]): Promise<void> {
-    for (const msg of outputMessages) {
-      const { kind, text } = this.extractKindText(msg);
-      const created = await this.prisma.message.create({ data: { kind, text, source: msg } });
-      await this.prisma.runMessage.create({ data: { runId, messageId: created.id, type: 'output' as RunMessageType } });
-    }
+    await Promise.all(
+      outputMessages.map(async (msg) => {
+        const { kind, text } = this.extractKindText(msg);
+        const created = await this.prisma.message.create({ data: { kind, text, source: msg } });
+        await this.prisma.runMessage.create({ data: { runId, messageId: created.id, type: RunMessageType.output } });
+      }),
+    );
     await this.prisma.run.update({ where: { id: runId }, data: { status } });
   }
 
@@ -52,8 +60,16 @@ export class AgentsPersistenceService {
     return this.prisma.thread.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, createdAt: true }, take: 100 });
   }
 
-  async listRuns(threadId: string): Promise<Array<{ id: string; status: RunStatus; createdAt: Date; updatedAt: Date }>> {
-    return this.prisma.run.findMany({ where: { threadId }, orderBy: { createdAt: 'desc' }, select: { id: true, status: true, createdAt: true, updatedAt: true } });
+  async listRuns(
+    threadId: string,
+    take: number = 100,
+  ): Promise<Array<{ id: string; status: RunStatus; createdAt: Date; updatedAt: Date }>> {
+    return this.prisma.run.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true, createdAt: true, updatedAt: true },
+      take,
+    });
   }
 
   async listRunMessages(runId: string, type: RunMessageType): Promise<Array<{ id: string; kind: MessageKind; text: string | null; source: Prisma.JsonValue; createdAt: Date }>> {
@@ -66,14 +82,45 @@ export class AgentsPersistenceService {
 
   // Helper: derive message kind and text from raw JSON
   private extractKindText(msg: Prisma.InputJsonValue): { kind: MessageKind; text: string | null } {
-    try {
-      const o = msg as any;
-      const role = (o?.role as string) || (o?.type === 'message' ? o?.role : undefined) || 'user';
-      const kind = (role === 'assistant' ? 'assistant' : role === 'system' ? 'system' : role === 'tool' ? 'tool' : 'user') as MessageKind;
-      const text = typeof o?.text === 'string' ? (o.text as string) : null;
-      return { kind, text };
-    } catch {
-      return { kind: 'user' as MessageKind, text: null };
+    // Narrow to object
+    const obj = (typeof msg === 'object' && msg !== null ? (msg as Record<string, unknown>) : {}) as Record<
+      string,
+      unknown
+    >;
+    // Determine role
+    const roleRaw = typeof obj.role === 'string' ? obj.role : typeof obj["role"] === 'string' ? (obj["role"] as string) : undefined;
+    const role = (roleRaw || (obj.type === 'message' && typeof obj.role === 'string' ? (obj.role as string) : undefined) || 'user') as string;
+    let kind: MessageKind;
+    switch (role) {
+      case 'assistant':
+        kind = MessageKind.assistant;
+        break;
+      case 'system':
+        kind = MessageKind.system;
+        break;
+      case 'tool':
+        kind = MessageKind.tool;
+        break;
+      default:
+        kind = MessageKind.user;
     }
+
+    // Extract text from known shapes
+    let text: string | null = null;
+    if (typeof obj.text === 'string') {
+      text = obj.text as string;
+    } else if (Array.isArray(obj['content'])) {
+      const content = obj['content'] as Array<unknown>;
+      const parts: string[] = [];
+      for (const c of content) {
+        if (typeof c === 'object' && c !== null) {
+          const co = c as Record<string, unknown>;
+          const t = typeof co.text === 'string' ? (co.text as string) : undefined;
+          if (t) parts.push(t);
+        }
+      }
+      if (parts.length) text = parts.join('\n');
+    }
+    return { kind, text };
   }
 }

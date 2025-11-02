@@ -1,10 +1,11 @@
 import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { IsEnum, IsString } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
-import type { RunMessageType } from '@prisma/client';
+import { RunMessageType } from '@prisma/client';
 
 export class ListRunMessagesQueryDto {
-  @IsEnum(['input', 'injected', 'output'])
+  // Validate against enum values at runtime
+  @IsEnum(RunMessageType)
   type!: RunMessageType;
 }
 

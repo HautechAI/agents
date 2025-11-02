@@ -30,7 +30,7 @@ import { SaveLLMReducer } from '../../../llm/reducers/save.llm.reducer';
 import { SummarizationLLMReducer } from '../../../llm/reducers/summarization.llm.reducer';
 import { Signal } from '../../../signal';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
-import type { Prisma } from '@prisma/client';
+import { Prisma, RunStatus } from '@prisma/client';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
@@ -265,14 +265,17 @@ export class AgentNode extends Node<AgentStaticConfig> {
     let result: ResponseMessage | ToolCallOutputMessage;
     // Begin run and persist input messages (forward-only)
     const toJson = (bm: BufferMessage): Prisma.InputJsonValue => {
-      try {
-        return bm.toPlain() as unknown as Prisma.InputJsonValue;
-      } catch {
-        // AIMessage/HumanMessage/SystemMessage all implement toPlain; fallback to text only
-        const role = (bm as any)?.role || 'user';
-        const text = (bm as any)?.text || '';
-        return { type: 'message', role, content: [{ type: role === 'assistant' ? 'output_text' : 'input_text', text }] } as any;
-      }
+      const plain = tryToPlain(bm);
+      if (plain) return plain;
+      // Fallback JSON structure when toPlain is unavailable
+      const role = getRoleFromPlainable(bm) ?? 'user';
+      const text = getTextFromPlainable(bm) ?? '';
+      const fallback: unknown = {
+        type: 'message',
+        role,
+        content: [{ type: role === 'assistant' ? 'output_text' : 'input_text', text }],
+      };
+      return ensureJsonValue(fallback);
     };
     let runId: string | undefined;
     if (this.persistence) {
@@ -304,16 +307,10 @@ export class AgentNode extends Node<AgentStaticConfig> {
             try {
               if (runId) {
                 const initialPlains = messages.map((m) => JSON.stringify(toJson(m)));
-                const injected = newState.messages.filter((m) => (m as any)?.role === 'system') as any[];
-                const injectedPlains = injected
-                  .map((m) => {
-                    try {
-                      return (m as any).toPlain();
-                    } catch {
-                      return undefined;
-                    }
-                  })
-                  .filter((p) => !!p) as Prisma.InputJsonValue[];
+                const injectedPlains = newState.messages
+                  .map((m) => tryToPlain(m))
+                  .filter((p): p is Prisma.InputJsonValue => Boolean(p))
+                  .filter((p) => isSystemRole(p));
                 const newInjected = injectedPlains.filter((p) => !initialPlains.includes(JSON.stringify(p)));
                 if (newInjected.length > 0) {
                   await this.persistence.recordInjected(runId, newInjected);
@@ -330,11 +327,11 @@ export class AgentNode extends Node<AgentStaticConfig> {
               try {
                 if (runId) {
                   if (result instanceof ResponseMessage) {
-                    const outputs = result.output.map((o) => (o as any).toPlain?.() ?? (o as any));
-                    await this.persistence.completeRun(runId, 'finished', outputs as Prisma.InputJsonValue[]);
+                    const outputs = result.output.map((o) => ensureJsonValue(tryToPlain(o) ?? o));
+                    await this.persistence.completeRun(runId, RunStatus.finished, outputs);
                   } else if (result instanceof ToolCallOutputMessage) {
-                    const out = (result as any).toPlain?.() ?? (result as any);
-                    await this.persistence.completeRun(runId, 'finished', [out as Prisma.InputJsonValue]);
+                    const out = ensureJsonValue(tryToPlain(result) ?? result);
+                    await this.persistence.completeRun(runId, RunStatus.finished, [out]);
                   }
                 }
               } catch (e) {
@@ -354,8 +351,8 @@ export class AgentNode extends Node<AgentStaticConfig> {
       if (this.persistence) {
         try {
           if (runId) {
-            const out = (result as any).toPlain?.() ?? (result as any);
-            await this.persistence.completeRun(runId, 'terminated', [out as Prisma.InputJsonValue]);
+            const out = ensureJsonValue(tryToPlain(result) ?? result);
+            await this.persistence.completeRun(runId, RunStatus.terminated, [out]);
           }
         } catch {}
       }
@@ -446,4 +443,74 @@ export class AgentNode extends Node<AgentStaticConfig> {
   }
 
   // Static introspection removed per hotfix; rely on TemplateRegistry meta.
+}
+
+// ---- Typed helpers for JSON conversion ----
+type Plainable = { toPlain: () => unknown };
+
+function hasToPlain(x: unknown): x is Plainable {
+  return typeof x === 'object' && x !== null && typeof (x as Record<string, unknown>).toPlain === 'function';
+}
+
+function tryToPlain(x: unknown): Prisma.InputJsonValue | undefined {
+  if (!hasToPlain(x)) return undefined;
+  try {
+    const v = (x as Plainable).toPlain();
+    return ensureJsonValue(v);
+  } catch {
+    return undefined;
+  }
+}
+
+function isJsonPrimitive(v: unknown): v is string | number | boolean {
+  return (
+    typeof v === 'string' ||
+    typeof v === 'number' ||
+    typeof v === 'boolean'
+  );
+}
+
+function ensureJsonValue(v: unknown): Prisma.InputJsonValue {
+  if (v === null) return 'null' as unknown as Prisma.InputJsonValue;
+  if (isJsonPrimitive(v)) return v as unknown as Prisma.InputJsonValue;
+  if (Array.isArray(v)) return v.map((i) => ensureJsonValue(i)) as unknown as Prisma.InputJsonValue;
+  if (typeof v === 'object' && v !== null) {
+    const out: Record<string, Prisma.InputJsonValue> = {};
+    for (const [k, val] of Object.entries(v)) out[k] = ensureJsonValue(val);
+    return out as unknown as Prisma.InputJsonValue;
+  }
+  // Fallback stringify for unsupported values (functions, symbols)
+  return String(v) as unknown as Prisma.InputJsonValue;
+}
+
+function isSystemRole(v: Prisma.InputJsonValue): boolean {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.role === 'string' && o.role === 'system';
+}
+
+function getRoleFromPlainable(x: unknown): string | undefined {
+  const p = tryToPlain(x);
+  if (p && typeof p === 'object' && p !== null && typeof (p as Record<string, unknown>).role === 'string') {
+    return (p as Record<string, unknown>).role as string;
+  }
+  return undefined;
+}
+
+function getTextFromPlainable(x: unknown): string | undefined {
+  const p = tryToPlain(x);
+  if (!p || typeof p !== 'object' || p === null) return undefined;
+  const o = p as Record<string, unknown>;
+  if (typeof o.text === 'string') return o.text;
+  if (Array.isArray(o['content'])) {
+    const parts = (o['content'] as unknown[]).flatMap((c) => {
+      if (typeof c === 'object' && c !== null) {
+        const t = (c as Record<string, unknown>).text;
+        return typeof t === 'string' ? [t] : [];
+      }
+      return [] as string[];
+    });
+    if (parts.length) return parts.join('\n');
+  }
+  return undefined;
 }
