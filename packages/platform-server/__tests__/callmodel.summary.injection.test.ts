@@ -14,7 +14,7 @@ describe('CallModelLLMReducer: summary injection', () => {
   it('inserts summary after system when present', async () => {
     const llm = new FakeLLM();
     const reducer = new CallModelLLMReducer({} as any);
-    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [] });
+    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [], injectSummary: true });
     await reducer.invoke({ messages: [HumanMessage.fromText('H1')], summary: 'SUM' } as any, { threadId: 't' } as any);
     expect(llm.lastInput[0] instanceof SystemMessage).toBe(true);
     expect((llm.lastInput[1] as HumanMessage).text).toBe('SUM');
@@ -28,6 +28,7 @@ describe('CallModelLLMReducer: summary injection', () => {
       model: 'x',
       systemPrompt: 'SYS',
       tools: [],
+      injectSummary: true,
       memoryProvider: async () => ({ msg: SystemMessage.fromText('MEM'), place: 'after_system' }),
     });
     await reducer.invoke({ messages: [HumanMessage.fromText('H1')], summary: 'SUM' } as any, { threadId: 't' } as any);
@@ -45,6 +46,7 @@ describe('CallModelLLMReducer: summary injection', () => {
       model: 'x',
       systemPrompt: 'SYS',
       tools: [],
+      injectSummary: true,
       memoryProvider: async () => ({ msg: SystemMessage.fromText('MEM'), place: 'last_message' }),
     });
     await reducer.invoke({ messages: [HumanMessage.fromText('H1')], summary: 'SUM' } as any, { threadId: 't' } as any);
@@ -57,7 +59,7 @@ describe('CallModelLLMReducer: summary injection', () => {
   it('does not inject when summary is empty/undefined', async () => {
     const llm = new FakeLLM();
     const reducer = new CallModelLLMReducer({} as any);
-    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [] });
+    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [], injectSummary: true });
     await reducer.invoke({ messages: [HumanMessage.fromText('H1')], summary: '' } as any, { threadId: 't' } as any);
     expect(llm.lastInput[1] instanceof HumanMessage).toBe(true);
     expect((llm.lastInput[1] as HumanMessage).text).toBe('H1');
@@ -66,7 +68,7 @@ describe('CallModelLLMReducer: summary injection', () => {
   it('prevents duplicate summary injection when same text exists', async () => {
     const llm = new FakeLLM();
     const reducer = new CallModelLLMReducer({} as any);
-    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [] });
+    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [], injectSummary: true });
     const summary = 'SUM';
     await reducer.invoke({ messages: [HumanMessage.fromText(summary)], summary } as any, { threadId: 't' } as any);
     // Should be [System, existing HumanMessage, ...]; no extra summary injected
@@ -79,7 +81,7 @@ describe('CallModelLLMReducer: summary injection', () => {
     const llm = new FakeLLM();
     const reducer = new CallModelLLMReducer({} as any);
     // summaryMaxTokens=2 -> maxChars=8
-    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [], summaryMaxTokens: 2 });
+    reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [], injectSummary: true, summaryMaxTokens: 2 });
     const long = 'abcdefghijklmno';
     const out = await reducer.invoke({ messages: [], summary: long } as any, { threadId: 't' } as any);
     expect((llm.lastInput[1] as HumanMessage).text).toBe('abcdefgh');
@@ -97,4 +99,3 @@ describe('CallModelLLMReducer: summary injection', () => {
     expect((llm.lastInput[1] as HumanMessage).text).toBe('H1');
   });
 });
-
