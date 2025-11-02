@@ -63,16 +63,17 @@ describe('CallModelLLMReducer: summary injection', () => {
     expect((llm.lastInput[1] as HumanMessage).text).toBe('H1');
   });
 
-  it('prevents duplicate summary injection when same text exists', async () => {
+  it('still injects summary even if identical text exists in messages', async () => {
     const llm = new FakeLLM();
     const reducer = new CallModelLLMReducer({} as any);
     reducer.init({ llm: llm as any, model: 'x', systemPrompt: 'SYS', tools: [] });
     const summary = 'SUM';
     await reducer.invoke({ messages: [HumanMessage.fromText(summary)], summary } as any, { threadId: 't' } as any);
-    // Should be [System, existing HumanMessage, ...]; no extra summary injected
+    // Summary should be injected after system, even if an identical HumanMessage exists later
     expect(llm.lastInput[0] instanceof SystemMessage).toBe(true);
     expect((llm.lastInput[1] as HumanMessage).text).toBe('SUM');
-    expect(llm.lastInput.filter((m) => m instanceof HumanMessage).length).toBe(1);
+    // There will be two HumanMessages with the same text: injected summary and existing message
+    expect(llm.lastInput.filter((m) => m instanceof HumanMessage).length).toBe(2);
   });
   // No disabled flag test: summary injection is unconditional when summary is present.
 });
