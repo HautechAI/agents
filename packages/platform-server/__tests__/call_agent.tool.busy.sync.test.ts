@@ -7,6 +7,7 @@ import { AgentNode } from '../src/graph/nodes/agent/agent.node';
 import { ResponseMessage, AIMessage } from '@agyn/llm';
 import { CallAgentNode } from '../src/graph/nodes/tools/call_agent/call_agent.node';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
+import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 
 class BusyAgent extends AgentNode {
   override async invoke(): Promise<ResponseMessage> {
@@ -17,7 +18,7 @@ class BusyAgent extends AgentNode {
 describe('call_agent sync busy', () => {
   it('returns queued when target thread running (sync)', async () => {
     const module = await Test.createTestingModule({
-      providers: [LoggerService, ConfigService, BusyAgent, { provide: LLMProvisioner, useValue: {} }],
+      providers: [LoggerService, ConfigService, BusyAgent, { provide: LLMProvisioner, useValue: {} }, { provide: AgentsPersistenceService, useValue: { beginRun: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {} } }],
     }).compile();
     const agent = await module.resolve(BusyAgent);
     await agent.setConfig({});

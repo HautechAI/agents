@@ -8,6 +8,7 @@ import { AIMessage, HumanMessage, ResponseMessage } from '@agyn/llm';
 import { Loop, Reducer } from '@agyn/llm';
 import type { LLMContext, LLMState } from '../src/llm/types';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
+import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 
 class PassthroughReducer extends Reducer<LLMState, LLMContext> {
   async invoke(state: LLMState): Promise<LLMState> {
@@ -26,7 +27,7 @@ class NoToolAgent extends AgentNode {
 describe('Agent busy gating (wait mode)', () => {
   it('does not start a new loop while running; schedules next after finish', async () => {
     const module = await Test.createTestingModule({
-      providers: [LoggerService, ConfigService, { provide: LLMProvisioner, useValue: {} }, NoToolAgent],
+      providers: [LoggerService, ConfigService, { provide: LLMProvisioner, useValue: {} }, NoToolAgent, { provide: AgentsPersistenceService, useValue: { beginRun: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {} } }],
     }).compile();
     const agent = await module.resolve(NoToolAgent);
     await agent.setConfig({ whenBusy: 'wait' });

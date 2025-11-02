@@ -7,6 +7,7 @@ import { AgentNode as Agent } from '../src/graph/nodes/agent/agent.node';
 import { Test } from '@nestjs/testing';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import { PrismaService } from '../src/core/services/prisma.service';
+import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 
 describe('Agent summarization graph', () => {
   it('invokes successfully over several turns with summarization configured', async () => {
@@ -19,6 +20,7 @@ describe('Agent summarization graph', () => {
         { provide: LLMProvisioner, useValue: provisioner },
         Agent,
         { provide: PrismaService, useValue: { getClient: () => null } },
+        { provide: AgentsPersistenceService, useValue: { beginRun: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {} } },
       ],
     }).compile();
 

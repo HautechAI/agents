@@ -31,6 +31,7 @@ import { SummarizationLLMReducer } from '../../../llm/reducers/summarization.llm
 import { Signal } from '../../../signal';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
 import { Prisma, RunStatus } from '@prisma/client';
+import { toJsonValue, type JsonValue } from '../../../llm/services/messages.serialization';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
@@ -277,15 +278,16 @@ export class AgentNode extends Node<AgentStaticConfig> {
       };
       return toJsonValue(fallback);
     };
-    let runId: string | undefined;
-    if (this.persistence) {
-      try {
-        const inputJson = messages.map((m) => toJson(m) as Prisma.InputJsonValue);
-        const started = await this.persistence.beginRun(thread, inputJson);
-        runId = started.runId;
-      } catch (e) {
-        this.logger.error('Failed to persist beginRun; continuing without persistence', e);
-      }
+    // Begin run deterministically; if persistence fails, disable it for this run
+    let activePersistence: AgentsPersistenceService | undefined = this.persistence;
+    let runId!: string;
+    try {
+      const inputJson = messages.map((m) => toJson(m) as Prisma.InputJsonValue);
+      const started = await this.persistence.beginRun(thread, inputJson);
+      runId = started.runId;
+    } catch (e) {
+      this.logger.error('Failed to persist beginRun; continuing without persistence', e);
+      activePersistence = undefined;
     }
     try {
       result = await withAgent(
@@ -303,18 +305,16 @@ export class AgentNode extends Node<AgentStaticConfig> {
           const result = newState.messages.at(-1);
 
           // Persist injected messages if any (SystemMessage appended by EnforceTools)
-          if (this.persistence) {
+          if (activePersistence) {
             try {
-              if (runId) {
-                const initialPlains = messages.map((m) => JSON.stringify(toJson(m)));
-                const injectedPlains = newState.messages
-                  .map((m) => tryToPlain(m))
-                  .filter((p): p is JsonValue => Boolean(p))
-                  .filter((p) => isSystemRole(p));
-                const newInjected = injectedPlains.filter((p) => !initialPlains.includes(JSON.stringify(p)));
-                if (newInjected.length > 0) {
-                  await this.persistence.recordInjected(runId, newInjected as Prisma.InputJsonValue[]);
-                }
+              const initialPlains = messages.map((m) => JSON.stringify(toJson(m)));
+              const injectedPlains = newState.messages
+                .map((m) => tryToPlain(m))
+                .filter((p): p is JsonValue => Boolean(p))
+                .filter((p) => isSystemRole(p));
+              const newInjected = injectedPlains.filter((p) => !initialPlains.includes(JSON.stringify(p)));
+              if (newInjected.length > 0) {
+                await activePersistence.recordInjected(runId, newInjected as Prisma.InputJsonValue[]);
               }
             } catch (e) {
               this.logger.debug('Injected messages persistence failed', e);
@@ -323,16 +323,14 @@ export class AgentNode extends Node<AgentStaticConfig> {
           if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
             this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
             // Persist outputs and complete run
-            if (this.persistence) {
+            if (activePersistence) {
               try {
-                if (runId) {
-                  if (result instanceof ResponseMessage) {
-                    const outputs = result.output.map((o) => toJsonValue(tryToPlain(o) ?? o));
-                    await this.persistence.completeRun(runId, RunStatus.finished, outputs as Prisma.InputJsonValue[]);
-                  } else if (result instanceof ToolCallOutputMessage) {
-                    const out = toJsonValue(tryToPlain(result) ?? result);
-                    await this.persistence.completeRun(runId, RunStatus.finished, [out as Prisma.InputJsonValue]);
-                  }
+                if (result instanceof ResponseMessage) {
+                  const outputs = result.output.map((o) => toJsonValue(tryToPlain(o) ?? o));
+                  await activePersistence.completeRun(runId, RunStatus.finished, outputs as Prisma.InputJsonValue[]);
+                } else if (result instanceof ToolCallOutputMessage) {
+                  const out = toJsonValue(tryToPlain(result) ?? result);
+                  await activePersistence.completeRun(runId, RunStatus.finished, [out as Prisma.InputJsonValue]);
                 }
               } catch (e) {
                 this.logger.error('Failed to persist run completion', e);
@@ -347,13 +345,11 @@ export class AgentNode extends Node<AgentStaticConfig> {
     } catch (err) {
       this.logger.error(`Agent invocation error in thread ${thread}:`, err);
       result = ResponseMessage.fromText(`Agent error`);
-      // Persist error completion if runId exists
-      if (this.persistence) {
+      // Persist error completion when a run was started
+      if (activePersistence) {
         try {
-          if (runId) {
-            const out = toJsonValue(tryToPlain(result) ?? result);
-            await this.persistence.completeRun(runId, RunStatus.terminated, [out as Prisma.InputJsonValue]);
-          }
+          const out = toJsonValue(tryToPlain(result) ?? result);
+          await activePersistence.completeRun(runId, RunStatus.terminated, [out as Prisma.InputJsonValue]);
         } catch {}
       }
     } finally {
@@ -448,9 +444,6 @@ export class AgentNode extends Node<AgentStaticConfig> {
 // ---- Typed helpers for JSON conversion ----
 type Plainable = { toPlain: () => unknown };
 
-// Strongly-typed JSON value
-type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
-
 function hasToPlain(x: unknown): x is Plainable {
   return typeof x === 'object' && x !== null && typeof (x as Record<string, unknown>).toPlain === 'function';
 }
@@ -465,24 +458,6 @@ function tryToPlain(x: unknown): JsonValue | undefined {
   }
 }
 
-// Plain object guard
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  if (v === null || typeof v !== 'object') return false;
-  const proto = Object.getPrototypeOf(v);
-  return proto === Object.prototype || proto === null;
-}
-
-function toJsonValue(v: unknown): JsonValue {
-  if (v === null) return null;
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
-  if (Array.isArray(v)) return v.map((i) => toJsonValue(i));
-  if (isPlainObject(v)) {
-    const entries = Object.entries(v).filter(([, val]) => typeof val !== 'undefined');
-    return Object.fromEntries(entries.map(([k, val]) => [k, toJsonValue(val)]));
-  }
-  // Fallback stringify for unsupported values (functions, symbols, undefined, non-plain objects)
-  return String(v);
-}
 
 function isSystemRole(v: JsonValue): boolean {
   if (typeof v !== 'object' || v === null) return false;
