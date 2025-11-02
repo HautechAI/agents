@@ -105,3 +105,5 @@ model VariableLocal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// End of schema

@@ -4,7 +4,6 @@ import { AgentsPersistenceService } from './agents.persistence.service';
 import { RunMessageType } from '@prisma/client';
 
 export class ListRunMessagesQueryDto {
-  // Validate against known string values at runtime
   @IsEnum(RunMessageType)
   type!: RunMessageType;
 }

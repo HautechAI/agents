@@ -98,7 +98,7 @@ export type AgentStaticConfig = z.infer<typeof AgentStaticConfigSchema>;
 export type WhenBusyMode = 'wait' | 'injectAfterTools';
 
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
-import { Inject, Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Optional, Scope } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { TemplatePortConfig } from '../../../graph/ports.types';
 import type { RuntimeContext } from '../../../graph/runtimeContext';

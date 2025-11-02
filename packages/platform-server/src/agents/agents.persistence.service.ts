@@ -1,4 +1,3 @@
-import { Injectable, Inject } from '@nestjs/common';
 import { Prisma, PrismaClient, MessageKind, RunStatus, RunMessageType } from '@prisma/client';
 import { PrismaService } from '../core/services/prisma.service';
 
@@ -12,7 +11,6 @@ export class AgentsPersistenceService {
     return this.prismaService.getClient();
   }
 
-  // Ensure a thread exists by alias; create if missing and return id.
   async ensureThreadByAlias(alias: string): Promise<string> {
     const existing = await this.prisma.thread.findUnique({ where: { alias } });
     if (existing) return existing.id;
@@ -24,7 +22,6 @@ export class AgentsPersistenceService {
     const threadId = await this.ensureThreadByAlias(threadAlias);
     const { runId } = await this.prisma.$transaction(async (tx) => {
       const run = await tx.run.create({ data: { threadId, status: RunStatus.running } });
-      // Persist input messages and link within the same transaction
       await Promise.all(
         inputMessages.map(async (msg) => {
           const { kind, text } = this.extractKindText(msg);
@@ -86,14 +83,8 @@ export class AgentsPersistenceService {
     return msgs;
   }
 
-  // Helper: derive message kind and text from raw JSON
   private extractKindText(msg: Prisma.InputJsonValue): { kind: MessageKind; text: string | null } {
-    // Narrow to object
-    const obj = (typeof msg === 'object' && msg !== null ? (msg as Record<string, unknown>) : {}) as Record<
-      string,
-      unknown
-    >;
-    // Determine role
+    const obj = (typeof msg === 'object' && msg !== null ? (msg as Record<string, unknown>) : {}) as Record<string, unknown>;
     const roleRaw = typeof obj.role === 'string' ? obj.role : typeof obj["role"] === 'string' ? (obj["role"] as string) : undefined;
     const role = (roleRaw || (obj.type === 'message' && typeof obj.role === 'string' ? (obj.role as string) : undefined) || 'user') as string;
     let kind: MessageKind;
@@ -111,12 +102,11 @@ export class AgentsPersistenceService {
         kind = MessageKind.user;
     }
 
-    // Extract text from known shapes
     let text: string | null = null;
     if (typeof obj.text === 'string') {
       text = obj.text as string;
-    } else if (Array.isArray(obj['content'])) {
-      const content = obj['content'] as Array<unknown>;
+    } else if (Array.isArray((obj as any)['content'])) {
+      const content = (obj as any)['content'] as Array<unknown>;
       const parts: string[] = [];
       for (const c of content) {
         if (typeof c === 'object' && c !== null) {
