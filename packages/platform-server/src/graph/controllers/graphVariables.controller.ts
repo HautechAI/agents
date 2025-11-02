@@ -43,10 +43,6 @@ export class GraphVariablesController {
       throw e;
     }
   }
-
-  private prisma(): PrismaClient {
-    return this.prismaService.getClient();
-  }
 }
 
 function isCodeError(e: unknown): e is { code?: string; current?: unknown } {
