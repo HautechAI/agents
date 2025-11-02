@@ -1,4 +1,4 @@
-import { FunctionTool, LLM, Reducer, SystemMessage, ToolCallMessage } from '@agyn/llm';
+import { FunctionTool, HumanMessage, LLM, Reducer, SystemMessage, ToolCallMessage } from '@agyn/llm';
 import { LLMResponse, withLLM } from '@agyn/tracing';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMContext, LLMMessage, LLMState } from '../types';
@@ -11,7 +11,8 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
   }
 
   private tools: FunctionTool[] = [];
-  private params: { model: string; systemPrompt: string } = { model: '', systemPrompt: '' };
+  private model = '';
+  private systemPrompt = '';
   private llm?: LLM;
   private memoryProvider?: (
     ctx: LLMContext,
@@ -29,32 +30,34 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     ) => Promise<{ msg: SystemMessage | null; place: 'after_system' | 'last_message' } | null>;
   }) {
     this.llm = params.llm;
-    this.params = { model: params.model, systemPrompt: params.systemPrompt };
+    this.model = params.model;
+    this.systemPrompt = params.systemPrompt;
     this.tools = params.tools || [];
     this.memoryProvider = params.memoryProvider;
     return this;
   }
 
   async invoke(state: LLMState, _ctx: LLMContext): Promise<LLMState> {
-    if (!this.llm || !this.params.model || !this.params.systemPrompt) {
+    if (!this.llm || !this.model || !this.systemPrompt) {
       throw new Error('CallModelLLMReducer not initialized');
     }
-    const system = SystemMessage.fromText(this.params.systemPrompt);
-    const inputBase: (SystemMessage | LLMMessage)[] = [system, ...state.messages];
+    const system = SystemMessage.fromText(this.systemPrompt);
+    const summaryText = state.summary?.trim();
+    const summaryMsg = summaryText ? HumanMessage.fromText(summaryText) : null;
     const mem = this.memoryProvider ? await this.memoryProvider(_ctx, state) : null;
-    let input: (SystemMessage | LLMMessage)[] = inputBase;
-    if (mem && mem.msg) {
-      if (mem.place === 'after_system') {
-        input = [system, mem.msg, ...state.messages];
-      } else {
-        input = [...inputBase, mem.msg];
-      }
-    }
+
+    // Assemble input in a single expression using filter(Boolean)
+    const input: (SystemMessage | LLMMessage)[] =
+      mem?.place === 'after_system'
+        ? [system, summaryMsg, mem?.msg ?? null, ...state.messages].filter(Boolean) as Array<SystemMessage | LLMMessage>
+        : mem?.place === 'last_message'
+        ? [system, summaryMsg, ...state.messages, mem?.msg ?? null].filter(Boolean) as Array<SystemMessage | LLMMessage>
+        : [system, summaryMsg, ...state.messages].filter(Boolean) as Array<SystemMessage | LLMMessage>;
 
     const response = await withLLM({ context: input.slice(-10) }, async () => {
       try {
         const raw = await this.llm!.call({
-          model: this.params.model,
+          model: this.model,
           input,
           tools: this.tools,
         });

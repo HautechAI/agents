@@ -16,7 +16,7 @@ beforeEach(async () => {
 
 describe('SummarizationLLMReducer', () => {
   it('does not summarize when within token budget', async () => {
-    const state: LLMState = { messages: [HumanMessage.fromText('a'), HumanMessage.fromText('b')], summary: '' };
+    const state: LLMState = { messages: [HumanMessage.fromText('a'), HumanMessage.fromText('b')], summary: undefined };
     // With keepTokens=10 and maxTokens=30, small inputs may be pruned without summarization
     const out = await reducer.invoke(state, { threadId: 't', finishSignal: { isActive: false } as any });
     expect(out.summary ?? '').toBe('');
@@ -29,7 +29,7 @@ describe('SummarizationLLMReducer', () => {
     const r = new SummarizationLLMReducer(prov as LLMProvisioner);
     await r.init({ model: 'gpt-5', keepTokens: 10, maxTokens: 30, systemPrompt: 'summarize' });
     const msgs = Array.from({ length: 50 }).map((_, i) => HumanMessage.fromText(`m${i}`));
-    const state: LLMState = { messages: msgs, summary: '' };
+    const state: LLMState = { messages: msgs, summary: undefined };
     const out = await r.invoke(state, { threadId: 't', finishSignal: { isActive: false } as any });
     expect((out.summary ?? '').length).toBeGreaterThan(0);
   });
@@ -37,7 +37,7 @@ describe('SummarizationLLMReducer', () => {
   it('keeps tool call context and handles outputs during summarize', async () => {
     const call = new ToolCallMessage({ type: 'function_call', name: 't', call_id: 'c1', arguments: '{}' });
     const resp = new ResponseMessage({ output: [call.toPlain(), AIMessage.fromText('x').toPlain()] });
-    const state: LLMState = { messages: [HumanMessage.fromText('h1'), resp], summary: '' };
+    const state: LLMState = { messages: [HumanMessage.fromText('h1'), resp], summary: undefined };
     const out = await reducer.invoke(state, { threadId: 't', finishSignal: { isActive: false } as any });
     expect(out.messages.length).toBeGreaterThan(0);
   });
@@ -46,7 +46,7 @@ describe('SummarizationLLMReducer', () => {
     const provisioner: Pick<LLMProvisioner, 'getLLM'> = { getLLM: async () => ({ call: async () => new ResponseMessage({ output: [] }) } as any) };
     const r = new SummarizationLLMReducer(provisioner as LLMProvisioner);
     await r.init({ model: 'gpt-5', keepTokens: 10, maxTokens: 0, systemPrompt: 'summarize' });
-    const state: LLMState = { messages: [HumanMessage.fromText('a')], summary: '' };
+    const state: LLMState = { messages: [HumanMessage.fromText('a')], summary: undefined };
     const out = await r.invoke(state, { threadId: 't', finishSignal: { isActive: false } as any });
     expect(out.messages.map((m) => (m as any).type)).toEqual(state.messages.map((m) => (m as any).type));
     expect(out.summary ?? '').toBe(state.summary ?? '');
@@ -77,7 +77,7 @@ describe('SummarizationLLMReducer', () => {
     const r = new SummarizationLLMReducer(provisioner as LLMProvisioner);
     await r.init({ model: 'gpt-5', keepTokens: 1000, maxTokens: 1000, systemPrompt: 'summarize' });
     const messages = Array.from({ length: 5 }).map((_, i) => HumanMessage.fromText(`m${i}`));
-    const state: LLMState = { messages, summary: '' };
+    const state: LLMState = { messages, summary: undefined };
     const out = await r.invoke(state, { threadId: 't', finishSignal: { isActive: false } as any });
     expect(out.messages.length).toBe(messages.length);
     expect(out.summary ?? '').toBe('');
