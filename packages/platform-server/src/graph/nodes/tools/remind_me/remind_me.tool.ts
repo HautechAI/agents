@@ -24,6 +24,7 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
   private active: Map<string, { timer: ReturnType<typeof setTimeout>; reminder: ActiveReminder }> = new Map();
   private destroyed = false;
   private maxActive = 1000;
+  private onRegistryChanged?: (count: number, updatedAtMs?: number) => void;
   constructor(private logger: LoggerService) {
     super();
   }
@@ -39,10 +40,19 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
   getActiveReminders(): ActiveReminder[] {
     return Array.from(this.active.values()).map((v) => v.reminder);
   }
+  /**
+   * Register a callback invoked whenever the active reminders registry size changes.
+   * Used to emit socket updates without coupling the tool to gateway implementation.
+   */
+  setOnRegistryChanged(cb?: (count: number, updatedAtMs?: number) => void) {
+    this.onRegistryChanged = cb;
+  }
   async destroy(): Promise<void> {
     this.destroyed = true;
     for (const rec of this.active.values()) clearTimeout(rec.timer);
     this.active.clear();
+    // Emit registry size change (count=0) after destroy
+    this.onRegistryChanged?.(0);
   }
   async execute(args: z.infer<typeof remindMeInvocationSchema>, ctx: LLMContext): Promise<string> {
     const { delayMs, note } = args;
@@ -58,9 +68,10 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
       const exists = this.active.has(id);
       if (!exists) return;
       this.active.delete(id);
+      // Registry size decreased; notify
+      this.onRegistryChanged?.(this.active.size);
       try {
         const msg = HumanMessage.fromText(`Reminder: ${note}`);
-
         await ctx.callerAgent.invoke(threadId, [msg]);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : JSON.stringify(e);
@@ -68,6 +79,8 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
       }
     }, delayMs);
     this.active.set(id, { timer, reminder: { id, threadId: threadId, note, at: eta } });
+    // Registry size increased; notify
+    this.onRegistryChanged?.(this.active.size);
     return JSON.stringify({ status: 'scheduled', etaMs: delayMs, at: eta, id });
   }
 }
