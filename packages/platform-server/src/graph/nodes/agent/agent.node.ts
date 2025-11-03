@@ -99,7 +99,7 @@ export type AgentStaticConfig = z.infer<typeof AgentStaticConfigSchema>;
 export type WhenBusyMode = 'wait' | 'injectAfterTools';
 
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
-import { Inject, Injectable, Optional, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { TemplatePortConfig } from '../../../graph/ports.types';
 import type { RuntimeContext } from '../../../graph/runtimeContext';
@@ -315,11 +315,24 @@ export class AgentNode extends Node<AgentStaticConfig> {
     } catch (err) {
       this.logger.error(`Agent invocation error in thread ${thread}:`, err);
       // Persist terminated status, then rethrow
+      let persistErr: unknown = undefined;
       try {
         await this.persistence.completeRun(runId, RunStatus.terminated, []);
       } catch (e) {
-        // Log and rethrow original error below
+        persistErr = e;
         this.logger.error('Failed to persist termination status', e);
+      }
+      // Attach persistence error as cause when available (optional improvement)
+      if (persistErr) {
+        const original = err instanceof Error ? err : new Error(String(err));
+        if (persistErr instanceof Error) {
+          // Prefer standard cause if supported
+          const wrapped = new Error(original.message, { cause: persistErr as Error });
+          throw wrapped;
+        } else {
+          (original as any).cause = persistErr;
+          throw original;
+        }
       }
       throw err;
     } finally {

@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
-import { IsEnum, IsString } from 'class-validator';
+import { IsEnum } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
 import { RunMessageType } from '@prisma/client';
 

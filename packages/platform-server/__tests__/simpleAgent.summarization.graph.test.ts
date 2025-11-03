@@ -19,7 +19,7 @@ describe('Agent summarization graph', () => {
         { provide: ConfigService, useValue: new ConfigService({ githubAppId: '1', githubAppPrivateKey: 'k', githubInstallationId: 'i', openaiApiKey: 'x', githubToken: 't', mongodbUrl: 'm' }) },
         { provide: LLMProvisioner, useValue: provisioner },
         Agent,
-        { provide: PrismaService, useValue: { getClient: () => null } },
+        { provide: PrismaService, useValue: { getClient: () => ({ conversationState: { upsert: async () => {}, findUnique: async () => null } }) } },
         { provide: AgentsPersistenceService, useValue: { beginRun: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {} } },
       ],
     }).compile();

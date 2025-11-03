@@ -85,9 +85,13 @@ export class AgentsPersistenceService {
   }
 
   private extractKindText(msg: Prisma.InputJsonValue): { kind: MessageKind; text: string | null } {
-    const obj = (typeof msg === 'object' && msg !== null ? (msg as Record<string, unknown>) : {}) as Record<string, unknown>;
-    const roleRaw = typeof obj.role === 'string' ? obj.role : typeof obj["role"] === 'string' ? (obj["role"] as string) : undefined;
-    const role = (roleRaw || (obj.type === 'message' && typeof obj.role === 'string' ? (obj.role as string) : undefined) || 'user') as string;
+    const obj = (typeof msg === 'object' && msg !== null ? (msg as Record<string, unknown>) : {});
+    const roleRaw = typeof (obj as Record<string, unknown>).role === 'string'
+      ? ((obj as Record<string, unknown>).role as string)
+      : typeof (obj as Record<string, unknown>)["role"] === 'string'
+      ? ((obj as Record<string, unknown>)["role"] as string)
+      : undefined;
+    const role = (roleRaw || ((obj as Record<string, unknown>).type === 'message' && typeof (obj as Record<string, unknown>).role === 'string' ? ((obj as Record<string, unknown>).role as string) : undefined) || 'user');
     let kind: MessageKind;
     switch (role) {
       case 'assistant':
@@ -104,19 +108,21 @@ export class AgentsPersistenceService {
     }
 
     let text: string | null = null;
-    if (typeof obj.text === 'string') {
-      text = obj.text as string;
-    } else if (Array.isArray((obj as any)['content'])) {
-      const content = (obj as any)['content'] as Array<unknown>;
-      const parts: string[] = [];
-      for (const c of content) {
-        if (typeof c === 'object' && c !== null) {
-          const co = c as Record<string, unknown>;
-          const t = typeof co.text === 'string' ? (co.text as string) : undefined;
-          if (t) parts.push(t);
+    if (typeof (obj as Record<string, unknown>).text === 'string') {
+      text = ((obj as Record<string, unknown>).text as string);
+    } else {
+      const rawContent = (obj as Record<string, unknown>).content as unknown;
+      if (Array.isArray(rawContent)) {
+        const parts: string[] = [];
+        for (const c of rawContent) {
+          if (c && typeof c === 'object') {
+            const co = c as Record<string, unknown>;
+            const t = typeof co.text === 'string' ? (co.text as string) : undefined;
+            if (t) parts.push(t);
+          }
         }
+        if (parts.length) text = parts.join('\n');
       }
-      if (parts.length) text = parts.join('\n');
     }
     return { kind, text };
   }
