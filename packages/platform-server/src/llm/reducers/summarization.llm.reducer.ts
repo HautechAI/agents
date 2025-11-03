@@ -13,11 +13,13 @@ import {
 import { stringify } from 'yaml';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMProvisioner } from '../provisioners/llm.provisioner';
+import { LoggerService } from '../../core/services/logger.service';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(
     @Inject(LLMProvisioner) private readonly provisioner: LLMProvisioner,
+    @Inject(LoggerService) protected readonly logger: LoggerService,
   ) {
     super();
   }
@@ -93,19 +95,24 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
         oldContextTokensCount: await this.countTokensFromMessages(state.messages),
       },
       async () => {
-        const response = await this.llm.call({
-          model,
-          input: [
-            SystemMessage.fromText(systemPrompt), //
-            HumanMessage.fromText(userPrompt),
-          ],
-        });
-        const newSummary = response.text.trim();
-        return new SummarizeResponse({
-          raw: { summary: newSummary, newContext: head },
-          summary: newSummary,
-          newContext: head,
-        });
+        try {
+          const response = await this.llm.call({
+            model,
+            input: [
+              SystemMessage.fromText(systemPrompt), //
+              HumanMessage.fromText(userPrompt),
+            ],
+          });
+          const newSummary = response.text.trim();
+          return new SummarizeResponse({
+            raw: { summary: newSummary, newContext: head },
+            summary: newSummary,
+            newContext: head,
+          });
+        } catch (error) {
+          this.logger.error('Error during summarization LLM call', error);
+          throw error;
+        }
       },
     );
 
