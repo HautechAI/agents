@@ -4,6 +4,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';
 import { ConversationStateRepository } from '../repositories/conversationState.repository';
 import { PersistenceBaseLLMReducer } from './persistenceBase.llm.reducer';
+import { toPrismaJsonValue } from '../services/messages.serialization';
 import { LoggerService } from '../../core/services/logger.service';
 
 @Injectable()
@@ -16,17 +17,18 @@ export class SaveLLMReducer extends PersistenceBaseLLMReducer {
   }
 
   async invoke(state: LLMState, ctx: LLMContext): Promise<LLMState> {
-    try {
-      const prisma = this.prismaService.getClient();
-      const repo = new ConversationStateRepository(prisma);
-      const nodeId = ctx.callerAgent.getAgentNodeId?.() || 'agent';
+    const prisma = this.prismaService.getClient();
+    const repo = new ConversationStateRepository(prisma);
+    const nodeId = ctx.callerAgent.getAgentNodeId?.() || 'agent';
 
-      const serialized = this.toJsonValue(this.serializeState(state));
+    const serialized = toPrismaJsonValue(this.serializeState(state));
+    try {
       await repo.upsert({ threadId: ctx.threadId, nodeId, state: serialized == null ? {} : serialized });
-      return state;
     } catch (e) {
-      this.logger.error('SaveLLMReducer error: %s', (e as Error)?.message || String(e));
-      return state;
+      this.logger.error('SaveLLMReducer: conversation state persist failed: %s', (e as Error)?.message || String(e));
+      // Propagate error to enforce fail-fast
+      throw e;
     }
+    return state;
   }
 }

@@ -1,7 +1,4 @@
-import {
-  Controller,
-  Inject
-} from '@nestjs/common';
+import { Controller, Inject } from '@nestjs/common';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { LiveGraphRuntime } from '../liveGraph.manager';
 
@@ -13,8 +10,8 @@ export class ListRunsParamsDto {
 
 export class ListRunsQueryDto {
   @IsOptional()
-  @IsEnum(['running', 'terminating', 'all'])
-  status?: 'running' | 'terminating' | 'all';
+  @IsEnum({ running: 'running', terminated: 'terminated', all: 'all' } as const)
+  status?: 'running' | 'terminated' | 'all';
 }
 
 export class TerminateByRunParamsDto {

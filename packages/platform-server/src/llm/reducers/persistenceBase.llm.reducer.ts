@@ -3,6 +3,7 @@ import type { LLMContext, LLMState } from '../types';
 import { HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
 import type { Prisma } from '@prisma/client';
 import type { ResponseInputItem, Response } from 'openai/resources/responses/responses.mjs';
+import { toPrismaJsonValue } from '../services/messages.serialization';
 
 type PlainMessage = {
   kind: 'human' | 'system' | 'response' | 'tool_call_output';
@@ -15,37 +16,14 @@ type PlainLLMState = {
 };
 
 export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMContext> {
-  protected toJsonValue(input: unknown): Prisma.InputJsonValue | null {
-    if (this.isInputJsonValue(input)) return input;
-    if (input === null) return null;
-    if (typeof input === 'string' || typeof input === 'number' || typeof input === 'boolean') return input;
-    if (Array.isArray(input)) return input.map((el) => this.toJsonValue(el));
-    if (this.isPlainObject(input)) {
-      const out: Record<string, Prisma.InputJsonValue | null> = {};
-      for (const [k, v] of Object.entries(input)) {
-        if (typeof v === 'undefined') continue;
-        if (typeof v === 'function' || typeof v === 'symbol' || typeof v === 'bigint') {
-          throw new Error(`Unable to convert value to JSON: non-serializable property ${k} of type ${typeof v}`);
-        }
-        out[k] = this.toJsonValue(v);
-      }
-      return out;
-    }
-    try {
-      const normalized = JSON.parse(JSON.stringify(input));
-      if (this.isInputJsonValue(normalized)) return normalized;
-    } catch {
-      // ignore
-    }
-    throw new Error('Unable to convert value to JSON');
-  }
+  // Use shared serializer for persistence typing
 
   protected serializeState(state: LLMState): PlainLLMState {
     const messages: PlainMessage[] = state.messages.map((m) => {
-      if (m instanceof HumanMessage) return { kind: 'human', value: this.toJsonValue(m.toPlain()) };
-      if (m instanceof SystemMessage) return { kind: 'system', value: this.toJsonValue(m.toPlain()) };
-      if (m instanceof ResponseMessage) return { kind: 'response', value: this.toJsonValue(m.toPlain()) };
-      if (m instanceof ToolCallOutputMessage) return { kind: 'tool_call_output', value: this.toJsonValue(m.toPlain()) };
+      if (m instanceof HumanMessage) return { kind: 'human', value: toPrismaJsonValue(m.toPlain()) };
+      if (m instanceof SystemMessage) return { kind: 'system', value: toPrismaJsonValue(m.toPlain()) };
+      if (m instanceof ResponseMessage) return { kind: 'response', value: toPrismaJsonValue(m.toPlain()) };
+      if (m instanceof ToolCallOutputMessage) return { kind: 'tool_call_output', value: toPrismaJsonValue(m.toPlain()) };
       throw new Error('Unsupported message type for serialization');
     });
     return { messages, summary: state.summary };
@@ -85,18 +63,7 @@ export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMCon
     return this.isRecord(m) && 'kind' in m && 'value' in m;
   }
 
-  protected isInputJsonValue(v: unknown): v is Prisma.InputJsonValue {
-    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return true;
-    if (Array.isArray(v)) return v.every((el) => this.isInputJsonValue(el));
-    if (this.isPlainObject(v)) return Object.values(v).every((val) => this.isInputJsonValue(val));
-    return false;
-  }
-
-  protected isPlainObject(v: unknown): v is Record<string, unknown> {
-    if (v === null || typeof v !== 'object') return false;
-    const proto = Object.getPrototypeOf(v);
-    return proto === Object.prototype || proto === null;
-  }
+  // isInputJsonValue and isPlainObject moved to shared service where needed for conversion
 
   protected isRecord(v: unknown): v is Record<string, unknown> {
     return v !== null && typeof v === 'object';

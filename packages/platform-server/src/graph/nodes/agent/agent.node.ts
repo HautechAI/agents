@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import {
   AIMessage,
+  SystemMessage,
   FunctionTool,
   Loop,
   Reducer,
@@ -29,6 +30,9 @@ import { LoadLLMReducer } from '../../../llm/reducers/load.llm.reducer';
 import { SaveLLMReducer } from '../../../llm/reducers/save.llm.reducer';
 import { SummarizationLLMReducer } from '../../../llm/reducers/summarization.llm.reducer';
 import { Signal } from '../../../signal';
+import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
+import { Prisma, RunStatus } from '@prisma/client';
+import { toPrismaJsonValue } from '../../../llm/services/messages.serialization';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
@@ -115,6 +119,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     @Inject(LoggerService) protected logger: LoggerService,
     @Inject(LLMProvisioner) protected llmProvisioner: LLMProvisioner,
     @Inject(ModuleRef) protected readonly moduleRef: ModuleRef,
+    @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
   ) {
     super(logger);
   }
@@ -260,6 +265,16 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
     this.runningThreads.add(thread);
     let result: ResponseMessage | ToolCallOutputMessage;
+    // Begin run deterministically; persistence must succeed or throw
+    const inputJson = messages.map((m) => toPrismaJsonValue(m));
+    let runId: string;
+    try {
+      const started = await this.persistence.beginRun(thread, inputJson);
+      runId = started.runId;
+    } catch (e) {
+      this.logger.error('Agent beginRun failed for thread %s: %s', thread, (e as Error)?.message || String(e));
+      throw e;
+    }
     try {
       result = await withAgent(
         { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
@@ -275,8 +290,22 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
           const result = newState.messages.at(-1);
 
+          // Persist injected messages (SystemMessage appended by EnforceTools)
+          const injected = newState.messages.filter((m) => m instanceof SystemMessage && !messages.includes(m));
+          if (injected.length > 0) {
+            const injectedJson = injected.map((m) => toPrismaJsonValue(m));
+            await this.persistence.recordInjected(runId, injectedJson);
+          }
           if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
             this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
+            // Persist outputs and complete run
+            if (result instanceof ResponseMessage) {
+              const outputs = result.output.map((o) => toPrismaJsonValue(o));
+              await this.persistence.completeRun(runId, RunStatus.finished, outputs);
+            } else if (result instanceof ToolCallOutputMessage) {
+              const out = toPrismaJsonValue(result);
+              await this.persistence.completeRun(runId, RunStatus.finished, [out]);
+            }
             return result;
           }
 
@@ -285,7 +314,24 @@ export class AgentNode extends Node<AgentStaticConfig> {
       );
     } catch (err) {
       this.logger.error(`Agent invocation error in thread ${thread}:`, err);
-      result = ResponseMessage.fromText(`Agent error`);
+      // Persist terminated status, then rethrow
+      let persistErr: unknown = undefined;
+      try {
+        await this.persistence.completeRun(runId, RunStatus.terminated, []);
+      } catch (e) {
+        persistErr = e;
+        this.logger.error('Failed to persist termination status', e);
+      }
+      // Attach persistence error as cause when available (optional improvement)
+      if (persistErr) {
+        const original = err instanceof Error ? err : new Error(String(err));
+        // Always wrap with a new Error carrying a cause; preserve name/stack when available.
+        const wrapped = new Error(original.message, { cause: persistErr });
+        wrapped.name = original.name;
+        if (original.stack) wrapped.stack = original.stack;
+        throw wrapped;
+      }
+      throw err;
     } finally {
       this.runningThreads.delete(thread);
     }

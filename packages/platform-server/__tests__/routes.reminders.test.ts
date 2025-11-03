@@ -4,7 +4,7 @@ import { RemindMeFunctionTool } from '../src/graph/nodes/tools/remind_me/remind_
 import { RemindersController } from '../src/graph/nodes/tools/remind_me/reminders.controller';
 import type { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { Signal } from '../src/signal';
-import type { AgentNode } from '../src/graph/nodes/agent/agent.node';
+// Use minimal callerAgent stub matching LLMContext requirements to avoid heavy DI
 import { LoggerService } from '../src/core/services/logger.service';
 
 describe('GET /graph/nodes/:nodeId/reminders', () => {
@@ -15,7 +15,7 @@ describe('GET /graph/nodes/:nodeId/reminders', () => {
     const fastify = Fastify({ logger: false });
     const logger = new LoggerService();
     const tool = new RemindMeFunctionTool(logger);
-    const caller_agent: AgentNode = { invoke: vi.fn(async () => undefined) } as unknown as AgentNode;
+    const caller_agent = { invoke: vi.fn(async () => undefined), getAgentNodeId: () => 'agent' };
     await tool.execute({ delayMs: 10_000, note: 'Soon' }, { threadId: 't-1', callerAgent: caller_agent, finishSignal: new Signal() });
 
     // schedule a far reminder so it stays active
