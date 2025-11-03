@@ -23,7 +23,12 @@
 
 import { AIMessage, HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { Signal } from '../signal';
-import { AgentNode } from '../graph/nodes/agent/agent.node';
+// Minimal interface required from a caller agent within LLM execution context.
+// AgentNode implements this shape; tests can provide light stubs without heavy DI.
+export interface CallerAgent {
+  getAgentNodeId?: () => string | undefined;
+  invoke: (threadId: string, messages: LLMMessage[]) => Promise<ResponseMessage | ToolCallOutputMessage>;
+}
 
 // export type ResponseOutputItem =
 //   | ResponseOutputMessage
@@ -57,5 +62,5 @@ export type LLMState = {
 export type LLMContext = {
   threadId: string;
   finishSignal: Signal;
-  callerAgent: AgentNode;
+  callerAgent: CallerAgent;
 };

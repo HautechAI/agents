@@ -38,7 +38,7 @@ describe('Fail-fast behavior', () => {
     const spy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     const agent = await module.resolve(AgentNode);
     await agent.setConfig({});
-    agent.setRuntimeContext({ nodeId: 'A' } as any);
+    agent.setRuntimeContext({ nodeId: 'A', get: (_id: string) => undefined });
 
     await expect(agent.invoke('thread-1', [HumanMessage.fromText('hi')])).rejects.toBeTruthy();
     expect(spy).toHaveBeenCalled();
@@ -63,4 +63,3 @@ describe('Fail-fast behavior', () => {
     await expect(ctrl.listThreads()).rejects.toBeTruthy();
   });
 });
-

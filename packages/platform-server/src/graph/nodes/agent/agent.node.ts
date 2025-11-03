@@ -266,7 +266,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     this.runningThreads.add(thread);
     let result: ResponseMessage | ToolCallOutputMessage;
     // Begin run deterministically; persistence must succeed or throw
-    const inputJson = messages.map((m) => toPrismaJsonValue(m) as Prisma.InputJsonValue);
+    const inputJson = messages.map((m) => toPrismaJsonValue(m));
     let runId: string;
     try {
       const started = await this.persistence.beginRun(thread, inputJson);
@@ -293,17 +293,17 @@ export class AgentNode extends Node<AgentStaticConfig> {
           // Persist injected messages (SystemMessage appended by EnforceTools)
           const injected = newState.messages.filter((m) => m instanceof SystemMessage && !messages.includes(m));
           if (injected.length > 0) {
-            const injectedJson = injected.map((m) => toPrismaJsonValue(m) as Prisma.InputJsonValue);
+            const injectedJson = injected.map((m) => toPrismaJsonValue(m));
             await this.persistence.recordInjected(runId, injectedJson);
           }
           if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
             this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
             // Persist outputs and complete run
             if (result instanceof ResponseMessage) {
-              const outputs = result.output.map((o) => toPrismaJsonValue(o) as Prisma.InputJsonValue);
+              const outputs = result.output.map((o) => toPrismaJsonValue(o));
               await this.persistence.completeRun(runId, RunStatus.finished, outputs);
             } else if (result instanceof ToolCallOutputMessage) {
-              const out = toPrismaJsonValue(result) as Prisma.InputJsonValue;
+              const out = toPrismaJsonValue(result);
               await this.persistence.completeRun(runId, RunStatus.finished, [out]);
             }
             return result;
@@ -325,14 +325,11 @@ export class AgentNode extends Node<AgentStaticConfig> {
       // Attach persistence error as cause when available (optional improvement)
       if (persistErr) {
         const original = err instanceof Error ? err : new Error(String(err));
-        if (persistErr instanceof Error) {
-          // Prefer standard cause if supported
-          const wrapped = new Error(original.message, { cause: persistErr as Error });
-          throw wrapped;
-        } else {
-          (original as any).cause = persistErr;
-          throw original;
-        }
+        // Always wrap with a new Error carrying a cause; preserve name/stack when available.
+        const wrapped = new Error(original.message, { cause: persistErr });
+        wrapped.name = original.name;
+        if (original.stack) wrapped.stack = original.stack;
+        throw wrapped;
       }
       throw err;
     } finally {
