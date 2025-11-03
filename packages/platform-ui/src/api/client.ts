@@ -40,7 +40,7 @@ export function getApiBase(override?: string): string {
   // 2) import.meta.env.VITE_API_BASE_URL
   // 3) process.env.API_BASE_URL
   // 4) if process.env.VITEST -> ''
-  // 5) default 'http://localhost:3010'
+  // 5) if not found -> throw in app/runtime
   if (override !== undefined) return override;
   const ve = readViteEnv();
   const ne = readNodeEnv();
@@ -68,7 +68,7 @@ export function getApiBase(override?: string): string {
   })();
   if (isVitest) return '';
 
-  return 'http://localhost:3010';
+  throw new Error('API base not configured. Set VITE_API_BASE_URL or pass override.');
 }
 
 export function buildUrl(path: string, base?: string): string {
@@ -94,4 +94,3 @@ export async function httpJson<T = unknown>(path: string, init?: RequestInit, ba
     return undefined;
   }
 }
-
