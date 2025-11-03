@@ -5,6 +5,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
 export class PrismaService {
+  // Lazy-initialized Prisma client; optional to avoid non-null assertion
   private prisma?: PrismaClient;
 
   constructor(

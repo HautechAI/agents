@@ -14,6 +14,9 @@ import { buildTemplateRegistry } from '../templates';
 import { GraphController } from './controllers/graph.controller';
 import { GraphPersistController } from './controllers/graphPersist.controller';
 import { RunsController } from './controllers/runs.controller';
+import { GraphVariablesController } from './controllers/graphVariables.controller';
+import { GraphVariablesService } from './services/graphVariables.service';
+import { PrismaService } from '../core/services/prisma.service';
 import { GitGraphRepository } from './gitGraph.repository';
 import { GraphGuard } from './graph.guard';
 import { GraphRepository } from './graph.repository';
@@ -43,7 +46,7 @@ import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
 
 @Module({
   imports: [CoreModule, InfraModule, LLMModule, EnvModule],
-  controllers: [RunsController, GraphPersistController, GraphController, RemindersController],
+  controllers: [RunsController, GraphPersistController, GraphController, RemindersController, GraphVariablesController],
   providers: [
     {
       provide: GraphGuard,
@@ -119,6 +122,8 @@ import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
     ShellCommandNode,
     GithubCloneRepoNode,
     RemindMeNode,
+    // Standard DI for GraphVariablesService
+    GraphVariablesService,
   ],
   exports: [LiveGraphRuntime, TemplateRegistry, PortsRegistry, GraphRepository, NodeStateService],
 })
