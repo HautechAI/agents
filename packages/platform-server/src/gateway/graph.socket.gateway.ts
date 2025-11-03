@@ -36,7 +36,6 @@ export const NodeStateEventSchema = z
   .strict();
 export type NodeStateEvent = z.infer<typeof NodeStateEventSchema>;
 
-<<<<<<< HEAD
 // RemindMe: active reminder count event
 export const ReminderCountEventSchema = z
   .object({
@@ -46,9 +45,6 @@ export const ReminderCountEventSchema = z
   })
   .strict();
 export type ReminderCountEvent = z.infer<typeof ReminderCountEventSchema>;
-
-=======
->>>>>>> e30249f6 (test(platform-ui): standardize imports to '@/api/graph' and '@/api/tracing' across graph tests/hooks; wrap NodeObsSidebar filtering test in ObsUiProvider with serverUrl to satisfy context; adjust dynamic import paths to alias for consistency)
 /**
  * Socket.IO gateway attached to Fastify/Nest HTTP server for graph events.
  * Constructors DI-only; call init({ server }) explicitly from bootstrap.
@@ -80,11 +76,7 @@ export class GraphSocketGateway {
     return this;
   }
 
-<<<<<<< HEAD
   private broadcast<T>(event: 'node_status' | 'node_state' | 'node_reminder_count', payload: T, schema: z.ZodType<T>) {
-=======
-  private broadcast<T>(event: 'node_status' | 'node_state', payload: T, schema: z.ZodType<T>) {
->>>>>>> e30249f6 (test(platform-ui): standardize imports to '@/api/graph' and '@/api/tracing' across graph tests/hooks; wrap NodeObsSidebar filtering test in ObsUiProvider with serverUrl to satisfy context; adjust dynamic import paths to alias for consistency)
     if (!this.io) return;
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
@@ -117,8 +109,6 @@ export class GraphSocketGateway {
     };
     this.broadcast('node_state', payload, NodeStateEventSchema);
   }
-<<<<<<< HEAD
-
   /** Emit node_reminder_count event for RemindMe tool nodes when registry changes. */
   emitReminderCount(nodeId: string, count: number, updatedAtMs?: number): void {
     const payload: ReminderCountEvent = {
@@ -128,6 +118,4 @@ export class GraphSocketGateway {
     };
     this.broadcast('node_reminder_count', payload, ReminderCountEventSchema);
   }
-=======
->>>>>>> e30249f6 (test(platform-ui): standardize imports to '@/api/graph' and '@/api/tracing' across graph tests/hooks; wrap NodeObsSidebar filtering test in ObsUiProvider with serverUrl to satisfy context; adjust dynamic import paths to alias for consistency)
 }
