@@ -200,32 +200,22 @@ export const graph = {
       body: JSON.stringify({ state }),
     }, base),
   getDynamicConfigSchema: async (nodeId: string, base?: string): Promise<Record<string, unknown> | null> => {
-    const legacy = buildUrl(`/api/graph/nodes/${encodeURIComponent(nodeId)}/dynamic-config-schema`, base);
     const structured = buildUrl(`/api/graph/nodes/${encodeURIComponent(nodeId)}/dynamic-config/schema`, base);
-    async function tryFetch(url: string) {
-      try {
-        const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
-        if (res.status === 404) return undefined;
-        if (!res.ok) return undefined;
-        try {
-          return await res.json();
-        } catch {
-          return undefined;
-        }
-      } catch {
-        return undefined;
+    try {
+      const res = await fetch(structured, { headers: { 'Content-Type': 'application/json' } });
+      if (res.status === 404) return null;
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => null);
+      if (!data || typeof data !== 'object') return null;
+      if ('schema' in (data as Record<string, unknown>)) {
+        const rec = data as Record<string, unknown> & { schema?: unknown };
+        const maybeSchema = rec.schema;
+        return isLikelyJsonSchemaRoot(maybeSchema) ? (maybeSchema as Record<string, unknown>) : null;
       }
-    }
-    let data = await tryFetch(legacy);
-    if (!data) data = await tryFetch(structured);
-    if (!data || typeof data !== 'object') return null;
-    if ('schema' in data) {
-      const rec = data as Record<string, unknown> & { schema?: unknown; ready?: unknown };
-      const maybeSchema = rec.schema;
-      if (isLikelyJsonSchemaRoot(maybeSchema)) return maybeSchema as Record<string, unknown>;
+      return isLikelyJsonSchemaRoot(data) ? (data as Record<string, unknown>) : null;
+    } catch {
       return null;
     }
-    return isLikelyJsonSchemaRoot(data) ? (data as Record<string, unknown>) : null;
   },
   postNodeAction: (nodeId: string, action: 'provision' | 'deprovision', base?: string) =>
     httpJson<void>(`/api/graph/nodes/${encodeURIComponent(nodeId)}/actions`, {
@@ -246,4 +236,3 @@ export const graph = {
 
 Object.defineProperty(graph, '__test_normalize', { value: normalizeConfigByTemplate });
 export const api = graph;
-
