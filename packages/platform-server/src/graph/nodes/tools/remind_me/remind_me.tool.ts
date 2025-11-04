@@ -76,9 +76,9 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
         try {
           const prisma = this.prismaService.getClient();
           await prisma.reminder.update({ where: { id }, data: { completedAt: new Date() } });
-        } catch (e) {
+          } catch (e) {
           try {
-            logger.warn?.('RemindMe: failed to mark reminder completed %s: %s', id, (e as Error)?.message || String(e));
+            logger.error('RemindMe: failed to mark reminder completed %s: %s', id, (e as Error)?.message || String(e));
           } catch {}
         }
       }
@@ -100,7 +100,7 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
         await prisma.reminder.create({ data: { id, threadId, note, at: etaDate, completedAt: null } });
       } catch (e) {
         try {
-          logger.warn?.('RemindMe: failed to persist reminder %s: %s', id, (e as Error)?.message || String(e));
+          logger.error('RemindMe: failed to persist reminder %s: %s', id, (e as Error)?.message || String(e));
         } catch {}
       }
     }
