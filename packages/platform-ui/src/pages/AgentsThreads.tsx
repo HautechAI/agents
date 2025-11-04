@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { RunList, type RunItem } from '@/components/agents/RunList';
+import { RunMessageList, type UnifiedRunMessage } from '@/components/agents/RunMessageList';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3010';
 
 type ThreadItem = { id: string; alias: string; createdAt: string };
-type RunItem = { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string };
 type MessageItem = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text?: string | null; source: unknown; createdAt: string };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -45,7 +46,7 @@ export function AgentsThreads() {
   });
 
   const threads = threadsQ.data?.items || [];
-  const runs = runsQ.data?.items || [];
+  const runs = (runsQ.data?.items || []) as RunItem[];
   const input = inputQ.data?.items || [];
   const injected = injectedQ.data?.items || [];
   const output = outputQ.data?.items || [];
@@ -53,63 +54,60 @@ export function AgentsThreads() {
   const [showJson, setShowJson] = useState<{ [id: string]: boolean }>({});
   const toggleJson = (id: string) => setShowJson((prev) => ({ ...prev, [id]: !prev[id] }));
 
+  const unified: UnifiedRunMessage[] = useMemo(() => {
+    const mark = (items: MessageItem[], side: 'left' | 'right'): UnifiedRunMessage[] =>
+      items.map((m) => ({ id: m.id, role: m.kind, text: m.text, source: m.source, createdAt: m.createdAt, side }));
+    const merged = [...mark(input, 'left'), ...mark(injected, 'left'), ...mark(output, 'right')];
+    merged.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return merged;
+  }, [input, injected, output]);
+
   return (
     <div className="p-4">
       <h1 className="text-xl font-semibold mb-3">Agents / Threads</h1>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Left: threads list */}
-        <div className="col-span-1 border rounded-md p-2">
+        <div className="border rounded-md p-2">
           <div className="text-sm font-medium">Threads</div>
+          {threadsQ.isLoading && <div className="text-sm text-gray-500 mt-2">Loading…</div>}
+          {threadsQ.error && <div className="text-sm text-red-600 mt-2" role="alert">{(threadsQ.error as Error).message}</div>}
           <ul className="mt-2 space-y-1">
             {threads.map((t) => (
               <li key={t.id}>
-                <button className={`w-full text-left px-2 py-1 rounded ${selectedThreadId === t.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`} onClick={() => { setSelectedThreadId(t.id); setSelectedRunId(undefined); }}>
+                <button
+                  className={`w-full text-left px-2 py-1 rounded ${selectedThreadId === t.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                  onClick={() => {
+                    setSelectedThreadId(t.id);
+                    setSelectedRunId(undefined);
+                  }}
+                >
                   <div className="text-sm">{t.alias}</div>
                   <div className="text-xs text-gray-500">created {new Date(t.createdAt).toLocaleString()}</div>
                 </button>
               </li>
             ))}
+            {threads.length === 0 && !threadsQ.isLoading && <li className="text-sm text-gray-500">No threads</li>}
           </ul>
         </div>
 
-        {/* Right: runs and messages */}
-        <div className="col-span-2 border rounded-md p-2">
+        {/* Right: runs and unified chat messages */}
+        <div className="md:col-span-2 border rounded-md p-2 min-h-[400px]">
           <div className="text-sm font-medium">Thread: {selectedThreadId || '(none selected)'}</div>
-          <div className="mt-2 grid grid-cols-3 gap-3">
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Runs list */}
-            <div className="col-span-1 border rounded p-2">
-              <div className="text-sm font-medium">Runs</div>
-              <ul className="mt-2 space-y-1">
-                {runs.map((r) => (
-                  <li key={r.id}>
-                    <button className={`w-full text-left px-2 py-1 rounded ${selectedRunId === r.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`} onClick={() => setSelectedRunId(r.id)}>
-                      <div className="text-sm">{r.id.slice(0, 8)}… {r.status}</div>
-                      <div className="text-xs text-gray-500">{new Date(r.createdAt).toLocaleString()}</div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            <div className="border rounded p-2 md:col-span-1">
+              <RunList runs={runs} selectedRunId={selectedRunId} onSelect={setSelectedRunId} />
             </div>
 
-            {/* Messages: Input / Injected / Output */}
-            <div className="col-span-2 grid grid-cols-3 gap-3">
-              {[{ label: 'Input', items: input }, { label: 'Injected', items: injected }, { label: 'Output', items: output }].map((col) => (
-                <div key={col.label} className="border rounded p-2">
-                  <div className="text-sm font-medium">{col.label}</div>
-                  <ul className="mt-2 space-y-2">
-                    {col.items.map((m) => (
-                      <li key={m.id} className="border rounded p-2">
-                        <div className="text-xs text-gray-500">{m.kind} • {new Date(m.createdAt).toLocaleTimeString()}</div>
-                        {m.text ? <div className="text-sm mt-1">{m.text}</div> : <div className="text-xs text-gray-500">(no text)</div>}
-                        <button className="mt-2 text-xs underline" onClick={() => toggleJson(m.id)}>{showJson[m.id] ? 'Hide raw JSON' : 'Show raw JSON'}</button>
-                        {showJson[m.id] && (
-                          <pre className="mt-2 text-xs bg-gray-50 p-2 rounded overflow-x-auto">{JSON.stringify(m.source, null, 2)}</pre>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+            {/* Unified message list */}
+            <div className="border rounded p-2 md:col-span-2 min-h-[300px]">
+              <RunMessageList
+                items={unified}
+                showJson={showJson}
+                onToggleJson={toggleJson}
+                isLoading={inputQ.isLoading || injectedQ.isLoading || outputQ.isLoading}
+                error={(inputQ.error as Error) || (injectedQ.error as Error) || (outputQ.error as Error) || null}
+              />
             </div>
           </div>
         </div>
