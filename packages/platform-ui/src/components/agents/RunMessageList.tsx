@@ -1,6 +1,7 @@
 import React from 'react';
 import { MessageBubble } from './MessageBubble';
 
+export type RunMeta = { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string };
 export type UnifiedRunMessage = {
   id: string;
   role: string;
@@ -8,17 +9,25 @@ export type UnifiedRunMessage = {
   source: unknown;
   createdAt: string;
   side: 'left' | 'right';
+  runId: string;
 };
+export type UnifiedListItem =
+  | { type: 'run_header'; run: RunMeta; start?: string; end?: string; durationMs?: number }
+  | { type: 'message'; message: UnifiedRunMessage };
 
 type RunMessageListProps = {
-  items: UnifiedRunMessage[];
+  items: UnifiedListItem[];
   onToggleJson: (id: string) => void;
   showJson: Record<string, boolean>;
   isLoading?: boolean;
   error?: Error | null;
+  // Upward lazy-loading
+  hasMoreAbove?: boolean;
+  loadingMoreAbove?: boolean;
+  onLoadMoreAbove?: () => void;
 };
 
-export function RunMessageList({ items, showJson, onToggleJson, isLoading, error }: RunMessageListProps) {
+export function RunMessageList({ items, showJson, onToggleJson, isLoading, error, hasMoreAbove, loadingMoreAbove, onLoadMoreAbove }: RunMessageListProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [atBottom, setAtBottom] = React.useState(true);
 
@@ -39,6 +48,10 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
     const threshold = 8;
     const nearBottom = el.scrollHeight - el.clientHeight - el.scrollTop <= threshold;
     setAtBottom(nearBottom);
+    const nearTop = el.scrollTop <= threshold;
+    if (nearTop && hasMoreAbove && !loadingMoreAbove) {
+      onLoadMoreAbove?.();
+    }
   };
 
   return (
@@ -54,21 +67,39 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
         data-testid="message-list"
       >
         {isLoading && <div className="text-sm text-gray-500">Loading…</div>}
+        {loadingMoreAbove && <div className="text-xs text-gray-500 self-center">Loading older messages…</div>}
         {error && <div className="text-sm text-red-600" role="alert">{error.message}</div>}
         {!isLoading && !error && items.length === 0 && <div className="text-sm text-gray-500">No messages</div>}
-        {items.map((m) => (
-          <MessageBubble
-            key={m.id}
-            id={m.id}
-            role={m.role}
-            timestamp={m.createdAt}
-            text={m.text}
-            source={m.source}
-            side={m.side}
-            showJson={!!showJson[m.id]}
-            onToggleJson={onToggleJson}
-          />
-        ))}
+        {items.map((it, idx) => {
+          if (it.type === 'run_header') {
+            const run = it.run;
+            const shortId = run.id.slice(0, 8);
+            const range = it.start && it.end ? `${new Date(it.start).toLocaleTimeString()}–${new Date(it.end).toLocaleTimeString()}` : '';
+            return (
+              <div key={`hdr-${run.id}-${idx}`} className="self-center text-xs text-gray-600 my-1" role="separator" data-testid="run-header">
+                <span className="px-2 py-0.5 rounded border bg-white">run {shortId}</span>
+                <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-white"
+                  style={{ backgroundColor: run.status === 'finished' ? '#16a34a' : run.status === 'running' ? '#2563eb' : '#6b7280' }}
+                >{run.status}</span>
+                {range && <span className="ml-2 text-gray-500">{range}</span>}
+              </div>
+            );
+          }
+          const m = it.message;
+          return (
+            <MessageBubble
+              key={m.id}
+              id={m.id}
+              role={m.role}
+              timestamp={m.createdAt}
+              text={m.text}
+              source={m.source}
+              side={m.side}
+              showJson={!!showJson[m.id]}
+              onToggleJson={onToggleJson}
+            />
+          );
+        })}
       </div>
       {!atBottom && (
         <button
@@ -80,7 +111,7 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
           }}
           data-testid="jump-to-latest"
         >
-          Jump to latest
+          New messages
         </button>
       )}
     </div>

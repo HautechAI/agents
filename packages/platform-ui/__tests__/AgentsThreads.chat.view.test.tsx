@@ -3,9 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { TestProviders, server } from './integration/testUtils';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TemplatesProvider } from '../src/lib/graph/templates.provider';
-import { TooltipProvider } from '@agyn/ui';
+// run selection removed; no extra wrappers needed beyond TestProviders
 import { AgentsThreads } from '../src/pages/AgentsThreads';
 
 function t(offsetMs: number) {
@@ -43,9 +41,8 @@ describe('AgentsThreads chat-like view', () => {
     );
     const threadBtn = await screen.findByRole('button', { name: /Thread A/ });
     fireEvent.click(threadBtn);
-    const runBtn = await screen.findByRole('option');
-    fireEvent.click(runBtn);
     const list = await screen.findByTestId('message-list');
+    expect(await within(list).findAllByTestId('run-header')).toHaveLength(1);
     const bubbles = await within(list).findAllByTestId('message-bubble');
     expect(bubbles).toHaveLength(3);
     expect(bubbles[0].dataset.side).toBe('left');
@@ -61,7 +58,6 @@ describe('AgentsThreads chat-like view', () => {
       </TestProviders>,
     );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
-    fireEvent.click(await screen.findByRole('option'));
     const list = await screen.findByTestId('message-list');
     const firstBubble = (await within(list).findAllByTestId('message-bubble'))[0];
     const toggle = within(firstBubble).getByRole('button', { name: /Show raw JSON/i });
@@ -98,20 +94,56 @@ describe('AgentsThreads chat-like view', () => {
       </TestProviders>,
     );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
-    const runBtn = await screen.findByRole('option');
-    fireEvent.click(runBtn);
     const list = await screen.findByTestId('message-list');
     const setScrollTop = vi.fn();
     // Spy on scrollTop assignment used for autoscroll
     Object.defineProperty(list, 'scrollTop', { configurable: true, get: () => 0, set: setScrollTop });
-    outputCount = 2;
-    fireEvent.click(runBtn);
+    // initial autoscroll after first load
     await waitFor(() => expect(setScrollTop).toHaveBeenCalled());
     Object.defineProperty(list, 'scrollHeight', { value: 1000, configurable: true });
     Object.defineProperty(list, 'clientHeight', { value: 300, configurable: true });
     Object.defineProperty(list, 'scrollTop', { value: 100, configurable: true });
     fireEvent.scroll(list);
     expect(await screen.findByTestId('jump-to-latest')).toBeInTheDocument();
+  });
+
+  it('lazy-loads older runs on upward scroll and inserts run headers', async () => {
+    server.use(
+      http.get('http://localhost:3010/api/agents/threads', () => HttpResponse.json({ items: [{ id: 'th1', alias: 'Thread A', createdAt: t(0) }] })),
+      http.get('http://localhost:3010/api/agents/threads/th1/runs', () =>
+        HttpResponse.json({ items: [
+          { id: 'run1', status: 'finished', createdAt: t(1), updatedAt: t(2) },
+          { id: 'run2', status: 'finished', createdAt: t(3), updatedAt: t(4) },
+        ] }),
+      ),
+      http.get('http://localhost:3010/api/agents/runs/run2/messages', ({ request }) => {
+        const url = new URL(request.url);
+        const type = url.searchParams.get('type');
+        if (type === 'input') return HttpResponse.json({ items: [{ id: 'r2m1', kind: 'user', text: 'R2 in', source: {}, createdAt: t(10) }] });
+        if (type === 'injected') return HttpResponse.json({ items: [] });
+        if (type === 'output') return HttpResponse.json({ items: [{ id: 'r2m2', kind: 'assistant', text: 'R2 out', source: {}, createdAt: t(20) }] });
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get('http://localhost:3010/api/agents/runs/run1/messages', ({ request }) => {
+        const url = new URL(request.url);
+        const type = url.searchParams.get('type');
+        if (type === 'input') return HttpResponse.json({ items: [{ id: 'r1m1', kind: 'user', text: 'R1 in', source: {}, createdAt: t(1) }] });
+        if (type === 'injected') return HttpResponse.json({ items: [] });
+        if (type === 'output') return HttpResponse.json({ items: [{ id: 'r1m2', kind: 'assistant', text: 'R1 out', source: {}, createdAt: t(2) }] });
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+    render(<TestProviders><AgentsThreads /></TestProviders>);
+    fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
+    const list2 = await screen.findByTestId('message-list');
+    // Initially only latest run2 is loaded
+    expect(await within(list2).findAllByTestId('run-header')).toHaveLength(1);
+    // Scroll top to fetch older
+    Object.defineProperty(list2, 'scrollTop', { value: 0, configurable: true });
+    Object.defineProperty(list2, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(list2, 'scrollHeight', { value: 1000, configurable: true });
+    fireEvent.scroll(list2);
+    await waitFor(async () => expect((await within(list2).findAllByTestId('run-header')).length).toBe(2));
   });
 
   it('shows empty states when no runs or messages', async () => {
@@ -125,7 +157,7 @@ describe('AgentsThreads chat-like view', () => {
       </TestProviders>,
     );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
-    expect(await screen.findByText(/No runs/)).toBeInTheDocument();
+    expect(await screen.findByText(/No messages/)).toBeInTheDocument();
   });
 
   it('shows error state when message fetch fails', async () => {
@@ -136,18 +168,8 @@ describe('AgentsThreads chat-like view', () => {
       ),
       http.get('http://localhost:3010/api/agents/runs/run1/messages', () => new HttpResponse(null, { status: 500 })),
     );
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <TooltipProvider delayDuration={0}>
-          <TemplatesProvider>
-            <AgentsThreads />
-          </TemplatesProvider>
-        </TooltipProvider>
-      </QueryClientProvider>,
-    );
+    render(<TestProviders><AgentsThreads /></TestProviders>);
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
-    fireEvent.click(await screen.findByRole('option'));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 });
