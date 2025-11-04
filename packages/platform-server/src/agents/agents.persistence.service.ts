@@ -15,6 +15,14 @@ export class AgentsPersistenceService {
   async ensureThreadByAlias(alias: string): Promise<string> {
     const existing = await this.prisma.thread.findUnique({ where: { alias } });
     if (existing) return existing.id;
+    // If alias indicates a parent-child relationship (parent__child), ensure parent first
+    const sep = alias.indexOf('__');
+    if (sep > 0) {
+      const parentAlias = alias.slice(0, sep);
+      const parentId = await this.ensureThreadByAlias(parentAlias);
+      const created = await this.prisma.thread.create({ data: { alias, parentId } });
+      return created.id;
+    }
     const created = await this.prisma.thread.create({ data: { alias } });
     return created.id;
   }
@@ -60,8 +68,9 @@ export class AgentsPersistenceService {
     });
   }
 
-  async listThreads(): Promise<Array<{ id: string; alias: string; createdAt: Date }>> {
-    return this.prisma.thread.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, createdAt: true }, take: 100 });
+  async listThreads(): Promise<Array<{ id: string; alias: string; createdAt: Date; parentId?: string | null }>> {
+    // Include parentId for clients that need thread hierarchy; preserves compatibility
+    return this.prisma.thread.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, createdAt: true, parentId: true }, take: 100 });
   }
 
   async listRuns(

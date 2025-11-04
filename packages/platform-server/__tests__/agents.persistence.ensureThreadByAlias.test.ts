@@ -1,0 +1,95 @@
+import { describe, it, expect } from 'vitest';
+import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
+import { PrismaService } from '../src/core/services/prisma.service';
+
+// Minimal in-memory Prisma stub for threads/runs/messages
+function createPrismaStub() {
+  const threads: Array<{ id: string; alias: string; parentId: string | null; createdAt: Date }> = [];
+  const runs: Array<{ id: string; threadId: string; status: string; createdAt: Date; updatedAt: Date }> = [];
+  const messages: Array<{ id: string; kind: string; text: string | null; source: any; createdAt: Date }> = [];
+  const runMessages: Array<{ runId: string; messageId: string; type: string; createdAt: Date }> = [];
+
+  let idSeq = 1;
+  const newId = () => `t-${idSeq++}`;
+
+  const prisma: any = {
+    thread: {
+      findUnique: async ({ where: { alias } }: any) => threads.find((t) => t.alias === alias) || null,
+      create: async ({ data }: any) => {
+        const row = { id: newId(), alias: data.alias, parentId: data.parentId ?? null, createdAt: new Date() };
+        threads.push(row);
+        return row;
+      },
+      findMany: async (_args: any) => threads,
+    },
+    run: {
+      create: async ({ data }: any) => {
+        const row = { id: `r-${idSeq++}`, threadId: data.threadId, status: data.status ?? 'running', createdAt: new Date(), updatedAt: new Date() };
+        runs.push(row);
+        return row;
+      },
+      update: async ({ where: { id }, data }: any) => {
+        const r = runs.find((x) => x.id === id);
+        if (r && data.status) r.status = data.status;
+        if (r) r.updatedAt = new Date();
+        return r;
+      },
+      findMany: async () => runs,
+    },
+    message: {
+      create: async ({ data }: any) => {
+        const row = { id: `m-${idSeq++}`, kind: data.kind, text: data.text ?? null, source: data.source, createdAt: new Date() };
+        messages.push(row);
+        return row;
+      },
+      findMany: async ({ where: { id: { in: ids } } }: any) => messages.filter((m) => ids.includes(m.id)),
+    },
+    runMessage: {
+      create: async ({ data }: any) => {
+        const row = { runId: data.runId, messageId: data.messageId, type: data.type, createdAt: new Date() };
+        runMessages.push(row);
+        return row;
+      },
+      findMany: async ({ where: { runId, type } }: any) => runMessages.filter((rm) => rm.runId === runId && rm.type === type),
+    },
+    $transaction: async (fn: (tx: any) => Promise<any>) => fn({ thread: prisma.thread, run: prisma.run, message: prisma.message, runMessage: prisma.runMessage }),
+    _store: { threads, runs, messages, runMessages },
+  };
+  return prisma;
+}
+
+class StubPrismaService extends PrismaService {
+  constructor(private stub: any) {
+    super({} as any, {} as any);
+  }
+  override getClient(): any {
+    return this.stub;
+  }
+}
+
+describe('AgentsPersistenceService.ensureThreadByAlias', () => {
+  it('creates a thread when alias has no parent', async () => {
+    const stub = createPrismaStub();
+    const svc = new AgentsPersistenceService(new StubPrismaService(stub));
+    const id = await svc.ensureThreadByAlias('root');
+    expect(typeof id).toBe('string');
+    expect(stub._store.threads.length).toBe(1);
+    expect(stub._store.threads[0].alias).toBe('root');
+    expect(stub._store.threads[0].parentId).toBeNull();
+  });
+
+  it('creates parent and child when alias contains "__" and sets parentId', async () => {
+    const stub = createPrismaStub();
+    const svc = new AgentsPersistenceService(new StubPrismaService(stub));
+    const childId = await svc.ensureThreadByAlias('parentA__child1');
+    expect(typeof childId).toBe('string');
+    // parent and child created
+    expect(stub._store.threads.length).toBe(2);
+    const parent = stub._store.threads.find((t: any) => t.alias === 'parentA');
+    const child = stub._store.threads.find((t: any) => t.alias === 'parentA__child1');
+    expect(parent).toBeTruthy();
+    expect(child).toBeTruthy();
+    expect(child.parentId).toBe(parent.id);
+  });
+});
+
