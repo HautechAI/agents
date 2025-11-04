@@ -40,7 +40,10 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
       // Use scrollTop assignment; guard in case of read-only in test envs
       try {
         c.scrollTop = c.scrollHeight;
-      } catch {}
+      } catch (_err) {
+        // ignore read-only scrollTop in test envs
+        void _err;
+      }
     }
     prevCount.current = items.length;
   }, [items, atBottom]);
@@ -112,7 +115,10 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
             if (c) {
               try {
                 c.scrollTop = c.scrollHeight;
-              } catch {}
+              } catch (_err) {
+                // ignore read-only scrollTop in test envs
+                void _err;
+              }
             }
           }}
           data-testid="jump-to-latest"
