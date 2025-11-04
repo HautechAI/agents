@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { Prisma, PrismaClient, MessageKind, RunStatus, RunMessageType } from '@prisma/client';
+import type { Prisma, PrismaClient, MessageKind, RunStatus, RunMessageType } from '@prisma/client';
 import { PrismaService } from '../core/services/prisma.service';
 import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
@@ -27,13 +27,13 @@ export class AgentsPersistenceService {
   async beginRun(threadAlias: string, inputMessages: Array<HumanMessage | SystemMessage | AIMessage>): Promise<RunStartResult> {
     const threadId = await this.ensureThreadByAlias(threadAlias);
     const { runId } = await this.prisma.$transaction(async (tx) => {
-      const run = await tx.run.create({ data: { threadId, status: RunStatus.running } });
+      const run = await tx.run.create({ data: { threadId, status: 'running' as RunStatus } });
       await Promise.all(
         inputMessages.map(async (msg) => {
           const { kind, text } = this.deriveKindTextTyped(msg);
           const source = toPrismaJsonValue(msg.toPlain());
           const created = await tx.message.create({ data: { kind, text, source } });
-          await tx.runMessage.create({ data: { runId: run.id, messageId: created.id, type: RunMessageType.input } });
+          await tx.runMessage.create({ data: { runId: run.id, messageId: created.id, type: 'input' as RunMessageType } });
         }),
       );
       return { runId: run.id };
@@ -51,7 +51,7 @@ export class AgentsPersistenceService {
           const { kind, text } = this.deriveKindTextTyped(msg);
           const source = toPrismaJsonValue(msg.toPlain());
           const created = await tx.message.create({ data: { kind, text, source } });
-          await tx.runMessage.create({ data: { runId, messageId: created.id, type: RunMessageType.injected } });
+          await tx.runMessage.create({ data: { runId, messageId: created.id, type: 'injected' as RunMessageType } });
         }),
       );
     });
@@ -71,7 +71,7 @@ export class AgentsPersistenceService {
           const { kind, text } = this.deriveKindTextTyped(msg);
           const source = toPrismaJsonValue(msg.toPlain());
           const created = await tx.message.create({ data: { kind, text, source } });
-          await tx.runMessage.create({ data: { runId, messageId: created.id, type: RunMessageType.output } });
+          await tx.runMessage.create({ data: { runId, messageId: created.id, type: 'output' as RunMessageType } });
         }),
       );
       await tx.run.update({ where: { id: runId }, data: { status } });
@@ -109,12 +109,12 @@ export class AgentsPersistenceService {
     kind: MessageKind;
     text: string | null;
   } {
-    if (msg instanceof HumanMessage) return { kind: MessageKind.user, text: msg.text };
-    if (msg instanceof SystemMessage) return { kind: MessageKind.system, text: msg.text };
-    if (msg instanceof AIMessage) return { kind: MessageKind.assistant, text: msg.text };
-    if (msg instanceof ToolCallMessage) return { kind: MessageKind.tool, text: `call ${msg.name}(${msg.args})` };
-    if (msg instanceof ToolCallOutputMessage) return { kind: MessageKind.tool, text: msg.text };
+    if (msg instanceof HumanMessage) return { kind: 'user' as MessageKind, text: msg.text };
+    if (msg instanceof SystemMessage) return { kind: 'system' as MessageKind, text: msg.text };
+    if (msg instanceof AIMessage) return { kind: 'assistant' as MessageKind, text: msg.text };
+    if (msg instanceof ToolCallMessage) return { kind: 'tool' as MessageKind, text: `call ${msg.name}(${msg.args})` };
+    if (msg instanceof ToolCallOutputMessage) return { kind: 'tool' as MessageKind, text: msg.text };
     // Unreachable via typing; keep fallback for safety
-    return { kind: MessageKind.user, text: null };
+    return { kind: 'user' as MessageKind, text: null };
   }
 }

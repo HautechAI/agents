@@ -31,7 +31,6 @@ import { SaveLLMReducer } from '../../../llm/reducers/save.llm.reducer';
 import { SummarizationLLMReducer } from '../../../llm/reducers/summarization.llm.reducer';
 import { Signal } from '../../../signal';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
-import { RunStatus } from '@prisma/client';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
@@ -265,10 +264,11 @@ export class AgentNode extends Node<AgentStaticConfig> {
     this.runningThreads.add(thread);
     let result: ResponseMessage | ToolCallOutputMessage;
     // Begin run deterministically; persistence must succeed or throw
-    let runId: string;
-    const started = await this.persistence.beginRun(thread, messages);
-    runId = started.runId;
+    let runId: string | undefined;
     try {
+      const started = await this.persistence.beginRun(thread, messages);
+      runId = started.runId;
+
       result = await withAgent(
         { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
         async () => {
@@ -281,35 +281,39 @@ export class AgentNode extends Node<AgentStaticConfig> {
             { start: 'load' },
           );
 
-          const result = newState.messages.at(-1);
+          const last = newState.messages.at(-1);
 
           // Persist injected messages only when using injectAfterTools strategy
           if ((this.config.whenBusy ?? 'wait') === 'injectAfterTools') {
             const injected = newState.messages.filter((m) => m instanceof SystemMessage && !messages.includes(m));
-            if (injected.length > 0) {
+            if (injected.length > 0 && runId) {
               await this.persistence.recordInjected(runId, injected);
             }
           }
-          if ((finishSignal.isActive && result instanceof ToolCallOutputMessage) || result instanceof ResponseMessage) {
-            this.logger.info(`Agent response in thread ${thread}: ${result?.text}`);
+          if ((finishSignal.isActive && last instanceof ToolCallOutputMessage) || last instanceof ResponseMessage) {
+            this.logger.info(`Agent response in thread ${thread}: ${last?.text}`);
             // Persist outputs and complete run
-            if (result instanceof ResponseMessage) {
-              // Persist strictly typed output items (AIMessage, ToolCallMessage)
-              const outputs = result.output.filter((o) => o instanceof AIMessage || o instanceof ToolCallMessage);
-              await this.persistence.completeRun(runId, RunStatus.finished, outputs as any);
-            } else if (result instanceof ToolCallOutputMessage) {
-              // Persist tool call output
-              await this.persistence.completeRun(runId, RunStatus.finished, [result]);
+            if (runId) {
+              if (last instanceof ResponseMessage) {
+                // Persist strictly typed output items (AIMessage, ToolCallMessage)
+                const outputs: Array<AIMessage | ToolCallMessage> = last.output.filter(
+                  (o) => o instanceof AIMessage || o instanceof ToolCallMessage,
+                ) as Array<AIMessage | ToolCallMessage>;
+                await this.persistence.completeRun(runId, 'finished', outputs);
+              } else if (last instanceof ToolCallOutputMessage) {
+                // Persist tool call output
+                await this.persistence.completeRun(runId, 'finished', [last]);
+              }
             }
-            return result;
+            return last;
           }
 
           throw new Error('Agent did not produce a valid response message.');
         },
       );
     } catch (err) {
+      // Log and propagate; do not wrap persistence in try/catch
       this.logger.error(`Agent invocation error in thread ${thread}:`, err);
-      await this.persistence.completeRun(runId, RunStatus.terminated, [] as any);
       throw err;
     } finally {
       this.runningThreads.delete(thread);
