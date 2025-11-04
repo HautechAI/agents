@@ -85,45 +85,75 @@ export class AgentsPersistenceService {
   }
 
   private extractKindText(msg: Prisma.InputJsonValue): { kind: MessageKind; text: string | null } {
-    const obj = (typeof msg === 'object' && msg !== null ? (msg as Record<string, unknown>) : {});
-    const roleRaw = typeof (obj as Record<string, unknown>).role === 'string'
-      ? ((obj as Record<string, unknown>).role as string)
-      : typeof (obj as Record<string, unknown>)["role"] === 'string'
-      ? ((obj as Record<string, unknown>)["role"] as string)
-      : undefined;
-    const role = (roleRaw || ((obj as Record<string, unknown>).type === 'message' && typeof (obj as Record<string, unknown>).role === 'string' ? ((obj as Record<string, unknown>).role as string) : undefined) || 'user');
-    let kind: MessageKind;
-    switch (role) {
-      case 'assistant':
-        kind = MessageKind.assistant;
-        break;
-      case 'system':
-        kind = MessageKind.system;
-        break;
-      case 'tool':
-        kind = MessageKind.tool;
-        break;
-      default:
-        kind = MessageKind.user;
+    const obj = typeof msg === 'object' && msg !== null ? (msg as Record<string, unknown>) : {};
+    const type = typeof obj.type === 'string' ? (obj.type as string) : undefined;
+    const role = typeof obj.role === 'string' ? (obj.role as string) : undefined;
+
+    // Defaults
+    let kind: MessageKind = MessageKind.user;
+    let text: string | null = null;
+
+    // Handle function call variants explicitly
+    if (type === 'function_call') {
+      kind = MessageKind.tool;
+      const name = typeof obj.name === 'string' ? (obj.name as string) : 'unknown';
+      const args = typeof (obj as any).arguments === 'string' ? ((obj as any).arguments as string) : '';
+      text = `call ${name}(${args})`;
+      return { kind, text };
+    }
+    if (type === 'function_call_output') {
+      kind = MessageKind.tool;
+      const output = (obj as any).output as unknown;
+      if (typeof output === 'string') text = output;
+      else if (typeof output !== 'undefined') text = JSON.stringify(output);
+      else text = null;
+      return { kind, text };
     }
 
-    let text: string | null = null;
-    if (typeof (obj as Record<string, unknown>).text === 'string') {
-      text = ((obj as Record<string, unknown>).text as string);
+    // Message items
+    if (type === 'message') {
+      if (role === 'assistant') kind = MessageKind.assistant;
+      else if (role === 'system') kind = MessageKind.system;
+      else if (role === 'tool') kind = MessageKind.tool;
+      else kind = MessageKind.user;
+
+      // Immediate fallback: top-level text wins
+      if (typeof (obj as any).text === 'string') {
+        text = (obj as any).text as string;
+      }
+
+      // Role-specific extraction
+      const content = Array.isArray((obj as any).content) ? ((obj as any).content as any[]) : [];
+      if (!text && role === 'assistant') {
+        const parts = content
+          .filter((c) => c && typeof c === 'object' && c.type === 'output_text' && typeof c.text === 'string')
+          .map((c) => c.text as string);
+        if (parts.length) text = parts.join('\n');
+      } else if (!text && (role === 'user' || role === 'system')) {
+        const parts = content
+          .filter((c) => c && typeof c === 'object' && c.type === 'input_text' && typeof c.text === 'string')
+          .map((c) => c.text as string);
+        if (parts.length) text = parts.join('\n');
+      }
     } else {
-      const rawContent = (obj as Record<string, unknown>).content as unknown;
-      if (Array.isArray(rawContent)) {
-        const parts: string[] = [];
-        for (const c of rawContent) {
-          if (c && typeof c === 'object') {
-            const co = c as Record<string, unknown>;
-            const t = typeof co.text === 'string' ? (co.text as string) : undefined;
-            if (t) parts.push(t);
-          }
-        }
+      // Kind inference from role for non-message types (fallback)
+      if (role === 'assistant') kind = MessageKind.assistant;
+      else if (role === 'system') kind = MessageKind.system;
+      else if (role === 'tool') kind = MessageKind.tool;
+    }
+
+    // Fallbacks when still empty
+    if (text === null || text === undefined || text === '') {
+      if (typeof (obj as any).text === 'string') {
+        text = (obj as any).text as string;
+      } else if (Array.isArray((obj as any).content)) {
+        const parts = ((obj as any).content as any[])
+          .filter((c) => c && typeof c === 'object' && typeof (c as any).text === 'string')
+          .map((c) => (c as any).text as string);
         if (parts.length) text = parts.join('\n');
       }
     }
+
     return { kind, text };
   }
 }
