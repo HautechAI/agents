@@ -48,8 +48,9 @@ export function ThreadTreeNode({
     try {
       const res = await api<{ items: ThreadNode[] }>(`agents/threads/${node.id}/children?status=${statusFilter}`);
       setChildren(res.items);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load children');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load children';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -60,8 +61,7 @@ export function ThreadTreeNode({
     try {
       const next = (node.status || 'open') === 'open' ? 'closed' : 'open';
       await api(`/agents/threads/${node.id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
-      // optimistic update local node
-      (node as any).status = next;
+      // status updated server-side; refresh UI via refetches below
       // Refresh children list if visible to apply filter
       if (expanded) await loadChildren();
       // Allow parent to refresh roots if provided
@@ -110,4 +110,3 @@ export function ThreadTreeNode({
     </li>
   );
 }
-

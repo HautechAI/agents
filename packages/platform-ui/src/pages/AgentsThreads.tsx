@@ -6,7 +6,7 @@ import { ThreadStatusFilterSwitch, type ThreadStatusFilter } from '@/components/
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3010';
 
-type ThreadItem = { id: string; alias: string; summary?: string | null; status?: 'open' | 'closed'; createdAt: string };
+// Thread list rendering moved into ThreadTree component
 type MessageItem = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text?: string | null; source: unknown; createdAt: string };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
