@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RunMessageList, type UnifiedRunMessage, type UnifiedListItem, type RunMeta } from '@/components/agents/RunMessageList';
+import { ThreadTree } from '@/components/agents/ThreadTree';
+import { ThreadStatusFilterSwitch, type ThreadStatusFilter } from '@/components/agents/ThreadStatusFilterSwitch';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3010';
 
-type ThreadItem = { id: string; alias: string; createdAt: string };
+// Thread list rendering moved into ThreadTree component
 type MessageItem = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text?: string | null; source: unknown; createdAt: string };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -15,12 +17,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function AgentsThreads() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<ThreadStatusFilter>('open');
   // No run selection in new UX (removed)
-
-  const threadsQ = useQuery({
-    queryKey: ['agents', 'threads'],
-    queryFn: async () => api<{ items: ThreadItem[] }>(`agents/threads`),
-  });
 
   const runsQ = useQuery<{ items: RunMeta[] }, Error>({
     queryKey: ['agents', 'threads', selectedThreadId, 'runs'],
@@ -28,7 +26,6 @@ export function AgentsThreads() {
     queryFn: async () => api<{ items: RunMeta[] }>(`agents/threads/${selectedThreadId}/runs`),
   });
 
-  const threads = threadsQ.data?.items || [];
   const runs: RunMeta[] = useMemo(() => {
     const list = runsQ.data?.items ?? [];
     // sort oldest -> newest
@@ -122,29 +119,14 @@ export function AgentsThreads() {
         {/* Mobile: single internally scrollable panel wrapper; desktop uses independent panel scrolls */}
         <div className="h-full min-h-0 overflow-y-auto md:overflow-hidden" data-testid="mobile-panel">
           <div className="flex h-full min-h-0 flex-col md:flex-row gap-4">
-            {/* Threads list panel */}
+            {/* Threads tree panel */}
             <div className="flex min-h-0 w-full md:w-96 shrink-0 flex-col overflow-visible md:overflow-hidden border rounded-md" data-testid="threads-panel">
-              <div className="border-b px-2 py-2 text-sm font-medium">Threads</div>
+              <div className="border-b px-2 py-2 text-sm font-medium flex items-center gap-3">
+                <span>Threads</span>
+                <ThreadStatusFilterSwitch value={statusFilter} onChange={(v) => setStatusFilter(v)} />
+              </div>
               <div className="flex-1 md:overflow-y-auto p-2">
-                {threadsQ.isLoading && <div className="text-sm text-gray-500 mt-2">Loading…</div>}
-                {threadsQ.error && <div className="text-sm text-red-600 mt-2" role="alert">{(threadsQ.error as Error).message}</div>}
-                <ul className="mt-2 space-y-1">
-                  {threads.map((t) => (
-                    <li key={t.id}>
-                      <button
-                        className={`w-full text-left px-2 py-1 rounded ${selectedThreadId === t.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-                        onClick={() => {
-                          setSelectedThreadId(t.id);
-                          // reset cache handled by effect on thread change
-                        }}
-                      >
-                        <div className="text-sm">{t.alias}</div>
-                        <div className="text-xs text-gray-500">created {new Date(t.createdAt).toLocaleString()}</div>
-                      </button>
-                    </li>
-                  ))}
-                  {threads.length === 0 && !threadsQ.isLoading && <li className="text-sm text-gray-500">No threads</li>}
-                </ul>
+                <ThreadTree status={statusFilter} onSelect={(id) => setSelectedThreadId(id)} selectedId={selectedThreadId} />
               </div>
             </div>
 

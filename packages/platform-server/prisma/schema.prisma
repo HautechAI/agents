@@ -37,6 +37,8 @@ model Thread {
   parent    Thread?  @relation("ThreadChildren", fields: [parentId], references: [id])
   children  Thread[] @relation("ThreadChildren")
   alias     String   @unique
+  summary   String?
+  status    ThreadStatus @default(open)
   createdAt DateTime @default(now())
 
   runs      Run[]
@@ -44,6 +46,13 @@ model Thread {
 
   // Index parentId to accelerate parent-child lookups
   @@index([parentId])
+  // Filter by thread status (open/closed)
+  @@index([status])
+}
+
+enum ThreadStatus {
+  open
+  closed
 }
 
 enum RunStatus {
