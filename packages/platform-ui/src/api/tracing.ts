@@ -8,6 +8,20 @@ export type SpanDoc = {
   attributes?: Record<string, unknown>;
 };
 
+// Additional realtime payload extras potentially included by socket events
+// These fields are optional and may not be present on historical fetches.
+export type SpanExtras = {
+  status?: string;
+  lastUpdate?: string; // ISO timestamp
+  nodeId?: string;
+  endedAt?: string;
+};
+
+// Event payload type for realtime span_upsert events
+export type SpanEventPayload = SpanDoc & Partial<SpanExtras> & {
+  attributes?: Record<string, unknown>;
+};
+
 // Prefer runtime-configured serverUrl from tracing-ui when available
 import { getServerUrl as getObsServerUrl } from '@agyn/tracing-ui/src/config';
 import { config } from '@/config';

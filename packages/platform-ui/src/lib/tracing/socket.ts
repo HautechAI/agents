@@ -1,25 +1,50 @@
 // Tracing realtime socket client for platform-ui (span_upsert events)
 import { io, type Socket } from 'socket.io-client';
-import type { SpanDoc } from '@/api/tracing';
+import type { SpanDoc, SpanExtras, SpanEventPayload } from '@/api/tracing';
 import { config } from '@/config';
 
 const TRACING_BASE: string | undefined = config.tracing.serverUrl;
 
-export type SpanUpsertHandler = (span: SpanDoc & Record<string, unknown>) => void;
+export type SpanUpsertHandler = (span: SpanEventPayload) => void;
 
-// Normalize unknown payloads into the minimal SpanDoc shape while preserving extras
-function normalizeSpan(payload: unknown): (SpanDoc & Record<string, unknown>) | null {
+// Type guards and normalizers for realtime payloads
+function toSpanDoc(payload: unknown): SpanDoc | null {
   if (!payload || typeof payload !== 'object') return null;
   const p = payload as Record<string, unknown>;
   const traceId = typeof p.traceId === 'string' ? p.traceId : undefined;
   const spanId = typeof p.spanId === 'string' ? p.spanId : undefined;
   if (!traceId || !spanId) return null;
-  const name = typeof p.name === 'string' ? p.name : (typeof p.label === 'string' ? (p.label as string) : 'span');
-  const startedAt = typeof p.startedAt === 'string' ? p.startedAt : (typeof p.startTime === 'string' ? (p.startTime as string) : new Date().toISOString());
-  const attributes = (p.attributes && typeof p.attributes === 'object') ? (p.attributes as Record<string, unknown>) : {};
-  const base: SpanDoc = { traceId, spanId, name, startedAt, attributes };
-  // Preserve all extras so consumers can read optional fields with guards
-  return { ...(p as any), ...base } as SpanDoc & Record<string, unknown>;
+  const name = typeof p.name === 'string'
+    ? p.name
+    // allow fallback to "label" for legacy payloads
+    : (typeof p.label === 'string' ? (p.label as string) : 'span');
+  const startedAt = typeof p.startedAt === 'string'
+    ? p.startedAt
+    // allow fallback field for legacy payloads
+    : (typeof p.startTime === 'string' ? (p.startTime as string) : new Date().toISOString());
+  const attributes = p.attributes && typeof p.attributes === 'object'
+    ? (p.attributes as Record<string, unknown>)
+    : undefined;
+  return { traceId, spanId, name, startedAt, ...(attributes ? { attributes } : {}) };
+}
+
+function toSpanExtras(payload: unknown): Partial<SpanExtras> {
+  if (!payload || typeof payload !== 'object') return {};
+  const p = payload as Record<string, unknown>;
+  const status = typeof p.status === 'string' ? p.status : undefined;
+  const lastUpdate = typeof p.lastUpdate === 'string' ? p.lastUpdate : undefined;
+  const nodeId = typeof p.nodeId === 'string' ? p.nodeId : undefined;
+  // prefer top-level endedAt when valid string
+  const endedAt = typeof p.endedAt === 'string' ? p.endedAt : undefined;
+  return { status, lastUpdate, nodeId, endedAt };
+}
+
+function normalizeSpan(payload: unknown): SpanEventPayload | null {
+  const base = toSpanDoc(payload);
+  if (!base) return null;
+  const extras = toSpanExtras(payload);
+  const attributes = base.attributes; // already normalized
+  return { ...base, ...extras, ...(attributes ? { attributes } : {}) };
 }
 
 class TracingRealtime {
@@ -45,11 +70,10 @@ class TracingRealtime {
 
   // Test-only API: emit a span_upsert to subscribers without a socket.
   // This is safe and public for tests; do not use in production code.
-  emitSpanUpsertForTest(span: SpanDoc & Record<string, unknown>) {
-    const norm = normalizeSpan(span) || (span as any as SpanDoc & Record<string, unknown>);
+  emitSpanUpsertForTest(span: SpanEventPayload) {
+    const norm = normalizeSpan(span) || span;
     this.handlers.forEach((h) => h(norm));
   }
 }
 
 export const tracingRealtime = new TracingRealtime();
-
