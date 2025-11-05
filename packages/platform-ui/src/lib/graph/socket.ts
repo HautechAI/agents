@@ -2,14 +2,24 @@ import { io, Socket } from 'socket.io-client';
 import { config } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 
+// Strictly typed server-to-client socket events
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
+type ServerToClientEvents = {
+  connect: void;
+  node_status: NodeStatusEvent;
+  node_state: NodeStateEvent;
+  node_reminder_count: ReminderCountEvent;
+};
+// No client-to-server emits used here
+type ClientToServerEvents = Record<string, never>;
 
 type Listener = (ev: NodeStatusEvent) => void;
 type StateListener = (ev: NodeStateEvent) => void;
 type ReminderListener = (ev: ReminderCountEvent) => void;
 
 class GraphSocket {
-  private socket: Socket | null = null;
+  // Typed socket instance; null until connected
+  private socket: Socket<ClientToServerEvents, ServerToClientEvents> | null = null;
   private listeners = new Map<string, Set<Listener>>();
   private stateListeners = new Map<string, Set<StateListener>>();
   private reminderListeners = new Map<string, Set<ReminderListener>>();
