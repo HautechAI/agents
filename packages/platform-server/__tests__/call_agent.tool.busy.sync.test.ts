@@ -23,7 +23,7 @@ describe('call_agent sync busy', () => {
     const agent = await module.resolve(BusyAgent);
     await agent.setConfig({});
     agent.init({ nodeId: 'caller' });
-    const node = new CallAgentNode(new LoggerService());
+    const node = new CallAgentNode(new LoggerService(), module.get(AgentsPersistenceService));
     await node.setConfig({ response: 'sync' });
     node.setAgent(agent);
     const tool = node.getTool();
