@@ -18,7 +18,7 @@ enum SortDir {
 
 export class ListContainersQueryDto {
   @IsOptional()
-  @IsEnum(Object)
+  @IsIn(['running', 'stopped', 'terminating', 'failed'])
   status?: ContainerStatus;
 
   @IsOptional()
@@ -99,7 +99,8 @@ export class ContainersController {
         break;
     }
 
-    const take = typeof limit === 'number' && Number.isFinite(limit) ? Math.max(1, Math.min(500, limit)) : 200;
+    const limNum = typeof limit === 'number' ? limit : Number.isFinite(Number(limit)) ? Number(limit) : undefined;
+    const take = typeof limNum === 'number' && Number.isFinite(limNum) ? Math.max(1, Math.min(500, limNum)) : 200;
 
     const rows = await this.prisma.container.findMany({
       where,
