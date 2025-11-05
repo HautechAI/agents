@@ -7,13 +7,14 @@ export function createPrismaStub() {
   const runMessages: Array<{ runId: string; messageId: string; type: string; createdAt: Date }> = [];
 
   let idSeq = 1;
+  const timeSeed = Date.now();
   const newId = () => `t-${idSeq++}`;
 
   const prisma: any = {
     thread: {
       findUnique: async ({ where: { alias } }: any) => threads.find((t) => t.alias === alias) || null,
       create: async ({ data }: any) => {
-        const row = { id: newId(), alias: data.alias, parentId: data.parentId ?? null, summary: data.summary ?? null, status: data.status ?? 'open', createdAt: new Date() };
+        const row = { id: newId(), alias: data.alias, parentId: data.parentId ?? null, summary: data.summary ?? null, status: data.status ?? 'open', createdAt: new Date(timeSeed + idSeq) };
         threads.push(row);
         return row;
       },
@@ -47,7 +48,7 @@ export function createPrismaStub() {
     },
     run: {
       create: async ({ data }: any) => {
-        const row = { id: `r-${idSeq++}`, threadId: data.threadId, status: data.status ?? 'running', createdAt: new Date(), updatedAt: new Date() };
+        const row = { id: `r-${idSeq++}`, threadId: data.threadId, status: data.status ?? 'running', createdAt: new Date(timeSeed + idSeq), updatedAt: new Date(timeSeed + idSeq) };
         runs.push(row);
         return row;
       },
@@ -61,7 +62,7 @@ export function createPrismaStub() {
     },
     message: {
       create: async ({ data }: any) => {
-        const row = { id: `m-${idSeq++}`, kind: data.kind, text: data.text ?? null, source: data.source, createdAt: new Date() };
+        const row = { id: `m-${idSeq++}`, kind: data.kind, text: data.text ?? null, source: data.source, createdAt: new Date(timeSeed + idSeq) };
         messages.push(row);
         return row;
       },
@@ -69,7 +70,7 @@ export function createPrismaStub() {
     },
     runMessage: {
       create: async ({ data }: any) => {
-        const row = { runId: data.runId, messageId: data.messageId, type: data.type, createdAt: new Date() };
+        const row = { runId: data.runId, messageId: data.messageId, type: data.type, createdAt: new Date(timeSeed + idSeq) };
         runMessages.push(row);
         return row;
       },
