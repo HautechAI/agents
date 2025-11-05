@@ -48,9 +48,24 @@ export class AgentsPersistenceService {
     inputMessages: Array<HumanMessage | SystemMessage | AIMessage>,
     parentThreadId?: string | null,
   ): Promise<RunStartResult> {
-    const threadId = await (parentThreadId
-      ? this.ensureThread(threadAlias, parentThreadId)
-      : this.ensureThreadByAlias(threadAlias));
+    // Create thread if missing and set summary only on creation from the first input message.
+    let thread = await this.prisma.thread.findUnique({ where: { alias: threadAlias } });
+    if (!thread) {
+      let parentId: string | undefined = undefined;
+      if (parentThreadId) parentId = await this.ensureThreadByAlias(parentThreadId);
+      let summary: string | null = null;
+      if (inputMessages.length > 0) {
+        const first = inputMessages[0];
+        const { text } = this.deriveKindTextTyped(first as HumanMessage | SystemMessage | AIMessage);
+        if (typeof text === 'string') {
+          const truncated = text.slice(0, 200).replace(/\s+$/u, '');
+          summary = truncated.length > 0 ? truncated : null;
+        }
+      }
+      thread = await this.prisma.thread.create({ data: { alias: threadAlias, parentId, summary } });
+    }
+
+    const threadId = thread.id;
     const { runId } = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const run = await tx.run.create({ data: { threadId, status: 'running' as RunStatus } });
       await Promise.all(

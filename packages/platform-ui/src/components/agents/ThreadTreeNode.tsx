@@ -39,7 +39,7 @@ export function ThreadTreeNode({
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
 
-  const label = node.summary || node.alias;
+  const label = (node.summary && node.summary.trim().length > 0) ? node.summary : '(no summary yet)';
   const isSelected = selectedId === node.id;
 
   async function loadChildren() {
