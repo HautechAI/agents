@@ -331,12 +331,12 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return result;
   }
 
-  addTool(toolNode: BaseToolNode<any>): void {
+  addTool(toolNode: BaseToolNode<unknown>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.add(tool);
     this.logger.debug(`[Agent: ${this.config.title}] Tool added: ${tool.name} (${toolNode.constructor.name})`);
   }
-  removeTool(toolNode: BaseToolNode<any>): void {
+  removeTool(toolNode: BaseToolNode<unknown>): void {
     const tool: FunctionTool = toolNode.getTool();
     this.tools.delete(tool);
     this.logger.debug(`[Agent: ${this.config.title}] Tool removed: ${tool.name} (${toolNode.constructor.name})`);

@@ -5,7 +5,6 @@ import { WebClient, type ChatPostEphemeralResponse, type ChatPostMessageResponse
 import { LoggerService } from '../../../../core/services/logger.service';
 import { VaultService } from '../../../../vault/vault.service';
 import { ReferenceFieldSchema, normalizeTokenRef, parseVaultRef, resolveTokenRef } from '../../../../utils/refs';
-import { ConfigService } from '../../../../core/services/config.service';
 import { SendSlackMessageNode } from './send_slack_message.node';
 
 export const SendSlackMessageToolStaticConfigSchema = z

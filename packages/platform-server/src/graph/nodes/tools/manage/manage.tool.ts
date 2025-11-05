@@ -6,7 +6,6 @@ import { LoggerService } from '../../../../core/services/logger.service';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMContext } from '../../../../llm/types';
 import { AgentsPersistenceService } from '../../../../agents/agents.persistence.service';
-type TriggerMessage = { content: string; info?: Record<string, unknown> };
 
 export const ManageInvocationSchema = z
   .object({
@@ -73,14 +72,14 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     }
     if (command === 'check_status') {
       if (!workers.length) return JSON.stringify({ activeTasks: 0, childThreadIds: [] });
-      const prefix = `${parentThreadId}__`;
+      const _prefix = `${parentThreadId}__`;
       const ids = new Set<string>();
-      const promises = workers.map(async (w) => {
+      const promises = workers.map(async (_w) => {
         try {
           // const res = await Promise.resolve(w.agent.listActiveThreads(prefix));
           // const threads = Array.isArray(res) ? res : [];
           // for (const t of threads) if (t.startsWith(prefix)) ids.add(t.slice(prefix.length));
-        } catch (err: unknown) {
+        } catch (_err: unknown) {
           // this.logger.error('Manage: listActiveThreads failed', {
           //   worker: w.name,
           //   error: (err as { message?: string })?.message || String(err),

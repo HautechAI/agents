@@ -73,7 +73,7 @@ export class MemoryService {
   async ensureIndexes(): Promise<void> {
     const existing = await this.collection.indexes();
     const names = new Set(existing.map((i) => i.name));
-    const specs: { name: string; key: any; unique: boolean; partialFilterExpression: any }[] = [
+    const specs: { name: string; key: Record<string, 1 | -1>; unique: boolean; partialFilterExpression: Record<string, unknown> }[] = [
       {
         name: 'uniq_global',
         key: { nodeId: 1, scope: 1 },
@@ -130,11 +130,12 @@ export class MemoryService {
         { upsert: true },
       );
       doc = (await this.collection.findOne(this.filter)) as WithId<MemoryDoc> | null;
+      if (!doc) throw new Error('failed to create memory document');
     }
-    const safe: any = doc || { nodeId: this.nodeId, scope: this.scope, threadId: this.threadId, data: {}, dirs: {} };
-    safe.data = safe.data ?? {};
-    safe.dirs = safe.dirs ?? {};
-    return safe as WithId<MemoryDoc>;
+    // Ensure maps exist
+    if (!doc.data) (doc as unknown as { data: Record<string, unknown> }).data = {};
+    if (!doc.dirs) (doc as unknown as { dirs: Record<string, unknown> }).dirs = {};
+    return doc;
   }
 
   private dotted(path: string): string {
@@ -362,12 +363,12 @@ export class MemoryService {
     let files = 0;
     const dataObj: Record<string, unknown> = doc.data || {};
     if (Object.prototype.hasOwnProperty.call(dataObj, key)) {
-      unset[`data.${key}`] = '' as any;
+      unset[`data.${key}`] = '';
       files += 1;
     } else {
       // attempt nested lookup (Mongo created nested objects from dotted $set)
       try {
-        const nested = (this as any).getNested?.(dataObj, key);
+        const nested = this.getNested(dataObj, key);
         if (nested && nested.exists && typeof nested.node === 'string') {
           unset[`data.${key}`] = '';
           files += 1;

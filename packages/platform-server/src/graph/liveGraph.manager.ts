@@ -121,7 +121,8 @@ export class LiveGraphRuntime {
       }
     } catch (e) {
       if (e instanceof GraphError) {
-        this.logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, (e as any)?.cause);
+        const cause = e && typeof e === 'object' && 'cause' in e ? (e as { cause?: unknown }).cause : undefined;
+        this.logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, String(cause));
       }
       this.logger.error('Failed to apply initial persisted graph: %s', String(e));
       return { applied: false };

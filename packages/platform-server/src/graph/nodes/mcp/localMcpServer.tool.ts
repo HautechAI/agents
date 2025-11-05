@@ -21,7 +21,7 @@ export class LocalMCPServerTool extends FunctionTool<z.ZodObject> {
   constructor(
     private _name: string,
     private _description: string,
-    private _inputSchema: z.ZodObject<any>,
+    private _inputSchema: z.ZodObject<z.ZodRawShape>,
     private _node: LocalMCPServerNode,
   ) {
     super();
@@ -39,7 +39,7 @@ export class LocalMCPServerTool extends FunctionTool<z.ZodObject> {
     return this._node;
   }
 
-  async execute(args: z.infer<z.ZodObject>, ctx: LLMContext): Promise<string> {
+  async execute(args: z.infer<z.ZodObject<z.ZodRawShape>>, ctx: LLMContext): Promise<string> {
     const res = await this.node.callTool(this._name, args, { threadId: ctx.threadId });
     if (res.isError) {
       return JSON.stringify({ ok: false, error: res.content || 'error' });

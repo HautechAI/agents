@@ -120,8 +120,9 @@ export class ContainerService {
           },
         );
       };
-      // Use overload that accepts optional opts. Undefined maps to (image, cb).
-      this.docker.pull(image, (platform ? ({ platform } as PullOpts) : {}) as {}, cb);
+      // Use overloads: with opts when platform provided, otherwise variant without opts
+      if (platform) this.docker.pull(image, { platform } as PullOpts, cb);
+      else this.docker.pull(image, cb);
     });
   }
 
@@ -361,7 +362,9 @@ export class ContainerService {
     const close = async (): Promise<{ exitCode: number }> => {
       try {
         hijackStream.end();
-      } catch {}
+      } catch {
+        // ignore stream end errors
+      }
       // Wait a short grace period; then inspect
       const details = await exec.inspect();
       return { exitCode: details.ExitCode ?? -1 };
@@ -384,6 +387,18 @@ export class ContainerService {
     signal?: AbortSignal,
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     return new Promise((resolve, reject) => {
+      const destroyIfPossible = (s: unknown) => {
+        if (s && typeof s === 'object' && 'destroy' in (s as Record<string, unknown>)) {
+          const d = (s as { destroy?: unknown }).destroy;
+          if (typeof d === 'function') {
+            try {
+              (d as () => void).call(s);
+            } catch {
+              // ignore destroy errors
+            }
+          }
+        }
+      };
       const stdoutCollector = createUtf8Collector();
       const stderrCollector = createUtf8Collector();
       let finished = false;
@@ -393,14 +408,14 @@ export class ContainerService {
       const onAbort = () => {
         if (finished) return;
         finished = true;
-        try {
-          // Node.js streams expose destroy(); WHATWG ReadableStream does not. Cast to any safely.
-          (streamRef as any)?.destroy?.();
-        } catch {}
+        // Tear down underlying stream on abort if available
+        destroyIfPossible(streamRef);
         try {
           stdoutCollector.flush();
           stderrCollector.flush();
-        } catch {}
+        } catch {
+          // ignore collector flush errors
+        }
         // Properly-typed AbortError without casts
         const abortErr = new Error('Aborted');
         abortErr.name = 'AbortError';
@@ -416,13 +431,13 @@ export class ContainerService {
               if (finished) return;
               finished = true;
               // Ensure underlying stream is torn down to avoid further data/timers
-              try {
-                (streamRef as any)?.destroy?.();
-              } catch {}
+              destroyIfPossible(streamRef);
               try {
                 stdoutCollector.flush();
                 stderrCollector.flush();
-              } catch {}
+              } catch {
+                // ignore collector flush errors
+              }
               reject(new ExecTimeoutError(timeoutMs!, stdoutCollector.getText(), stderrCollector.getText()));
             }, timeoutMs)
           : null;
@@ -435,13 +450,13 @@ export class ContainerService {
           if (finished) return;
           finished = true;
           // Ensure underlying stream is torn down to avoid further data/timers
-          try {
-            (streamRef as any)?.destroy?.();
-          } catch {}
+          destroyIfPossible(streamRef);
           try {
             stdoutCollector.flush();
             stderrCollector.flush();
-          } catch {}
+          } catch {
+            // ignore collector flush errors
+          }
           reject(new ExecIdleTimeoutError(idleTimeoutMs!, stdoutCollector.getText(), stderrCollector.getText()));
         }, idleTimeoutMs);
       };
@@ -452,7 +467,9 @@ export class ContainerService {
           if (signal)
             try {
               signal.removeEventListener('abort', onAbort);
-            } catch {}
+            } catch {
+              // ignore listener removal errors
+            }
           return reject(err);
         }
         if (!stream) {
@@ -460,7 +477,9 @@ export class ContainerService {
           if (signal)
             try {
               signal.removeEventListener('abort', onAbort);
-            } catch {}
+            } catch {
+              // ignore listener removal errors
+            }
           return reject(new Error('No stream returned from exec.start'));
         }
 
@@ -538,12 +557,16 @@ export class ContainerService {
             if (signal)
               try {
                 signal.removeEventListener('abort', onAbort);
-              } catch {}
+              } catch {
+                // ignore listener removal errors
+              }
             finished = true;
             try {
               stdoutCollector.flush();
               stderrCollector.flush();
-            } catch {}
+            } catch {
+              // ignore collector flush errors
+            }
             resolve({
               stdout: stdoutCollector.getText(),
               stderr: stderrCollector.getText(),
@@ -554,7 +577,9 @@ export class ContainerService {
             if (signal)
               try {
                 signal.removeEventListener('abort', onAbort);
-              } catch {}
+              } catch {
+                // ignore listener removal errors
+              }
             finished = true;
             reject(e);
           }
@@ -565,12 +590,16 @@ export class ContainerService {
           if (signal)
             try {
               signal.removeEventListener('abort', onAbort);
-            } catch {}
+            } catch {
+              // ignore listener removal errors
+            }
           // Flush decoders to avoid dropping partial code units
           try {
             stdoutCollector.flush();
             stderrCollector.flush();
-          } catch {}
+          } catch {
+            // ignore collector flush errors
+          }
           finished = true;
           reject(e);
         });
@@ -580,7 +609,9 @@ export class ContainerService {
           if (signal)
             try {
               signal.removeEventListener('abort', onAbort);
-            } catch {}
+            } catch {
+              // ignore listener removal errors
+            }
         });
       });
     });

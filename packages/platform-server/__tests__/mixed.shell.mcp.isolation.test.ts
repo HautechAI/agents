@@ -63,7 +63,9 @@ describe('Mixed Shell + MCP overlay isolation', () => {
     expect(out).not.toContain('M_VAR=m');
 
     // MCP discovery creates an exec with Env containing only M_VAR
-    try { await mcp.discoverTools(); } catch {}
+    try { await mcp.discoverTools(); } catch {
+      // ignore discovery errors in test
+    }
     expect(captured.length).toBeGreaterThan(0);
     const env: string[] = captured[0].Env || [];
     expect(env).toEqual(expect.arrayContaining(['M_VAR=m']));

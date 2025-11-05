@@ -1,4 +1,3 @@
-import { Reducer } from '@agyn/llm';
 import type { LLMContext, LLMState } from '../types';
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';

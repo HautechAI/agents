@@ -91,7 +91,9 @@ async function atomicWrite(filePath: string, content: string) {
   try {
     const dfd = await fs.open(dir, 'r');
     try { await dfd.sync(); } finally { await dfd.close(); }
-  } catch {}
+  } catch {
+    // ignore directory sync errors
+  }
 }
 
 async function pathExists(p: string) {
@@ -177,7 +179,9 @@ async function main() {
   // Remove legacy graphs/ directory
   if (await pathExists(path.join(repoPath, 'graphs'))) {
     try { await runGit(['rm', '-r', '--ignore-unmatch', 'graphs'], repoPath); } catch {
-      try { await fs.rm(path.join(repoPath, 'graphs'), { recursive: true, force: true }); } catch {}
+      try { await fs.rm(path.join(repoPath, 'graphs'), { recursive: true, force: true }); } catch {
+        // ignore fallback rm errors
+      }
     }
   }
   const nodeCount = normalizedNodes.length;

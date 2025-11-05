@@ -1,26 +1,18 @@
 import z from 'zod';
 
 import { LoggerService } from '../../../../core/services/logger.service';
-import { AgentNode } from '../../agent/agent.node';
 
 import { CallAgentNode, CallAgentToolStaticConfigSchema } from './call_agent.node';
 import { FunctionTool, HumanMessage } from '@agyn/llm';
 import { LLMContext } from '../../../../llm/types';
 import { AgentsPersistenceService } from '../../../../agents/agents.persistence.service';
-type TriggerMessage = { content: string; info?: Record<string, unknown> };
 
 export const callAgentInvocationSchema = z.object({
   input: z.string().min(1).describe('Message to forward to the target agent.'),
   threadAlias: z.string().min(1).describe('Child thread alias to resolve under current parent thread.'),
 });
 
-interface CallAgentFunctionToolDeps {
-  getTargetAgent: () => AgentNode | undefined;
-  getDescription: () => string;
-  getName: () => string;
-  getResponseMode: () => 'sync' | 'async' | 'ignore';
-  logger: LoggerService;
-}
+// Interface removed (unused)
 
 export class CallAgentFunctionTool extends FunctionTool<typeof callAgentInvocationSchema> {
   constructor(
@@ -41,7 +33,7 @@ export class CallAgentFunctionTool extends FunctionTool<typeof callAgentInvocati
   }
 
   async execute(args: z.infer<typeof callAgentInvocationSchema>, ctx: LLMContext): Promise<string> {
-    const { input, threadAlias } = args;
+    const { threadAlias } = args;
     const targetAgent = this.node.agent;
     const responseMode = this.node.config.response;
 

@@ -150,10 +150,14 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
   afterAll(async () => {
     try {
       await client?.close(true);
-    } catch {}
+    } catch {
+      // ignore client close errors in tests
+    }
     try {
       await mongod?.stop();
-    } catch {}
+    } catch {
+      // ignore mongod stop errors in tests
+    }
   });
 
   it('injects memory after system when placement=after_system', async () => {

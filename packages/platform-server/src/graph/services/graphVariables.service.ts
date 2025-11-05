@@ -31,16 +31,13 @@ export class GraphVariablesService {
   async create(name: string, key: string, graphValue: string): Promise<{ key: string; graph: string }> {
     const current = (await this.graphs.get(name)) || ({ name, version: 0, updatedAt: new Date().toISOString(), nodes: [], edges: [], variables: [] } as PersistedGraph);
     const exists = (current.variables || []).some((v) => v.key === key);
-    if (exists) {
-      const err: any = new Error('Duplicate key');
-      err.code = 'DUPLICATE_KEY';
-      throw err;
-    }
+    if (exists) throw Object.assign(new Error('Duplicate key'), { code: 'DUPLICATE_KEY' });
     const next: PersistedGraph = { ...current, version: current.version, variables: [...(current.variables || []), { key, value: graphValue }] };
     try {
       await this.graphs.upsert({ name, version: current.version, nodes: next.nodes, edges: next.edges, variables: next.variables });
-    } catch (e: any) {
-      if (e && typeof e === 'object' && 'code' in e && e.code === 'VERSION_CONFLICT') throw e;
+    } catch (e: unknown) {
+      const code = e && typeof e === 'object' && 'code' in e ? (e as { code?: string }).code : undefined;
+      if (code === 'VERSION_CONFLICT') throw e;
       throw e;
     }
     return { key, graph: graphValue };
@@ -50,23 +47,16 @@ export class GraphVariablesService {
     // Graph update
     if (req.graph !== undefined) {
       const current = await this.graphs.get(name);
-      if (!current) {
-        const err: any = new Error('Graph not found');
-        err.code = 'GRAPH_NOT_FOUND';
-        throw err;
-      }
+      if (!current) throw Object.assign(new Error('Graph not found'), { code: 'GRAPH_NOT_FOUND' });
       const idx = (current.variables || []).findIndex((v) => v.key === key);
-      if (idx < 0) {
-        const err: any = new Error('Key not found');
-        err.code = 'KEY_NOT_FOUND';
-        throw err;
-      }
+      if (idx < 0) throw Object.assign(new Error('Key not found'), { code: 'KEY_NOT_FOUND' });
       const variables = Array.from(current.variables || []);
       variables[idx] = { key, value: req.graph! };
       try {
         await this.graphs.upsert({ name, version: current.version, nodes: current.nodes, edges: current.edges, variables });
-      } catch (e: any) {
-        if (e && typeof e === 'object' && 'code' in e && e.code === 'VERSION_CONFLICT') throw e;
+      } catch (e: unknown) {
+        const code = e && typeof e === 'object' && 'code' in e ? (e as { code?: string }).code : undefined;
+        if (code === 'VERSION_CONFLICT') throw e;
         throw e;
       }
     }
@@ -92,8 +82,9 @@ export class GraphVariablesService {
       const variables = (current.variables || []).filter((v) => v.key !== key);
       try {
         await this.graphs.upsert({ name, version: current.version, nodes: current.nodes, edges: current.edges, variables });
-      } catch (e: any) {
-        if (e && typeof e === 'object' && 'code' in e && e.code === 'VERSION_CONFLICT') throw e;
+      } catch (e: unknown) {
+        const code = e && typeof e === 'object' && 'code' in e ? (e as { code?: string }).code : undefined;
+        if (code === 'VERSION_CONFLICT') throw e;
         throw e;
       }
     }

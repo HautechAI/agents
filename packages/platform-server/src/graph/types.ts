@@ -155,4 +155,4 @@ export interface PersistedGraphUpsertRequest {
   // Optional variables; if omitted, repositories must preserve existing values.
   variables?: Array<{ key: string; value: string }>;
 }
-export interface PersistedGraphUpsertResponse extends PersistedGraph {}
+export type PersistedGraphUpsertResponse = PersistedGraph;

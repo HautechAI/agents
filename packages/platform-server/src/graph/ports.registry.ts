@@ -23,7 +23,7 @@ export class PortsRegistry {
     return this.templates[template];
   }
 
-  validateTemplateInstance(template: string, instance: any) {  
+  validateTemplateInstance(template: string, instance: Record<string, unknown>) {  
     const cfg = this.templates[template];
     if (!cfg) return; // no ports defined
     const checkPorts = (ports?: Record<string, PortConfig>) => {
@@ -31,10 +31,12 @@ export class PortsRegistry {
       for (const [handle, port] of Object.entries(ports)) {
         if (port.kind === 'method') {
           const m = port as MethodPortConfig;
-          if (typeof instance[m.create] !== 'function') {
+          const createFn = instance[m.create];
+          if (typeof createFn !== 'function') {
             throw new Error(`Template ${template} port ${handle} expected method '${m.create}' on instance`);
           }
-          if (m.destroy && typeof instance[m.destroy] !== 'function') {
+          const destroyFn = m.destroy ? instance[m.destroy] : undefined;
+          if (m.destroy && typeof destroyFn !== 'function') {
             throw new Error(`Template ${template} port ${handle} expected destroy method '${m.destroy}' on instance`);
           }
         }

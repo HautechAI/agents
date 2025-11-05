@@ -180,7 +180,9 @@ export class GitGraphRepository extends GraphRepository {
       const delRel = async (rel: string) => {
         try {
           await fs.unlink(path.join(root, rel));
-        } catch {}
+        } catch {
+          // ignore missing file during cleanup
+        }
         touched.deleted.push(rel);
       };
 
@@ -219,7 +221,9 @@ export class GitGraphRepository extends GraphRepository {
         } catch {
           try {
             await fs.rm(path.join(root, 'graphs'), { recursive: true, force: true });
-          } catch {}
+          } catch {
+            // ignore fallback removal errors
+          }
         }
       }
 
@@ -227,7 +231,7 @@ export class GitGraphRepository extends GraphRepository {
       try {
         await this.commit(`chore(graph): v${target.version} ${deltaMsg}`, author ?? this.defaultAuthor());
         // Update in-memory snapshot after successful commit
-        this.lastCommitted = JSON.parse(JSON.stringify(target));
+        this.lastCommitted = JSON.parse(JSON.stringify(target)) as PersistedGraph;
       } catch (e: unknown) {
         await this.rollbackPaths(touched);
         const msg = e instanceof Error ? e.message : String(e);
@@ -285,7 +289,9 @@ export class GitGraphRepository extends GraphRepository {
       } finally {
         await dfd.close();
       }
-    } catch {}
+    } catch {
+      // ignore directory sync errors
+    }
   }
 
   private async pathExists(p: string) {
@@ -301,7 +307,10 @@ export class GitGraphRepository extends GraphRepository {
     return new Promise((resolve, reject) => {
       const child = spawn('git', args, { cwd });
       let stderr = '';
-      child.stderr.on('data', (d) => (stderr += d.toString()));
+      child.stderr.on('data', (d: unknown) => {
+        const s = Buffer.isBuffer(d) ? d.toString('utf8') : String(d);
+        stderr += s;
+      });
       child.on('error', reject);
       child.on('exit', (code) => {
         if (code === 0) resolve();
@@ -315,8 +324,14 @@ export class GitGraphRepository extends GraphRepository {
       const child = spawn('git', args, { cwd });
       let stderr = '';
       let stdout = '';
-      child.stdout.on('data', (d) => (stdout += d.toString()));
-      child.stderr.on('data', (d) => (stderr += d.toString()));
+      child.stdout.on('data', (d: unknown) => {
+        const s = Buffer.isBuffer(d) ? d.toString('utf8') : String(d);
+        stdout += s;
+      });
+      child.stderr.on('data', (d: unknown) => {
+        const s = Buffer.isBuffer(d) ? d.toString('utf8') : String(d);
+        stderr += s;
+      });
       child.on('error', reject);
       child.on('exit', (code) => {
         if (code === 0) resolve(stdout);
@@ -353,7 +368,10 @@ export class GitGraphRepository extends GraphRepository {
     return new Promise((resolve, reject) => {
       const child = spawn('git', args, { cwd: this.config.graphRepoPath });
       let stderr = '';
-      child.stderr.on('data', (d) => (stderr += d.toString()));
+      child.stderr.on('data', (d: unknown) => {
+        const s = Buffer.isBuffer(d) ? d.toString('utf8') : String(d);
+        stderr += s;
+      });
       child.on('error', reject);
       child.on('exit', (code) => {
         if (code === 0) resolve();
@@ -386,20 +404,28 @@ export class GitGraphRepository extends GraphRepository {
       toRestore.map(async (rel) => {
         try {
           await this.runGit(['restore', '--worktree', '--source', 'HEAD', rel], this.config.graphRepoPath);
-        } catch {}
+        } catch {
+          // ignore restore errors
+        }
         try {
           await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.config.graphRepoPath);
-        } catch {}
+        } catch {
+          // ignore restore errors
+        }
       }),
     );
     await Promise.all(
       touched.added.map(async (rel) => {
         try {
           await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.config.graphRepoPath);
-        } catch {}
+        } catch {
+          // ignore restore errors
+        }
         try {
           await fs.unlink(path.join(this.config.graphRepoPath, rel));
-        } catch {}
+        } catch {
+          // ignore unlink errors
+        }
       }),
     );
   }
@@ -434,7 +460,9 @@ export class GitGraphRepository extends GraphRepository {
     if (!handle) return;
     try {
       await fs.unlink(handle.lockPath);
-    } catch {}
+    } catch {
+      // ignore unlink errors on release
+    }
   }
 
   // Root-level readers and fallbacks
@@ -460,7 +488,9 @@ export class GitGraphRepository extends GraphRepository {
         const raw = await fs.readFile(path.join(this.config.graphRepoPath, 'variables.json'), 'utf8');
         const parsedVars = JSON.parse(raw) as Array<{ key: string; value: string }>;
         if (Array.isArray(parsedVars)) variables = parsedVars.map((v) => ({ key: String(v.key), value: String(v.value) }));
-      } catch {}
+      } catch {
+        // ignore variables read errors
+      }
       if (nodesRes.hadError || edgesRes.hadError) {
         // Prefer lastCommitted snapshot if available; otherwise fall back to HEAD
         if (this.lastCommitted) return this.lastCommitted;
@@ -530,19 +560,23 @@ export class GitGraphRepository extends GraphRepository {
       const nodes = await Promise.all(
         nodePaths.map(async (p) => {
           const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-          const obj = JSON.parse(raw);
-          if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
-          obj.id = String(obj.id);
-          return obj as PersistedGraphNode;
+          const parsedUnknown = JSON.parse(raw) as unknown;
+          const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
+          const hasId = 'id' in o && typeof o.id === 'string' && o.id.length > 0;
+          if (!hasId) o.id = decodeURIComponent(path.basename(p, '.json'));
+          o.id = String(o.id);
+          return o as PersistedGraphNode;
         }),
       );
       const edges = await Promise.all(
         edgePaths.map(async (p) => {
           const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-          const obj = JSON.parse(raw);
-          if (!obj.id) obj.id = decodeURIComponent(path.basename(p, '.json'));
-          obj.id = String(obj.id);
-          return obj as PersistedGraphEdge;
+          const parsedUnknown = JSON.parse(raw) as unknown;
+          const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
+          const hasId = 'id' in o && typeof o.id === 'string' && o.id.length > 0;
+          if (!hasId) o.id = decodeURIComponent(path.basename(p, '.json'));
+          o.id = String(o.id);
+          return o as PersistedGraphEdge;
         }),
       );
       let variables: Array<{ key: string; value: string }> | undefined = undefined;
@@ -551,9 +585,9 @@ export class GitGraphRepository extends GraphRepository {
           const rawVars = await this.runGitCapture(['show', 'HEAD:variables.json'], this.config.graphRepoPath);
           const parsedVars = JSON.parse(rawVars) as Array<{ key: string; value: string }>;
           if (Array.isArray(parsedVars)) variables = parsedVars.map((v) => ({ key: String(v.key), value: String(v.value) }));
-      } catch {
-        // ignore variables read error
-      }
+        } catch {
+          // ignore variables read error
+        }
       }
       return {
         name: meta.name ?? name,
@@ -587,9 +621,12 @@ export class GitGraphRepository extends GraphRepository {
           .filter((p) => p.startsWith(`${base}/nodes/`) && p.endsWith('.json'))
           .map(async (p) => {
             const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-            const obj = JSON.parse(raw) as PersistedGraphNode;
-            obj.id = String((obj.id as unknown as string | undefined) ?? decodeURIComponent(path.basename(p, '.json')));
-            return obj;
+            const parsedUnknown = JSON.parse(raw) as unknown;
+            const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
+            const curId = 'id' in o ? (o as { id?: unknown }).id : undefined;
+            const idStr = typeof curId === 'string' && curId.length > 0 ? curId : decodeURIComponent(path.basename(p, '.json'));
+            (o as { id: string }).id = String(idStr);
+            return o as PersistedGraphNode;
           }),
       );
       const edges = await Promise.all(
@@ -597,9 +634,12 @@ export class GitGraphRepository extends GraphRepository {
           .filter((p) => p.startsWith(`${base}/edges/`) && p.endsWith('.json'))
           .map(async (p) => {
             const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-            const obj = JSON.parse(raw) as PersistedGraphEdge;
-            obj.id = String((obj.id as unknown as string | undefined) ?? decodeURIComponent(path.basename(p, '.json')));
-            return obj;
+            const parsedUnknown = JSON.parse(raw) as unknown;
+            const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
+            const curId = 'id' in o ? (o as { id?: unknown }).id : undefined;
+            const idStr = typeof curId === 'string' && curId.length > 0 ? curId : decodeURIComponent(path.basename(p, '.json'));
+            (o as { id: string }).id = String(idStr);
+            return o as PersistedGraphEdge;
           }),
       );
       return {

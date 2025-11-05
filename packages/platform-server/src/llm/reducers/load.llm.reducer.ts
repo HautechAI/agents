@@ -1,4 +1,3 @@
-import { Reducer } from '@agyn/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';
 import { ConversationStateRepository } from '../repositories/conversationState.repository';
