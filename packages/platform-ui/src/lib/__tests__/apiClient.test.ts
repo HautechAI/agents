@@ -15,7 +15,8 @@ describe('apiClient base URL resolution', () => {
   async function importFresh() {
     // dynamic import of the module to use current env
     const mod = await import('../../api/client');
-    return mod as typeof import('../../api/client');
+    // Rely on TS inference; avoid explicit import() type annotation to satisfy ESLint
+    return mod;
   }
 
   it('uses override argument first', async () => {
@@ -54,7 +55,8 @@ describe('apiClient buildUrl edge cases', () => {
 
   async function importFresh() {
     const mod = await import('../../api/client');
-    return mod as typeof import('../../api/client');
+    // Rely on TS inference; avoid explicit import() type annotation to satisfy ESLint
+    return mod;
   }
 
   it('joins base with leading slash path', async () => {
