@@ -19,6 +19,8 @@ export class AgentsPersistenceService {
   }
 
   async ensureThreadByAlias(alias: string): Promise<string> {
+    // Compatibility helper: ensure a thread by alias only.
+    // Does NOT derive parentId from alias. Parent linkage must be explicit via ensureThread.
     const existing = await this.prisma.thread.findUnique({ where: { alias } });
     if (existing) return existing.id;
     const created = await this.prisma.thread.create({ data: { alias } });
@@ -26,10 +28,33 @@ export class AgentsPersistenceService {
   }
 
   /**
-   * Begin a run and persist input messages. Accepts strictly typed message instances.
+   * Ensure a thread exists with the given alias. When parentThreadId is provided
+   * and the thread is newly created, set Thread.parentId to it.
    */
-  async beginRun(threadAlias: string, inputMessages: Array<HumanMessage | SystemMessage | AIMessage>): Promise<RunStartResult> {
-    const threadId = await this.ensureThreadByAlias(threadAlias);
+  async ensureThread(alias: string, parentThreadId?: string | null): Promise<string> {
+    const existing = await this.prisma.thread.findUnique({ where: { alias } });
+    if (existing) return existing.id;
+    let parentId: string | undefined = undefined;
+    if (parentThreadId) {
+      // Resolve provided parent alias to DB id.
+      parentId = await this.ensureThreadByAlias(parentThreadId);
+    }
+    const created = await this.prisma.thread.create({ data: { alias, parentId } });
+    return created.id;
+  }
+
+  /**
+   * Begin a run and persist input messages. Accepts strictly typed message instances.
+   * Supports optional explicit parent thread linkage.
+   */
+  async beginRun(
+    threadAlias: string,
+    inputMessages: Array<HumanMessage | SystemMessage | AIMessage>,
+    parentThreadId?: string | null,
+  ): Promise<RunStartResult> {
+    const threadId = await (parentThreadId
+      ? this.ensureThread(threadAlias, parentThreadId)
+      : this.ensureThreadByAlias(threadAlias));
     const { runId } = await this.prisma.$transaction(async (tx: any) => {
       const run = await tx.run.create({ data: { threadId, status: 'running' as RunStatus } });
       await Promise.all(
@@ -82,8 +107,9 @@ export class AgentsPersistenceService {
     });
   }
 
-  async listThreads(): Promise<Array<{ id: string; alias: string; createdAt: Date }>> {
-    return this.prisma.thread.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, createdAt: true }, take: 100 });
+  async listThreads(): Promise<Array<{ id: string; alias: string; createdAt: Date; parentId?: string | null }>> {
+    // Include parentId for clients that need thread hierarchy; preserves compatibility
+    return this.prisma.thread.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, createdAt: true, parentId: true }, take: 100 });
   }
 
   async listRuns(
