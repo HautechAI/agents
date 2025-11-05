@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { ContainersController, ListContainersQueryDto } from '../src/infra/container/containers.controller';
+import type { PrismaService } from '../src/core/services/prisma.service';
 
 type Row = {
   containerId: string;
@@ -13,18 +14,38 @@ type Row = {
   nodeId?: string;
 };
 
+type SortOrder = 'asc' | 'desc';
+type ContainerWhereInput = {
+  status?: Row['status'];
+  threadId?: string | null;
+  image?: string;
+  nodeId?: string;
+};
+type ContainerOrderByInput = { createdAt?: SortOrder; lastUsedAt?: SortOrder; killAfterAt?: SortOrder };
+type ContainerSelect = {
+  containerId?: boolean;
+  threadId?: boolean;
+  image?: boolean;
+  status?: boolean;
+  createdAt?: boolean;
+  lastUsedAt?: boolean;
+  killAfterAt?: boolean;
+};
+type FindManyArgs = { where?: ContainerWhereInput; orderBy?: ContainerOrderByInput; select?: ContainerSelect; take?: number };
+type SelectedRow = { containerId: string; threadId: string | null; image: string; status: Row['status']; createdAt: Date; lastUsedAt: Date; killAfterAt: Date | null };
+
 class InMemoryPrismaClient {
   container = {
     rows: [] as Row[],
-    async findMany(args: any) {
-      const where = (args?.where || {}) as Partial<Row> & { status?: Row['status'] };
+    async findMany(args: FindManyArgs): Promise<SelectedRow[]> {
+      const where = args?.where || {};
       let items = this.rows.slice();
       if (where.status) items = items.filter((r) => r.status === where.status);
-      if (where.threadId) items = items.filter((r) => r.threadId === where.threadId);
-      if (where.image) items = items.filter((r) => r.image === where.image);
-      if ((where as any).nodeId) items = items.filter((r) => r.nodeId === (where as any).nodeId);
+      if (typeof where.threadId !== 'undefined') items = items.filter((r) => r.threadId === where.threadId);
+      if (typeof where.image !== 'undefined') items = items.filter((r) => r.image === where.image);
+      if (typeof where.nodeId !== 'undefined') items = items.filter((r) => r.nodeId === where.nodeId);
       const orderBy = args?.orderBy || { lastUsedAt: 'desc' };
-      const [[col, dir]] = Object.entries(orderBy);
+      const [[col, dir]] = Object.entries(orderBy) as [keyof ContainerOrderByInput, SortOrder][];
       items.sort((a, b) => {
         const av = (col === 'createdAt' ? a.createdAt : col === 'killAfterAt' ? a.killAfterAt : a.lastUsedAt) || new Date(0);
         const bv = (col === 'createdAt' ? b.createdAt : col === 'killAfterAt' ? b.killAfterAt : b.lastUsedAt) || new Date(0);
@@ -44,22 +65,27 @@ class InMemoryPrismaClient {
   };
 }
 
-class PrismaStub { client = new InMemoryPrismaClient(); getClient() { return this.client as unknown as any; } }
+type MinimalPrismaClient = { container: { findMany(args: FindManyArgs): Promise<SelectedRow[]>; rows: Row[] } };
+class PrismaStub {
+  client: MinimalPrismaClient = new InMemoryPrismaClient();
+  getClient(): MinimalPrismaClient { return this.client; }
+}
 
 describe('ContainersController routes', () => {
   let fastify: any; let prismaSvc: PrismaStub; let controller: ContainersController;
 
   beforeEach(async () => {
     fastify = Fastify({ logger: false }); prismaSvc = new PrismaStub();
-    controller = new ContainersController(prismaSvc as any);
+    controller = new ContainersController(prismaSvc as PrismaService);
     // Typed query adapter to avoid any/double assertions
-    const isStatus = (v: unknown): v is 'running' | 'stopped' | 'terminating' | 'failed' =>
+    const isStatus = (v: unknown): v is Row['status'] =>
       typeof v === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(v);
     const isSortBy = (v: unknown): v is 'lastUsedAt' | 'startedAt' | 'killAfterAt' =>
       typeof v === 'string' && ['lastUsedAt', 'startedAt', 'killAfterAt'].includes(v);
     const isSortDir = (v: unknown): v is 'asc' | 'desc' => typeof v === 'string' && ['asc', 'desc'].includes(v);
+    type ReqWithQuery = { query?: Record<string, unknown> };
     fastify.get('/api/containers', async (req, res) => {
-      const q = (req as { query?: Record<string, unknown> }).query || {};
+      const q: Record<string, unknown> = (req as ReqWithQuery).query || {};
       const dto: ListContainersQueryDto = {
         status: isStatus(q.status) ? q.status : undefined,
         threadId: typeof q.threadId === 'string' ? q.threadId : undefined,
