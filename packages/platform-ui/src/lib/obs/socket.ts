@@ -1,8 +1,9 @@
 // Minimal tracing realtime socket client (span_upsert events)
 import { io, Socket } from 'socket.io-client';
 import type { SpanDoc } from '../tracing/api';
+import { config } from '@/config';
 
-const TRACING_BASE: string | undefined = (import.meta as ImportMeta).env?.VITE_TRACING_SERVER_URL as string | undefined;
+const TRACING_BASE: string | undefined = config.tracing.serverUrl;
 
 export type SpanUpsertHandler = (span: SpanDoc) => void;
 

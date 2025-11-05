@@ -10,6 +10,7 @@ export type SpanDoc = {
 
 // Prefer runtime-configured serverUrl from tracing-ui when available
 import { getServerUrl as getObsServerUrl } from '@agyn/tracing-ui/src/config';
+import { config } from '@/config';
 
 export function getTracingBase(override?: string): string {
   if (override) return override;
@@ -17,27 +18,11 @@ export function getTracingBase(override?: string): string {
     // Obs UI provider sets this at runtime; throws if not configured
     return getObsServerUrl();
   } catch {
-    /* fallthrough to env */
+    /* fallthrough to config */
   }
-  // In platform-ui only, read env var via ImportMeta first, then Node env
-  let viteUrl: string | undefined;
-  try {
-    const env: ImportMetaEnv | Record<string, string> =
-      typeof import.meta !== 'undefined' && (import.meta as ImportMeta).env
-        ? (import.meta as ImportMeta).env
-        : {};
-    viteUrl = (env as ImportMetaEnv).VITE_TRACING_SERVER_URL as string | undefined;
-  } catch {
-    viteUrl = undefined;
-  }
-  if (viteUrl) return viteUrl;
-  try {
-    const nodeUrl = typeof process !== 'undefined' ? (process.env?.TRACING_SERVER_URL as string | undefined) : undefined;
-    if (nodeUrl) return nodeUrl;
-  } catch {
-    /* ignore */
-  }
-  throw new Error('Tracing base not configured. Set VITE_TRACING_SERVER_URL or pass override.');
+  const base = config.tracing.serverUrl;
+  if (base) return base;
+  throw new Error('Tracing base not configured. Set VITE_TRACING_SERVER_URL via config or pass override.');
 }
 
 export async function fetchSpansInRange(fromIso: string, toIso: string, base?: string): Promise<SpanDoc[]> {

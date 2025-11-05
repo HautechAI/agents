@@ -1,56 +1,18 @@
-// Centralized API client utilities (moved from src/lib/apiClient.ts)
-// - getApiBase(): resolve API base URL with precedence
+// Centralized API client utilities
+// - getApiBase(): resolve API base URL from config
 // - buildUrl(path, base?): join base with normalized path
 // - httpJson<T>(path, init?, base?): fetch JSON with sane defaults
-
-type ViteEnv = {
-  VITE_API_BASE_URL?: string;
-};
-
-function readViteEnv(): ViteEnv | undefined {
-  try {
-    // Prefer globalThis.importMeta (used in tests), fallback to import.meta when present
-    const fromGlobal = (globalThis as Record<string, unknown> | undefined)?.importMeta;
-    const im = (typeof import.meta !== 'undefined' ? import.meta : undefined) ?? fromGlobal;
-    if (im && typeof im === 'object' && 'env' in (im as Record<string, unknown>)) {
-      const env = (im as { env?: unknown }).env;
-      if (env && typeof env === 'object') return env as ViteEnv;
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function readNodeEnv(): Record<string, string | undefined> | undefined {
-  try {
-    if (typeof process === 'undefined') return undefined;
-    const p: unknown = process;
-    if (!p || typeof p !== 'object' || !('env' in p)) return undefined;
-    const env = (p as { env?: unknown }).env;
-    return env && typeof env === 'object' ? (env as Record<string, string | undefined>) : undefined;
-  } catch {
-    return undefined;
-  }
-}
+import { config } from '@/config';
 
 export function getApiBase(override?: string): string {
   // Precedence:
   // 1) explicit override
-  // 2) import.meta.env.VITE_API_BASE_URL
-  // 3) process.env.API_BASE_URL
-  // 4) if not found -> throw in app/runtime
+  // 2) config.apiBaseUrl
+  // 3) throw if missing
   if (override !== undefined) return override;
-  const ve = readViteEnv();
-  const ne = readNodeEnv();
-
-  const viteApi = ve?.VITE_API_BASE_URL;
-  if (viteApi) return viteApi;
-
-  const nodeBase = ne?.API_BASE_URL;
-  if (nodeBase) return nodeBase;
-
-  throw new Error('API base not configured. Set VITE_API_BASE_URL or pass override.');
+  const base = config.apiBaseUrl;
+  if (base) return base;
+  throw new Error('API base not configured. Set VITE_API_BASE_URL in config or pass override.');
 }
 
 export function buildUrl(path: string, base?: string): string {

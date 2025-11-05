@@ -21,7 +21,8 @@ export interface SpanDoc {
   threadId?: string;
 }
 
-const TRACING_BASE: string | undefined = (import.meta as ImportMeta).env?.VITE_TRACING_SERVER_URL as string | undefined;
+import { config } from '@/config';
+const TRACING_BASE: string | undefined = config.tracing.serverUrl;
 
 export function getTracingBaseUrl(): string {
   if (!TRACING_BASE) throw new Error('Tracing server URL not configured. Set VITE_TRACING_SERVER_URL.');

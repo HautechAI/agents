@@ -1,15 +1,14 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3010';
+import { httpJson } from '@/api/client';
 
 type ReminderItem = { id: string; threadId: string; note: string; at: string; createdAt: string; completedAt: string | null };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(`${API_BASE}/api/${path}`, { headers: { 'Content-Type': 'application/json' }, ...(init || {}) });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  const res = await httpJson<T>(`/api/${path}`, init);
+  if (res === undefined) throw new Error('Empty response');
+  return res;
 }
 
 export function AgentsReminders() {

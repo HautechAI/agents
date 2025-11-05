@@ -7,6 +7,7 @@ import { useTemplatesCache } from '@/lib/graph/templates.provider';
 import { useNodeReminders } from '@/lib/graph/hooks';
 import { api } from '@/api/graph';
 import { notifyError, notifySuccess } from '@/lib/notify';
+import { config } from '@/config';
 
 type BuilderPanelNodeData = {
   template: string;
@@ -15,7 +16,7 @@ type BuilderPanelNodeData = {
   dynamicConfig?: Record<string, unknown>;
 };
 
-const TRACING_UI_BASE: string | undefined = (import.meta as ImportMeta).env?.VITE_TRACING_UI_BASE as string | undefined;
+const TRACING_UI_BASE: string | undefined = config.tracing.uiBase;
 
   function spanMatchesContext(span: SpanDoc, node: Node<BuilderPanelNodeData>, kind: 'agent' | 'tool') {
   const attrs = (span.attributes || {}) as Record<string, unknown>;
