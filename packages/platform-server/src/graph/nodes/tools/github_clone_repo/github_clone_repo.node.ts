@@ -1,7 +1,6 @@
 import z from 'zod';
 import { BaseToolNode } from '../baseToolNode';
 import { WorkspaceNode } from '../../workspace/workspace.node';
-import { ConfigService } from '../../../../core/services/config.service';
 import { LoggerService } from '../../../../core/services/logger.service';
 import { VaultService } from '../../../../vault/vault.service';
 import { GithubCloneRepoFunctionTool } from './github_clone_repo.tool';

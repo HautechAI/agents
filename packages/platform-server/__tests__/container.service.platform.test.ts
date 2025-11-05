@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { PassThrough } from 'node:stream';
 import Docker from 'dockerode';
 import { ContainerService } from '../src/infra/container/container.service';
 import { LoggerService } from '../src/core/services/logger.service.js';
@@ -23,7 +24,6 @@ vi.mock('dockerode', () => {
     pull = vi.fn((image: string, optsOrCb?: object | ((err?: Error, stream?: NodeJS.ReadableStream) => void), maybeCb?: (err?: Error, stream?: NodeJS.ReadableStream) => void) => {
       const cb = (typeof optsOrCb === 'function' ? optsOrCb : maybeCb) as (err?: Error, stream?: NodeJS.ReadableStream) => void;
       // Return a dummy PassThrough stream
-      const { PassThrough } = require('node:stream');
       const stream = new PassThrough();
       setTimeout(() => {
         stream.end();

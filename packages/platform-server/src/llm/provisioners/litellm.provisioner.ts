@@ -100,9 +100,10 @@ export class LiteLLMProvisioner extends LLMProvisioner {
         if (!key || typeof key !== 'string') throw new Error('litellm_provision_invalid_response');
         const baseUrl = this.cfg.openaiBaseUrl || `${base.replace(/\/$/, '')}/v1`;
         return { apiKey: key, baseUrl };
-      } catch (e: any) {
+      } catch (e: unknown) {
+        const msg = e && typeof e === 'object' && 'message' in e ? (e as { message?: string }).message : String(e);
         if (attempt < maxAttempts) {
-          this.logger.debug('LiteLLM provisioning attempt %d failed: %s', attempt, e?.message || String(e));
+          this.logger.debug('LiteLLM provisioning attempt %d failed: %s', attempt, msg || String(e));
           await this.delay(baseDelayMs * Math.pow(2, attempt - 1));
           continue;
         }
@@ -136,7 +137,7 @@ export class LiteLLMProvisioner extends LLMProvisioner {
   }
   private redact(s: string): string {
     if (!s) return s;
-    return s.replace(/(sk-[A-Za-z0-9_\-]{6,})/g, '[REDACTED]');
+    return s.replace(/(sk-[A-Za-z0-9_-]{6,})/g, '[REDACTED]');
   }
   private async delay(ms: number) {
     await new Promise((res) => setTimeout(res, ms));

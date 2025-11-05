@@ -22,7 +22,7 @@ describe('call_agent integration: creates child thread with parentId', () => {
     const tool = new CallAgentTool(new LoggerService(), persistence);
     await tool.setConfig({ description: 'desc', response: 'sync' });
     // Attach fake agent that persists runs/threads
-    // @ts-ignore private for unit/integration
+    // @ts-expect-error accessing private for test setup
     tool['setAgent'](new FakeAgentWithPersistence(persistence) as any);
 
     const dynamic = tool.getTool();

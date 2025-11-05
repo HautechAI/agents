@@ -43,7 +43,7 @@ export class TemplateRegistry {
       // Attempt DI instantiation to read ports from instance
 
       const cls = this.classes.get(name)!;
-      let inst = await this.moduleRef.create<Node>(cls);
+      const inst = await this.moduleRef.create<Node>(cls);
 
       if (inst) {
         const cfg: TemplatePortConfig = inst.getPortConfig();

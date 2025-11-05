@@ -27,7 +27,9 @@ function createBlockingMcpMock() {
         try {
           const msg = JSON.parse(line);
           void handle(msg);
-        } catch {}
+        } catch {
+          // ignore parse errors in test harness
+        }
       }
     });
     const send = (o: any) => outbound.write(JSON.stringify(o) + '\n');

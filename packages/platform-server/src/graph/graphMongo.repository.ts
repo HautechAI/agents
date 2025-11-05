@@ -57,7 +57,7 @@ export class MongoGraphRepository extends GraphRepository {
     }
     // optimistic lock check
     if (req.version !== undefined && req.version !== existing.version) {
-      const err: any = new Error('Version conflict');
+      const err = new Error('Version conflict') as Error & { code?: string; current?: PersistedGraph };
       err.code = 'VERSION_CONFLICT';
       err.current = this.toPersisted(existing);
       throw err;

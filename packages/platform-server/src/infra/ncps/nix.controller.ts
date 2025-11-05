@@ -37,7 +37,7 @@ class LruCache<T> {
 }
 
 // Security: only allow safe characters in name
-const SAFE_IDENT = /^[A-Za-z0-9_.+\-]+$/;
+const SAFE_IDENT = /^[A-Za-z0-9_.+-]+$/;
 
 // Outgoing response schemas
 const PackagesResponseSchema = z.object({
@@ -245,7 +245,7 @@ export class NixController {
       }
     } catch (e) {
       const err = e as Error & { status?: number };
-      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as any);
+      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as Record<string, unknown>);
       if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };
@@ -280,9 +280,9 @@ export class NixController {
       } finally {
         clearTimeout(tid);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       const err = e as Error & { status?: number; code?: string };
-      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as any);
+      const isAbort = (x: unknown): x is { name: string } => !!x && typeof x === 'object' && 'name' in (x as Record<string, unknown>);
       if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };

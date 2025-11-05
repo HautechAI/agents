@@ -121,7 +121,8 @@ export class LiveGraphRuntime {
       }
     } catch (e) {
       if (e instanceof GraphError) {
-        this.logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, (e as any)?.cause);
+        const cause = e && typeof e === 'object' && 'cause' in e ? (e as { cause?: unknown }).cause : undefined;
+        this.logger.error('Failed to apply initial persisted graph: %s. Cause: %s', e.message, String(cause));
       }
       this.logger.error('Failed to apply initial persisted graph: %s', String(e));
       return { applied: false };
@@ -352,7 +353,7 @@ export class LiveGraphRuntime {
       const cfg = created.getPortConfig() as TemplatePortConfig;
       if (cfg) {
         this.portsRegistry.registerTemplatePorts(node.data.template, cfg);
-        this.portsRegistry.validateTemplateInstance(node.data.template, created);
+        this.portsRegistry.validateTemplateInstance(node.data.template, created as unknown as Record<string, unknown>);
       }
 
       // NOTE: setGraphNodeId reflection removed; prefer factories to leverage ctx.nodeId directly.
@@ -405,7 +406,7 @@ export class LiveGraphRuntime {
     const MAX_RETRIES = 3; // number of retries, not total attempts
     while (true) {
       try {
-        await (fn as Function).call(instance, current);
+        await (fn as (cfg: Record<string, unknown>) => unknown | Promise<unknown>).call(instance, current);
         return current; // success
       } catch (err) {
         if (err instanceof ZodError) {
@@ -449,7 +450,9 @@ export class LiveGraphRuntime {
     if (handler) {
       try {
         live.instance.off('status_changed', handler);
-      } catch {}
+      } catch {
+        // ignore detach errors during disposal
+      }
       this.nodeStatusHandlers.delete(nodeId);
     }
     // Remove outbound & inbound edges referencing this node
@@ -474,7 +477,9 @@ export class LiveGraphRuntime {
     if (inst && typeof inst.deprovision === 'function') {
       try {
         await inst.deprovision();
-      } catch {}
+      } catch {
+        // ignore teardown errors
+      }
     }
     this.state.nodes.delete(nodeId);
     this.state.inboundEdges.delete(nodeId);

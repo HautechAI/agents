@@ -16,7 +16,6 @@ import { GraphPersistController } from './controllers/graphPersist.controller';
 import { RunsController } from './controllers/runs.controller';
 import { GraphVariablesController } from './controllers/graphVariables.controller';
 import { GraphVariablesService } from './services/graphVariables.service';
-import { PrismaService } from '../core/services/prisma.service';
 import { GitGraphRepository } from './gitGraph.repository';
 import { GraphGuard } from './graph.guard';
 import { GraphRepository } from './graph.repository';

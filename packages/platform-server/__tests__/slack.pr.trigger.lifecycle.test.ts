@@ -4,8 +4,8 @@ import { SlackTrigger } from '../src/graph/nodes/slackTrigger/slackTrigger.node'
 // Mock @slack/socket-mode to avoid network/real client
 vi.mock('@slack/socket-mode', () => {
   class MockClient {
-    handlers: Record<string, Function[]> = {};
-    on(ev: string, fn: Function) {
+    handlers: Record<string, Array<(...args: unknown[]) => unknown>> = {};
+    on(ev: string, fn: (...args: unknown[]) => unknown) {
       this.handlers[ev] = this.handlers[ev] || [];
       this.handlers[ev].push(fn);
     }

@@ -34,7 +34,9 @@ export class RemindersController {
       if (e instanceof HttpException) throw e;
       try {
         this.logger.error('reminders controller', e as unknown);
-      } catch {}
+      } catch {
+        // ignore logging failures
+      }
       throw new HttpException({ error: 'server_error' }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }

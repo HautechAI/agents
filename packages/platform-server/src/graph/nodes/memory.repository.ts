@@ -73,7 +73,7 @@ export class MemoryService {
   async ensureIndexes(): Promise<void> {
     const existing = await this.collection.indexes();
     const names = new Set(existing.map((i) => i.name));
-    const specs: { name: string; key: any; unique: boolean; partialFilterExpression: any }[] = [
+    const specs: { name: string; key: Record<string, 1 | -1>; unique: boolean; partialFilterExpression: Record<string, unknown> }[] = [
       {
         name: 'uniq_global',
         key: { nodeId: 1, scope: 1 },
@@ -130,11 +130,12 @@ export class MemoryService {
         { upsert: true },
       );
       doc = (await this.collection.findOne(this.filter)) as WithId<MemoryDoc> | null;
+      if (!doc) throw new Error('failed to create memory document');
     }
-    const safe: any = doc || { nodeId: this.nodeId, scope: this.scope, threadId: this.threadId, data: {}, dirs: {} };
-    safe.data = safe.data ?? {};
-    safe.dirs = safe.dirs ?? {};
-    return safe as WithId<MemoryDoc>;
+    // Ensure maps exist
+    if (!doc.data) (doc as unknown as { data: Record<string, unknown> }).data = {};
+    if (!doc.dirs) (doc as unknown as { dirs: Record<string, unknown> }).dirs = {};
+    return doc;
   }
 
   private dotted(path: string): string {
@@ -158,9 +159,9 @@ export class MemoryService {
   // Check quickly if there is any flat dotted child under the prefix
   private hasFlatChild(doc: WithId<MemoryDoc>, key: string): boolean {
     const prefix = key ? key + '.' : '';
-    const dataKeys = Object.keys((doc as any).data || {});
+    const dataKeys = Object.keys(doc.data || {});
     if (dataKeys.some((k) => typeof k === 'string' && k.startsWith(prefix))) return true;
-    const dirKeys = Object.keys((doc as any).dirs || {});
+    const dirKeys = Object.keys((doc.dirs || {} as Record<string, unknown>));
     if (dirKeys.some((k) => typeof k === 'string' && k.startsWith(prefix))) return true;
     return false;
   }
@@ -202,18 +203,18 @@ export class MemoryService {
     if (key === '') return { kind: 'dir' };
 
     // Prefer nested path resolution first
-    const n = this.getNested((doc as any).data, key);
+    const n = this.getNested(doc.data, key);
     if (n.exists) {
       if (typeof n.node === 'string') return { kind: 'file', size: Buffer.byteLength(n.node || '') };
       return { kind: 'dir' };
     }
 
     // Back-compat: flat dotted exact file or dir
-    if (Object.prototype.hasOwnProperty.call((doc as any).data, key)) {
-      const v = (doc as any).data[key];
+    if (Object.prototype.hasOwnProperty.call(doc.data, key)) {
+      const v = (doc.data as Record<string, unknown>)[key];
       if (typeof v === 'string') return { kind: 'file', size: Buffer.byteLength(v || '') };
     }
-    if (Object.prototype.hasOwnProperty.call((doc as any).dirs, key)) return { kind: 'dir' };
+    if (Object.prototype.hasOwnProperty.call(doc.dirs, key)) return { kind: 'dir' };
 
     // Implicit dir if any child exists
     const hasChild = this.hasFlatChild(doc, key);
@@ -227,13 +228,13 @@ export class MemoryService {
     const nestedChildren: ListEntry[] = [];
 
     // Children from nested data tree (preferred)
-    const n = this.getNested((doc as any).data, key);
+    const n = this.getNested(doc.data, key);
     if (n.exists && typeof n.node === 'object' && n.node !== null) {
       nestedChildren.push(...this.listNestedChildren(n.node));
     }
 
     // Include explicit nested dirs under this key
-    const nd = this.getNested((doc as any).dirs, key);
+    const nd = this.getNested(doc.dirs, key);
     if (nd.exists && typeof nd.node === 'object' && nd.node !== null) {
       for (const name of Object.keys(nd.node as Record<string, unknown>)) nestedChildren.push({ name, kind: 'dir' });
     }
@@ -241,7 +242,7 @@ export class MemoryService {
     // Back-compat: flat dotted keys aggregation
     const flatMap = new Map<string, 'file' | 'dir'>();
     const prefix = key === '' ? '' : key + '.';
-    for (const k of Object.keys((doc as any).data || {})) {
+    for (const k of Object.keys(doc.data || {})) {
       if (typeof k !== 'string' || !k.startsWith(prefix)) continue;
       const rest = k.slice(prefix.length);
       if (rest.length === 0) continue; // exact key not a child
@@ -251,7 +252,7 @@ export class MemoryService {
       const prev = flatMap.get(seg);
       flatMap.set(seg, prev === 'dir' ? 'dir' : next);
     }
-    for (const k of Object.keys((doc as any).dirs || {})) {
+    for (const k of Object.keys(doc.dirs || {} as Record<string, unknown>)) {
       if (typeof k !== 'string' || !k.startsWith(prefix)) continue;
       const rest = k.slice(prefix.length);
       if (rest.length === 0) continue;
@@ -268,13 +269,13 @@ export class MemoryService {
     const key = this.dotted(path);
     const doc = await this.getDocOrCreate();
     // Try nested first
-    const nested = this.getNested((doc as any).data, key);
+    const nested = this.getNested(doc.data, key);
     if (nested.exists) {
       if (typeof nested.node === 'string') return nested.node;
       throw new Error('EISDIR: path is a directory');
     }
     // Fallback: flat dotted exact key
-    const flat = (doc as any).data?.[key];
+    const flat = (doc.data as Record<string, unknown> | undefined)?.[key];
     if (typeof flat === 'string') return flat;
 
     // Not found; determine if it's a dir
@@ -295,8 +296,8 @@ export class MemoryService {
     await this.ensureParentDirs(key);
     const doc = await this.getDocOrCreate();
 
-    const dirs = (doc as any).dirs ?? {};
-    const dataMap = (doc as any).data ?? {};
+    const dirs = (doc.dirs ?? {}) as Record<string, unknown>;
+    const dataMap = (doc.data ?? {}) as Record<string, string>;
     // error if explicit dir at this key
     if (Object.prototype.hasOwnProperty.call(dirs, key)) throw new Error('EISDIR: path is a directory');
 
@@ -304,9 +305,11 @@ export class MemoryService {
     let current: string | undefined = undefined;
     // attempt nested resolution similar to read/stat logic
     try {
-      const nested = (this as any).getNested?.((doc as any).data, key);
+      const nested = this.getNested(doc.data, key);
       if (nested && nested.exists && typeof nested.node === 'string') current = nested.node;
-    } catch {}
+    } catch {
+      // ignore nested resolution errors
+    }
     // fallback: flat dotted key value
     if (current === undefined) current = dataMap[key];
     const next =
@@ -320,17 +323,19 @@ export class MemoryService {
     const key = this.dotted(path);
     const doc = await this.getDocOrCreate();
 
-    if (Object.prototype.hasOwnProperty.call((doc as any).dirs, key)) throw new Error('EISDIR: path is a directory');
+    if (Object.prototype.hasOwnProperty.call(doc.dirs, key)) throw new Error('EISDIR: path is a directory');
     // Support both nested object persistence (Mongo auto-expands dotted keys) and flat dotted keys.
-    let current: any = undefined;
+    let current: string | undefined = undefined;
     try {
-      const nested = (this as any).getNested?.((doc as any).data, key);
+      const nested = this.getNested(doc.data, key);
       if (nested && nested.exists) {
         if (typeof nested.node === 'string') current = nested.node;
         else throw new Error('EISDIR: path is a directory');
       }
-    } catch {}
-    if (current === undefined) current = (doc as any).data?.[key];
+    } catch {
+      // ignore nested lookup errors
+    }
+    if (current === undefined) current = (doc.data as Record<string, unknown> | undefined)?.[key] as string | undefined;
     if (current === undefined) throw new Error('ENOENT: file not found');
 
     if (oldStr.length === 0) return 0;
@@ -348,44 +353,46 @@ export class MemoryService {
     const doc = await this.getDocOrCreate();
     if (key === '') {
       // clear all for this doc
-      const files = Object.keys((doc as any).data || {}).length;
-      const dirs = Object.keys((doc as any).dirs || {}).length;
+      const files = Object.keys(doc.data || {}).length;
+      const dirs = Object.keys(doc.dirs || {} as Record<string, unknown>).length;
       await this.collection.updateOne(this.filter, { $set: { data: {}, dirs: {} } });
       return { files, dirs };
     }
     const prefix = key + '.';
-    const unset: Record<string, ''> = {} as any;
+    const unset: Record<string, ''> = {};
     let files = 0;
-    const dataObj: any = (doc as any).data || {};
+    const dataObj: Record<string, unknown> = doc.data || {};
     if (Object.prototype.hasOwnProperty.call(dataObj, key)) {
-      unset[`data.${key}`] = '' as any;
+      unset[`data.${key}`] = '';
       files += 1;
     } else {
       // attempt nested lookup (Mongo created nested objects from dotted $set)
       try {
-        const nested = (this as any).getNested?.(dataObj, key);
+        const nested = this.getNested(dataObj, key);
         if (nested && nested.exists && typeof nested.node === 'string') {
-          unset[`data.${key}`] = '' as any;
+          unset[`data.${key}`] = '';
           files += 1;
         }
-      } catch {}
+      } catch {
+        // ignore nested lookup errors
+      }
     }
     for (const k of Object.keys(dataObj)) {
       if (k.startsWith(prefix)) {
-        unset[`data.${k}`] = '' as any;
+        unset[`data.${k}`] = '';
         files += 1;
       }
     }
 
     let dirs = 0;
-    const dirsObj: any = (doc as any).dirs || {};
+    const dirsObj: Record<string, unknown> = doc.dirs || {};
     if (Object.prototype.hasOwnProperty.call(dirsObj, key)) {
-      unset[`dirs.${key}`] = '' as any;
+      unset[`dirs.${key}`] = '';
       dirs += 1;
     }
     for (const k of Object.keys(dirsObj)) {
       if (k.startsWith(prefix)) {
-        unset[`dirs.${k}`] = '' as any;
+        unset[`dirs.${k}`] = '';
         dirs += 1;
       }
     }
@@ -398,7 +405,7 @@ export class MemoryService {
   /** Return flat dotted key -> string value map (clone). */
   async getAll(): Promise<Record<string, string>> {
     const doc = await this.getDocOrCreate();
-    return { ...(doc as any).data };
+    return { ...((doc.data as unknown) as Record<string, string>) };
   }
 
   /** Convenience dump of entire doc (shallow). */
@@ -407,22 +414,22 @@ export class MemoryService {
   > {
     const doc = await this.getDocOrCreate();
     return {
-      nodeId: (doc as any).nodeId,
-      scope: (doc as any).scope,
-      threadId: (doc as any).threadId,
-      data: { ...(doc as any).data },
-      dirs: { ...(doc as any).dirs },
-    } as any;
+      nodeId: doc.nodeId,
+      scope: doc.scope,
+      threadId: doc.threadId,
+      data: { ...((doc.data as unknown) as Record<string, string>) },
+      dirs: { ...((doc.dirs as unknown) as Record<string, true>) },
+    } as unknown as Pick<MemoryDoc, 'nodeId' | 'scope' | 'threadId'> & { data: Record<string, string>; dirs: Record<string, true> };
   }
 
   // ensure parents of a dotted key are marked as dirs
   private async ensureParentDirs(key: string) {
     if (!key) return;
     const parts = key.split('.');
-    const updates: Record<string, true> = {} as any;
+    const updates: Record<string, true> = {};
     for (let i = 1; i < parts.length; i++) {
       const dirKey = parts.slice(0, i).join('.');
-      updates[`dirs.${dirKey}`] = true as any;
+      updates[`dirs.${dirKey}`] = true;
     }
     if (Object.keys(updates).length) await this.collection.updateOne(this.filter, { $set: updates }, { upsert: true });
   }

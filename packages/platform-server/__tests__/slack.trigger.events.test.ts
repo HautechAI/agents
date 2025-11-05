@@ -5,9 +5,9 @@ import type { LoggerService } from '../src/core/services/logger.service';
 vi.mock('@slack/socket-mode', () => {
   let last: MockClient | null = null;
   class MockClient {
-    handlers: Record<string, Function[]> = {};
+    handlers: Record<string, Array<(...args: unknown[]) => unknown>> = {};
     constructor() { last = this; }
-    on(ev: string, fn: Function) {
+    on(ev: string, fn: (...args: unknown[]) => unknown) {
       this.handlers[ev] = this.handlers[ev] || [];
       this.handlers[ev].push(fn);
     }
@@ -19,7 +19,7 @@ vi.mock('@slack/socket-mode', () => {
 });
 // Type augmentation for mocked helper
 declare module '@slack/socket-mode' {
-  export function __getLastSocketClient(): { handlers: Record<string, Function[]> } | null;
+  export function __getLastSocketClient(): { handlers: Record<string, Array<(...args: unknown[]) => unknown>> } | null;
 }
 import { SlackTrigger } from '../src/graph/nodes/slackTrigger/slackTrigger.node';
 import { __getLastSocketClient } from '@slack/socket-mode';

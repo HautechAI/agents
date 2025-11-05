@@ -90,7 +90,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     if (typeof console !== 'undefined' && typeof console.debug === 'function') {
       try {
         console.debug('[ContainerProviderEntity] lookup labels (workspace)', workspaceLabels);
-      } catch {}
+      } catch {
+        // ignore console debug errors in non-tty envs
+      }
     }
     let container: ContainerHandle | undefined = await this.containerService.findContainerByLabels(workspaceLabels);
 
@@ -99,7 +101,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       if (typeof console !== 'undefined' && typeof console.debug === 'function') {
         try {
           console.debug('[ContainerProviderEntity] fallback lookup by thread_id only', labels);
-        } catch {}
+        } catch {
+          // ignore console debug errors in non-tty envs
+        }
       }
       const candidates = await this.containerService.findContainersByLabels(labels);
       if (Array.isArray(candidates) && candidates.length) {
@@ -156,7 +160,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
                   }
                 }),
               );
-            } catch {}
+            } catch {
+              // ignore DinD sidecar lookup errors
+            }
           }
           // Stop and remove old container, then recreate (handle benign errors)
           try {
@@ -249,8 +255,11 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       // This lets the script prepare environment (e.g., user/profile) before installing packages.
       // Install Nix packages when resolved specs are provided (best-effort)
       try {
-        const nixAny = this.config?.nix as any as { packages?: unknown } | undefined;
-        const pkgsUnknown = nixAny && (nixAny as any).packages;
+        const nixUnknown = this.config?.nix as unknown;
+        const pkgsUnknown =
+          nixUnknown && typeof nixUnknown === 'object' && 'packages' in (nixUnknown as Record<string, unknown>)
+            ? (nixUnknown as Record<string, unknown>)['packages']
+            : undefined;
         const pkgsArr: unknown[] = Array.isArray(pkgsUnknown) ? (pkgsUnknown as unknown[]) : [];
         const specs = this.normalizeToInstallSpecs(pkgsArr);
         const originalCount = Array.isArray(pkgsUnknown) ? pkgsArr.length : 0;
@@ -265,8 +274,11 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       if (this.config?.enableDinD && container) await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
       // Also attempt install on reuse (idempotent)
       try {
-        const nixAny = this.config?.nix as any as { packages?: unknown } | undefined;
-        const pkgsUnknown = nixAny && (nixAny as any).packages;
+        const nixUnknown = this.config?.nix as unknown;
+        const pkgsUnknown =
+          nixUnknown && typeof nixUnknown === 'object' && 'packages' in (nixUnknown as Record<string, unknown>)
+            ? (nixUnknown as Record<string, unknown>)['packages']
+            : undefined;
         const pkgsArr: unknown[] = Array.isArray(pkgsUnknown) ? (pkgsUnknown as unknown[]) : [];
         const specs = this.normalizeToInstallSpecs(pkgsArr);
         const originalCount = Array.isArray(pkgsUnknown) ? pkgsArr.length : 0;
@@ -277,7 +289,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     }
     try {
       await this.containerService.touchLastUsed(container.id);
-    } catch {}
+    } catch {
+      // ignore touch last-used errors
+    }
     return container;
   }
 
@@ -320,7 +334,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
           'docker -H tcp://0.0.0.0:2375 info >/dev/null 2>&1',
         ]);
         if (exitCode === 0) return;
-      } catch {}
+      } catch {
+        // ignore touchLastUsed errors
+      }
       // Early fail if DinD exited unexpectedly (best-effort; skip if low-level client not available)
       try {
         const maybeSvc: unknown = this.containerService;
@@ -372,7 +388,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
         typeof ch === 'string' &&
         /^[0-9a-f]{40}$/.test(ch) &&
         typeof ap === 'string' &&
-        /^[A-Za-z0-9_.+\-]+$/.test(ap) &&
+        /^[A-Za-z0-9_.+-]+$/.test(ap) &&
         ap.length > 0
       ) {
         specs.push({ commitHash: ch, attributePath: ap });

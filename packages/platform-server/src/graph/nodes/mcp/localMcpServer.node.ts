@@ -134,12 +134,9 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
    * If a delegate is provided, it is used (for discovered tools); otherwise, a fallback delegate is used (for preloaded tools).
    */
   private createLocalTool(tool: McpTool): LocalMCPServerTool {
-    return new LocalMCPServerTool(
-      tool.name,
-      tool.description || 'MCP tool',
-      jsonSchemaToZod({ ...(tool.inputSchema as any), strict: false, additionalProperties: false }) as z.ZodObject,
-      this,
-    );
+    const schema = jsonSchemaToZod(tool.inputSchema);
+    const inputSchema = schema instanceof z.ZodObject ? schema : z.object({}).strict();
+    return new LocalMCPServerTool(tool.name, tool.description || 'MCP tool', inputSchema, this);
   }
 
   preloadCachedTools(tools: McpTool[], updatedAt?: number | string | Date): void {
@@ -435,7 +432,9 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     // Touch last-used when starting a tool call (defensive; provider already updates on provide)
     try {
       await this.containerService.touchLastUsed(container.id);
-    } catch {}
+    } catch {
+      // ignore last-used update errors
+    }
     const containerId = container.id;
 
     if (!this.config) throw new Error('LocalMCPServer: config not yet set via setConfig');

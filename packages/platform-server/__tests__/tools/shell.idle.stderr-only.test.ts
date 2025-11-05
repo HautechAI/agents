@@ -8,7 +8,7 @@ describe('ContainerService idle timer resets on stderr-only output', () => {
     const svc = new ContainerService(logger);
 
     const fakeStream: any = {
-      on: vi.fn((evt: string, cb: Function) => {
+      on: vi.fn((evt: string, cb: (...args: unknown[]) => unknown) => {
         if (evt === 'end' || evt === 'error' || evt === 'close') return;
         return fakeStream; // noop for data registrations
       }),

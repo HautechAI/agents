@@ -144,7 +144,9 @@ export abstract class Node<TConfig = unknown> extends EventEmitter {
       const next = mutator(this._config as TConfig);
       if (next && typeof next === 'object') this._config = next as TConfig;
       this.emitConfigChanged();
-    } catch {}
+    } catch {
+      // ignore config mutation errors during reprovision
+    }
     await this.provision();
   }
 }

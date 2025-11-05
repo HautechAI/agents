@@ -6,7 +6,7 @@ export type InputJsonValue = Prisma.InputJsonValue;
 // Internal guards
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   if (v === null || typeof v !== 'object') return false;
-  const proto = Object.getPrototypeOf(v);
+  const proto = Object.getPrototypeOf(v) as object | null;
   return proto === Object.prototype || proto === null;
 }
 

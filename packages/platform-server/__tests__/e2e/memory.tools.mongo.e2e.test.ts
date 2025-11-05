@@ -23,10 +23,14 @@ describe.skipIf(!RUN_MONGOMS)('E2E: memory tools with real MongoDB (mongodb-memo
   afterAll(async () => {
     try {
       await client?.close(true);
-    } catch {}
+    } catch {
+      // ignore client close errors in tests
+    }
     try {
       await mongod?.stop();
-    } catch {}
+    } catch {
+      // ignore mongod stop errors in tests
+    }
   });
 
   describe('append', () => {

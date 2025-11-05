@@ -24,7 +24,7 @@ export class LoggerService {
     const redactValuePatterns: RegExp[] = [
       /(ghp_[A-Za-z0-9]{20,})/g,
       /(github_pat_[A-Za-z0-9_]{20,})/g,
-      /(Bearer)\s+[A-Za-z0-9\-\._~\+\/]+=*/gi,
+      /(Bearer)\s+[-A-Za-z0-9._~+/]+=*/gi,
     ];
     // Query param redaction (e.g., ?token=..., &access_token=..., &api_key=...)
     const redactQueryParamRe = /([?&])(access_token|token|api[_-]?key|authorization|auth|password|secret)=([^&#]*)/gi;

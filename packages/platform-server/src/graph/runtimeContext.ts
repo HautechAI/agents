@@ -8,5 +8,7 @@ export interface RuntimeContextAware {
 }
 
 export function isRuntimeContextAware(obj: unknown): obj is RuntimeContextAware {
-  return !!obj && typeof (obj as any).setRuntimeContext === 'function';
+  return (
+    !!obj && typeof (obj as { setRuntimeContext?: unknown }).setRuntimeContext === 'function'
+  );
 }
