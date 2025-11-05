@@ -101,6 +101,11 @@ describe.skipIf(!RUN_MONGOMS)('GET /v1/metrics/errors-by-tool', () => {
     expect(ok.statusCode).toBe(200);
     const body = ok.json();
     expect(body.items.length).toBe(1);
-    expect(body.items[0].spanId).toBe('b');
+    // Assert sorting/limit behavior without relying on specific spanId
+    const returned = body.items[0];
+    expect(returned.label).toBe('L');
+    // Should be the most recently updated span
+    const latest = now.toISOString();
+    expect(returned.lastUpdate).toBe(latest);
   });
 });
