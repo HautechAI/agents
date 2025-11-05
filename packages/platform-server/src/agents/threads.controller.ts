@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Inject, Param, Patch, Query } from '@nestjs/common';
-import { IsBooleanString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBooleanString, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
 import { RunMessageType } from '@prisma/client';
 import type { ThreadStatus } from '@prisma/client';
@@ -37,6 +37,8 @@ export class ListChildrenQueryDto {
 
 export class PatchThreadBodyDto {
   @IsOptional()
+  // Allow null explicitly; validate string only when not null or undefined
+  @ValidateIf((_o, v) => v !== null && v !== undefined)
   @IsString()
   summary?: string | null;
 

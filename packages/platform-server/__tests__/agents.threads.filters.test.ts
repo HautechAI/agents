@@ -24,10 +24,9 @@ describe('AgentsPersistenceService threads filters and updates', () => {
     expect(closedChildren[0].parentId).toBe(rootOpen.id);
 
     // update
-    await svc.updateThread(child1.id, { summary: 'B1x', status: 'closed' as any });
+    await svc.updateThread(child1.id, { summary: 'B1x', status: 'closed' });
     const childAfter = (await svc.listChildren(rootOpen.id, 'all')).find((t) => t.id === child1.id)!;
     expect(childAfter.summary).toBe('B1x');
     expect(childAfter.status).toBe('closed');
   });
 });
-

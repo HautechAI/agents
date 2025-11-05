@@ -27,13 +27,13 @@ export class AgentsPersistenceService {
    * Ensure a thread exists with the given alias. When parentThreadId is provided
    * and the thread is newly created, set Thread.parentId to it.
    */
-  async ensureThread(alias: string, parentThreadId?: string | null): Promise<string> {
+  async ensureThread(alias: string, parentAlias?: string | null): Promise<string> {
     const existing = await this.prisma.thread.findUnique({ where: { alias } });
     if (existing) return existing.id;
     let parentId: string | undefined = undefined;
-    if (parentThreadId) {
+    if (parentAlias) {
       // Resolve provided parent alias to DB id.
-      parentId = await this.ensureThreadByAlias(parentThreadId);
+      parentId = await this.ensureThreadByAlias(parentAlias);
     }
     const created = await this.prisma.thread.create({ data: { alias, parentId } });
     return created.id;
@@ -46,13 +46,13 @@ export class AgentsPersistenceService {
   async beginRun(
     threadAlias: string,
     inputMessages: Array<HumanMessage | SystemMessage | AIMessage>,
-    parentThreadId?: string | null,
+    parentAlias?: string | null,
   ): Promise<RunStartResult> {
     // Create thread if missing and set summary only on creation from the first input message.
     let thread = await this.prisma.thread.findUnique({ where: { alias: threadAlias } });
     if (!thread) {
       let parentId: string | undefined = undefined;
-      if (parentThreadId) parentId = await this.ensureThreadByAlias(parentThreadId);
+      if (parentAlias) parentId = await this.ensureThreadByAlias(parentAlias);
       let summary: string | null = null;
       if (inputMessages.length > 0) {
         const first = inputMessages[0];

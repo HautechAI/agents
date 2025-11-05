@@ -58,6 +58,7 @@ export function ThreadTreeNode({
 
   async function toggleStatus() {
     setToggling(true);
+    setError(null);
     try {
       const next = (node.status || 'open') === 'open' ? 'closed' : 'open';
       await api(`/agents/threads/${node.id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
@@ -66,6 +67,9 @@ export function ThreadTreeNode({
       if (expanded) await loadChildren();
       // Allow parent to refresh roots if provided
       invalidateSiblingCache?.();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to update status';
+      setError(msg);
     } finally {
       setToggling(false);
     }
@@ -74,7 +78,7 @@ export function ThreadTreeNode({
   const padding = 8 + level * 12;
 
   return (
-    <li role="treeitem" aria-expanded={expanded} className="select-none">
+    <li role="treeitem" aria-expanded={expanded} aria-selected={isSelected} aria-level={level + 1} className="select-none">
       <div className={`flex items-center gap-2 rounded px-2 py-1 ${isSelected ? 'bg-gray-200' : 'hover:bg-gray-100'}`} style={{ paddingLeft: padding }}>
         <button
           className="text-xs text-gray-600"
@@ -91,12 +95,12 @@ export function ThreadTreeNode({
           <div className="text-sm">{label}</div>
           <div className="text-xs text-gray-500">{(node.status || 'open') === 'open' ? 'Open' : 'Closed'} • created {new Date(node.createdAt).toLocaleString()}</div>
         </button>
-        <button className="text-xs border rounded px-2 py-0.5" onClick={toggleStatus} disabled={toggling}>
+        <button className="text-xs border rounded px-2 py-0.5" onClick={toggleStatus} disabled={toggling} aria-busy={toggling} aria-label={(node.status || 'open') === 'open' ? 'Close thread' : 'Reopen thread'}>
           {(node.status || 'open') === 'open' ? 'Close' : 'Reopen'}
         </button>
       </div>
       {expanded && (
-        <ul role="group" className="mt-1">
+        <ul role="group" className="mt-1" aria-busy={loading}>
           {loading && <li className="text-xs text-gray-500" style={{ paddingLeft: padding + 16 }}>Loading…</li>}
           {error && <li className="text-xs text-red-600" role="alert" style={{ paddingLeft: padding + 16 }}>{error}</li>}
           {!loading && !error && children && children.length === 0 && (
