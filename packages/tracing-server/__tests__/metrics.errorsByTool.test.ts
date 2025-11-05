@@ -99,7 +99,9 @@ describe.skipIf(!RUN_MONGOMS)('GET /v1/metrics/errors-by-tool', () => {
       { traceId: 't', spanId: 'a', label: 'L', status: 'ok', startTime: earlier.toISOString(), lastUpdate: earlier.toISOString(), completed: true, attributes: {}, events: [], rev: 0, idempotencyKeys: [], createdAt: earlier.toISOString(), updatedAt: earlier.toISOString() },
       { traceId: 't', spanId: 'b', label: 'L', status: 'error', startTime: later.toISOString(), lastUpdate: later.toISOString(), completed: true, attributes: {}, events: [], rev: 0, idempotencyKeys: [], createdAt: later.toISOString(), updatedAt: later.toISOString() },
     ] as any);
-    const ok = await server.inject({ method: 'GET', url: '/v1/spans?limit=1&sort=-startTime' });
+    const from = new Date(earlier.getTime() - 10_000).toISOString();
+    const to = new Date(later.getTime() + 10_000).toISOString();
+    const ok = await server.inject({ method: 'GET', url: `/v1/spans?limit=1&sort=-startTime&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` });
     expect(ok.statusCode).toBe(200);
     const body = ok.json();
     expect(body.items.length).toBe(1);
