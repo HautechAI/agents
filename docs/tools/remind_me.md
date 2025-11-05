@@ -22,7 +22,7 @@ Notes
 - In-memory timers drive delivery; persistence to Postgres records scheduled reminders.
 - Persisted Reminder fields: `id` (UUID, DB PK), `threadId`, `note`, `at`, `createdAt`, `completedAt?`.
 - When a reminder fires, the DB row is updated with `completedAt` (completion is required) instead of being deleted.
-- The runtime in-memory registry uses a separate internal id (`<threadId>:<uuid>`) for tracking; DB uses a pure UUID id.
+- The reminder id is the DB UUID; the active reminders registry aligns with the persisted entity shape.
 - On node disposal, all timers are cleared and registry is emptied.
 - Soft cap: a maximum of 1000 active reminders per RemindMe node is enforced. When exceeded, the tool call errors with message "Too many active reminders (max 1000)." and no timer is scheduled.
 - Error shapes for reminders endpoint:

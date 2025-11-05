@@ -8,7 +8,7 @@ describe('RemindMe socket reminder_count events', () => {
 
   it('emits count on schedule and on fire (decrement)', async () => {
     const logger = new LoggerService();
-    const prismaStub = { getClient() { return { reminder: { create: vi.fn(async () => ({})), update: vi.fn(async () => ({})) } } as any; } };
+    const prismaStub = { getClient() { return { reminder: { create: vi.fn(async (args) => ({ ...args.data, createdAt: new Date() })), update: vi.fn(async () => ({})) } } as any; } };
     const emitted: Array<{ nodeId: string; count: number }> = [];
     const gatewayStub: any = { emitReminderCount: (nodeId: string, count: number) => { emitted.push({ nodeId, count }); } };
 
@@ -34,7 +34,7 @@ describe('RemindMe socket reminder_count events', () => {
 
   it('emits count=0 on deprovision/destroy', async () => {
     const logger = new LoggerService();
-    const prismaStub = { getClient() { return { reminder: { create: vi.fn(async () => ({})), update: vi.fn(async () => ({})) } } as any; } };
+    const prismaStub = { getClient() { return { reminder: { create: vi.fn(async (args) => ({ ...args.data, createdAt: new Date() })), update: vi.fn(async () => ({})) } } as any; } };
     const emitted: Array<{ nodeId: string; count: number }> = [];
     const gatewayStub: any = { emitReminderCount: (nodeId: string, count: number) => { emitted.push({ nodeId, count }); } };
 
