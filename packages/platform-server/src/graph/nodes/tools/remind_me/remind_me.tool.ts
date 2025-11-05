@@ -72,12 +72,16 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     const timer = setTimeout(async () => {
       const exists = this.active.has(created.id);
       if (!exists) return;
-      // Remove from registry
-      this.active.delete(created.id);
-      // Registry size decreased; notify
-      this.onRegistryChanged?.(this.active.size);
-      // Mark persisted reminder as completed; surface errors
-      await prisma.reminder.update({ where: { id: created.id }, data: { completedAt: new Date() } });
+      // Mark persisted reminder as completed with localized error handling
+      try {
+        await prisma.reminder.update({ where: { id: created.id }, data: { completedAt: new Date() } });
+      } catch (e) {
+        logger.error('RemindMe completion failed', e);
+      } finally {
+        // Always remove from registry and notify
+        this.active.delete(created.id);
+        this.onRegistryChanged?.(this.active.size);
+      }
       try {
         const msg = HumanMessage.fromText(`Reminder: ${note}`);
         await ctx.callerAgent.invoke(threadId, [msg]);
