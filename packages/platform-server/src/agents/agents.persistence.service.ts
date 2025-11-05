@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '../core/services/prisma.service';
 import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
-import type { Prisma, RunStatus, RunMessageType, MessageKind, PrismaClient } from '@prisma/client';
+import type { Prisma, RunStatus, RunMessageType, MessageKind, PrismaClient, ThreadStatus } from '@prisma/client';
 
 export type RunStartResult = { runId: string };
 
@@ -103,9 +103,32 @@ export class AgentsPersistenceService {
     });
   }
 
-  async listThreads(): Promise<Array<{ id: string; alias: string; createdAt: Date; parentId?: string | null }>> {
-    // Include parentId for clients that need thread hierarchy; preserves compatibility
-    return this.prisma.thread.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, createdAt: true, parentId: true }, take: 100 });
+  async listThreads(opts?: { rootsOnly?: boolean; status?: 'open' | 'closed' | 'all'; limit?: number }): Promise<Array<{ id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null }>> {
+    const rootsOnly = opts?.rootsOnly ?? false;
+    const status = opts?.status ?? 'all';
+    const limit = opts?.limit ?? 100;
+    const where: Prisma.ThreadWhereInput = {};
+    if (rootsOnly) where.parentId = null;
+    if (status !== 'all') where.status = status as ThreadStatus;
+    return this.prisma.thread.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, alias: true, summary: true, status: true, createdAt: true, parentId: true },
+      take: limit,
+    });
+  }
+
+  async listChildren(parentId: string, status: 'open' | 'closed' | 'all' = 'all'): Promise<Array<{ id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null }>> {
+    const where: Prisma.ThreadWhereInput = { parentId };
+    if (status !== 'all') where.status = status as ThreadStatus;
+    return this.prisma.thread.findMany({ where, orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, summary: true, status: true, createdAt: true, parentId: true } });
+  }
+
+  async updateThread(threadId: string, data: { summary?: string | null; status?: ThreadStatus }): Promise<void> {
+    const patch: Prisma.ThreadUpdateInput = {};
+    if (data.summary !== undefined) patch.summary = data.summary;
+    if (data.status !== undefined) patch.status = data.status;
+    await this.prisma.thread.update({ where: { id: threadId }, data: patch });
   }
 
   async listRuns(
