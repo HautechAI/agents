@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { getApiBase } from '@/api/client';
+import { config } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
@@ -14,16 +14,25 @@ class GraphSocket {
   private stateListeners = new Map<string, Set<StateListener>>();
   private reminderListeners = new Map<string, Set<ReminderListener>>();
 
-  connect(baseUrl?: string) {
+  connect() {
     if (this.socket) return this.socket;
-    let host: string | null = null;
-    try {
-      host = getApiBase(baseUrl);
-    } catch {
-      // In tests, API base may be unset; skip connecting.
+    const host = config.apiBaseUrl;
+    if (!host || host.trim() === '') {
+      // No API base configured; provide no-op behavior.
       return null;
     }
-    this.socket = io(host, { path: '/socket.io', transports: ['websocket'], forceNew: false, autoConnect: true, timeout: 10000, reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000, reconnectionDelayMax: 5000, withCredentials: true });
+    this.socket = io(host, {
+      path: '/socket.io',
+      transports: ['websocket'],
+      forceNew: false,
+      autoConnect: true,
+      timeout: 10000,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      withCredentials: true,
+    });
     this.socket.on('connect', () => {
       // noop
     });

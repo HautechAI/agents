@@ -8,8 +8,9 @@ import { httpJson } from '@/api/client';
 // Thread list rendering moved into ThreadTree component
 type MessageItem = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text?: string | null; source: unknown; createdAt: string };
 
+// Use relative base in tests; avoids env dependence
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await httpJson<T>(`/api/${path}`, init);
+  const res = await httpJson<T>(`/api/${path}`, init, '');
   if (res === undefined) throw new Error('Empty response');
   return res;
 }
