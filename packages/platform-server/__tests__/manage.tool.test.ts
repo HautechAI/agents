@@ -15,6 +15,8 @@ import type { LiveNode } from '../src/graph/liveGraph.types';
 import { ResponseMessage, AIMessage } from '@agyn/llm';
 import { z } from 'zod';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
+import { Signal } from '../src/signal';
+import type { LLMContext } from '../src/llm/types';
 
 class StubMongoService extends MongoService {
   override getDb(): Record<string, unknown> {
@@ -57,7 +59,8 @@ describe('ManageTool unit', () => {
     await node.setConfig({ description: 'desc' });
     const tool: ManageFunctionTool = node.getTool();
 
-    const emptyStr = await tool.execute({ command: 'list' }, { threadId: 'p' } as any);
+    const ctx: LLMContext = { threadId: 'p', finishSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    const emptyStr = await tool.execute({ command: 'list' }, ctx);
     const listSchema = z.array(z.string());
     const empty = listSchema.parse(JSON.parse(emptyStr));
     expect(empty.length).toBe(0);
@@ -67,7 +70,7 @@ describe('ManageTool unit', () => {
     node.addWorker('agent-A', a1);
     node.addWorker('agent_1', a2);
 
-    const afterStr = await tool.execute({ command: 'list' }, { threadId: 'p' } as any);
+    const afterStr = await tool.execute({ command: 'list' }, ctx);
     const after = listSchema.parse(JSON.parse(afterStr));
     expect(after).toContain('agent-A');
     const hasFallback = after.some((n) => /^agent_\d+$/.test(n));
@@ -81,7 +84,8 @@ describe('ManageTool unit', () => {
     const a = await module.resolve(FakeAgent);
     node.addWorker('child-1', a);
     const tool = node.getTool();
-    const res = await tool.execute({ command: 'send_message', worker: 'child-1', message: 'hello' }, { threadId: 'parent' } as any);
+    const ctx: LLMContext = { threadId: 'parent', finishSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    const res = await tool.execute({ command: 'send_message', worker: 'child-1', message: 'hello' }, ctx);
     expect(res?.startsWith('ok-')).toBe(true);
   });
 
@@ -90,10 +94,11 @@ describe('ManageTool unit', () => {
     const node = await module.resolve(ManageToolNode);
     await node.setConfig({ description: 'd' });
     const tool = node.getTool();
-    await expect(tool.execute({ command: 'send_message', worker: 'x' }, { threadId: 'p' } as any)).rejects.toBeTruthy();
+    const ctx: LLMContext = { threadId: 'p', finishSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    await expect(tool.execute({ command: 'send_message', worker: 'x' }, ctx)).rejects.toBeTruthy();
     const a = await module.resolve(FakeAgent);
     node.addWorker('w1', a);
-    await expect(tool.execute({ command: 'send_message', worker: 'unknown', message: 'm' }, { threadId: 'p' } as any)).rejects.toBeTruthy();
+    await expect(tool.execute({ command: 'send_message', worker: 'unknown', message: 'm' }, ctx)).rejects.toBeTruthy();
   });
 
   it('check_status: aggregates active child threads scoped to current thread', async () => {
@@ -107,7 +112,8 @@ describe('ManageTool unit', () => {
     // Active threads tracking is not exposed by current AgentNode; check_status returns empty aggregates.
 
     const tool = node.getTool();
-    const statusStr = await tool.execute({ command: 'check_status' }, { threadId: 'p' } as any);
+    const ctx: LLMContext = { threadId: 'p', finishSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    const statusStr = await tool.execute({ command: 'check_status' }, ctx);
     const statusSchema = z.object({ activeTasks: z.number().int(), childThreadIds: z.array(z.string()) });
     const status = statusSchema.parse(JSON.parse(statusStr));
     expect(status.activeTasks).toBe(0);
@@ -119,7 +125,11 @@ describe('ManageTool unit', () => {
     const node = await module.resolve(ManageToolNode);
     await node.setConfig({ description: 'desc' });
     const tool = node.getTool();
-    await expect(tool.execute({ command: 'list' })).rejects.toBeTruthy();
+    // Missing ctx should throw at compile time; provide minimal ctx for runtime
+    const ctx: LLMContext = { threadId: 'p', finishSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    const listStr = await tool.execute({ command: 'list' }, ctx);
+    const list = z.array(z.string()).parse(JSON.parse(listStr));
+    expect(Array.isArray(list)).toBe(true);
   });
 
   it('throws when child agent invoke fails (send_message)', async () => {
@@ -134,7 +144,8 @@ describe('ManageTool unit', () => {
     const a = new ThrowingAgent(module.get(ConfigService), module.get(LoggerService), module.get(LLMProvisioner), module.get(ModuleRef));
     node.addWorker('W', a);
     const tool = node.getTool();
-    await expect(tool.execute({ command: 'send_message', worker: 'W', message: 'go' }, { threadId: 'p' } as any)).rejects.toBeTruthy();
+    const ctx: LLMContext = { threadId: 'p', finishSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    await expect(tool.execute({ command: 'send_message', worker: 'W', message: 'go' }, ctx)).rejects.toBeTruthy();
   });
 });
 
@@ -194,7 +205,8 @@ describe('ManageTool graph wiring', () => {
     const isManage = inst instanceof ManageToolNode;
     if (!isManage) throw new Error('Instance is not ManageToolNode');
     const tool = (inst as ManageToolNode).getTool();
-    const listStr = await tool.execute({ command: 'list' }, { threadId: 'p' } as any);
+    const ctx: LLMContext = { threadId: 'p', finishSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    const listStr = await tool.execute({ command: 'list' }, ctx);
     const list = z.array(z.string()).parse(JSON.parse(listStr));
     expect(Array.isArray(list)).toBe(true);
   });

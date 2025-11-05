@@ -3,6 +3,7 @@ import { LoggerService } from '../src/core/services/logger.service';
 import { CallAgentTool } from '../src/graph/nodes/tools/call_agent/call_agent.node';
 import { ResponseMessage, HumanMessage } from '@agyn/llm';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
+import { Signal } from '../src/signal';
 import { createPrismaStub, StubPrismaService } from './helpers/prisma.stub';
 
 class FakeAgentWithPersistence {
@@ -27,7 +28,7 @@ describe('call_agent integration: creates child thread with parentId', () => {
     const dynamic = tool.getTool();
     // Create parent thread and use its UUID in ctx.threadId
     const parentThreadId = await persistence.getOrCreateThreadByAlias('test', 'parentX');
-    const res = await dynamic.execute({ input: 'do', threadAlias: 'childX' }, { threadId: parentThreadId } as any);
+    const res = await dynamic.execute({ input: 'do', threadAlias: 'childX' }, { threadId: parentThreadId, finishSignal: new Signal(), callerAgent: { invoke: async () => ResponseMessage.fromText('OK') } } as any);
     expect(res).toBe('OK');
 
     const parent = stub._store.threads.find((t: any) => t.alias === 'parentX');

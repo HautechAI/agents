@@ -4,6 +4,7 @@ import { FunctionTool, HumanMessage } from '@agyn/llm';
 import { ManageToolNode } from './manage.node';
 import { LoggerService } from '../../../../core/services/logger.service';
 import { Inject, Injectable, Scope } from '@nestjs/common';
+import { LLMContext } from '../../../../llm/types';
 import { AgentsPersistenceService } from '../../../../agents/agents.persistence.service';
 type TriggerMessage = { content: string; info?: Record<string, unknown> };
 
@@ -44,10 +45,9 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     return this.node.config.description ?? 'Manage tool';
   }
 
-  async execute(args: z.infer<typeof ManageInvocationSchema>, ctx?: { threadId?: string }): Promise<string> {
+  async execute(args: z.infer<typeof ManageInvocationSchema>, ctx: LLMContext): Promise<string> {
     const { command, worker, message, threadAlias } = args;
-    const parentThreadId = ctx?.threadId;
-    if (!parentThreadId) throw new Error('threadId is required in context');
+    const parentThreadId = ctx.threadId;
     const workers = this.node.listWorkers();
 
     if (command === 'list') {

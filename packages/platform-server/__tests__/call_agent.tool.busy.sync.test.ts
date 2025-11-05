@@ -8,6 +8,7 @@ import { ResponseMessage, AIMessage } from '@agyn/llm';
 import { CallAgentNode } from '../src/graph/nodes/tools/call_agent/call_agent.node';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
+import { Signal } from '../src/signal';
 
 class BusyAgent extends AgentNode {
   override async invoke(): Promise<ResponseMessage> {
@@ -27,7 +28,7 @@ describe('call_agent sync busy', () => {
     await node.setConfig({ response: 'sync' });
     node.setAgent(agent);
     const tool = node.getTool();
-    const res = await tool.execute({ input: 'hi', threadAlias: 'x' }, { callerAgent: agent, threadId: 'caller-t' });
+    const res = await tool.execute({ input: 'hi', threadAlias: 'x' }, { callerAgent: agent, threadId: 'caller-t', finishSignal: new Signal() } as any);
     expect(res).toBe('queued');
   });
 });
