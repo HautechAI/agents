@@ -63,7 +63,8 @@ export class ContainerRegistry {
         killAfterAt: killAfter ? new Date(killAfter) : null,
         terminationReason: null,
         deletedAt: null,
-        metadata: metadata as Prisma.InputJsonValue,
+        // Cast via unknown to satisfy Prisma InputJsonValue
+        metadata: metadata as unknown as Prisma.InputJsonValue,
       },
       update: {
         nodeId: args.nodeId,
@@ -75,7 +76,8 @@ export class ContainerRegistry {
         killAfterAt: killAfter ? new Date(killAfter) : null,
         terminationReason: null,
         deletedAt: null,
-        metadata: metadata as Prisma.InputJsonValue,
+        // Cast via unknown to satisfy Prisma InputJsonValue
+        metadata: metadata as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -106,7 +108,8 @@ export class ContainerRegistry {
       data: {
         status: 'terminating',
         terminationReason: reason,
-        metadata: meta as Prisma.InputJsonValue,
+        // Cast via unknown to satisfy Prisma InputJsonValue
+        metadata: meta as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -125,7 +128,7 @@ export class ContainerRegistry {
     const nextMeta: ContainerMetadata = { ...currentMeta, claimId };
     const res = await this.prisma.container.updateMany({
       where: { containerId, status: 'running' },
-      data: { status: 'terminating', metadata: nextMeta as Prisma.InputJsonValue },
+      data: { status: 'terminating', metadata: nextMeta as unknown as Prisma.InputJsonValue },
     });
     return res.count === 1;
   }
@@ -177,6 +180,6 @@ export class ContainerRegistry {
     meta.lastError = message;
     meta.retryAfter = retryAfterIso;
     meta.terminationAttempts = nextAttempts;
-    await this.prisma.container.update({ where: { containerId }, data: { metadata: meta as Prisma.InputJsonValue } });
+    await this.prisma.container.update({ where: { containerId }, data: { metadata: meta as unknown as Prisma.InputJsonValue } });
   }
 }
