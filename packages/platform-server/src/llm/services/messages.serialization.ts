@@ -1,6 +1,7 @@
-// Avoid compile-time dependency on Prisma types. Define local JSON types compatible with DB JSON columns.
-export type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } | JsonValue[];
-export type InputJsonValue = JsonValue; // alias for clarity where persistence is expected
+import { Prisma } from '@prisma/client';
+// Use Prisma's generated JSON types for strict typing
+export type JsonValue = Prisma.JsonValue;
+export type InputJsonValue = Prisma.InputJsonValue;
 
 // Internal guards
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -10,7 +11,8 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 function isInputJsonValue(v: unknown): v is InputJsonValue {
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null) return true;
+  if (v === Prisma.JsonNull || v === Prisma.DbNull || v === Prisma.AnyNull) return true;
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return true;
   if (Array.isArray(v)) return v.every((el) => isInputJsonValue(el));
   if (isPlainObject(v)) return Object.values(v).every((val) => isInputJsonValue(val));
   return false;
@@ -35,7 +37,7 @@ export function toPrismaJsonValue(input: unknown): InputJsonValue {
   if (isInputJsonValue(input)) return input;
 
   // Primitive handling (including null)
-  if (input === null) return null;
+  if (input === null) return Prisma.JsonNull as unknown as InputJsonValue;
   if (typeof input === 'string' || typeof input === 'number' || typeof input === 'boolean') return input;
 
   // Arrays: convert each element
@@ -60,6 +62,7 @@ export function toPrismaJsonValue(input: unknown): InputJsonValue {
   // Fallback: attempt JSON normalization for other serializable inputs
   try {
     const normalized = JSON.parse(JSON.stringify(input));
+    if (normalized === null) return Prisma.JsonNull as unknown as InputJsonValue;
     if (isInputJsonValue(normalized)) return normalized as InputJsonValue;
   } catch {
     // ignore JSON.stringify errors

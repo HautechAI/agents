@@ -1,9 +1,9 @@
 import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { IsIn } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
-import type { RunMessageType } from './agents.persistence.service';
+import { RunMessageType } from '@prisma/client';
 
-export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'output', 'injected'];
+export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = Object.values(RunMessageType);
 
 export class ListRunMessagesQueryDto {
   @IsIn(RunMessageTypeValues)

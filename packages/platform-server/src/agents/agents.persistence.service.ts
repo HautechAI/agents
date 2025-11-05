@@ -1,12 +1,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '../core/services/prisma.service';
 import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
-import { toPrismaJsonValue, type JsonValue } from '../llm/services/messages.serialization';
-
-// Local replicas of Prisma enum types to avoid compile-time dependency on generated client types.
-export type MessageKind = 'user' | 'assistant' | 'system' | 'tool';
-export type RunStatus = 'running' | 'finished' | 'failed';
-export type RunMessageType = 'input' | 'output' | 'injected';
+import { toPrismaJsonValue } from '../llm/services/messages.serialization';
+import type { Prisma, RunStatus, RunMessageType, MessageKind, PrismaClient } from '@prisma/client';
 
 export type RunStartResult = { runId: string };
 
@@ -14,7 +10,7 @@ export type RunStartResult = { runId: string };
 export class AgentsPersistenceService {
   constructor(@Inject(PrismaService) private prismaService: PrismaService) {}
 
-  private get prisma(): any {
+  private get prisma(): PrismaClient {
     return this.prismaService.getClient();
   }
 
@@ -55,7 +51,7 @@ export class AgentsPersistenceService {
     const threadId = await (parentThreadId
       ? this.ensureThread(threadAlias, parentThreadId)
       : this.ensureThreadByAlias(threadAlias));
-    const { runId } = await this.prisma.$transaction(async (tx: any) => {
+    const { runId } = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const run = await tx.run.create({ data: { threadId, status: 'running' as RunStatus } });
       await Promise.all(
         inputMessages.map(async (msg) => {
@@ -74,7 +70,7 @@ export class AgentsPersistenceService {
    * Persist injected messages. Only SystemMessage injections are supported.
    */
   async recordInjected(runId: string, injectedMessages: SystemMessage[]): Promise<void> {
-    await this.prisma.$transaction(async (tx: any) => {
+    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await Promise.all(
         injectedMessages.map(async (msg) => {
           const { kind, text } = this.deriveKindTextTyped(msg);
@@ -94,7 +90,7 @@ export class AgentsPersistenceService {
     status: RunStatus,
     outputMessages: Array<AIMessage | ToolCallMessage | ToolCallOutputMessage>,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx: any) => {
+    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await Promise.all(
         outputMessages.map(async (msg) => {
           const { kind, text } = this.deriveKindTextTyped(msg);
@@ -124,10 +120,10 @@ export class AgentsPersistenceService {
     });
   }
 
-  async listRunMessages(runId: string, type: RunMessageType): Promise<Array<{ id: string; kind: MessageKind; text: string | null; source: JsonValue; createdAt: Date }>> {
+  async listRunMessages(runId: string, type: RunMessageType): Promise<Array<{ id: string; kind: MessageKind; text: string | null; source: Prisma.JsonValue; createdAt: Date }>> {
     const links = await this.prisma.runMessage.findMany({ where: { runId, type }, select: { messageId: true } });
     if (links.length === 0) return [];
-    const msgIds = links.map((l: any) => l.messageId);
+    const msgIds = links.map((l) => l.messageId);
     const msgs = await this.prisma.message.findMany({ where: { id: { in: msgIds } }, orderBy: { createdAt: 'asc' }, select: { id: true, kind: true, text: true, source: true, createdAt: true } });
     return msgs;
   }
@@ -135,10 +131,9 @@ export class AgentsPersistenceService {
   /**
    * Strict derivation of kind/text from typed message instances.
    */
-  private deriveKindTextTyped(msg: HumanMessage | SystemMessage | AIMessage | ToolCallMessage | ToolCallOutputMessage): {
-    kind: MessageKind;
-    text: string | null;
-  } {
+  private deriveKindTextTyped(
+    msg: HumanMessage | SystemMessage | AIMessage | ToolCallMessage | ToolCallOutputMessage,
+  ): { kind: MessageKind; text: string | null } {
     if (msg instanceof HumanMessage) return { kind: 'user' as MessageKind, text: msg.text };
     if (msg instanceof SystemMessage) return { kind: 'system' as MessageKind, text: msg.text };
     if (msg instanceof AIMessage) return { kind: 'assistant' as MessageKind, text: msg.text };

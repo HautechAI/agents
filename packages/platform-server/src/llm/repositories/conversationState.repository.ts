@@ -1,5 +1,6 @@
 import type { InputJsonValue, JsonValue } from '../services/messages.serialization';
 import { Injectable } from '@nestjs/common';
+import type { PrismaClient } from '@prisma/client';
 
 export type ConversationStateRead = {
   threadId: string;
@@ -15,7 +16,7 @@ export type ConversationStateUpsert = {
 
 @Injectable()
 export class ConversationStateRepository {
-  constructor(private prisma: any) {}
+  constructor(private prisma: PrismaClient) {}
 
   async get(threadId: string, nodeId: string): Promise<ConversationStateRead | null> {
     const found = await this.prisma.conversationState.findUnique({ where: { threadId_nodeId: { threadId, nodeId } } });
