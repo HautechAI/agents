@@ -110,44 +110,59 @@ export function AgentsThreads() {
   const toggleJson = (id: string) => setShowJson((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-semibold mb-3">Agents / Threads</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Left: threads list */}
-        <div className="border rounded-md p-2">
-          <div className="text-sm font-medium">Threads</div>
-          {threadsQ.isLoading && <div className="text-sm text-gray-500 mt-2">Loading…</div>}
-          {threadsQ.error && <div className="text-sm text-red-600 mt-2" role="alert">{(threadsQ.error as Error).message}</div>}
-          <ul className="mt-2 space-y-1">
-            {threads.map((t) => (
-              <li key={t.id}>
-                <button
-                  className={`w-full text-left px-2 py-1 rounded ${selectedThreadId === t.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
-                  onClick={() => {
-                    setSelectedThreadId(t.id);
-                    // reset cache handled by effect on thread change
-                  }}
-                >
-                  <div className="text-sm">{t.alias}</div>
-                  <div className="text-xs text-gray-500">created {new Date(t.createdAt).toLocaleString()}</div>
-                </button>
-              </li>
-            ))}
-            {threads.length === 0 && !threadsQ.isLoading && <li className="text-sm text-gray-500">No threads</li>}
-          </ul>
-        </div>
+    // Non-scrollable outer page; inner panels handle scroll independently
+    <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden">
+      {/* Header bar */}
+      <div className="shrink-0 border-b px-4 py-3">
+        <h1 className="text-xl font-semibold">Agents / Threads</h1>
+      </div>
 
-        {/* Right: unified messages across all runs */}
-        <div className="md:col-span-1 border rounded-md p-2 min-h-[400px]">
-          <div className="text-sm font-medium">Thread: {selectedThreadId || '(none selected)'}</div>
-          <div className="mt-2 border rounded p-2 min-h-[300px]">
-            <RunMessageList
-              items={unifiedItems}
-              showJson={showJson}
-              onToggleJson={toggleJson}
-              isLoading={runsQ.isLoading}
-              error={loadError}
-            />
+      {/* Content area */}
+      <div className="flex-1 min-h-0 p-4">
+        {/* Mobile: single internally scrollable panel wrapper; desktop uses independent panel scrolls */}
+        <div className="h-full min-h-0 overflow-y-auto md:overflow-hidden" data-testid="mobile-panel">
+          <div className="flex h-full min-h-0 flex-col md:flex-row gap-4">
+            {/* Threads list panel */}
+            <div className="flex min-h-0 w-full md:w-96 shrink-0 flex-col overflow-visible md:overflow-hidden border rounded-md" data-testid="threads-panel">
+              <div className="border-b px-2 py-2 text-sm font-medium">Threads</div>
+              <div className="flex-1 md:overflow-y-auto p-2">
+                {threadsQ.isLoading && <div className="text-sm text-gray-500 mt-2">Loading…</div>}
+                {threadsQ.error && <div className="text-sm text-red-600 mt-2" role="alert">{(threadsQ.error as Error).message}</div>}
+                <ul className="mt-2 space-y-1">
+                  {threads.map((t) => (
+                    <li key={t.id}>
+                      <button
+                        className={`w-full text-left px-2 py-1 rounded ${selectedThreadId === t.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
+                        onClick={() => {
+                          setSelectedThreadId(t.id);
+                          // reset cache handled by effect on thread change
+                        }}
+                      >
+                        <div className="text-sm">{t.alias}</div>
+                        <div className="text-xs text-gray-500">created {new Date(t.createdAt).toLocaleString()}</div>
+                      </button>
+                    </li>
+                  ))}
+                  {threads.length === 0 && !threadsQ.isLoading && <li className="text-sm text-gray-500">No threads</li>}
+                </ul>
+              </div>
+            </div>
+
+            {/* Unified messages across all runs panel */}
+            <div className="flex h-[60vh] md:h-full min-h-0 min-w-0 md:flex-1 flex-col overflow-visible md:overflow-hidden border rounded-md" data-testid="messages-panel">
+              <div className="border-b px-2 py-2 text-sm font-medium">Thread: {selectedThreadId || '(none selected)'}</div>
+              <div className="flex-1 min-h-0 p-2">
+                <div className="h-full border rounded p-2">
+                  <RunMessageList
+                    items={unifiedItems}
+                    showJson={showJson}
+                    onToggleJson={toggleJson}
+                    isLoading={runsQ.isLoading}
+                    error={loadError}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
