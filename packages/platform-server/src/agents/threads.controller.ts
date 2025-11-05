@@ -1,7 +1,8 @@
 import { Body, Controller, Get, Inject, Param, Patch, Query } from '@nestjs/common';
 import { IsBooleanString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
-import { RunMessageType, ThreadStatus } from '@prisma/client';
+import { RunMessageType } from '@prisma/client';
+import type { ThreadStatus } from '@prisma/client';
 import { Transform } from 'class-transformer';
 
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = Object.values(RunMessageType);
