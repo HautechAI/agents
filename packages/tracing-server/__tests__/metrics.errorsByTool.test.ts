@@ -101,7 +101,7 @@ describe.skipIf(!RUN_MONGOMS)('GET /v1/metrics/errors-by-tool', () => {
     ] as any);
     const from = new Date(earlier.getTime() - 10_000).toISOString();
     const to = new Date(later.getTime() + 10_000).toISOString();
-    const ok = await server.inject({ method: 'GET', url: `/v1/spans?limit=1&sort=-startTime&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` });
+    const ok = await server.inject({ method: 'GET', url: `/v1/spans?limit=1&sort=startTime&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` });
     expect(ok.statusCode).toBe(200);
     const body = ok.json();
     expect(body.items.length).toBe(1);
