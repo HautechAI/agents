@@ -12,7 +12,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: ['./tsconfig.json'],
+        project: ['./tsconfig.eslint.json'],
       },
     },
     plugins: { '@typescript-eslint': tseslint.plugin },
@@ -60,7 +60,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: ['./tsconfig.json'],
+        project: ['./tsconfig.eslint.json'],
       },
     },
     plugins: { '@typescript-eslint': tseslint.plugin },

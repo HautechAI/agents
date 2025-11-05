@@ -178,7 +178,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
 
   // Expose listeners for base type compatibility via function
   public listeners<K>(_eventName?: K): Array<(...args: unknown[]) => unknown> {
-    return this._listeners.map((l) => l.invoke);
+    return this._listeners.map((l) => l.invoke as unknown as (...args: unknown[]) => unknown);
   }
 
   getPortConfig() {

@@ -353,7 +353,7 @@ export class LiveGraphRuntime {
       const cfg = created.getPortConfig() as TemplatePortConfig;
       if (cfg) {
         this.portsRegistry.registerTemplatePorts(node.data.template, cfg);
-        this.portsRegistry.validateTemplateInstance(node.data.template, created);
+        this.portsRegistry.validateTemplateInstance(node.data.template, created as unknown as Record<string, unknown>);
       }
 
       // NOTE: setGraphNodeId reflection removed; prefer factories to leverage ctx.nodeId directly.

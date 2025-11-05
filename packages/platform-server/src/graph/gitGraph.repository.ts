@@ -565,7 +565,7 @@ export class GitGraphRepository extends GraphRepository {
           const hasId = 'id' in o && typeof o.id === 'string' && o.id.length > 0;
           if (!hasId) o.id = decodeURIComponent(path.basename(p, '.json'));
           o.id = String(o.id);
-          return o as PersistedGraphNode;
+          return o as unknown as PersistedGraphNode;
         }),
       );
       const edges = await Promise.all(
@@ -576,7 +576,7 @@ export class GitGraphRepository extends GraphRepository {
           const hasId = 'id' in o && typeof o.id === 'string' && o.id.length > 0;
           if (!hasId) o.id = decodeURIComponent(path.basename(p, '.json'));
           o.id = String(o.id);
-          return o as PersistedGraphEdge;
+          return o as unknown as PersistedGraphEdge;
         }),
       );
       let variables: Array<{ key: string; value: string }> | undefined = undefined;
@@ -626,7 +626,7 @@ export class GitGraphRepository extends GraphRepository {
             const curId = 'id' in o ? (o as { id?: unknown }).id : undefined;
             const idStr = typeof curId === 'string' && curId.length > 0 ? curId : decodeURIComponent(path.basename(p, '.json'));
             (o as { id: string }).id = String(idStr);
-            return o as PersistedGraphNode;
+            return o as unknown as PersistedGraphNode;
           }),
       );
       const edges = await Promise.all(
@@ -639,7 +639,7 @@ export class GitGraphRepository extends GraphRepository {
             const curId = 'id' in o ? (o as { id?: unknown }).id : undefined;
             const idStr = typeof curId === 'string' && curId.length > 0 ? curId : decodeURIComponent(path.basename(p, '.json'));
             (o as { id: string }).id = String(idStr);
-            return o as PersistedGraphEdge;
+            return o as unknown as PersistedGraphEdge;
           }),
       );
       return {

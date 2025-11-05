@@ -13,6 +13,6 @@
     "emitDecoratorMetadata": true,
     "types": ["node"]
   },
-  "include": ["src", "__tests__"],
+  "include": ["src"],
   "exclude": ["node_modules"]
 }
