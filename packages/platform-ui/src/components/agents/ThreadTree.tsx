@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ThreadStatusFilter } from './ThreadStatusFilterSwitch';
+import { type ThreadStatusFilter } from './ThreadStatusFilterSwitch';
 import { ThreadTreeNode, type ThreadNode } from './ThreadTreeNode';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3010';
