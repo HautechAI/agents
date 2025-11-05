@@ -3,7 +3,7 @@ const RUN_MONGOMS = process.env.RUN_MONGOMS === '1';
 import { startMemoryMongo } from './helpers/mongoMemory';
 import { createServer } from '../src/server';
 
-import { init, withAgent, withLLM, withToolCall, LLMResponse, HumanMessage, ToolCallMessage, SystemMessage, ToolCallResponse } from '../../tracing';
+import { init, withAgent, withLLM, withToolCall, LLMResponse, HumanMessage, ToolCallMessage, SystemMessage, ToolCallResponse } from '../tracing/src';
 import type { ResponseFunctionToolCall } from 'openai/resources/responses/responses.mjs';
 import type { FastifyInstance } from 'fastify';
 
