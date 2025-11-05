@@ -9,9 +9,8 @@ export function canProvision(t: TemplateSchema): boolean {
 export function hasStaticConfig(t: TemplateSchema): boolean {
   return !!t.capabilities?.staticConfigurable && !!t.staticConfigSchema;
 }
-export function hasDynamicConfig(_t: TemplateSchema): boolean {
-  // Dynamic config removed; always false
-  return false;
+export function hasDynamicConfig(t: TemplateSchema): boolean {
+  return !!t.capabilities?.dynamicConfigurable;
 }
 
 export function canPauseByName(name: string, getTemplate: (n: string) => TemplateSchema | undefined): boolean {
@@ -26,6 +25,7 @@ export function hasStaticConfigByName(name: string, getTemplate: (n: string) => 
   const t = getTemplate(name);
   return t ? hasStaticConfig(t) : false;
 }
-export function hasDynamicConfigByName(_name: string, _getTemplate: (n: string) => TemplateSchema | undefined): boolean {
-  return false;
+export function hasDynamicConfigByName(name: string, getTemplate: (n: string) => TemplateSchema | undefined): boolean {
+  const t = getTemplate(name);
+  return t ? hasDynamicConfig(t) : false;
 }
