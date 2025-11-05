@@ -405,7 +405,7 @@ export class LiveGraphRuntime {
     const MAX_RETRIES = 3; // number of retries, not total attempts
     while (true) {
       try {
-        await (fn as Function).call(instance, current);
+        await (fn as (cfg: Record<string, unknown>) => unknown | Promise<unknown>).call(instance, current);
         return current; // success
       } catch (err) {
         if (err instanceof ZodError) {
@@ -449,7 +449,9 @@ export class LiveGraphRuntime {
     if (handler) {
       try {
         live.instance.off('status_changed', handler);
-      } catch {}
+      } catch {
+        // ignore detach errors during disposal
+      }
       this.nodeStatusHandlers.delete(nodeId);
     }
     // Remove outbound & inbound edges referencing this node
@@ -474,7 +476,9 @@ export class LiveGraphRuntime {
     if (inst && typeof inst.deprovision === 'function') {
       try {
         await inst.deprovision();
-      } catch {}
+      } catch {
+        // ignore teardown errors
+      }
     }
     this.state.nodes.delete(nodeId);
     this.state.inboundEdges.delete(nodeId);

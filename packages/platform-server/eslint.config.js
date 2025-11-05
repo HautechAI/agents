@@ -6,34 +6,76 @@ export default [
   {
     ignores: ['dist/**', '**/dist/**', 'node_modules/**'],
   },
+  // Type-aware rules for source files (tsconfig must include src and tests for typed rules)
+  {
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: ['./tsconfig.json'],
+      },
+    },
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      'no-empty': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-require-imports': 'error',
+      '@typescript-eslint/ban-ts-comment': 'error',
+      '@typescript-eslint/no-unsafe-function-type': 'error',
+      '@typescript-eslint/no-empty-object-type': 'error',
+      'no-useless-escape': 'error',
+      'prefer-const': 'error',
+    },
+  },
+  // Non-src TS files (no project for parser) but same hardened rules
   {
     files: ['**/*.ts', '**/*.tsx'],
+    ignores: ['src/**', '__tests__/**'],
     languageOptions: { parser: tseslint.parser },
     plugins: { '@typescript-eslint': tseslint.plugin },
     rules: {
-      // Global relaxed defaults
-      '@typescript-eslint/no-explicit-any': 'off',
-      'no-empty': 'off',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      // Reduce noise from tests and legacy code
-      '@typescript-eslint/no-require-imports': 'off',
-      '@typescript-eslint/ban-ts-comment': 'off',
-      '@typescript-eslint/ban-types': 'off',
-      '@typescript-eslint/no-unsafe-function-type': 'off',
-      '@typescript-eslint/no-empty-object-type': 'off',
-      'no-control-regex': 'off',
-      'no-useless-escape': 'off',
-      'prefer-const': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
+      'no-empty': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      // Typed rules disabled here due to lack of project context
+      '@typescript-eslint/no-require-imports': 'error',
+      '@typescript-eslint/ban-ts-comment': 'error',
+      '@typescript-eslint/no-unsafe-function-type': 'error',
+      '@typescript-eslint/no-empty-object-type': 'error',
+      'no-useless-escape': 'error',
+      'prefer-const': 'error',
     },
   },
   {
     files: ['__tests__/**/*.ts', '__tests__/**/*.tsx'],
-    languageOptions: { parser: tseslint.parser },
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: ['./tsconfig.json'],
+      },
+    },
     plugins: { '@typescript-eslint': tseslint.plugin },
     rules: {
+      // Keep tests relaxed for unused vars
       '@typescript-eslint/no-unused-vars': 'off',
+      // Tests often use `any` in mocks; allow here only
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-empty': 'error',
+      '@typescript-eslint/no-require-imports': 'error',
+      '@typescript-eslint/ban-ts-comment': 'error',
+      '@typescript-eslint/no-unsafe-function-type': 'error',
+      '@typescript-eslint/no-empty-object-type': 'error',
+      'no-useless-escape': 'error',
+      'prefer-const': 'error',
     },
   },
   {

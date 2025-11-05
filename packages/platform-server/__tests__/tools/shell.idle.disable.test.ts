@@ -8,7 +8,7 @@ describe('ContainerService idle timeout disable', () => {
     const svc = new ContainerService(logger);
 
     const fakeStream: any = {
-      on: vi.fn((evt: string, cb: Function) => {
+      on: vi.fn((evt: string, cb: (...args: unknown[]) => unknown) => {
         if (evt === 'end') {
           // end soon after start
           setTimeout(() => cb(), 50);

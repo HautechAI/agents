@@ -496,10 +496,11 @@ export class GitGraphRepository extends GraphRepository {
           try {
             const raw = JSON.parse(await fs.readFile(p, 'utf8')) as Partial<T>;
             const decodedId = decodeURIComponent(f.replace(/\.json$/, ''));
-            const obj = { id: String((raw as any).id ?? decodedId), ...(raw as object) } as T;
+            const idCandidate = (raw as { id?: unknown }).id;
+            const obj = { id: String(idCandidate ?? decodedId), ...(raw as object) } as T;
             return obj;
           } catch {
-            hadError = true;
+            hadError = true; // ignore malformed files
             return null;
           }
         }),
@@ -550,7 +551,9 @@ export class GitGraphRepository extends GraphRepository {
           const rawVars = await this.runGitCapture(['show', 'HEAD:variables.json'], this.config.graphRepoPath);
           const parsedVars = JSON.parse(rawVars) as Array<{ key: string; value: string }>;
           if (Array.isArray(parsedVars)) variables = parsedVars.map((v) => ({ key: String(v.key), value: String(v.value) }));
-        } catch {}
+      } catch {
+        // ignore variables read error
+      }
       }
       return {
         name: meta.name ?? name,
@@ -560,9 +563,9 @@ export class GitGraphRepository extends GraphRepository {
         edges,
         variables,
       };
-    } catch {
-      return null;
-    }
+      } catch {
+        return null;
+      }
   }
 
   private async readFromHeadPerGraph(name: string): Promise<PersistedGraph | null> {
@@ -585,7 +588,7 @@ export class GitGraphRepository extends GraphRepository {
           .map(async (p) => {
             const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
             const obj = JSON.parse(raw) as PersistedGraphNode;
-            (obj as any).id = String((obj as any).id ?? decodeURIComponent(path.basename(p, '.json')));
+            obj.id = String((obj.id as unknown as string | undefined) ?? decodeURIComponent(path.basename(p, '.json')));
             return obj;
           }),
       );
@@ -595,7 +598,7 @@ export class GitGraphRepository extends GraphRepository {
           .map(async (p) => {
             const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
             const obj = JSON.parse(raw) as PersistedGraphEdge;
-            (obj as any).id = String((obj as any).id ?? decodeURIComponent(path.basename(p, '.json')));
+            obj.id = String((obj.id as unknown as string | undefined) ?? decodeURIComponent(path.basename(p, '.json')));
             return obj;
           }),
       );
@@ -606,9 +609,9 @@ export class GitGraphRepository extends GraphRepository {
         nodes,
         edges,
       };
-    } catch {
-      return null;
-    }
+      } catch {
+        return null;
+      }
   }
 
   private async readFromHeadMonolith(name: string): Promise<PersistedGraph | null> {

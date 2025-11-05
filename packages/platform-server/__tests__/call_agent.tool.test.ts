@@ -34,7 +34,7 @@ describe('CallAgentTool unit', () => {
       const ai = AIMessage.fromText('OK');
       return new ResponseMessage({ output: [ai.toPlain()] });
     });
-    // @ts-ignore private for unit
+  // @ts-expect-error private for unit
     tool['setAgent'](agent as any);
     const dynamic = tool.getTool();
     const out = await dynamic.execute({ input: 'ping', threadAlias: 'sub' }, { threadId: 't2' } as any);
@@ -59,7 +59,7 @@ describe('CallAgentTool unit', () => {
       const ai = AIMessage.fromText('OK');
       return new ResponseMessage({ output: [ai.toPlain()] });
     });
-    // @ts-ignore private for unit
+  // @ts-expect-error private for unit
     tool['setAgent'](agent as any);
     const dynamic = tool.getTool();
     const out = await dynamic.execute({ input: 'ping', threadAlias: 'sub' }, { threadId: 'parent' } as any);
@@ -74,7 +74,7 @@ describe('CallAgentTool unit', () => {
       const ai = AIMessage.fromText('child-complete');
       return new ResponseMessage({ output: [ai.toPlain()] });
     });
-    // @ts-ignore private for unit
+  // @ts-expect-error private for unit
     tool['setAgent'](child as any);
     const dynamic = tool.getTool();
     const res = await dynamic.execute({ input: 'do work', threadAlias: 'c1' }, { threadId: 'p' } as any);
@@ -89,7 +89,7 @@ describe('CallAgentTool unit', () => {
       const ai = AIMessage.fromText('ignored');
       return new ResponseMessage({ output: [ai.toPlain()] });
     });
-    // @ts-ignore private for unit
+  // @ts-expect-error private for unit
     tool['setAgent'](child as any);
     const dynamic = tool.getTool();
     const res = await dynamic.execute({ input: 'do work', threadAlias: 'c2' }, { threadId: 'p2' } as any);

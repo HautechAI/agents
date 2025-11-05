@@ -56,7 +56,7 @@ export interface EndpointBase {
 export interface MethodEndpoint extends EndpointBase {
   type: 'method';
   key: string;
-  fn: Function;
+  fn: (...args: unknown[]) => unknown | Promise<unknown>;
   owner: unknown;
 }
 

@@ -80,13 +80,13 @@ export class DockerExecTransport {
       }
     }
 
-    this._stdout.on('data', (chunk) => {
+    this._stdout.on('data', (chunk: Buffer) => {
       this.logger.debug(`[DockerExecTransport#${this._id} stdout]`, chunk.toString().trim());
-      this._readBuffer.append(chunk as Buffer);
+      this._readBuffer.append(chunk);
       this.processReadBuffer();
     });
     this._stdout.on('error', (e) => this.onerror?.(e));
-    this._stderr.on('data', (chunk) => {
+    this._stderr.on('data', (chunk: Buffer) => {
       // Provide minimal stderr visibility without overwhelming logs; only log first few lines until handshake.
       const text = chunk.toString();
       if (text.trim().length > 0) {
@@ -113,7 +113,9 @@ export class DockerExecTransport {
 
   async send(message: JSONRPCMessage): Promise<void> {
     if (this._closed) throw new Error('Transport closed');
-    if (!this._stdin || (this._stdin as any).writableEnded || (this._stdin as any).destroyed) {
+    type WritableMaybe = NodeJS.WritableStream & { writableEnded?: boolean; destroyed?: boolean };
+    const w = this._stdin as WritableMaybe | undefined;
+    if (!w || w.writableEnded || w.destroyed) {
       throw new Error('Transport closed');
     }
     const payload = serializeMessageInline(message);
@@ -132,8 +134,11 @@ export class DockerExecTransport {
     if (this._closed) return;
     this._closed = true;
     try {
-      if (this._stdin && typeof (this._stdin as any).end === 'function') (this._stdin as any).end();
-    } catch {}
+      const w = this._stdin as NodeJS.WritableStream & { end?: (...args: unknown[]) => void };
+      if (w && typeof w.end === 'function') w.end();
+    } catch {
+      // ignore
+    }
     this.logger.info(`[DockerExecTransport#${this._id}] CLOSED`);
     this.onclose?.();
   }

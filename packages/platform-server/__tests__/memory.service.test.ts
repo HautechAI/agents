@@ -68,11 +68,11 @@ class FakeCollection<T extends MemoryDoc> {
 }
 
 class FakeDb {
-  // @ts-ignore minimal implementation for tests
+  // @ts-expect-error minimal implementation for tests
   collection<T>(name: string) {
     return new FakeCollection<T>(name) as any;
   }
-  // @ts-ignore not used in tests
+  // @ts-expect-error not used in tests
   [key: string]: any;
 }
 

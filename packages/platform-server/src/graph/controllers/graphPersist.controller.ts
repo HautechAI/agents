@@ -41,7 +41,7 @@ export class GraphPersistController {
   ) {}
 
   @Get('graph')
-  async getGraph(): Promise<{ name: string; version: number; updatedAt: string; nodes: any[]; edges: any[]; variables?: Array<{ key: string; value: string }> }> {
+  async getGraph(): Promise<{ name: string; version: number; updatedAt: string; nodes: GraphDefinition['nodes']; edges: GraphDefinition['edges']; variables?: Array<{ key: string; value: string }> }> {
     const name = 'main';
     const graph = await this.graphs.get(name);
     if (!graph) {
