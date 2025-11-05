@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3010';
 
@@ -98,9 +98,9 @@ export function AgentsReminders() {
                       {items.map((r) => (
                         <tr key={r.id} className="border-b">
                           <td className="px-2 py-2">
-                            <a href={`/tracing/thread/${r.threadId}`} className="underline">
+                            <Link to={`/tracing/thread/${r.threadId}`} className="underline">
                               {r.threadId}
-                            </a>
+                            </Link>
                           </td>
                           <td className="px-2 py-2">{r.note}</td>
                           <td className="px-2 py-2">{new Date(r.at).toLocaleString()}</td>
