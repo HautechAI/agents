@@ -7,6 +7,7 @@ import { useTemplatesCache } from '@/lib/graph/templates.provider';
 import { useNodeReminders } from '@/lib/graph/hooks';
 import { api } from '@/api/graph';
 import { notifyError, notifySuccess } from '@/lib/notify';
+import { Link } from 'react-router-dom';
 
 type BuilderPanelNodeData = {
   template: string;
@@ -250,7 +251,7 @@ function NodeTracingSidebarBody({ node }: { node: Node<BuilderPanelNodeData> }) 
               </div>
               <div className="flex items-center gap-2">
                 <span className="px-1.5 py-0.5 rounded border bg-accent/20 text-[10px]">{summarizeStatus(getStatus(span))}</span>
-                <a href={link} className="text-blue-600 hover:underline text-[11px]">open</a>
+                <Link to={link} className="text-blue-600 hover:underline text-[11px]">open</Link>
               </div>
             </li>
           ))}

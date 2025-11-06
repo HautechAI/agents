@@ -15,7 +15,7 @@ export function getApiBase(override?: string): string {
 export function buildUrl(path: string, base?: string): string {
   const b = typeof base === 'string' ? base : getApiBase();
   const p = path.startsWith('/') ? path : `/${path}`;
-  if (!b) return p; // relative for vitest or explicit ''
+  // If base override is an empty string, return relative path for tests
   // Avoid double slashes
   return b.endsWith('/') ? `${b.slice(0, -1)}${p}` : `${b}${p}`;
 }
