@@ -2,19 +2,10 @@ import { io, type Socket } from 'socket.io-client';
 import { config } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 
-// Strictly typed server-to-client socket events
-type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
-type ServerToClientEvents = {
-  connect: () => void;
-  node_status: (payload: NodeStatusEvent) => void;
-  node_state: (payload: NodeStateEvent) => void;
-  node_reminder_count: (payload: ReminderCountEvent) => void;
-};
-// No client-to-server emits used here
-type ClientToServerEvents = Record<string, never>;
+// Event payload types are enforced at handler call sites
 
 type Listener = (ev: NodeStatusEvent) => void;
-type StateListener = (ev: NodeStateEvent) => void;
+type StateListener = (ev: { nodeId: string; state: Record<string, unknown>; updatedAt: string }) => void;
 type ReminderListener = (ev: ReminderCountEvent) => void;
 
 class GraphSocket {
@@ -47,7 +38,7 @@ class GraphSocket {
       const set = this.listeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
-    this.socket.on('node_state', (payload: NodeStateEvent) => {
+    this.socket.on('node_state', (payload: { nodeId: string; state: Record<string, unknown>; updatedAt: string }) => {
       const set = this.stateListeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });

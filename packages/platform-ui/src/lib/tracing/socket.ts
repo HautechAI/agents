@@ -3,10 +3,7 @@ import { io, type Socket } from 'socket.io-client';
 import type { SpanDoc, SpanExtras } from '@/api/types/tracing';
 import { config } from '@/config';
 
-type TracingServerToClientEvents = {
-  span_upsert: (payload: unknown) => void;
-};
-type TracingClientToServerEvents = Record<string, never>;
+// Socket event payloads validated at runtime in handlers
 
 const TRACING_BASE: string = config.tracingApiBaseUrl;
 
