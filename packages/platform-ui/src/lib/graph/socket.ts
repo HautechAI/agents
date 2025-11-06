@@ -50,7 +50,8 @@ class GraphSocket {
     if (this.socket) return this.socket;
     // Use centralized config for API base
     const host = config.apiBaseUrl;
-    this.socket = io<ServerToClientEvents, ClientToServerEvents>(host, {
+    // Cast to typed Socket to enable event payload typing
+    this.socket = io(host, {
       path: '/socket.io',
       transports: ['websocket'],
       forceNew: false,
@@ -61,7 +62,7 @@ class GraphSocket {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       withCredentials: true,
-    });
+    }) as unknown as Socket<ServerToClientEvents, ClientToServerEvents>;
     // No-op connect listener; optional
     this.socket.on('node_status', (payload: NodeStatusEvent) => {
       const set = this.listeners.get(payload.nodeId);
