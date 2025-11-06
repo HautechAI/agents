@@ -36,7 +36,7 @@ export function SettingsSecrets() {
           <Input placeholder="Path prefix (optional)" value={pathPrefix} onChange={(e) => { setPathPrefix(e.target.value); setPage(1); }} />
         </div>
         <div className="ml-auto flex items-center gap-1">
-          <Input placeholder="Admin token (optional)" type="password" value={adminToken} onChange={(e) => { const v = e.target.value; setAdminToken(v); try { if (v) localStorage.setItem('X-Admin-Token', v); else localStorage.removeItem('X-Admin-Token'); } catch {  />
+          <Input placeholder="Admin token (optional)" type="password" value={adminToken} onChange={(e) => { const v = e.target.value; setAdminToken(v); try { if (v) localStorage.setItem("X-Admin-Token", v); else localStorage.removeItem("X-Admin-Token"); } catch { /* ignore */ } }} />
         </div>
       </div>
 
