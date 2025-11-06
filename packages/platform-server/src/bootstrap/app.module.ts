@@ -4,6 +4,7 @@ import { InfraModule } from '../infra/infra.module';
 import { GraphModule } from '../graph/graph.module';
 import { GraphSocketGateway } from '../gateway/graph.socket.gateway';
 
+import { SecretsModule } from '../secrets/secrets.module';
 @Module({ imports: [CoreModule, InfraModule, GraphModule, SecretsModule], providers: [GraphSocketGateway] })
 export class AppModule {
   constructor() {}
