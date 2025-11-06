@@ -12,7 +12,8 @@ export type ThreadNode = {
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const p = path.startsWith('/api') ? path : `/api/${path}`;
+  // Normalize to '/api/...'; avoid duplicate slashes
+  const p = path.startsWith('/api') ? path : (path.startsWith('/') ? `/api${path}` : `/api/${path}`);
   // Use relative base in tests to avoid env dependence
   const res = await httpJson<T>(p, init, '');
   if (res === undefined) throw new Error('Empty response');
@@ -62,7 +63,7 @@ export function ThreadTreeNode({
     setError(null);
     try {
       const next = (node.status || 'open') === 'open' ? 'closed' : 'open';
-      await api(`/agents/threads/${node.id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
+      await api(`agents/threads/${node.id}`, { method: 'PATCH', body: JSON.stringify({ status: next }) });
       // status updated server-side; refresh UI via refetches below
       // Refresh children list if visible to apply filter
       if (expanded) await loadChildren();
