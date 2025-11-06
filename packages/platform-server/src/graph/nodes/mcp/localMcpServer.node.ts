@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
-import { z } from 'zod';
+import z from 'zod';
 import { WorkspaceNode } from '../workspace/workspace.node';
 // Legacy capabilities removed; rely on Node lifecycle/state
 import { ConfigService } from '../../../core/services/config.service';
@@ -134,11 +134,11 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
    * If a delegate is provided, it is used (for discovered tools); otherwise, a fallback delegate is used (for preloaded tools).
    */
   private createLocalTool(tool: McpTool): LocalMCPServerTool {
-    // Inline conversion to avoid any/unknown propagation in typed rules
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const inputSchema: z.AnyZodObject =
-      jsonSchemaToZod(tool.inputSchema) instanceof z.ZodObject
-        ? (jsonSchemaToZod(tool.inputSchema) as z.AnyZodObject)
+    // Convert JSON Schema to Zod object; fallback to empty object schema.
+    const schemaCandidate = jsonSchemaToZod(tool.inputSchema);
+    const inputSchema =
+      schemaCandidate instanceof z.ZodObject
+        ? (schemaCandidate as z.ZodObject<z.ZodRawShape>)
         : z.object({}).strict();
     return new LocalMCPServerTool(tool.name, tool.description || 'MCP tool', inputSchema, this);
   }

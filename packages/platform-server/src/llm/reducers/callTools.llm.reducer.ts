@@ -120,8 +120,9 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
           },
         );
 
-        // Emit raw output payload for FunctionCallOutput
-        return ToolCallOutputMessage.fromResponse(t.callId, response);
+        // Emit raw output payload for FunctionCallOutput; normalize to string for type safety
+        const outputForMessage = typeof response === 'string' ? response : JSON.stringify(response);
+        return ToolCallOutputMessage.fromResponse(t.callId, outputForMessage);
       }),
     );
 
