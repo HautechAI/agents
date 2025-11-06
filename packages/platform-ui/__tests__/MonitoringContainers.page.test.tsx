@@ -25,21 +25,12 @@ describe('MonitoringContainers page', () => {
       lastUsedAt: new Date('2024-01-01T01:00:00Z').toISOString(),
       killAfterAt: null,
     }];
-<<<<<<< HEAD
-    const httpJson = vi.fn(async (url: string) => {
-      if (url.startsWith('/api/containers?')) return { items };
-      if (url.includes('/sidecars')) return { items: [] } as any;
-      return { items: [] } as any;
-    });
-    vi.mock('@/api/client', async () => ({ httpJson }));
-=======
     httpJsonMock.mockImplementation(async (url: string) => {
       if (url.startsWith('/api/containers?')) return { items } as any;
       if (url.includes('/sidecars')) return { items: [] } as any;
       if (url === '/api/graph/templates') return [] as any;
       return { items: [] } as any;
     });
->>>>>>> 845e4411 (test(platform-ui): make config resolveApiBase test-friendly; refactor MonitoringContainers tests with hoisted httpJson mock and robust assertions)
     // Clipboard stub
     const writeText = vi.fn();
     (globalThis as any).navigator = { clipboard: { writeText } };
