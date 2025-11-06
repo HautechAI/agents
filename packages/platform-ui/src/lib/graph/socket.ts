@@ -1,36 +1,24 @@
 import { io, type Socket } from 'socket.io-client';
+import { config } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 
-// Strictly typed server-to-client socket events
-type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
-type ServerToClientEvents = {
-  connect: void;
-  node_status: NodeStatusEvent;
-  node_state: NodeStateEvent;
-  node_reminder_count: ReminderCountEvent;
-};
-// No client-to-server emits used here
-type ClientToServerEvents = Record<string, never>;
+// Event payload types are enforced at handler call sites
 
 type Listener = (ev: NodeStatusEvent) => void;
-type StateListener = (ev: NodeStateEvent) => void;
+type StateListener = (ev: { nodeId: string; state: Record<string, unknown>; updatedAt: string }) => void;
 type ReminderListener = (ev: ReminderCountEvent) => void;
 
 class GraphSocket {
-  // Typed socket instance; null until connected
-  private socket: Socket<ClientToServerEvents, ServerToClientEvents> | null = null;
+  // Socket instance; set on connect
+  private socket!: Socket;
   private listeners = new Map<string, Set<Listener>>();
   private stateListeners = new Map<string, Set<StateListener>>();
   private reminderListeners = new Map<string, Set<ReminderListener>>();
 
-  connect() {
+  connect(): Socket {
     if (this.socket) return this.socket;
-    // Derive host lazily from env to avoid import-time errors in tests
-    const host = (import.meta as { env?: Record<string, unknown> } | undefined)?.env?.VITE_API_BASE_URL as string | undefined;
-    if (!host || host.trim() === '') {
-      // No API base configured; provide no-op behavior.
-      return null;
-    }
+    // Use centralized config for API base
+    const host = config.apiBaseUrl;
     this.socket = io(host, {
       path: '/socket.io',
       transports: ['websocket'],
@@ -50,7 +38,7 @@ class GraphSocket {
       const set = this.listeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
-    this.socket.on('node_state', (payload: NodeStateEvent) => {
+    this.socket.on('node_state', (payload: { nodeId: string; state: Record<string, unknown>; updatedAt: string }) => {
       const set = this.stateListeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
