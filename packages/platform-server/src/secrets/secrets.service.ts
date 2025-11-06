@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { GraphRepository } from '../graph/graph.repository';
+import type { PersistedGraph } from '../graph/types';
 import { VaultService } from '../vault/vault.service';
 import { LoggerService } from '../core/services/logger.service';
 import { parseVaultRef } from '../utils/refs';
@@ -20,11 +21,11 @@ export class SecretsService {
     @Inject(LoggerService) private readonly logger: LoggerService,
   ) {}
 
-  private async getCurrentGraph(): Promise<{ nodes: Array<{ config?: Record<string, unknown> }> } | null> {
+  private async getCurrentGraph(): Promise<PersistedGraph | null> {
     try {
       // Follow GraphPersistController single-graph model
       const g = await this.graphs.get('main');
-      return (g as unknown) as { nodes: Array<{ config?: Record<string, unknown> }> } | null;
+      return g;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.debug('SecretsService: getCurrentGraph failed: %s', msg);
@@ -48,7 +49,7 @@ export class SecretsService {
       const src = rec['source'];
       const val = rec['value'];
       if (src === 'vault' && typeof val === 'string') {
-        const refStr = val as string;
+        const refStr = val;
         try {
           const p = parseVaultRef(refStr);
           valid.push({ ref: `${p.mount}/${p.path}/${p.key}`, mount: p.mount, path: p.path, key: p.key });
@@ -102,11 +103,16 @@ export class SecretsService {
     };
 
     const present = new Map<string, Set<string>>(); // pair -> keys
-    for (const pair of pairs.values()) {
-      if (!within(pair.mount, pair.path)) continue;
-      const keys = await this.vault.listKeys(pair.mount, pair.path);
-      present.set(`${pair.mount}@@${pair.path}`, new Set(keys));
-    }
+    // Parallelize Vault key listing to avoid await-in-loop
+    const keyEntries = await Promise.all(
+      Array.from(pairs.values())
+        .filter((p) => within(p.mount, p.path))
+        .map(async (p) => [
+          `${p.mount}@@${p.path}`,
+          new Set(await this.vault.listKeys(p.mount, p.path)),
+        ] as const),
+    );
+    for (const [k, set] of keyEntries) present.set(k, set);
 
     const items: SecretItem[] = [];
     let used_present = 0;
@@ -136,7 +142,7 @@ export class SecretsService {
       }
     }
 
-    const invalidItems: SecretItem[] = invalid.map((r) => ({ ref: r, status: 'invalid_ref' } as SecretItem));
+    const invalidItems: SecretItem[] = invalid.map((r) => ({ ref: r, status: 'invalid_ref' }));
 
     const filter = opts.filter || 'all';
     let filtered = items;

@@ -4,22 +4,27 @@ import { VaultService } from '../vault/vault.service';
 import { SecretsService } from './secrets.service';
 import { SummaryQueryDto } from './dto/summary.query.dto';
 import { ReadQueryDto } from './dto/read.query.dto';
+import { LoggerService } from '../core/services/logger.service';
 
 @Controller('api/secrets')
 export class SecretsController {
   constructor(
     @Inject(SecretsService) private readonly secrets: SecretsService,
     @Inject(VaultService) private readonly vault: VaultService,
+    @Inject(LoggerService) private readonly logger: LoggerService,
   ) {}
 
   @Get('summary')
   async getSummary(@Query() q: SummaryQueryDto) {
-    const pageNum = typeof q.page === 'string' ? Number(q.page) : (q.page as number | undefined);
-    const pageSizeNum = typeof q.page_size === 'string' ? Number(q.page_size) : (q.page_size as number | undefined);
+    // Parse numbers safely without redundant casts; default to sane values
+    const pageNumRaw = typeof q.page === 'string' ? Number(q.page) : NaN;
+    const pageSizeRaw = typeof q.page_size === 'string' ? Number(q.page_size) : NaN;
+    const pageNum = Number.isFinite(pageNumRaw) && pageNumRaw > 0 ? pageNumRaw : 1;
+    const pageSizeNum = Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 50;
     return this.secrets.summarize({
       filter: q.filter ?? 'all',
-      page: Number.isFinite(pageNum as number) ? (pageNum as number) : 1,
-      pageSize: Number.isFinite(pageSizeNum as number) ? (pageSizeNum as number) : 50,
+      page: pageNum,
+      pageSize: pageSizeNum,
       mount: q.mount,
       pathPrefix: q.path_prefix,
     });
@@ -40,7 +45,9 @@ export class SecretsController {
     if (wantReveal) {
       const allow = String(process.env.VAULT_READ_ALLOW_UNMASK || '').toLowerCase() === 'true';
       const expected = process.env.ADMIN_READ_TOKEN;
-      const provided = (headers?.['x-admin-token'] as string) || (headers?.['X-Admin-Token'] as unknown as string);
+      // Case-insensitive header lookup without assertions
+      const tokenHeader = Object.entries(headers || {}).find(([k]) => k.toLowerCase() === 'x-admin-token')?.[1];
+      const provided = typeof tokenHeader === 'string' ? tokenHeader : undefined;
       const ok = allow && expected && provided ? timingSafeEqual(String(provided), String(expected)) : false;
       if (!ok) throw new HttpException({ error: 'FORBIDDEN' }, HttpStatus.FORBIDDEN);
       try {
@@ -48,7 +55,10 @@ export class SecretsController {
         if (v == null) return { ref, masked: false, status: 'missing' };
         // Do NOT log plaintext
         return { ref, masked: false, status: 'present', value: v };
-      } catch {
+      } catch (e: unknown) {
+        // Log non-sensitive error code; avoid secret value logging
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger?.debug?.('SecretsController: reveal read failed for %s: %s', ref, msg);
         return { ref, masked: false, status: 'error', error: 'vault_error' };
       }
     }
@@ -56,7 +66,9 @@ export class SecretsController {
       const v = await this.vault.getSecret({ mount, path, key });
       if (v == null) return { ref, masked: false, status: 'missing' };
       return { ref, masked: true, status: 'present', length: String(v).length };
-    } catch {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger?.debug?.('SecretsController: masked read failed for %s: %s', ref, msg);
       return { ref, masked: false, status: 'error', error: 'vault_error' };
     }
   }
