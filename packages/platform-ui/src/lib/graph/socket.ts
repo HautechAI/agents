@@ -25,8 +25,8 @@ type StateListener = (ev: { nodeId: string; state: Record<string, unknown>; upda
 type ReminderListener = (ev: ReminderCountEvent) => void;
 
 class GraphSocket {
-  // Socket instance; set on connect
-  private socket!: Socket;
+  // Typed socket instance; null until connected
+  private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   private listeners = new Map<string, Set<Listener>>();
   private stateListeners = new Map<string, Set<StateListener>>();
   private reminderListeners = new Map<string, Set<ReminderListener>>();
@@ -37,11 +37,11 @@ class GraphSocket {
   private messageCreatedListeners = new Set<(payload: ServerToClientEvents['message_created']) => void>();
   private runStatusListeners = new Set<(payload: ServerToClientEvents['run_status_changed']) => void>();
 
-  connect(): Socket {
+  connect(): Socket<ServerToClientEvents, ClientToServerEvents> {
     if (this.socket) return this.socket;
     // Use centralized config for API base
     const host = config.apiBaseUrl;
-    this.socket = io(host, {
+    this.socket = io<ServerToClientEvents, ClientToServerEvents>(host, {
       path: '/socket.io',
       transports: ['websocket'],
       forceNew: false,
