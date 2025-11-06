@@ -7,8 +7,6 @@ import { ContainerService } from './container.service';
 import { LoggerService } from '../../core/services/logger.service';
 import { ROLE_LABEL, PARENT_CID_LABEL } from '../../constants';
 
-// Removed duck typing helpers; use zod schemas for parsing
-
 // Allowed sort columns for containers list
 enum SortBy {
   lastUsedAt = 'lastUsedAt',
@@ -124,6 +122,7 @@ export class ContainersController {
         createdAt: true,
         lastUsedAt: true,
         killAfterAt: true,
+        metadata: true,
       },
       take,
     });
@@ -177,15 +176,15 @@ export class ContainersController {
         };
       }),
     );
-      const items = results
-        .map((r, i) => {
-          if (r.status === 'fulfilled') return r.value;
-          // Log failures with container id
-          const id = handles[i]?.id ?? 'unknown';
-          const err = r.reason instanceof Error ? r.reason : new Error(String(r.reason));
-          this.logger.error('ContainersController: sidecar inspect failed', { id, error: err });
-          return undefined;
-        })
+    const items = results
+      .map((r, i) => {
+        if (r.status === 'fulfilled') return r.value;
+        // Log failures with container id
+        const id = handles[i]?.id ?? 'unknown';
+        const err = r.reason instanceof Error ? r.reason : new Error(String(r.reason));
+        this.logger.error('ContainersController: sidecar inspect failed', { id, error: err });
+        return undefined;
+      })
       .filter((x): x is {
         containerId: string;
         parentContainerId: string;
@@ -197,3 +196,4 @@ export class ContainersController {
     return { items };
   }
 }
+

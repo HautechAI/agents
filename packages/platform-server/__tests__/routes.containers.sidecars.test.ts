@@ -61,7 +61,7 @@ describe('ContainersController sidecars route', () => {
     expect(body.items.length).toBe(1);
     const sc = body.items[0];
     expect(sc.role).toBe('dind');
-    expect(sc.parentContainerId).toBe(parentId);
+    expect(sc.parentContainerId).toBe('parent-123');
     expect(sc.status).toBe('running');
     expect(sc.image).toBe('docker:27-dind');
   });
@@ -128,3 +128,4 @@ describe('ContainersController sidecars route', () => {
     expect(body.items[0].status).toBe('stopped');
   });
 });
+
