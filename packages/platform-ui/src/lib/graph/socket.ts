@@ -3,6 +3,7 @@ import type { NodeStatusEvent, ReminderCountEvent } from './types';
 
 export type ThreadActivityEvent = { threadId: string; activity: 'working' | 'waiting' | 'idle' };
 export type ThreadRemindersEvent = { threadId: string; remindersCount: number };
+export type ThreadCreatedEvent = { thread: { id: string; alias: string; status?: 'open' | 'closed' } };
 
 // Strictly typed server-to-client socket events
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
@@ -28,6 +29,7 @@ class GraphSocket {
   // Test-visible sets for thread-level events (emitted by server in other channel)
   public threadActivityListeners = new Set<(ev: ThreadActivityEvent) => void>();
   public threadRemindersListeners = new Set<(ev: ThreadRemindersEvent) => void>();
+  public threadCreatedListeners = new Set<(ev: ThreadCreatedEvent) => void>();
 
   connect() {
     if (this.socket) return this.socket;
@@ -114,6 +116,10 @@ class GraphSocket {
   onThreadReminders(cb: (ev: ThreadRemindersEvent) => void) {
     this.threadRemindersListeners.add(cb);
     return () => this.threadRemindersListeners.delete(cb);
+  }
+  onThreadCreated(cb: (ev: ThreadCreatedEvent) => void) {
+    this.threadCreatedListeners.add(cb);
+    return () => this.threadCreatedListeners.delete(cb);
   }
 }
 
