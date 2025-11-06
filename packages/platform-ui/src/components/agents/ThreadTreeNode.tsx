@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ThreadStatusFilter } from './ThreadStatusFilterSwitch';
 import { threads } from '@/api/modules/threads';
-import { graphSocket } from '@/lib/graph/socket';
 
 export type ThreadNode = {
   id: string;
@@ -10,7 +9,7 @@ export type ThreadNode = {
   status?: 'open' | 'closed';
   parentId?: string | null;
   createdAt: string;
-  metrics?: { remindersCount?: number; activity?: number };
+  metrics?: { remindersCount: number; activity: 'working' | 'waiting' | 'idle' };
 };
 
 export function ThreadTreeNode({
@@ -36,20 +35,8 @@ export function ThreadTreeNode({
 
   const label = (node.summary && node.summary.trim().length > 0) ? node.summary : '(no summary yet)';
   const isSelected = selectedId === node.id;
-  // Initialize to 'idle'; live updates come from socket listeners
-  const [activity, setActivity] = useState<'working' | 'waiting' | 'idle'>('idle');
-  const [remindersCount, setRemindersCount] = useState<number>(node.metrics?.remindersCount || 0);
-
-  useEffect(() => {
-    // Subscribe to thread-level metrics updates via graphSocket test-visible listeners
-    const offAct = graphSocket.onThreadActivity((ev) => {
-      if (ev.threadId === node.id) setActivity(ev.activity);
-    });
-    const offRem = graphSocket.onThreadReminders((ev) => {
-      if (ev.threadId === node.id) setRemindersCount(ev.remindersCount);
-    });
-    return () => { offAct(); offRem(); };
-  }, [node.id]);
+  const remindersCount = node.metrics?.remindersCount ?? 0;
+  const activity = node.metrics?.activity ?? 'idle';
 
   async function loadChildren() {
     setLoading(true);
@@ -104,10 +91,17 @@ export function ThreadTreeNode({
           <div className="text-sm">{label}</div>
           <div className="text-xs text-gray-500">{(node.status || 'open') === 'open' ? 'Open' : 'Closed'} • created {new Date(node.createdAt).toLocaleString()}</div>
         </button>
-        {/* Activity dot */}
-        <span aria-label={`Activity: ${activity}`} className="inline-block w-2 h-2 rounded-full bg-gray-500" />
+        {/* Activity indicator: small colored dot with tooltip + aria */}
+        <span
+          className={`inline-block w-2 h-2 rounded-full ${activity === 'working' ? 'bg-green-500' : activity === 'waiting' ? 'bg-yellow-500' : 'bg-blue-500'}`}
+          aria-label={`Activity: ${activity}`}
+          title={`Activity: ${activity}`}
+        />
+        {/* Reminders badge: show clock + count when > 0 */}
         {remindersCount > 0 && (
-          <span aria-label={`Active reminders: ${remindersCount}`} className="text-xs border rounded px-1 py-0.5">{remindersCount}</span>
+          <span className="text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-700" aria-label={`Active reminders: ${remindersCount}`} title={`Active reminders: ${remindersCount}`}>
+            🕒 {remindersCount}
+          </span>
         )}
         <button className="text-xs border rounded px-2 py-0.5" onClick={toggleStatus} disabled={toggling} aria-busy={toggling} aria-label={(node.status || 'open') === 'open' ? 'Close thread' : 'Reopen thread'}>
           {(node.status || 'open') === 'open' ? 'Close' : 'Reopen'}

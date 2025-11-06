@@ -77,47 +77,47 @@ export function createPrismaStub() {
       },
       findMany: async ({ where: { runId, type } }: any) => runMessages.filter((rm) => rm.runId === runId && rm.type === type),
     },
+    $transaction: async (fn: (tx: any) => Promise<any>) => fn({ thread: prisma.thread, run: prisma.run, message: prisma.message, runMessage: prisma.runMessage }),
     reminder: {
       create: async ({ data }: any) => {
-        const row = { id: `rem-${idSeq++}`, threadId: data.threadId, note: data.note, at: data.at, createdAt: new Date(timeSeed + idSeq), completedAt: data.completedAt ?? null };
+        const row = { id: data.id ?? `rem-${idSeq++}`, threadId: data.threadId, note: data.note, at: data.at, createdAt: new Date(timeSeed + idSeq), completedAt: data.completedAt ?? null };
         reminders.push(row);
         return row;
       },
-      findMany: async ({ where, orderBy, take }: any) => {
-        let rows = [...reminders];
-        if (where?.completedAt === null) rows = rows.filter((r) => r.completedAt === null);
-        if (where?.NOT?.completedAt === null) rows = rows.filter((r) => r.completedAt !== null);
-        if (orderBy?.at === 'desc') rows.sort((a, b) => b.at.getTime() - a.at.getTime());
-        return rows.slice(0, take || rows.length);
+      update: async ({ where: { id }, data }: any) => {
+        const r = reminders.find((x) => x.id === id);
+        if (r && Object.prototype.hasOwnProperty.call(data, 'completedAt')) r.completedAt = data.completedAt ?? null;
+        return r;
       },
-    },
-    $transaction: async (fn: (tx: any) => Promise<any>) => fn({ thread: prisma.thread, run: prisma.run, message: prisma.message, runMessage: prisma.runMessage }),
-    // Minimal $queryRaw simulation used by ThreadsMetricsService tests
-    $queryRaw: async (...args: any[]) => {
-      const ids: string[] = Array.isArray(args?.[1]) ? (args[1] as string[]) : [];
-      type Row = { root_id: string; reminders_count: number; desc_working: boolean; self_working: boolean };
-      const rows: Row[] = [];
-      for (const rootId of ids) {
-        // build subtree ids (including root)
-        const subtree = new Set<string>();
-        const queue: string[] = [rootId];
-        while (queue.length) {
-          const cur = queue.shift()!;
-          if (subtree.has(cur)) continue;
-          subtree.add(cur);
-          const childrenIds = threads.filter((t) => t.parentId === cur).map((t) => t.id);
-          if (childrenIds.length) queue.push(...childrenIds);
-        }
-        const desc = new Set([...subtree].filter((id) => id !== rootId));
-        const runningOn = new Set(runs.filter((r) => r.status === 'running').map((r) => r.threadId));
-        const self_working = runningOn.has(rootId);
-        const desc_working = [...desc].some((id) => runningOn.has(id));
-        const reminders_count = reminders.filter((r) => r.completedAt === null && subtree.has(r.threadId)).length;
-        rows.push({ root_id: rootId, reminders_count, desc_working, self_working });
-      }
-      return rows;
+      findMany: async () => reminders,
     },
     _store: { threads, runs, messages, runMessages, reminders },
+    // Minimal implementation to support ThreadsMetricsService tests.
+    // Accepts TemplateStrings and values; expects first array value to contain root IDs.
+    async $queryRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<Array<{ root_id: string; reminders_count: number; desc_working: boolean; self_working: boolean }>> {
+      const idsArg = values.find((v) => Array.isArray(v)) as string[] | undefined;
+      const roots = Array.isArray(idsArg) ? idsArg : [];
+      function collectSubtree(root: string): string[] {
+        const acc: string[] = [root];
+        const stack = [root];
+        while (stack.length) {
+          const cur = stack.pop()!;
+          const kids = threads.filter((t) => t.parentId === cur).map((t) => t.id);
+          for (const k of kids) { acc.push(k); stack.push(k); }
+        }
+        return acc;
+      }
+      const isRunning = new Set(runs.filter((r) => r.status === 'running').map((r) => r.threadId));
+      const out: Array<{ root_id: string; reminders_count: number; desc_working: boolean; self_working: boolean }> = [];
+      for (const root of roots) {
+        const sub = collectSubtree(root);
+        const self_working = isRunning.has(root);
+        const desc_working = sub.some((id) => id !== root && isRunning.has(id));
+        const reminders_count = reminders.filter((rem) => sub.includes(rem.threadId) && rem.completedAt == null).length;
+        out.push({ root_id: root, reminders_count, desc_working, self_working });
+      }
+      return out;
+    },
   };
   return prisma;
 }
