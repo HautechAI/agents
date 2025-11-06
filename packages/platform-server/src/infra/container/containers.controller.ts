@@ -5,18 +5,10 @@ import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'cla
 import { Type } from 'class-transformer';
 import { ContainerService } from './container.service';
 import { LoggerService } from '../../core/services/logger.service';
+import { ROLE_LABEL, PARENT_CID_LABEL } from '../../constants';
+import { InspectLabelsSchema } from './container.schemas';
 
-// Safely narrow unknown to Record<string, string>
-function safeStringRecord(u: unknown): Record<string, string> {
-  if (!u || typeof u !== 'object') return {};
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(u as Record<string, unknown>)) {
-    if (typeof k === 'string' && typeof v === 'string') {
-      out[k] = v;
-    }
-  }
-  return out;
-}
+// Removed duck typing helpers; use zod schemas for parsing
 
 // Allowed sort columns for containers list
 enum SortBy {
@@ -127,28 +119,21 @@ export class ContainersController {
       select: {
         containerId: true,
         threadId: true,
+        role: true,
         image: true,
         status: true,
         createdAt: true,
         lastUsedAt: true,
         killAfterAt: true,
-        metadata: true,
       },
       take,
     });
 
     // Map createdAt -> startedAt and return minimal shape
-    const deriveRole = (meta: unknown): string => {
-      const m = meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : undefined;
-      const labels = m && typeof m['labels'] === 'object' && m['labels'] !== null ? (m['labels'] as Record<string, string>) : undefined;
-      const role = labels && typeof labels['hautech.ai/role'] === 'string' ? labels['hautech.ai/role'] : undefined;
-      return role ?? 'workspace';
-    };
-
     const items = rows.map((r) => ({
       containerId: r.containerId,
       threadId: r.threadId,
-      role: deriveRole(r.metadata),
+      role: typeof r.role === 'string' ? r.role : 'workspace',
       image: r.image,
       status: r.status,
       startedAt: r.createdAt.toISOString(),
@@ -172,16 +157,17 @@ export class ContainersController {
   }> {
     // Lookup DinD sidecars by labels
     const handles = await this.containers.findContainersByLabels(
-      { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': containerId },
+      { [ROLE_LABEL]: 'dind', [PARENT_CID_LABEL]: containerId },
       { all: true },
     );
     const docker = this.containers.getDocker();
     const results = await Promise.allSettled(
       handles.map(async (h) => {
         const inspect = await docker.getContainer(h.id).inspect();
-        // Safely derive string-only labels from Docker inspect
-        const labels = safeStringRecord(inspect?.Config?.Labels);
-        const parentContainerId = labels['hautech.ai/parent_cid'] ?? containerId;
+        // Parse labels via zod; fall back to containerId when missing
+        const parsedLabels = InspectLabelsSchema.safeParse(inspect?.Config?.Labels ?? {});
+        const labels = parsedLabels.success ? parsedLabels.data : {};
+        const parentContainerId = labels[PARENT_CID_LABEL] ?? containerId;
         return {
           containerId: String(inspect?.Id ?? h.id),
           parentContainerId,

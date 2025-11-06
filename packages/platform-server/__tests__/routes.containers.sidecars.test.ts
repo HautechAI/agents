@@ -100,4 +100,31 @@ describe('ContainersController sidecars route', () => {
     expect(Array.isArray(body.items)).toBe(true);
     expect(body.items.length).toBe(0);
   });
+
+  it('falls back to parent id when label missing or invalid', async () => {
+    const parentId = 'parent-fallback';
+    const sideId = 'side-fallback';
+    const fakeInspect = {
+      Id: sideId,
+      Created: new Date('2024-02-01T00:00:00.000Z').toISOString(),
+      // Missing parent_cid; include an invalid type for unrelated key to ensure zod parsing is safe
+      Config: { Image: 'docker:27-dind', Labels: { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': 123 } },
+      State: { Running: false },
+    };
+    const ctrl = new ContainersController(
+      new PrismaStub() as unknown as PrismaService,
+      new FakeContainerService([{ id: sideId }], { [sideId]: fakeInspect }),
+      new LoggerService(),
+    );
+    const fastify2 = Fastify({ logger: false });
+    fastify2.get('/api/containers/:id/sidecars', async (req, res) => {
+      const id = (req.params as { id: string }).id;
+      return res.send(await ctrl.listSidecars(id));
+    });
+    const res = await fastify2.inject({ method: 'GET', url: `/api/containers/${parentId}/sidecars` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items: Array<{ parentContainerId: string; status: string }> };
+    expect(body.items[0].parentContainerId).toBe(parentId);
+    expect(body.items[0].status).toBe('stopped');
+  });
 });

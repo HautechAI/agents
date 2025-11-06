@@ -3,7 +3,7 @@ import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
 import { ContainerHandle } from './container.handle';
 import { LoggerService } from '../../core/services/logger.service';
-import { PLATFORM_LABEL, type Platform } from '../../constants';
+import { PLATFORM_LABEL, ROLE_LABEL, THREAD_ID_LABEL, NODE_ID_LABEL, type Platform } from '../../constants';
 import {
   isExecTimeoutError,
   ExecTimeoutError,
@@ -189,10 +189,13 @@ export class ContainerService {
     // Persist workspace containers in registry
     if (this.registry) {
       try {
-        const labels = inspect.Config?.Labels || {};
-        if (labels['hautech.ai/role'] === 'workspace') {
-          const nodeId = labels['hautech.ai/node_id'] || 'unknown';
-          const threadId = labels['hautech.ai/thread_id'] || '';
+        const labelsRaw = inspect?.Config?.Labels ?? {};
+        // Parse labels via zod schema
+        const { InspectLabelsSchema } = await import('./container.schemas');
+        const labels = InspectLabelsSchema.parse(labelsRaw) as Record<string, string>;
+        if (labels[ROLE_LABEL] === 'workspace') {
+          const nodeId = labels[NODE_ID_LABEL] || 'unknown';
+          const threadId = labels[THREAD_ID_LABEL] || '';
           await this.registry.registerStart({
             containerId: inspect.Id,
             nodeId,
@@ -202,6 +205,7 @@ export class ContainerService {
             labels,
             platform: optsWithDefaults.platform,
             ttlSeconds: optsWithDefaults.ttlSeconds,
+            role: 'workspace',
           });
         }
       } catch (e) {
@@ -724,7 +728,7 @@ export class ContainerService {
   private async backfillFromDocker(): Promise<void> {
     this.logger.info('ContainerService: backfilling registry from Docker');
     try {
-      const list = await this.findContainersByLabels({ 'hautech.ai/role': 'workspace' }, { all: true });
+      const list = await this.findContainersByLabels({ [ROLE_LABEL]: 'workspace' }, { all: true });
       const nowIso = new Date().toISOString();
       const concurrency = 5;
       let index = 0;
@@ -734,9 +738,9 @@ export class ContainerService {
         if (!item) return;
         try {
           const labels = await this.getContainerLabels(item.id);
-          if (labels && labels['hautech.ai/role'] !== 'workspace') return;
-      const nodeId = labels?.['hautech.ai/node_id'] || 'unknown';
-      const threadId = labels?.['hautech.ai/thread_id'] || '';
+          if (labels && labels[ROLE_LABEL] !== 'workspace') return;
+      const nodeId = labels?.[NODE_ID_LABEL] || 'unknown';
+      const threadId = labels?.[THREAD_ID_LABEL] || '';
       const inspect = await this.docker.getContainer(item.id).inspect();
           // created retained for future use; eslint-disable to prevent warning
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -749,7 +753,8 @@ export class ContainerService {
             image: inspect?.Config?.Image || 'unknown',
             ttlSeconds: 86400,
             labels,
-            platform: labels?.['hautech.ai/platform'],
+            platform: labels?.[PLATFORM_LABEL],
+            role: 'workspace',
           });
           if (!running) await this.registry.markStopped(item.id, 'backfill');
         } catch (err) {

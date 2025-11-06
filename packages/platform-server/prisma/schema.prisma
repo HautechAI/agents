@@ -125,6 +125,12 @@ enum ContainerStatus {
   failed
 }
 
+// Role of a container (workspace or DinD sidecar)
+enum ContainerRole {
+  workspace
+  dind
+}
+
 model Container {
   id                Int             @id @default(autoincrement())
   containerId       String          @unique
@@ -132,6 +138,7 @@ model Container {
   threadId          String?         @db.Uuid
   thread            Thread?         @relation(fields: [threadId], references: [id], onDelete: SetNull)
   providerType      ProviderType    @default(docker)
+  role              ContainerRole?
   image             String
   status            ContainerStatus @default(running)
   createdAt         DateTime        @default(now())

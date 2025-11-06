@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Fastify from 'fastify';
-import { ContainersController, ListContainersQueryDto } from '../src/infra/container/containers.controller';
+import { ContainersController } from '../src/infra/container/containers.controller';
 import type { PrismaService } from '../src/core/services/prisma.service';
 import { LoggerService } from '../src/core/services/logger.service';
 import { ContainerService } from '../src/infra/container/container.service';
@@ -10,6 +10,7 @@ import type { PrismaClient } from '@prisma/client';
 type Row = {
   containerId: string;
   threadId: string | null;
+  role?: 'workspace' | 'dind';
   metadata?: unknown;
   image: string;
   status: 'running' | 'stopped' | 'terminating' | 'failed';
@@ -30,6 +31,7 @@ type ContainerOrderByInput = { createdAt?: SortOrder; lastUsedAt?: SortOrder; ki
 type ContainerSelect = {
   containerId?: boolean;
   threadId?: boolean;
+  role?: boolean;
   metadata?: boolean;
   image?: boolean;
   status?: boolean;
@@ -38,7 +40,7 @@ type ContainerSelect = {
   killAfterAt?: boolean;
 };
 type FindManyArgs = { where?: ContainerWhereInput; orderBy?: ContainerOrderByInput; select?: ContainerSelect; take?: number };
-type SelectedRow = { containerId: string; threadId: string | null; metadata?: unknown; image: string; status: Row['status']; createdAt: Date; lastUsedAt: Date; killAfterAt: Date | null };
+type SelectedRow = { containerId: string; threadId: string | null; role?: Row['role']; metadata?: unknown; image: string; status: Row['status']; createdAt: Date; lastUsedAt: Date; killAfterAt: Date | null };
 
 class InMemoryPrismaClient {
   container = {
@@ -61,6 +63,7 @@ class InMemoryPrismaClient {
       return items.slice(0, take).map((r) => ({
         containerId: r.containerId,
         threadId: r.threadId,
+        role: r.role,
         metadata: r.metadata,
         image: r.image,
         status: r.status,
@@ -94,31 +97,15 @@ describe('ContainersController routes', () => {
   beforeEach(async () => {
     fastify = Fastify({ logger: false }); prismaSvc = new PrismaStub();
     controller = new ContainersController(prismaSvc as unknown as PrismaService, new FakeContainerService(), new LoggerService());
-    // Typed query adapter to avoid any/double assertions
-    const isStatus = (v: unknown): v is Row['status'] =>
-      typeof v === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(v);
-    const isSortBy = (v: unknown): v is 'lastUsedAt' | 'startedAt' | 'killAfterAt' =>
-      typeof v === 'string' && ['lastUsedAt', 'startedAt', 'killAfterAt'].includes(v);
-    const isSortDir = (v: unknown): v is 'asc' | 'desc' => typeof v === 'string' && ['asc', 'desc'].includes(v);
-    type ReqWithQuery = { query?: Record<string, unknown> };
     fastify.get('/api/containers', async (req, res) => {
-      const q: Record<string, unknown> = (req as ReqWithQuery).query || {};
-      const dto: ListContainersQueryDto = {
-        status: isStatus(q.status) ? q.status : undefined,
-        threadId: typeof q.threadId === 'string' ? q.threadId : undefined,
-        image: typeof q.image === 'string' ? q.image : undefined,
-        nodeId: typeof q.nodeId === 'string' ? q.nodeId : undefined,
-        sortBy: isSortBy(q.sortBy) ? q.sortBy : undefined,
-        sortDir: isSortDir(q.sortDir) ? q.sortDir : undefined,
-        limit: typeof q.limit === 'string' ? Number(q.limit) : undefined,
-      };
-      return res.send(await controller.list(dto));
+      return res.send(await controller.list((req as any).query));
     });
     // seed data
     const now = Date.now();
     const mk = (i: number, status: Row['status'], threadId: string | null): Row => ({
       containerId: `cid-${i}`,
       threadId,
+      role: 'workspace',
       metadata: { labels: { 'hautech.ai/role': 'workspace' } },
       image: `img:${i}`,
       status,
@@ -143,16 +130,17 @@ describe('ContainersController routes', () => {
     // verify mapping equals underlying createdAt ISO
     const src = prismaSvc.client.container.rows.find((r) => r.containerId === first.containerId)!;
     expect(first.startedAt).toBe(src.createdAt.toISOString());
-    // role should default to workspace
+    // role should be returned from DB
     expect(first.role).toBe('workspace');
   });
 
-  it('defaults role to workspace when metadata missing', async () => {
-    // add a row without metadata
+  it('defaults role to workspace when DB role is null', async () => {
+    // add a row without role set
     const now = Date.now();
     const row: Row = {
       containerId: 'cid-missing-metadata',
       threadId: null,
+      role: undefined,
       image: 'img:missing',
       status: 'running',
       createdAt: new Date(now - 5000),
@@ -167,25 +155,7 @@ describe('ContainersController routes', () => {
     expect(found?.role).toBe('workspace');
   });
 
-  it('defaults role to workspace when labels missing', async () => {
-    const now = Date.now();
-    const row: Row = {
-      containerId: 'cid-no-labels',
-      threadId: null,
-      metadata: {},
-      image: 'img:no-labels',
-      status: 'running',
-      createdAt: new Date(now - 6000),
-      lastUsedAt: new Date(now - 5500),
-      killAfterAt: null,
-    };
-    prismaSvc.client.container.rows.push(row);
-    const res = await fastify.inject({ method: 'GET', url: '/api/containers' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json() as { items: Array<{ containerId: string; role: string }> };
-    const found = body.items.find((i) => i.containerId === 'cid-no-labels');
-    expect(found?.role).toBe('workspace');
-  });
+  // Labels are no longer used to derive role in list endpoint
 
   it('supports sorting by lastUsedAt desc', async () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/containers?sortBy=lastUsedAt&sortDir=desc' }); expect(res.statusCode).toBe(200);

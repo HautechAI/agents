@@ -1,19 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
-import type { PrismaClient, Prisma } from '@prisma/client';
+import type { PrismaClient, Prisma, ContainerRole } from '@prisma/client';
+import { ContainerMetadataSchema, type ContainerMetadata } from './container.schemas';
+import { ROLE_LABEL } from '../../constants';
 
 export type ContainerStatus = 'running' | 'stopped' | 'terminating' | 'failed';
 
 // Strongly typed metadata stored in JSON column
-export interface ContainerMetadata {
-  labels: Record<string, string>;
-  platform?: string;
-  ttlSeconds: number;
-  lastError?: string;
-  retryAfter?: string; // ISO timestamp
-  terminationAttempts?: number;
-  claimId?: string;
-}
+// ContainerMetadata type is defined via zod schema in container.schemas.ts
 
 @Injectable()
 export class ContainerRegistry {
@@ -42,14 +36,18 @@ export class ContainerRegistry {
     labels?: Record<string, string>;
     platform?: string;
     ttlSeconds?: number;
+    role?: ContainerRole;
   }): Promise<void> {
     const nowIso = new Date().toISOString();
     const killAfter = this.computeKillAfter(nowIso, args.ttlSeconds);
-    const metadata: ContainerMetadata = {
+    const metadata: ContainerMetadata = ContainerMetadataSchema.parse({
       labels: args.labels ?? {},
       platform: args.platform,
-      ttlSeconds: typeof args.ttlSeconds === 'number' ? args.ttlSeconds : 86400,
-    };
+      ttlSeconds: typeof args.ttlSeconds === 'number' ? args.ttlSeconds : undefined,
+    });
+    const role: ContainerRole | null = args.role
+      ? args.role
+      : (metadata.labels?.[ROLE_LABEL] === 'workspace' ? 'workspace' : undefined) ?? null;
     await this.prisma.container.upsert({
       where: { containerId: args.containerId },
       create: {
@@ -57,6 +55,7 @@ export class ContainerRegistry {
         nodeId: args.nodeId,
         threadId: args.threadId || null,
         providerType: 'docker',
+        role,
         image: args.image,
         status: 'running',
         lastUsedAt: new Date(nowIso),
@@ -70,6 +69,7 @@ export class ContainerRegistry {
         nodeId: args.nodeId,
         threadId: args.threadId || null,
         providerType: 'docker',
+        role,
         image: args.image,
         status: 'running',
         lastUsedAt: new Date(nowIso),
@@ -85,7 +85,7 @@ export class ContainerRegistry {
   async updateLastUsed(containerId: string, now: Date = new Date(), ttlOverrideSeconds?: number): Promise<void> {
     const existing = await this.prisma.container.findUnique({ where: { containerId } });
     if (!existing) return; // do not create missing records
-    const meta = this.normalizeMetadata(existing.metadata);
+    const meta = ContainerMetadataSchema.parse(existing.metadata ?? {});
     const ttlMeta = meta.ttlSeconds;
     const ttl = typeof ttlOverrideSeconds === 'number' ? ttlOverrideSeconds : typeof ttlMeta === 'number' ? ttlMeta : 86400;
     const killIso = this.computeKillAfter(now.toISOString(), ttl);
@@ -101,7 +101,7 @@ export class ContainerRegistry {
   async markTerminating(containerId: string, reason: string, claimId?: string): Promise<void> {
     const existing = await this.prisma.container.findUnique({ where: { containerId } });
     if (!existing) return;
-    const meta = this.normalizeMetadata(existing.metadata);
+    const meta = ContainerMetadataSchema.parse(existing.metadata ?? {});
     if (claimId) meta.claimId = claimId;
     await this.prisma.container.update({
       where: { containerId },
@@ -135,21 +135,10 @@ export class ContainerRegistry {
 
   private async getMetadata(containerId: string): Promise<ContainerMetadata> {
     const existing = await this.prisma.container.findUnique({ where: { containerId } });
-    return this.normalizeMetadata(existing?.metadata);
+    return ContainerMetadataSchema.parse(existing?.metadata ?? {});
   }
 
-  // Narrow unknown JSON to typed ContainerMetadata with defaults
-  private normalizeMetadata(meta: unknown): ContainerMetadata {
-    const m = (typeof meta === 'object' && meta !== null) ? (meta as Record<string, unknown>) : {};
-    const labels = typeof m.labels === 'object' && m.labels !== null ? (m.labels as Record<string, string>) : {};
-    const platform = typeof m.platform === 'string' ? m.platform : undefined;
-    const ttlSeconds = typeof m.ttlSeconds === 'number' ? m.ttlSeconds : 86400;
-    const lastError = typeof m.lastError === 'string' ? m.lastError : undefined;
-    const retryAfter = typeof m.retryAfter === 'string' ? m.retryAfter : undefined;
-    const terminationAttempts = typeof m.terminationAttempts === 'number' ? m.terminationAttempts : undefined;
-    const claimId = typeof m.claimId === 'string' ? m.claimId : undefined;
-    return { labels, platform, ttlSeconds, lastError, retryAfter, terminationAttempts, claimId };
-  }
+  // Metadata normalization handled by zod schema; no duck typing
 
   async getExpired(now: Date = new Date()) {
     const iso = now.toISOString();
@@ -172,7 +161,7 @@ export class ContainerRegistry {
   async recordTerminationFailure(containerId: string, message: string): Promise<void> {
     const existing = await this.prisma.container.findUnique({ where: { containerId } });
     if (!existing) return;
-    const meta = this.normalizeMetadata(existing.metadata);
+    const meta = ContainerMetadataSchema.parse(existing.metadata ?? {});
     const attempts = typeof meta.terminationAttempts === 'number' ? meta.terminationAttempts : 0;
     const nextAttempts = attempts + 1;
     const delayMs = Math.min(Math.pow(2, attempts) * 1000, 15 * 60 * 1000);
