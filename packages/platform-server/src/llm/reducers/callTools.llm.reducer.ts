@@ -59,20 +59,15 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
         // Support both Zod's safeParse and plain parse (for tests/mocks)
         let input: unknown;
         try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          const maybeSafeParse = (tool.schema as any)?.safeParse;
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          const maybeParse = (tool.schema as any)?.parse;
-          if (typeof maybeSafeParse === 'function') {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-            const parsed = maybeSafeParse.call(tool.schema, parsedArgs);
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          type SafeSchema = { safeParse?: (val: unknown) => { success: boolean; data?: unknown } };
+          type ParseSchema = { parse?: (val: unknown) => unknown };
+          const schema: SafeSchema & ParseSchema = tool.schema as SafeSchema & ParseSchema;
+          if (typeof schema.safeParse === 'function') {
+            const parsed = schema.safeParse(parsedArgs);
             if (!parsed.success) throw new Error('Invalid tool arguments');
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             input = parsed.data as unknown;
-          } else if (typeof maybeParse === 'function') {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-            input = maybeParse.call(tool.schema, parsedArgs) as unknown;
+          } else if (typeof schema.parse === 'function') {
+            input = schema.parse(parsedArgs) as unknown;
           } else {
             input = parsedArgs;
           }
@@ -89,7 +84,6 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
           },
           async () => {
             try {
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               const raw: string | Record<string, unknown> | unknown[] = await tool.execute(
                 input as never,
                 ctx,
