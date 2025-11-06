@@ -1,0 +1,40 @@
+import axios, { AxiosError, AxiosInstance } from 'axios';
+import { config } from '@/config';
+
+export type ApiError = AxiosError<{ error?: string; message?: string } | unknown>;
+
+function createHttp(baseURL: string): AxiosInstance {
+  const inst = axios.create({
+    baseURL,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    withCredentials: false,
+  });
+
+  // Response: unwrap data; error: normalize to AxiosError with server message if present
+  inst.interceptors.response.use(
+    (res) => res.data,
+    (err) => {
+      // Pass through AxiosError; ensure message surfaces server error string when available
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as { error?: string; message?: string } | undefined;
+        if (data?.error && !err.message.includes(data.error)) err.message = data.error;
+        else if (data?.message && !err.message.includes(data.message)) err.message = data.message;
+      }
+      return Promise.reject(err);
+    },
+  );
+  return inst;
+}
+
+// Primary API client
+export const http = createHttp(config.apiBaseUrl);
+
+// Tracing API client (base from config.tracing.serverUrl or throw)
+function resolveTracingBase(): string {
+  const base = config.tracing.serverUrl;
+  if (base) return base;
+  throw new Error('Tracing base not configured');
+}
+
+export const tracingHttp = createHttp(resolveTracingBase());
+

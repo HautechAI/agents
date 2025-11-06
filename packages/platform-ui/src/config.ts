@@ -37,20 +37,25 @@ const ve = readViteEnv();
 const ne = readNodeEnv();
 
 function resolveApiBase(): string {
-  if (!import.meta.env.VITE_API_BASE_URL) {
-    throw new Error('API base URL is not defined. Please set VITE_API_BASE_URL environment variable.');
-  }
-  return import.meta.env.VITE_API_BASE_URL;
+  const vite = ve?.VITE_API_BASE_URL;
+  if (vite && vite.trim()) return vite;
+  const node = ne?.API_BASE_URL;
+  if (node && node.trim()) return node;
+  // In Vitest, default to '' so tests can use relative handlers
+  const isVitest = (ve as any)?.VITEST || (ne?.VITEST_WORKER_ID ? true : false);
+  if (isVitest) return '';
+  // Fallback default for local dev
+  return 'http://localhost:3010';
 }
 
 function resolveTracingServer(): string | undefined {
-  // Precedence: VITE_TRACING_SERVER_URL -> TRACING_SERVER_URL -> undefined
-  return ve?.VITE_TRACING_SERVER_URL || ne?.TRACING_SERVER_URL;
+  // Precedence: VITE_TRACING_SERVER_URL -> TRACING_SERVER_URL -> default
+  return ve?.VITE_TRACING_SERVER_URL || ne?.TRACING_SERVER_URL || 'http://localhost:4319';
 }
 
 function resolveTracingUiBase(): string | undefined {
-  // Precedence: VITE_TRACING_UI_BASE -> TRACING_UI_BASE -> undefined
-  return ve?.VITE_TRACING_UI_BASE || ne?.TRACING_UI_BASE;
+  // Precedence: VITE_TRACING_UI_BASE -> TRACING_UI_BASE -> default
+  return ve?.VITE_TRACING_UI_BASE || ne?.TRACING_UI_BASE || 'http://localhost:4320';
 }
 
 export const config = {

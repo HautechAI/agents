@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/graph';
-import type { PersistedGraphUpsertRequestUI } from '@/api/graph';
+import { graph as api } from '@/api/modules/graph';
+import type { PersistedGraphUpsertRequestUI } from '@/api/modules/graph';
 import { graphSocket } from './socket';
 import type { NodeStatus, NodeStatusEvent, ReminderDTO, ReminderCountEvent } from './types';
 import { z } from 'zod';

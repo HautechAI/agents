@@ -1,7 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-// Use centralized API client helpers
-import { httpJson } from '@/api/client';
+import { useContainers } from '@/api/hooks/containers';
 import { Table, Thead, Tbody, Tr, Th, Td, Button } from '@agyn/ui';
 import { Link } from 'react-router-dom';
 
@@ -20,15 +18,7 @@ export function MonitoringContainers() {
   const sortBy = 'lastUsedAt';
   const sortDir = 'desc';
 
-  const queryKey = useMemo(() => ['containers', { status, sortBy, sortDir }], [status, sortBy, sortDir]);
-  const listQ = useQuery<{ items: ContainerItem[] }, Error>({
-    queryKey,
-    queryFn: async () => {
-      const res = await httpJson<{ items: ContainerItem[] }>(`/api/containers?status=${status}&sortBy=${sortBy}&sortDir=${sortDir}`);
-      return { items: res?.items ?? [] };
-    },
-    refetchInterval: 5000,
-  });
+  const listQ = useContainers(status, sortBy, sortDir);
 
   const items = listQ.data?.items || [];
   // Ensure client-side default sort by lastUsedAt desc

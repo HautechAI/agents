@@ -3,28 +3,18 @@ import { useQuery } from '@tanstack/react-query';
 import { RunMessageList, type UnifiedRunMessage, type UnifiedListItem, type RunMeta } from '@/components/agents/RunMessageList';
 import { ThreadTree } from '@/components/agents/ThreadTree';
 import { ThreadStatusFilterSwitch, type ThreadStatusFilter } from '@/components/agents/ThreadStatusFilterSwitch';
-import { httpJson } from '@/api/client';
+import { useThreadRuns } from '@/api/hooks/runs';
+import { runs as runsApi } from '@/api/modules/runs';
 
 // Thread list rendering moved into ThreadTree component
 type MessageItem = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text?: string | null; source: unknown; createdAt: string };
-
-// Use relative base in tests; avoids env dependence
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await httpJson<T>(`/api/${path}`, init, '');
-  if (res === undefined) throw new Error('Empty response');
-  return res;
-}
 
 export function AgentsThreads() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<ThreadStatusFilter>('open');
   // No run selection in new UX (removed)
 
-  const runsQ = useQuery<{ items: RunMeta[] }, Error>({
-    queryKey: ['agents', 'threads', selectedThreadId, 'runs'],
-    enabled: !!selectedThreadId,
-    queryFn: async () => api<{ items: RunMeta[] }>(`agents/threads/${selectedThreadId}/runs`),
-  });
+  const runsQ = useThreadRuns(selectedThreadId) as any as { data?: { items: RunMeta[] }; isLoading: boolean };
 
   const runs: RunMeta[] = useMemo(() => {
     const list = runsQ.data?.items ?? [];
@@ -35,9 +25,9 @@ export function AgentsThreads() {
   // Helper to fetch all messages for a run
   async function fetchRunMessages(runId: string): Promise<UnifiedRunMessage[]> {
     const [input, injected, output] = await Promise.all([
-      api<{ items: MessageItem[] }>(`agents/runs/${runId}/messages?type=input`),
-      api<{ items: MessageItem[] }>(`agents/runs/${runId}/messages?type=injected`),
-      api<{ items: MessageItem[] }>(`agents/runs/${runId}/messages?type=output`),
+      runsApi.messages(runId, 'input'),
+      runsApi.messages(runId, 'injected'),
+      runsApi.messages(runId, 'output'),
     ]);
     const mark = (items: MessageItem[], side: 'left' | 'right'): UnifiedRunMessage[] =>
       items.map((m) => ({ id: m.id, role: m.kind, text: m.text, source: m.source, createdAt: m.createdAt, side, runId }));

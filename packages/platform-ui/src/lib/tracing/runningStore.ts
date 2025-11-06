@@ -5,8 +5,8 @@
 
 import { useSyncExternalStore } from 'react';
 import { tracingRealtime } from './socket';
-import type { SpanDoc, SpanEventPayload } from '@/api/tracing';
-import { fetchRunningSpansFromTo } from '@/api/tracing';
+import type { SpanDoc } from '@/api/types/tracing';
+import { fetchRunningSpansFromTo } from '@/api/modules/tracing';
 
 type Bucket = 'agent' | 'tool';
 

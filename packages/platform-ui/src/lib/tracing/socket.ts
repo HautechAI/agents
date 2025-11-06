@@ -1,10 +1,11 @@
 // Tracing realtime socket client for platform-ui (span_upsert events)
 import { io, type Socket } from 'socket.io-client';
-import type { SpanDoc, SpanExtras, SpanEventPayload } from '@/api/tracing';
+import type { SpanDoc, SpanExtras } from '@/api/types/tracing';
 import { config } from '@/config';
 
 const TRACING_BASE: string | undefined = config.tracing.serverUrl;
 
+export type SpanEventPayload = SpanDoc & Partial<SpanExtras> & { attributes?: Record<string, unknown> };
 export type SpanUpsertHandler = (span: SpanEventPayload) => void;
 
 // Type guards and normalizers for realtime payloads
