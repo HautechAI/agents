@@ -48,7 +48,7 @@ export function buildUrl(path: string, base?: string): string {
   const b = base !== undefined ? base : getApiBase();
   if (!b) return p; // allow relative for tests or explicit ''
   // Trim trailing slash from base
-  let cleanedBase = b.endsWith('/') ? b.slice(0, -1) : b;
+  const cleanedBase = b.endsWith('/') ? b.slice(0, -1) : b;
   // De-duplicate '/api' if both base and path include it
   if (cleanedBase.endsWith('/api') && p.startsWith('/api/')) {
     p = p.slice(4); // remove leading '/api' from path
