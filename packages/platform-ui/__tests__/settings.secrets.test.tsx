@@ -1,9 +1,10 @@
 import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SettingsSecrets } from '../src/pages/SettingsSecrets';
+import { server } from './msw.server';
 
 function renderWithClient(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -11,6 +12,9 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 describe('Settings / Secrets UI', () => {
+  beforeAll(() => server.listen());
+  afterEach(() => server.resetHandlers());
+  afterAll(() => server.close());
   beforeEach(() => {
     // Silence console logs to ensure no secret values are printed
     vi.spyOn(console, 'log').mockImplementation(() => {});

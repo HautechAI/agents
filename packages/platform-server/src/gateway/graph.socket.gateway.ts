@@ -3,6 +3,8 @@ import type { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { z } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
+import { ThreadsMetricsService } from '../agents/threads.metrics.service';
+import { PrismaService } from '../core/services/prisma.service';
 import { LiveGraphRuntime } from '../graph/liveGraph.manager';
 
 // Strict outbound event payloads
@@ -53,10 +55,14 @@ export type ReminderCountEvent = z.infer<typeof ReminderCountEventSchema>;
 export class GraphSocketGateway {
   private io: SocketIOServer | null = null;
   private initialized = false;
+  private pendingThreadMetrics = new Set<string>();
+  private metricsTimer: NodeJS.Timeout | null = null;
 
   constructor(
     @Inject(LoggerService) private readonly logger: LoggerService,
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
+    @Inject(ThreadsMetricsService) private readonly metrics: ThreadsMetricsService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
   /** Attach Socket.IO to the provided HTTP server. */
@@ -117,5 +123,33 @@ export class GraphSocketGateway {
       updatedAt: new Date(updatedAtMs ?? Date.now()).toISOString(),
     };
     this.broadcast('node_reminder_count', payload, ReminderCountEventSchema);
+  }
+
+  /** Coalesce per-thread metric refresh requests into a single batch computation. */
+  public scheduleThreadMetrics(threadId: string): void {
+    this.pendingThreadMetrics.add(threadId);
+    if (!this.metricsTimer) {
+      this.metricsTimer = setTimeout(() => void this.flushThreadMetrics(), 100);
+    }
+  }
+
+  private async flushThreadMetrics(): Promise<void> {
+    const ids = Array.from(this.pendingThreadMetrics.values());
+    this.pendingThreadMetrics.clear();
+    this.metricsTimer && clearTimeout(this.metricsTimer);
+    this.metricsTimer = null;
+    if (!ids.length) return;
+    try {
+      const result = await this.metrics.getThreadsMetrics(ids);
+      for (const id of ids) {
+        const m = result[id];
+        if (!m) continue;
+        // Emit to shared 'threads' room; tests stub .to('threads').emit
+        this.io?.to('threads').emit('thread_activity_changed', { threadId: id, activity: m.activity });
+        this.io?.to('threads').emit('thread_reminders_count', { threadId: id, remindersCount: m.remindersCount });
+      }
+    } catch (e) {
+      this.logger.error('flushThreadMetrics failed', e);
+    }
   }
 }

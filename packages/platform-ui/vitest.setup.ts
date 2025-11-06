@@ -1,10 +1,4 @@
-import { afterAll, afterEach, beforeAll } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { server } from './__tests__/msw.server';
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
 
 // Polyfill ResizeObserver for jsdom/Vitest environment
 // Minimal implementation sufficient for components relying on observer presence

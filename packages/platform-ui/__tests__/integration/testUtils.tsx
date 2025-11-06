@@ -6,6 +6,7 @@ import { TemplatesProvider } from '../../src/lib/graph/templates.provider';
 import * as socketModule from '../../src/lib/graph/socket';
 import type { NodeStatusEvent, TemplateSchema } from '../../src/lib/graph/types';
 import { TooltipProvider } from '@agyn/ui';
+import { config } from '../../src/config';
 
 // Mock socket emitter
 export const emitted: Array<NodeStatusEvent> = [];
@@ -102,4 +103,12 @@ export function TestProviders({ children }: { children: React.ReactNode }) {
       </TooltipProvider>
     </QueryClientProvider>
   );
+}
+
+// Build absolute URL for MSW handlers based on configured API base
+export function abs(path: string): string {
+  const base = config.apiBaseUrl || '';
+  if (!base) return path;
+  if (path.startsWith('/')) return `${base}${path}`;
+  return `${base}/${path}`;
 }

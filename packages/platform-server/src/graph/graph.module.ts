@@ -45,6 +45,7 @@ import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
 import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { AgentsThreadsController } from '../agents/threads.controller';
 import { AgentsRemindersController } from '../agents/reminders.controller';
+import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 
 @Module({
   imports: [CoreModule, InfraModule, LLMModule, EnvModule],
@@ -110,6 +111,7 @@ import { AgentsRemindersController } from '../agents/reminders.controller';
     NodeStateService,
     GraphSocketGateway,
     AgentsPersistenceService,
+    ThreadsMetricsService,
 
     //////// Nodes
 

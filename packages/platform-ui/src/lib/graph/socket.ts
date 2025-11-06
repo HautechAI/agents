@@ -1,6 +1,9 @@
 import { io, type Socket } from 'socket.io-client';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 
+export type ThreadActivityEvent = { threadId: string; activity: 'working' | 'waiting' | 'idle' };
+export type ThreadRemindersEvent = { threadId: string; remindersCount: number };
+
 // Strictly typed server-to-client socket events
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
 type ServerToClientEvents = {
@@ -22,6 +25,9 @@ class GraphSocket {
   private listeners = new Map<string, Set<Listener>>();
   private stateListeners = new Map<string, Set<StateListener>>();
   private reminderListeners = new Map<string, Set<ReminderListener>>();
+  // Test-visible sets for thread-level events (emitted by server in other channel)
+  public threadActivityListeners = new Set<(ev: ThreadActivityEvent) => void>();
+  public threadRemindersListeners = new Set<(ev: ThreadRemindersEvent) => void>();
 
   connect() {
     if (this.socket) return this.socket;
@@ -98,6 +104,16 @@ class GraphSocket {
       set!.delete(cb);
       if (set!.size === 0) this.reminderListeners.delete(nodeId);
     };
+  }
+
+  // Subscriptions for thread metrics (used by ThreadTree)
+  onThreadActivity(cb: (ev: ThreadActivityEvent) => void) {
+    this.threadActivityListeners.add(cb);
+    return () => this.threadActivityListeners.delete(cb);
+  }
+  onThreadReminders(cb: (ev: ThreadRemindersEvent) => void) {
+    this.threadRemindersListeners.add(cb);
+    return () => this.threadRemindersListeners.delete(cb);
   }
 }
 
