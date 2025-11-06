@@ -2,10 +2,12 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { ContainersController, ListContainersQueryDto } from '../src/infra/container/containers.controller';
 import type { PrismaService } from '../src/core/services/prisma.service';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 type Row = {
   containerId: string;
   threadId: string | null;
+  metadata?: unknown;
   image: string;
   status: 'running' | 'stopped' | 'terminating' | 'failed';
   createdAt: Date;
@@ -25,6 +27,7 @@ type ContainerOrderByInput = { createdAt?: SortOrder; lastUsedAt?: SortOrder; ki
 type ContainerSelect = {
   containerId?: boolean;
   threadId?: boolean;
+  metadata?: boolean;
   image?: boolean;
   status?: boolean;
   createdAt?: boolean;
@@ -32,7 +35,7 @@ type ContainerSelect = {
   killAfterAt?: boolean;
 };
 type FindManyArgs = { where?: ContainerWhereInput; orderBy?: ContainerOrderByInput; select?: ContainerSelect; take?: number };
-type SelectedRow = { containerId: string; threadId: string | null; image: string; status: Row['status']; createdAt: Date; lastUsedAt: Date; killAfterAt: Date | null };
+type SelectedRow = { containerId: string; threadId: string | null; metadata?: unknown; image: string; status: Row['status']; createdAt: Date; lastUsedAt: Date; killAfterAt: Date | null };
 
 class InMemoryPrismaClient {
   container = {
@@ -55,6 +58,7 @@ class InMemoryPrismaClient {
       return items.slice(0, take).map((r) => ({
         containerId: r.containerId,
         threadId: r.threadId,
+        metadata: r.metadata,
         image: r.image,
         status: r.status,
         createdAt: r.createdAt,
@@ -73,10 +77,14 @@ class PrismaStub {
 
 describe('ContainersController routes', () => {
   let fastify: any; let prismaSvc: PrismaStub; let controller: ContainersController;
+  class FakeContainerService {
+    async findContainersByLabels(): Promise<Array<{ id: string }>> { return []; }
+    getDocker() { return { getContainer: (_id: string) => ({ inspect: async () => ({}) }) }; }
+  }
 
   beforeEach(async () => {
     fastify = Fastify({ logger: false }); prismaSvc = new PrismaStub();
-    controller = new ContainersController(prismaSvc as PrismaService);
+    controller = new ContainersController(prismaSvc as unknown as PrismaService, new FakeContainerService() as any);
     // Typed query adapter to avoid any/double assertions
     const isStatus = (v: unknown): v is Row['status'] =>
       typeof v === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(v);
@@ -102,6 +110,7 @@ describe('ContainersController routes', () => {
     const mk = (i: number, status: Row['status'], threadId: string | null): Row => ({
       containerId: `cid-${i}`,
       threadId,
+      metadata: { labels: { 'hautech.ai/role': 'workspace' } },
       image: `img:${i}`,
       status,
       createdAt: new Date(now - i * 1000),
@@ -114,7 +123,7 @@ describe('ContainersController routes', () => {
 
   it('lists running containers by default and maps startedAt', async () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/containers' }); expect(res.statusCode).toBe(200);
-    type ContainerTestItem = { containerId: string; threadId: string | null; image: string; status: string; startedAt: string; lastUsedAt: string; killAfterAt: string | null };
+    type ContainerTestItem = { containerId: string; threadId: string | null; role: string; image: string; status: string; startedAt: string; lastUsedAt: string; killAfterAt: string | null };
     type ListResponse = { items: ContainerTestItem[] };
     const body = res.json() as ListResponse;
     const items = body.items;
@@ -125,6 +134,8 @@ describe('ContainersController routes', () => {
     // verify mapping equals underlying createdAt ISO
     const src = prismaSvc.client.container.rows.find((r) => r.containerId === first.containerId)!;
     expect(first.startedAt).toBe(src.createdAt.toISOString());
+    // role should default to workspace
+    expect(first.role).toBe('workspace');
   });
 
   it('supports sorting by lastUsedAt desc', async () => {

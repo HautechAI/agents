@@ -1,8 +1,9 @@
-import { Controller, Get, Inject, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';
 import type { PrismaClient, ContainerStatus, Prisma } from '@prisma/client';
 import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ContainerService } from './container.service';
 
 // Allowed sort columns for containers list
 enum SortBy {
@@ -53,7 +54,7 @@ export class ListContainersQueryDto {
 export class ContainersController {
   private prisma: PrismaClient;
 
-  constructor(@Inject(PrismaService) prismaSvc: PrismaService) {
+  constructor(@Inject(PrismaService) prismaSvc: PrismaService, @Inject(ContainerService) private containers: ContainerService) {
     this.prisma = prismaSvc.getClient();
   }
 
@@ -61,6 +62,7 @@ export class ContainersController {
   async list(@Query() query: ListContainersQueryDto): Promise<{ items: Array<{
     containerId: string;
     threadId: string | null;
+    role: string;
     image: string;
     status: ContainerStatus;
     startedAt: string;
@@ -113,6 +115,7 @@ export class ContainersController {
         createdAt: true,
         lastUsedAt: true,
         killAfterAt: true,
+        metadata: true,
       },
       take,
     });
@@ -121,6 +124,16 @@ export class ContainersController {
     const items = rows.map((r) => ({
       containerId: r.containerId,
       threadId: r.threadId,
+      role:
+        r && (r as unknown as { metadata?: unknown })?.metadata &&
+        typeof (r as unknown as { metadata?: Record<string, unknown> }).metadata === 'object'
+          ? ((): string => {
+              const labelsVal = (r as unknown as { metadata?: { labels?: unknown } })?.metadata?.['labels'];
+              const labels = labelsVal && typeof labelsVal === 'object' ? (labelsVal as Record<string, string>) : {};
+              const role = typeof labels['hautech.ai/role'] === 'string' ? labels['hautech.ai/role'] : undefined;
+              return role || 'workspace';
+            })()
+          : 'workspace',
       image: r.image,
       status: r.status,
       startedAt: r.createdAt.toISOString(),
@@ -128,6 +141,50 @@ export class ContainersController {
       killAfterAt: r.killAfterAt ? r.killAfterAt.toISOString() : null,
     }));
 
+    return { items };
+  }
+
+  @Get(':containerId/sidecars')
+  async listSidecars(@Param('containerId') containerId: string): Promise<{
+    items: Array<{
+      containerId: string;
+      parentContainerId: string;
+      role: 'dind';
+      image: string;
+      status: 'running' | 'stopped';
+      startedAt: string;
+    }>;
+  }> {
+    // Lookup DinD sidecars by labels
+    const handles = await this.containers.findContainersByLabels(
+      { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': containerId },
+      { all: true },
+    );
+    const docker = this.containers.getDocker();
+    const items: Array<{
+      containerId: string;
+      parentContainerId: string;
+      role: 'dind';
+      image: string;
+      status: 'running' | 'stopped';
+      startedAt: string;
+    }> = [];
+    for (const h of handles) {
+      try {
+        const inspect = await docker.getContainer(h.id).inspect();
+        const labels = (inspect?.Config?.Labels || {}) as Record<string, string>;
+        items.push({
+          containerId: inspect.Id,
+          parentContainerId: labels['hautech.ai/parent_cid'] || containerId,
+          role: 'dind',
+          image: inspect?.Config?.Image || 'unknown',
+          status: inspect?.State?.Running ? 'running' : 'stopped',
+          startedAt: inspect?.Created ? new Date(inspect.Created).toISOString() : new Date(0).toISOString(),
+        });
+      } catch {
+        // Skip containers that cannot be inspected
+      }
+    }
     return { items };
   }
 }
