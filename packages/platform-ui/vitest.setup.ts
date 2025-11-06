@@ -8,16 +8,17 @@ afterAll(() => server.close());
 
 // Polyfill ResizeObserver for jsdom/Vitest environment
 // Minimal implementation sufficient for components relying on observer presence
-class ResizeObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+class RO {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
 }
-// Assign globally (covers both globalThis and window in jsdom)
-// Do not override if provided by environment
-if (!(globalThis as any).ResizeObserver) {
-  (globalThis as any).ResizeObserver = ResizeObserver as unknown as typeof ResizeObserver;
-}
-if (typeof window !== 'undefined' && !(window as any).ResizeObserver) {
-  (window as any).ResizeObserver = ResizeObserver as unknown as typeof ResizeObserver;
+
+type WithRO = { ResizeObserver?: typeof RO };
+const g = globalThis as unknown as WithRO;
+if (!g.ResizeObserver) g.ResizeObserver = RO;
+
+if (typeof window !== 'undefined') {
+  const w = window as unknown as WithRO;
+  if (!w.ResizeObserver) w.ResizeObserver = RO;
 }
