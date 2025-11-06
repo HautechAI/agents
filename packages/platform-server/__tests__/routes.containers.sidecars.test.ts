@@ -7,7 +7,8 @@ import { ContainerService } from '../src/infra/container/container.service';
 import { ContainerRegistry } from '../src/infra/container/container.registry';
 import type { PrismaClient } from '@prisma/client';
 
-class PrismaStub { getClient() { return { container: { findMany: async () => [] } } as any; } }
+type MinimalPrismaClient = { container: { findMany: (args?: unknown) => Promise<unknown[]> } };
+class PrismaStub { private client: MinimalPrismaClient = { container: { findMany: async () => [] } }; getClient(): MinimalPrismaClient { return this.client; } }
 
 describe('ContainersController sidecars route', () => {
   let fastify: any; let controller: ContainersController;

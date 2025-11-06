@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, Fragment } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { httpJson } from '@/api/client';
 import { Table, Thead, Tbody, Tr, Th, Td, Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, Input } from '@agyn/ui';
@@ -38,79 +38,111 @@ async function copyToClipboard(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     notifySuccess('Copied to clipboard');
-  } catch (e) {
+  } catch (_e) {
     notifyError('Failed to copy to clipboard');
   }
 }
 
-function SidecarsRow({ parentId, parentThreadId, expanded }: { parentId: string; parentThreadId: string | null; expanded: boolean }) {
-  // Fetch sidecars for a given parent; gated by expanded
-  const scQ = useQuery<{ items: SidecarItem[] }, Error>({
-    queryKey: ['sidecars', parentId],
+function ContainerRow({ item, expanded, onToggle }: { item: ContainerItem; expanded: boolean; onToggle: (parentId: string) => void }) {
+  // Unconditional hook call; fetch gated via enabled
+  const sidecarsQuery = useQuery<{ items: SidecarItem[] }, Error>({
+    queryKey: ['sidecars', item.containerId],
     enabled: expanded,
     staleTime: 5000,
     queryFn: async () => {
-      const res = await httpJson<{ items: SidecarItem[] }>(`/api/containers/${encodeURIComponent(parentId)}/sidecars`, undefined, '');
+      const res = await httpJson<{ items: SidecarItem[] }>(`/api/containers/${encodeURIComponent(item.containerId)}/sidecars`, undefined, '');
       return { items: res?.items ?? [] };
     },
+    refetchInterval: expanded ? 5000 : false,
   });
-  const scItems = scQ.data?.items || [];
-  if (!expanded) return null; // render nothing when collapsed
-  if (scQ.isLoading) {
-    return (
-      <Tr key={`${parentId}-loading`}>
-        <Td />
-        <Td colSpan={8} className="text-muted-foreground pl-4">Loading sidecars…</Td>
-      </Tr>
-    );
-  }
-  if (scQ.error) {
-    return (
-      <Tr key={`${parentId}-error`}>
-        <Td />
-        <Td colSpan={8} className="text-red-600 pl-4">Failed to load sidecars</Td>
-      </Tr>
-    );
-  }
-  if (scItems.length === 0) {
-    return (
-      <Tr key={`${parentId}-none`}>
-        <Td />
-        <Td colSpan={8} className="text-muted-foreground pl-4">No sidecars.</Td>
-      </Tr>
-    );
-  }
+  const scItems = sidecarsQuery.data?.items || [];
   return (
     <>
-      {scItems.map((sc) => (
-        <Tr key={`sc-${sc.containerId}`}>
-          <Td />
-          <Td className="font-mono text-xs">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="pl-4">{truncateId(sc.containerId)}</span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs">{sc.containerId}</span>
-                    <Button aria-label="Copy sidecarId" variant="outline" size="xs" onClick={() => copyToClipboard(sc.containerId)}>
-                      <ClipboardCopy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </Td>
-          <Td className="font-mono text-xs">{parentThreadId || '-'}</Td>
-          <Td className="font-mono text-xs">{sc.role}</Td>
-          <Td className="font-mono text-xs">{sc.image}</Td>
-          <Td>{sc.status}</Td>
-          <Td>{new Date(sc.startedAt).toLocaleString()}</Td>
-          <Td>-</Td>
-          <Td>-</Td>
-        </Tr>
-      ))}
+      <Tr>
+        <Td>
+          <Button aria-label={expanded ? 'Collapse' : 'Expand'} variant="ghost" size="sm" onClick={() => onToggle(item.containerId)}>
+            {expanded ? '−' : '+'}
+          </Button>
+        </Td>
+        <Td className="font-mono text-xs">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>{truncateId(item.containerId)}</span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs">{item.containerId}</span>
+                  <Button aria-label="Copy containerId" variant="outline" size="sm" onClick={() => copyToClipboard(item.containerId)}>
+                    <ClipboardCopy className="h-3 w-3" />
+                  </Button>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </Td>
+        <Td className="font-mono text-xs">
+          {item.threadId ? (
+            <Link className="underline" to={`/tracing/thread/${item.threadId}`}>{item.threadId}</Link>
+          ) : (
+            <span className="text-muted-foreground">(none)</span>
+          )}
+        </Td>
+        <Td className="font-mono text-xs">{item.role || 'workspace'}</Td>
+        <Td className="font-mono text-xs">{item.image}</Td>
+        <Td>{item.status}</Td>
+        <Td>{new Date(item.startedAt).toLocaleString()}</Td>
+        <Td>{new Date(item.lastUsedAt).toLocaleString()}</Td>
+        <Td>{item.killAfterAt ? new Date(item.killAfterAt).toLocaleString() : '-'}</Td>
+      </Tr>
+      {expanded && (
+        sidecarsQuery.isLoading ? (
+          <Tr key={`${item.containerId}-loading`}>
+            <Td />
+            <Td colSpan={8} className="text-muted-foreground pl-4">Loading sidecars…</Td>
+          </Tr>
+        ) : sidecarsQuery.error ? (
+          <Tr key={`${item.containerId}-error`}>
+            <Td />
+            <Td colSpan={8} className="text-red-600 pl-4">Failed to load sidecars</Td>
+          </Tr>
+        ) : scItems.length === 0 ? (
+          <Tr key={`${item.containerId}-none`}>
+            <Td />
+            <Td colSpan={8} className="text-muted-foreground pl-4">No sidecars.</Td>
+          </Tr>
+        ) : (
+          scItems.map((sc) => (
+            <Tr key={`sc-${sc.containerId}`}>
+              <Td />
+              <Td className="font-mono text-xs">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="pl-4">{truncateId(sc.containerId)}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{sc.containerId}</span>
+                        <Button aria-label="Copy sidecarId" variant="outline" size="sm" onClick={() => copyToClipboard(sc.containerId)}>
+                          <ClipboardCopy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </Td>
+              <Td className="font-mono text-xs">{item.threadId || '-'}</Td>
+              <Td className="font-mono text-xs">{sc.role}</Td>
+              <Td className="font-mono text-xs">{sc.image}</Td>
+              <Td>{sc.status}</Td>
+              <Td>{new Date(sc.startedAt).toLocaleString()}</Td>
+              <Td>-</Td>
+              <Td>-</Td>
+            </Tr>
+          ))
+        )
+      )}
     </>
   );
 }
@@ -121,10 +153,8 @@ export function MonitoringContainers() {
   const sortDir = 'desc';
   const [threadIdInput, setThreadIdInput] = useState<string>('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  // expanded state drives sidecar fetching in child component
 
   const validThreadId = threadIdInput && isUuid(threadIdInput) ? threadIdInput : undefined;
-
   const queryKey = useMemo(() => ['containers', { status, sortBy, sortDir, threadId: validThreadId || null }], [status, sortBy, sortDir, validThreadId]);
   const listQ = useQuery<{ items: ContainerItem[] }, Error>({
     queryKey,
@@ -138,14 +168,11 @@ export function MonitoringContainers() {
   });
 
   const items = listQ.data?.items || [];
-  // Ensure client-side default sort by lastUsedAt desc
   const sorted = [...items].sort((a, b) => new Date(b.lastUsedAt).getTime() - new Date(a.lastUsedAt).getTime());
 
   const toggleExpand = useCallback((parentId: string) => {
     setExpanded((prev) => ({ ...prev, [parentId]: !prev[parentId] }));
   }, []);
-
-  // Note: sidecar fetching moved into SidecarsRow; hooks are top-level only
 
   return (
     <div className="p-4">
@@ -190,46 +217,7 @@ export function MonitoringContainers() {
             </Thead>
             <Tbody>
               {sorted.map((c) => (
-                <Fragment key={c.containerId}>
-                <Tr>
-                  <Td>
-                    <Button aria-label={expanded[c.containerId] ? 'Collapse' : 'Expand'} variant="ghost" size="sm" onClick={() => toggleExpand(c.containerId)}>
-                      {expanded[c.containerId] ? '−' : '+'}
-                    </Button>
-                  </Td>
-                  <Td className="font-mono text-xs">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>{truncateId(c.containerId)}</span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs">{c.containerId}</span>
-                            <Button aria-label="Copy containerId" variant="outline" size="sm" onClick={() => copyToClipboard(c.containerId)}>
-                              <ClipboardCopy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </Td>
-                  <Td className="font-mono text-xs">
-                    {c.threadId ? (
-                      <Link className="underline" to={`/tracing/thread/${c.threadId}`}>{c.threadId}</Link>
-                    ) : (
-                      <span className="text-muted-foreground">(none)</span>
-                    )}
-                  </Td>
-                  <Td className="font-mono text-xs">{c.role || 'workspace'}</Td>
-                  <Td className="font-mono text-xs">{c.image}</Td>
-                  <Td>{c.status}</Td>
-                  <Td>{new Date(c.startedAt).toLocaleString()}</Td>
-                  <Td>{new Date(c.lastUsedAt).toLocaleString()}</Td>
-                  <Td>{c.killAfterAt ? new Date(c.killAfterAt).toLocaleString() : '-'}</Td>
-                {/* Child component calls react-query hook internally; rendered unconditionally */}
-                <SidecarsRow key={c.containerId} parentId={c.containerId} parentThreadId={c.threadId} expanded={!!expanded[c.containerId]} />
-                </Fragment>
+                <ContainerRow key={c.containerId} item={c} expanded={!!expanded[c.containerId]} onToggle={toggleExpand} />
               ))}
             </Tbody>
           </Table>
