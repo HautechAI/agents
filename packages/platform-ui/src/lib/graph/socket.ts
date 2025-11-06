@@ -18,17 +18,17 @@ type StateListener = (ev: NodeStateEvent) => void;
 type ReminderListener = (ev: ReminderCountEvent) => void;
 
 class GraphSocket {
-  // Typed socket instance; null until connected
-  private socket!: Socket<ServerToClientEvents, ClientToServerEvents>;
+  // Socket instance; set on connect
+  private socket!: Socket;
   private listeners = new Map<string, Set<Listener>>();
   private stateListeners = new Map<string, Set<StateListener>>();
   private reminderListeners = new Map<string, Set<ReminderListener>>();
 
-  connect(): Socket<ServerToClientEvents, ClientToServerEvents> {
+  connect(): Socket {
     if (this.socket) return this.socket;
     // Use centralized config for API base
     const host = config.apiBaseUrl;
-    this.socket = io<ServerToClientEvents, ClientToServerEvents>(host, {
+    this.socket = io(host, {
       path: '/socket.io',
       transports: ['websocket'],
       forceNew: false,

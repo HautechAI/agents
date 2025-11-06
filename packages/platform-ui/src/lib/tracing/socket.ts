@@ -54,13 +54,13 @@ function normalizeSpan(payload: unknown): SpanEventPayload | null {
 }
 
 class TracingRealtime {
-  private socket: Socket<TracingClientToServerEvents, TracingServerToClientEvents> | null = null;
+  private socket: Socket | null = null;
   private handlers = new Set<SpanUpsertHandler>();
 
   private ensure() {
     if (this.socket) return;
     const url = TRACING_BASE.endsWith('/') ? TRACING_BASE.slice(0, -1) : TRACING_BASE;
-    this.socket = io<TracingServerToClientEvents, TracingClientToServerEvents>(url, {
+    this.socket = io(url, {
       path: '/socket.io',
       transports: ['websocket'],
       timeout: 10000,
