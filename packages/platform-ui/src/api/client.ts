@@ -8,8 +8,9 @@ export function getApiBase(): string {
   return config.apiBaseUrl;
 }
 
-export function buildUrl(path: string): string {
-  const b = getApiBase();
+export function buildUrl(path: string, base?: string): string {
+  // Optional override via `base`; otherwise use resolved config
+  const b = typeof base === 'string' ? base : getApiBase();
   const p = path.startsWith('/') ? path : `/${path}`;
   if (!b) return p; // relative for vitest or explicit ''
   // Avoid double slashes
@@ -17,8 +18,8 @@ export function buildUrl(path: string): string {
 }
 
 // Returns parsed JSON or undefined (e.g., for 204 or non-JSON bodies)
-export async function httpJson<T = unknown>(path: string, init?: RequestInit): Promise<T | undefined> {
-  const url = buildUrl(path);
+export async function httpJson<T = unknown>(path: string, init?: RequestInit, base?: string): Promise<T | undefined> {
+  const url = buildUrl(path, base);
   const res = await fetch(url, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
