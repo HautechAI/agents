@@ -25,12 +25,12 @@ describe('Builder dirty detection for graph edits', () => {
   function setupServerCounters() {
     const counters = { posts: 0 };
     server.use(
-      http.get('http://localhost:3010/api/graph/templates', () =>
+      http.get('/api/graph/templates', () =>
         HttpResponse.json([
           { name: 'mock', title: 'Mock', kind: 'tool', sourcePorts: ['out'], targetPorts: ['in'] },
         ]),
       ),
-      http.get('http://localhost:3010/api/graph', () =>
+      http.get('/api/graph', () =>
         HttpResponse.json({
           name: 'g',
           version: 1,
@@ -42,7 +42,7 @@ describe('Builder dirty detection for graph edits', () => {
         }),
       ),
       // Align with builder.autosave.test.tsx which posts to http://localhost:3010/api/graph
-      http.post('http://localhost:3010/api/graph', async ({ request }) => {
+      http.post('/api/graph', async ({ request }) => {
         counters.posts += 1;
         await request.json().catch(() => ({}));
         return HttpResponse.json({ version: Date.now() });

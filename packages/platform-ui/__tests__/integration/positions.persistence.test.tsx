@@ -22,13 +22,13 @@ describe('Builder position persistence', () => {
   it('positions in graph survive reload via autosave payload', async () => {
     let savedPayload: any = null;
     server.use(
-      http.get('http://localhost:3010/api/graph/templates', () =>
+      http.get('/api/graph/templates', () =>
         HttpResponse.json([{ name: 'mock', title: 'Mock', kind: 'tool', sourcePorts: [], targetPorts: [] }]),
       ),
-      http.get('http://localhost:3010/api/graph', () =>
+      http.get('/api/graph', () =>
         HttpResponse.json({ name: 'g', version: 1, nodes: [{ id: 'n1', template: 'mock', config: {}, position: { x: 10, y: 15 } }], edges: [] }),
       ),
-      http.post('http://localhost:3010/api/graph', async ({ request }) => {
+      http.post('/api/graph', async ({ request }) => {
         const body = await request.json().catch(() => ({}));
         savedPayload = body;
         return HttpResponse.json({ version: 2, updatedAt: new Date().toISOString(), ...body });
@@ -51,7 +51,7 @@ describe('Builder position persistence', () => {
 
     // Simulate reload: server returns previously saved position
     server.use(
-      http.get('http://localhost:3010/api/graph', () =>
+      http.get('/api/graph', () =>
         HttpResponse.json({ name: 'g', version: 2, nodes: savedPayload.nodes, edges: savedPayload.edges }),
       ),
     );
@@ -66,4 +66,3 @@ describe('Builder position persistence', () => {
     expect(nodeAfter?.position).toEqual({ x: 10, y: 15 });
   });
 });
-

@@ -42,6 +42,16 @@ try {
 // Avoid mutating config.apiBaseUrl globally to not affect unit tests that
 // validate env resolution. Individual pages pass base '' explicitly where needed.
 
+// Provide a safe default mock for config to avoid import-time throws in tests
+// that indirectly import '@/config' via other modules. Specific tests can
+// override this mock using vi.doMock('@/config', ...).
+vi.mock('@/config', () => ({
+  config: {
+    apiBaseUrl: '',
+    tracing: { serverUrl: undefined, uiBase: undefined },
+  },
+}));
+
 // Stub tracing span fetches to avoid external network in CI.
 // Tests that need specific spans should mock '@/api/tracing' themselves.
 vi.mock('@/api/tracing', async () => {
