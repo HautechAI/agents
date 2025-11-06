@@ -48,15 +48,23 @@ function resolveApiBase(): string {
   // Fallback default for local dev
   return 'http://localhost:3010';
 }
-
-function resolveTracingServer(): string | undefined {
-  // Precedence: VITE_TRACING_SERVER_URL -> TRACING_SERVER_URL -> default
-  return ve?.VITE_TRACING_SERVER_URL || ne?.TRACING_SERVER_URL || 'http://localhost:4319';
+function resolveTracingServer(): string {
+  // Precedence: VITE_TRACING_SERVER_URL -> TRACING_SERVER_URL -> apiBaseUrl + /tracing -> default
+  const fromVite = ve?.VITE_TRACING_SERVER_URL;
+  if (fromVite && fromVite.trim()) return fromVite;
+  const fromNode = ne?.TRACING_SERVER_URL;
+  if (fromNode && fromNode.trim()) return fromNode;
+  const api = resolveApiBase();
+  const fallback = api ? `${api}/tracing` : 'http://localhost:4319';
+  return fallback.endsWith('/') ? fallback.slice(0, -1) : fallback;
 }
 
-function resolveTracingUiBase(): string | undefined {
-  // Precedence: VITE_TRACING_UI_BASE -> TRACING_UI_BASE -> default
-  return ve?.VITE_TRACING_UI_BASE || ne?.TRACING_UI_BASE || 'http://localhost:4320';
+function resolveTracingUiBase(): string {
+  const fromVite = ve?.VITE_TRACING_UI_BASE;
+  if (fromVite && fromVite.trim()) return fromVite;
+  const fromNode = ne?.TRACING_UI_BASE;
+  if (fromNode && fromNode.trim()) return fromNode;
+  return 'http://localhost:4320';
 }
 
 export const config = {
@@ -65,4 +73,6 @@ export const config = {
     serverUrl: resolveTracingServer(),
     uiBase: resolveTracingUiBase(),
   },
+  // Legacy shape used in some components/providers
+  tracingServerUrl: resolveTracingServer(),
 };

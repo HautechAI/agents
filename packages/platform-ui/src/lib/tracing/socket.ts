@@ -55,7 +55,8 @@ class TracingRealtime {
   private ensure() {
     if (this.socket) return;
     if (!TRACING_BASE) return; // allow usage without socket (tests/SSR)
-    this.socket = io(TRACING_BASE, { path: '/socket.io', transports: ['websocket'], timeout: 10000, autoConnect: true });
+    const url = TRACING_BASE.endsWith('/') ? TRACING_BASE.slice(0, -1) : TRACING_BASE;
+    this.socket = io(url, { path: '/socket.io', transports: ['websocket'], timeout: 10000, autoConnect: true });
     this.socket.on('span_upsert', (payload: unknown) => {
       const norm = normalizeSpan(payload);
       if (norm) this.handlers.forEach((h) => h(norm));
