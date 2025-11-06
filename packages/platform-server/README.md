@@ -90,3 +90,7 @@ Persistent conversation state (Prisma)
 - CI runs Prisma client generation before tests/build:
   - `pnpm --filter @agyn/platform-server prisma:generate`
 - For production deployments, apply migrations with `prisma migrate deploy` as part of your release process.
+Channel-agnostic messaging
+- Threads persist per-channel metadata (`Thread.channel` JSON). Migration `20251106121500_thread_channel_json` adds this column.
+- Configure `SLACK_BOT_TOKEN` in environment or via Vault ref `${vault:...}` for outbound messages via SendMessage tool.
+- The legacy `send_slack_message` tool is kept for backward compatibility but deprecated; prefer `send_message`.

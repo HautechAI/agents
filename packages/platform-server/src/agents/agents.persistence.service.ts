@@ -3,6 +3,7 @@ import { PrismaService } from '../core/services/prisma.service';
 import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
 import type { Prisma, RunStatus, RunMessageType, MessageKind, PrismaClient, ThreadStatus } from '@prisma/client';
+import { ChannelInfoSchema, type ChannelInfo } from '../channels/types';
 
 export type RunStartResult = { runId: string };
 
@@ -34,6 +35,25 @@ export class AgentsPersistenceService {
     if (existing) return existing.id;
     const created = await this.prisma.thread.create({ data: { alias: composed, parentId: parentThreadId } });
     return created.id;
+  }
+
+  /**
+   * Get persisted ChannelInfo for a thread (validated). Returns null if absent or invalid.
+   */
+  async getThreadChannel(threadId: string): Promise<ChannelInfo | null> {
+    const t = await this.prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true } });
+    if (!t || t.channel == null) return null;
+    const parsed = ChannelInfoSchema.safeParse(t.channel);
+    if (!parsed.success) return null;
+    return parsed.data;
+  }
+
+  /**
+   * Set ChannelInfo for a thread. Validates shape strictly.
+   */
+  async setThreadChannel(threadId: string, info: ChannelInfo): Promise<void> {
+    const validated = ChannelInfoSchema.parse(info);
+    await this.prisma.thread.update({ where: { id: threadId }, data: { channel: validated as unknown as Prisma.InputJsonValue } });
   }
 
   /**

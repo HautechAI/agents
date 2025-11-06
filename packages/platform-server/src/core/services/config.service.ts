@@ -152,6 +152,8 @@ export const configSchema = z.object({
         .map((x) => x.trim())
         .filter((x) => !!x),
     ),
+  // Slack bot token: plain or Vault ref (${vault:...})
+  slackBotToken: z.string().optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -317,6 +319,9 @@ export class ConfigService implements Config {
   get corsOrigins(): string[] {
     return this.params.corsOrigins ?? [];
   }
+  get slackBotToken(): string | undefined {
+    return this.params.slackBotToken;
+  }
 
   static fromEnv(): ConfigService {
     const legacy = process.env.NCPS_URL;
@@ -371,6 +376,7 @@ export class ConfigService implements Config {
       ncpsAuthToken: process.env.NCPS_AUTH_TOKEN,
       agentsDatabaseUrl: process.env.AGENTS_DATABASE_URL,
       corsOrigins: process.env.CORS_ORIGINS,
+      slackBotToken: process.env.SLACK_BOT_TOKEN,
     });
     return new ConfigService().init(parsed);
   }

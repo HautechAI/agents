@@ -118,6 +118,17 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         };
         // Resolve persistent UUID threadId from Slack alias at ingress
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias);
+        // Persist channel info for routing outbound messages
+        try {
+          await this.persistence.setThreadChannel(threadId, {
+            type: 'slack',
+            channel: event.channel || 'unknown',
+            thread_ts: (event.thread_ts || event.ts) as string | undefined,
+            user: event.user,
+          });
+        } catch (e) {
+          this.logger.warn('SlackTrigger: setThreadChannel failed', { error: (e as { message?: string })?.message || String(e) });
+        }
         await this.notify(threadId, [msg]);
       } catch (err) {
         this.logger.error('SlackTrigger handler error', err);

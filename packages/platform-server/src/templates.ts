@@ -23,6 +23,7 @@ import { LLMProvisioner } from './llm/provisioners/llm.provisioner';
 import { RemindMeNode } from './graph/nodes/tools/remind_me/remind_me.node';
 import { ShellCommandNode } from './graph/nodes/tools/shell_command/shell_command.node';
 import { SendSlackMessageNode } from './graph/nodes/tools/send_slack_message/send_slack_message.node';
+import { SendMessageNode } from './graph/nodes/tools/send_message/send_message.node';
 // Unified Memory tool
 
 export interface TemplateRegistryDeps {
@@ -63,6 +64,15 @@ export function buildTemplateRegistry(deps: TemplateRegistryDeps): TemplateRegis
       // capabilities/staticConfigSchema removed from palette per Issue #451
     },
     GithubCloneRepoNode,
+  );
+  registry.register(
+    'sendMessageTool',
+    {
+      title: 'Send message',
+      kind: 'tool',
+      // capabilities/staticConfigSchema removed from palette per Issue #451
+    },
+    SendMessageNode,
   );
   registry.register(
     'sendSlackMessageTool',

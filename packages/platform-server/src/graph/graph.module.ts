@@ -39,12 +39,16 @@ import { CallAgentNode } from './nodes/tools/call_agent/call_agent.node';
 import { FinishNode } from './nodes/tools/finish/finish.node';
 import { MemoryToolNode } from './nodes/tools/memory/memory.node';
 import { SendSlackMessageNode } from './nodes/tools/send_slack_message/send_slack_message.node';
+import { SendMessageNode } from './nodes/tools/send_message/send_message.node';
+import { SendMessageFunctionTool } from './nodes/tools/send_message/send_message.tool';
 import { ShellCommandNode } from './nodes/tools/shell_command/shell_command.node';
 import { GithubCloneRepoNode } from './nodes/tools/github_clone_repo/github_clone_repo.node';
 import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
 import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { AgentsThreadsController } from '../agents/threads.controller';
 import { AgentsRemindersController } from '../agents/reminders.controller';
+import { ChannelRegistry } from '../channels/channel.registry';
+import { SlackChannelAdapter } from '../channels/slack.adapter';
 
 @Module({
   imports: [CoreModule, InfraModule, LLMModule, EnvModule],
@@ -110,6 +114,8 @@ import { AgentsRemindersController } from '../agents/reminders.controller';
     NodeStateService,
     GraphSocketGateway,
     AgentsPersistenceService,
+    ChannelRegistry,
+    SlackChannelAdapter,
 
     //////// Nodes
 
@@ -129,6 +135,8 @@ import { AgentsRemindersController } from '../agents/reminders.controller';
     CallAgentNode,
     FinishNode,
     MemoryToolNode,
+    SendMessageNode,
+    SendMessageFunctionTool,
     SendSlackMessageNode,
     ShellCommandNode,
     GithubCloneRepoNode,

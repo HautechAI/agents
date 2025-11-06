@@ -29,6 +29,7 @@ Postgres checkpointer (optional)
 
 Slack integration
 - Use Vault-managed secrets and the Graph UI templates for SlackTrigger and SendSlackMessageTool.
+- New: Channel-agnostic messaging with SendMessage tool. Configure SLACK_BOT_TOKEN in packages/platform-server/.env (supports Vault ref via ${vault:...}). Threads now persist channel metadata; run Prisma migration after pulling.
   - Setup: docs/security/vault.md
   - UI reference: docs/ui/graph/README.md
 

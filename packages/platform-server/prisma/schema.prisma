@@ -39,6 +39,7 @@ model Thread {
   alias     String   @unique
   summary   String?
   status    ThreadStatus @default(open)
+  channel   Json?
   createdAt DateTime @default(now())
 
   runs      Run[]
