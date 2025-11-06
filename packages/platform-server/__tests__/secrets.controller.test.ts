@@ -67,19 +67,8 @@ describe('SecretsController', () => {
     expect(statuses).toBeGreaterThan(0);
   });
 
-  it('enforces unmask security: flag off => 403', async () => {
-    process.env.VAULT_READ_ALLOW_UNMASK = 'false'; process.env.ADMIN_READ_TOKEN = 'adm';
-    await expect(controller.readSecret('secret', 'app', 'api_key', { reveal: '1' } as any, { 'X-Admin-Token': 'adm' } as any)).rejects.toMatchObject({ status: 403 });
-  });
-
-  it('enforces unmask security: flag on + wrong token => 403', async () => {
-    process.env.VAULT_READ_ALLOW_UNMASK = 'true'; process.env.ADMIN_READ_TOKEN = 'adm';
-    await expect(controller.readSecret('secret', 'app', 'api_key', { reveal: 'true' } as any, { 'X-Admin-Token': 'bad' } as any)).rejects.toMatchObject({ status: 403 });
-  });
-
-  it('allows unmask with correct token', async () => {
-    process.env.VAULT_READ_ALLOW_UNMASK = 'true'; process.env.ADMIN_READ_TOKEN = 'adm';
-    const body = await controller.readSecret('secret', 'app', 'api_key', { reveal: '1' } as any, { 'x-admin-token': 'adm' } as any) as { masked: boolean; value?: string; status: string };
+  it('reveals plaintext when reveal=true without extra auth gating', async () => {
+    const body = await controller.readSecret('secret', 'app', 'api_key', { reveal: '1' } as any) as { masked: boolean; value?: string; status: string };
     expect(body.masked).toBe(false);
     expect(body.status).toBe('present');
     expect(body.value).toBe('API-SECRET');

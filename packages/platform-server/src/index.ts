@@ -83,4 +83,3 @@ bootstrap().catch((e) => {
 });
 
 // Legacy Fastify helpers removed; Vault routes handled by Nest
-// allow X-Admin-Token for secrets reveal (added by Rowan at 2025-11-06T03:31:49Z)

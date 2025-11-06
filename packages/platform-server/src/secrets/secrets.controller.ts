@@ -1,5 +1,4 @@
-import { Controller, Get, Headers, HttpException, HttpStatus, Inject, Param, Query } from '@nestjs/common';
-import * as crypto from 'crypto';
+import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { VaultService } from '../vault/vault.service';
 import { SecretsService } from './secrets.service';
 import { SummaryQueryDto } from './dto/summary.query.dto';
@@ -37,19 +36,11 @@ export class SecretsController {
     @Param('path') path: string,
     @Param('key') key: string,
     @Query() q: ReadQueryDto,
-    @Headers() headers?: Record<string, string>,
   ): Promise<{ ref: string; masked: boolean; value?: string; length?: number; status: 'present' | 'missing' | 'error'; error?: string }> {
     const ref = `${mount}/${path}/${key}`;
     const reveal = q?.reveal;
     const wantReveal = reveal === '1' || (reveal || '').toLowerCase() === 'true';
     if (wantReveal) {
-      const allow = String(process.env.VAULT_READ_ALLOW_UNMASK || '').toLowerCase() === 'true';
-      const expected = process.env.ADMIN_READ_TOKEN;
-      // Case-insensitive header lookup without assertions
-      const tokenHeader = Object.entries(headers || {}).find(([k]) => k.toLowerCase() === 'x-admin-token')?.[1];
-      const provided = typeof tokenHeader === 'string' ? tokenHeader : undefined;
-      const ok = allow && expected && provided ? timingSafeEqual(String(provided), String(expected)) : false;
-      if (!ok) throw new HttpException({ error: 'FORBIDDEN' }, HttpStatus.FORBIDDEN);
       try {
         const v = await this.vault.getSecret({ mount, path, key });
         if (v == null) return { ref, masked: false, status: 'missing' };
@@ -74,13 +65,4 @@ export class SecretsController {
   }
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
-  try {
-    const ab = Buffer.from(a);
-    const bb = Buffer.from(b);
-    if (ab.length !== bb.length) return false;
-    return crypto.timingSafeEqual(ab, bb);
-  } catch {
-    return a === b;
-  }
-}
+// Note: No admin-token gating; reveal is allowed when explicitly requested.

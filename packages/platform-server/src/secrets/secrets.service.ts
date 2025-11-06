@@ -22,15 +22,9 @@ export class SecretsService {
   ) {}
 
   private async getCurrentGraph(): Promise<PersistedGraph | null> {
-    try {
-      // Follow GraphPersistController single-graph model
-      const g = await this.graphs.get('main');
-      return g;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      this.logger.debug('SecretsService: getCurrentGraph failed: %s', msg);
-      return null;
-    }
+    // Follow GraphPersistController single-graph model; bubble up errors to caller if repo fails
+    const g = await this.graphs.get('main');
+    return g;
   }
 
   private collectRefsFromConfig(obj: unknown): {
@@ -81,6 +75,33 @@ export class SecretsService {
     summary: { counts: { used_present: number; used_missing: number; present_unused: number; invalid_ref: number } };
   }> {
     const graph = await this.getCurrentGraph();
+    const { refMap, invalid, pairs } = this.buildRefIndex(graph);
+    const within = this.buildWithin(opts.mount, opts.pathPrefix);
+    const present = await this.listPresentKeys(pairs, within);
+
+    const {
+      items,
+      counts: { used_present, used_missing, present_unused },
+    } = this.buildItems(refMap, present, within);
+
+    const invalidItems: SecretItem[] = invalid.map((r) => ({ ref: r, status: 'invalid_ref' }));
+    const filtered = this.applyFilter(opts.filter || 'all', items, invalidItems);
+    const paged = this.applyPagination(filtered, Math.max(1, opts.page || 1), Math.min(1000, Math.max(1, opts.pageSize || 50)));
+
+    return {
+      items: paged.items,
+      page: paged.page,
+      page_size: paged.pageSize,
+      total: paged.total,
+      summary: { counts: { used_present, used_missing, present_unused, invalid_ref: invalid.length } },
+    };
+  }
+
+  private buildRefIndex(graph: PersistedGraph | null): {
+    refMap: Map<string, { mount: string; path: string; key: string }>;
+    invalid: string[];
+    pairs: Map<string, { mount: string; path: string }>;
+  } {
     const allRefs: Array<{ ref: string; mount: string; path: string; key: string }> = [];
     const invalid: string[] = [];
     for (const n of graph?.nodes || []) {
@@ -90,20 +111,26 @@ export class SecretsService {
     }
     const refMap = new Map<string, { mount: string; path: string; key: string }>();
     for (const r of allRefs) if (!refMap.has(r.ref)) refMap.set(r.ref, { mount: r.mount, path: r.path, key: r.key });
-
     const pairs = new Map<string, { mount: string; path: string }>();
     for (const { mount, path } of refMap.values()) pairs.set(`${mount}@@${path}`, { mount, path });
+    return { refMap, invalid: Array.from(new Set(invalid)), pairs };
+  }
 
-    const mountFilter = (opts.mount || '').trim() || undefined;
-    const pathPrefix = (opts.pathPrefix || '').trim() || undefined;
-    const within = (m: string, p: string) => {
+  private buildWithin(mount?: string, pathPrefix?: string): (m: string, p: string) => boolean {
+    const mountFilter = (mount || '').trim() || undefined;
+    const pfx = (pathPrefix || '').trim() || undefined;
+    return (m: string, p: string) => {
       if (mountFilter && m !== mountFilter) return false;
-      if (pathPrefix && !p.startsWith(pathPrefix)) return false;
+      if (pfx && !p.startsWith(pfx)) return false;
       return true;
     };
+  }
 
-    const present = new Map<string, Set<string>>(); // pair -> keys
-    // Parallelize Vault key listing to avoid await-in-loop
+  private async listPresentKeys(
+    pairs: Map<string, { mount: string; path: string }>,
+    within: (m: string, p: string) => boolean,
+  ): Promise<Map<string, Set<string>>> {
+    const present = new Map<string, Set<string>>();
     const keyEntries = await Promise.all(
       Array.from(pairs.values())
         .filter((p) => within(p.mount, p.path))
@@ -113,13 +140,18 @@ export class SecretsService {
         ] as const),
     );
     for (const [k, set] of keyEntries) present.set(k, set);
+    return present;
+  }
 
+  private buildItems(
+    refMap: Map<string, { mount: string; path: string; key: string }>,
+    present: Map<string, Set<string>>,
+    within: (m: string, p: string) => boolean,
+  ): { items: SecretItem[]; counts: { used_present: number; used_missing: number; present_unused: number } } {
     const items: SecretItem[] = [];
     let used_present = 0;
     let used_missing = 0;
     let present_unused = 0;
-    const invalid_ref = invalid.length;
-
     for (const [ref, { mount, path, key }] of refMap.entries()) {
       if (!within(mount, path)) continue;
       const set = present.get(`${mount}@@${path}`);
@@ -131,7 +163,6 @@ export class SecretsService {
         used_missing++;
       }
     }
-
     for (const [pair, set] of present.entries()) {
       const [m, p] = pair.split('@@');
       const usedForPair = new Set<string>();
@@ -141,16 +172,14 @@ export class SecretsService {
         present_unused++;
       }
     }
+    return { items, counts: { used_present, used_missing, present_unused } };
+  }
 
-    const invalidItems: SecretItem[] = invalid.map((r) => ({ ref: r, status: 'invalid_ref' }));
-
-    const filter = opts.filter || 'all';
-    let filtered = items;
-    if (filter === 'used') filtered = items.filter((it) => it.status === 'used_present' || it.status === 'used_missing');
-    else if (filter === 'missing') filtered = items.filter((it) => it.status === 'used_missing');
-    if (filter === 'all') filtered = [...filtered, ...invalidItems];
-
-    filtered.sort((a, b) => {
+  private applyFilter(filter: 'used' | 'missing' | 'all', items: SecretItem[], invalidItems: SecretItem[]): SecretItem[] {
+    if (filter === 'used') return items.filter((it) => it.status === 'used_present' || it.status === 'used_missing');
+    if (filter === 'missing') return items.filter((it) => it.status === 'used_missing');
+    const out = [...items, ...invalidItems];
+    out.sort((a, b) => {
       const am = a.mount || '';
       const bm = b.mount || '';
       if (am !== bm) return am.localeCompare(bm);
@@ -162,20 +191,13 @@ export class SecretsService {
       if (ak !== bk) return ak.localeCompare(bk);
       return a.status.localeCompare(b.status);
     });
+    return out;
+  }
 
-    const total = filtered.length;
-    const page = Math.max(1, opts.page || 1);
-    const pageSize = Math.min(1000, Math.max(1, opts.pageSize || 50));
+  private applyPagination(list: SecretItem[], page: number, pageSize: number): { items: SecretItem[]; page: number; pageSize: number; total: number } {
+    const total = list.length;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    const paged = filtered.slice(start, end);
-
-    return {
-      items: paged,
-      page,
-      page_size: pageSize,
-      total,
-      summary: { counts: { used_present, used_missing, present_unused, invalid_ref } },
-    };
+    return { items: list.slice(start, end), page, pageSize, total };
   }
 }
