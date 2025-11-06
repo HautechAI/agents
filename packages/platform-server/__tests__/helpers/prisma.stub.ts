@@ -5,6 +5,7 @@ export function createPrismaStub() {
   const runs: Array<{ id: string; threadId: string; status: string; createdAt: Date; updatedAt: Date }> = [];
   const messages: Array<{ id: string; kind: string; text: string | null; source: any; createdAt: Date }> = [];
   const runMessages: Array<{ runId: string; messageId: string; type: string; createdAt: Date }> = [];
+  const reminders: Array<{ id: string; threadId: string; note: string; at: Date; createdAt: Date; completedAt: Date | null }> = [];
 
   let idSeq = 1;
   const timeSeed = Date.now();
@@ -77,7 +78,20 @@ export function createPrismaStub() {
       findMany: async ({ where: { runId, type } }: any) => runMessages.filter((rm) => rm.runId === runId && rm.type === type),
     },
     $transaction: async (fn: (tx: any) => Promise<any>) => fn({ thread: prisma.thread, run: prisma.run, message: prisma.message, runMessage: prisma.runMessage }),
-    _store: { threads, runs, messages, runMessages },
+    reminder: {
+      create: async ({ data }: any) => {
+        const row = { id: data.id ?? `rem-${idSeq++}`, threadId: data.threadId, note: data.note, at: data.at, createdAt: new Date(timeSeed + idSeq), completedAt: data.completedAt ?? null };
+        reminders.push(row);
+        return row;
+      },
+      update: async ({ where: { id }, data }: any) => {
+        const r = reminders.find((x) => x.id === id);
+        if (r && Object.prototype.hasOwnProperty.call(data, 'completedAt')) r.completedAt = data.completedAt ?? null;
+        return r;
+      },
+      findMany: async () => reminders,
+    },
+    _store: { threads, runs, messages, runMessages, reminders },
   };
   return prisma;
 }
