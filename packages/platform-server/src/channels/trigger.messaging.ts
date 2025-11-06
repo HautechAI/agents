@@ -3,7 +3,7 @@ import { LoggerService } from '../core/services/logger.service';
 import type { ChannelInfo, SlackChannelInfo } from './types';
 import { SlackChannelAdapter, type SendResult } from './slack.adapter';
 import { VaultService } from '../vault/vault.service';
-import { normalizeTokenRef, parseVaultRef, resolveTokenRef } from '../utils/refs';
+import { resolveTokenRef } from '../utils/refs';
 
 export type MessengerType = 'slack';
 
@@ -34,24 +34,30 @@ export class TriggerMessagingService {
 // Slack trigger-bound messenger factory
 export function createSlackMessenger(
   deps: { logger: LoggerService; vault: VaultService },
-  config: { bot_token?: { value: string; source?: 'static' | 'vault' } },
+  config: { bot_token?: string | { value: string; source: 'static' | 'vault' } },
 ): Messenger {
   const adapter = new SlackChannelAdapter(deps.logger);
+  const normalizeStrict = (
+    input: string | { value: string; source: 'static' | 'vault' },
+  ): { value: string; source: 'static' | 'vault' } => {
+    if (typeof input === 'string') {
+      const isVault = input.startsWith('${vault:');
+      return { value: input, source: isVault ? 'vault' : 'static' } as const;
+    }
+    return input;
+  };
   return {
     async send(info: ChannelInfo, params: { text: string; broadcast?: boolean; ephemeral_user?: string | null }) {
       const slack = info as SlackChannelInfo;
-      // Resolve token strictly from trigger config
-      const bot = (config.bot_token
-        ? normalizeTokenRef(config.bot_token)
-        : ({ value: '', source: 'static' } as { value: string; source: 'static' })) as {
-        value: string;
-        source: 'static' | 'vault';
-      };
-      if (bot.source === 'vault') parseVaultRef(bot.value);
+      // Resolve token strictly from trigger config (no secrets persisted)
       if (!config.bot_token) return { ok: false, error: 'bot_token_missing', attempts: 0 } as SendResult;
-      const token = await resolveTokenRef(bot, { expectedPrefix: 'xoxb-', fieldName: 'bot_token', vault: deps.vault });
+      const tokenRef = normalizeStrict(config.bot_token);
+      const token = await resolveTokenRef(tokenRef, {
+        expectedPrefix: 'xoxb-',
+        fieldName: 'bot_token',
+        vault: deps.vault,
+      });
       return adapter.send(slack, { text: params.text, broadcast: params.broadcast, ephemeral_user: params.ephemeral_user }, token);
     },
   };
 }
-
