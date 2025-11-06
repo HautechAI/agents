@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, Fragment } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { httpJson } from '@/api/client';
 import { Table, Thead, Tbody, Tr, Th, Td, Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, Input } from '@agyn/ui';
@@ -218,8 +218,6 @@ export function MonitoringContainers() {
               </Tr>
             </Thead>
             <Tbody>
-              {sorted.map((c) => (
-                <ContainerRow key={c.containerId} item={c} expanded={!!expanded[c.containerId]} onToggle={toggleExpand} />
               {sorted.map((c) => (
                 <ContainerRow key={c.containerId} item={c} expanded={!!expanded[c.containerId]} onToggle={toggleExpand} />
               ))}
