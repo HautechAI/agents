@@ -148,21 +148,12 @@ export class ContainerRegistry {
   // Metadata normalization handled by zod schema; no duck typing
 
   async getExpired(now: Date = new Date()) {
-    const iso = now.toISOString();
-    // Include terminating containers with no retryAfter or retryAfter <= now; exclude future retryAfter
-    const terminating = await this.prisma.$queryRaw<Array<{ containerId: string }>>`
-      SELECT "containerId" FROM "Container"
-      WHERE "status" = 'terminating'
-        AND (
-          NOT ("metadata" ? 'retryAfter')
-          OR (("metadata"->>'retryAfter')::timestamptz <= ${iso}::timestamptz)
-        )
-    `;
+    // Use typed columns only; do not gate on metadata JSON
     const running = await this.prisma.container.findMany({
       where: { status: 'running', killAfterAt: { not: null, lte: now } },
     });
-    const termDetails = await this.prisma.container.findMany({ where: { containerId: { in: terminating.map((r) => r.containerId) } } });
-    return [...running, ...termDetails];
+    const terminating = await this.prisma.container.findMany({ where: { status: 'terminating' } });
+    return [...running, ...terminating];
   }
 
   async recordTerminationFailure(containerId: string, message: string): Promise<void> {

@@ -5,14 +5,14 @@ import React from 'react';
 import { useNodeStatus, useTemplates, useNodeReminders } from '../../graph/hooks';
 import { graphSocket } from '../../graph/socket';
 
-// Mock http client used by modules (avoid TDZ with vi.hoisted)
-const hoisted = vi.hoisted(() => ({ getMock: vi.fn() }));
-vi.mock('@/api/http', () => ({ http: { get: hoisted.getMock }, tracingHttp: { get: vi.fn() } }));
+// Mock httpJson client used by modules (avoid TDZ with vi.hoisted)
+const hoisted = vi.hoisted(() => ({ httpJson: vi.fn() }));
+vi.mock('@/api/client', () => ({ httpJson: hoisted.httpJson }));
 
 describe('graph hooks', () => {
   beforeEach(() => {
-    hoisted.getMock.mockReset();
-    hoisted.getMock.mockImplementation(async (url: string) => {
+    hoisted.httpJson.mockReset();
+    hoisted.httpJson.mockImplementation(async (url: string) => {
       if (url.endsWith('/api/graph/templates')) return [{ name: 'x', title: 'X', kind: 'tool', sourcePorts: {}, targetPorts: {} }];
       if (String(url).includes('/status')) return { isPaused: false };
       if (String(url).includes('/reminders')) return { items: [{ id: '1', threadId: 't', note: 'n', at: new Date().toISOString() }] };

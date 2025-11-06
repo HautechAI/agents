@@ -173,7 +173,7 @@ describe('ContainerRegistry (Prisma-backed)', () => {
     expect(ok2).toBe(false);
   });
 
-  it('getExpired returns running past killAfter and terminating past retryAfter', async () => {
+  it('getExpired returns running past killAfter and all terminating', async () => {
     const now = new Date();
     const past = new Date(now.getTime() - 1000);
     const future = new Date(now.getTime() + 60_000);
@@ -190,7 +190,7 @@ describe('ContainerRegistry (Prisma-backed)', () => {
     const ids = expired.map((r) => r.containerId);
     expect(ids).toContain('r1');
     expect(ids).toContain('t1');
-    expect(ids).not.toContain('t2');
+    expect(ids).toContain('t2');
   });
 
   it('updateLastUsed recomputes killAfter using ttl column and override', async () => {
