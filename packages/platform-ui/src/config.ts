@@ -42,12 +42,14 @@ function resolveApiBase(): string {
   // 2) Vitest detected => '' (use relative URLs in tests)
   // 3) API_BASE_URL from Node env
   // 4) Fallback 'http://localhost:3010'
-  const viteBase = ve?.VITE_API_BASE_URL;
+  const ve = (import.meta as { env?: Record<string, unknown> } | undefined)?.env || {};
+  const ne = (typeof process !== 'undefined' ? process.env : undefined) || {};
+  const viteBase = (ve as Record<string, unknown>)?.VITE_API_BASE_URL as string | undefined;
   if (typeof viteBase === 'string') return viteBase;
   const vitestFlag = (ve as Record<string, unknown> | undefined)?.VITEST;
-  const isVitest = vitestFlag === true || vitestFlag === 'true' || ne?.VITEST === 'true';
+  const isVitest = vitestFlag === true || vitestFlag === 'true' || (ne as Record<string, unknown>)?.VITEST === 'true';
   if (isVitest) return '';
-  const nodeBase = ne?.API_BASE_URL;
+  const nodeBase = (ne as Record<string, unknown>)?.API_BASE_URL as string | undefined;
   if (typeof nodeBase === 'string' && nodeBase.length > 0) return nodeBase;
   return 'http://localhost:3010';
 }

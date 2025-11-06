@@ -112,35 +112,37 @@ function ContainerRow({ item, expanded, onToggle }: { item: ContainerItem; expan
             <Td colSpan={8} className="text-muted-foreground pl-4">No sidecars.</Td>
           </Tr>
         ) : (
-          scItems.map((sc) => (
-            <Tr key={`sc-${sc.containerId}`}>
-              <Td />
-              <Td className="font-mono text-xs">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="pl-4">{truncateId(sc.containerId)}</span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs">{sc.containerId}</span>
-                        <Button aria-label="Copy sidecarId" variant="outline" size="sm" onClick={() => copyToClipboard(sc.containerId)}>
-                          <ClipboardCopy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </Td>
-              <Td className="font-mono text-xs">{item.threadId || '-'}</Td>
-              <Td className="font-mono text-xs">{sc.role}</Td>
-              <Td className="font-mono text-xs">{sc.image}</Td>
-              <Td>{sc.status}</Td>
-              <Td>{new Date(sc.startedAt).toLocaleString()}</Td>
-              <Td>-</Td>
-              <Td>-</Td>
-            </Tr>
-          ))
+          <>
+            {scItems.map((sc) => (
+              <Tr key={`sc-${sc.containerId}`}>
+                <Td />
+                <Td className="font-mono text-xs">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="pl-4">{truncateId(sc.containerId)}</span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs">{sc.containerId}</span>
+                          <Button aria-label="Copy sidecarId" variant="outline" size="sm" onClick={() => copyToClipboard(sc.containerId)}>
+                            <ClipboardCopy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </Td>
+                <Td className="font-mono text-xs">{item.threadId || '-'}</Td>
+                <Td className="font-mono text-xs">{sc.role}</Td>
+                <Td className="font-mono text-xs">{sc.image}</Td>
+                <Td>{sc.status}</Td>
+                <Td>{new Date(sc.startedAt).toLocaleString()}</Td>
+                <Td>-</Td>
+                <Td>-</Td>
+              </Tr>
+            ))}
+          </>
         )
       )}
     </>
