@@ -21,8 +21,9 @@ export const mockTemplates: TemplateSchema[] = [
     name: 'mock',
     title: 'Mock',
     kind: 'tool',
-    sourcePorts: {},
-    targetPorts: {},
+    // Use array port lists to match UI expectations
+    sourcePorts: [],
+    targetPorts: [],
     capabilities: { pausable: true, staticConfigurable: true },
     staticConfigSchema: {
       type: 'object',
@@ -32,26 +33,32 @@ export const mockTemplates: TemplateSchema[] = [
 ];
 
 // MSW server setup (MSW v2 http handlers)
+// Handlers must match the client's request URLs exactly. Register both relative and
+// absolute route variants so MSW intercepts them regardless of base.
+const DEFAULT_ORIGIN = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
+const ORIGINS = Array.from(new Set([DEFAULT_ORIGIN, 'http://localhost:3010']));
+
+function both(method: 'get' | 'post' | 'put' | 'delete', path: string, resolver: Parameters<typeof _http.get>[1]) {
+  const rel = [_http[method](path, resolver) as any];
+  const abs = ORIGINS.map((o) => _http[method](`${o}${path.startsWith('/') ? path : `/${path}`}`, resolver));
+  return [...rel, ...abs] as const;
+}
+
 export const handlers = [
-  _http.get('/api/graph/templates', () => _HttpResponse.json(mockTemplates)),
-  _http.get('/api/graph/nodes/:nodeId/status', ({ params }) => {
+  ...both('get', '/api/graph/templates', () => _HttpResponse.json(mockTemplates)),
+  ...both('get', '/api/graph/nodes/:nodeId/status', ({ params }) => {
     const nodeId = params.nodeId as string;
-    return _HttpResponse.json({
-      nodeId,
-      isPaused: false,
-      provisionStatus: { state: 'not_ready' },
-      // dynamicConfigReady removed
-    });
+    return _HttpResponse.json({ nodeId, isPaused: false, provisionStatus: { state: 'not_ready' } });
   }),
-  _http.post('/api/graph/nodes/:nodeId/actions', () => new _HttpResponse(null, { status: 204 })),
-  _http.get('/api/graph/nodes/:nodeId/dynamic-config/schema', () =>
+  ...both('post', '/api/graph/nodes/:nodeId/actions', () => new _HttpResponse(null, { status: 204 })),
+  ...both('get', '/api/graph/nodes/:nodeId/dynamic-config/schema', () =>
     _HttpResponse.json({
       type: 'object',
       properties: { toolA: { type: 'boolean', title: 'toolA' }, toolB: { type: 'boolean', title: 'toolB' } },
     }),
   ),
   // Full graph endpoints used by setNodeConfig / dynamic set mutation
-  _http.get('/api/graph', () =>
+  ...both('get', '/api/graph', () =>
     _HttpResponse.json({
       name: 'g',
       version: 1,
@@ -64,31 +71,31 @@ export const handlers = [
       edges: [],
     }),
   ),
-  _http.post('/api/graph', async ({ request }) => {
+  ...both('post', '/api/graph', async ({ request }) => {
     await request.json().catch(() => ({}));
     return _HttpResponse.json({ version: Date.now(), updatedAt: new Date().toISOString() });
   }),
   // Nix proxy handlers used by UI services
-  _http.get('/api/nix/packages', ({ request }) => {
+  ...both('get', '/api/nix/packages', ({ request }) => {
     const url = new URL(request.url);
     const q = url.searchParams.get('query') || '';
     const packages = q && q.length >= 2 ? [{ name: q, description: `${q} package` }] : [];
     return _HttpResponse.json({ packages });
   }),
-  _http.get('/api/nix/versions', ({ request }) => {
+  ...both('get', '/api/nix/versions', ({ request }) => {
     const url = new URL(request.url);
     const name = url.searchParams.get('name');
     if (!name) return new _HttpResponse(null, { status: 400 });
     return _HttpResponse.json({ versions: ['1.2.3', '1.0.0'] });
   }),
-  _http.get('/api/nix/resolve', ({ request }) => {
+  ...both('get', '/api/nix/resolve', ({ request }) => {
     const url = new URL(request.url);
     const name = url.searchParams.get('name');
     const version = url.searchParams.get('version');
     if (!name || !version) return new _HttpResponse(null, { status: 400 });
     return _HttpResponse.json({ name, version, commitHash: 'abcd1234', attributePath: `${name}` });
   }),
-];
+].flat();
 
 export const server = setupServer(...handlers);
 

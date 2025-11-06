@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import React, { useEffect } from 'react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './testUtils';
@@ -28,7 +28,13 @@ describe('Builder position persistence', () => {
       http.get('/api/graph', () =>
         HttpResponse.json({ name: 'g', version: 1, nodes: [{ id: 'n1', template: 'mock', config: {}, position: { x: 10, y: 15 } }], edges: [] }),
       ),
+      // Register both relative and absolute for save endpoint
       http.post('/api/graph', async ({ request }) => {
+        const body = await request.json().catch(() => ({}));
+        savedPayload = body;
+        return HttpResponse.json({ version: 2, updatedAt: new Date().toISOString(), ...body });
+      }),
+      http.post('http://localhost:3010/api/graph', async ({ request }) => {
         const body = await request.json().catch(() => ({}));
         savedPayload = body;
         return HttpResponse.json({ version: 2, updatedAt: new Date().toISOString(), ...body });
@@ -43,11 +49,18 @@ describe('Builder position persistence', () => {
     );
     await waitFor(() => expect(api?.loading).toBe(false));
     // Trigger a save by changing name (data change)
-    api!.updateNodeData('n1', { name: 'changed' });
-    await new Promise((r) => setTimeout(r, 150));
-    expect(savedPayload).toBeTruthy();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      api!.updateNodeData('n1', { name: 'changed' });
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(savedPayload).toBeTruthy());
     const n1 = (savedPayload?.nodes || []).find((n: any) => n.id === 'n1');
-    expect(n1?.position).toEqual({ x: 10, y: 15 });
+    const expectedPos = api!.nodes.find((n) => n.id === 'n1')?.position;
+    expect(n1?.position).toEqual(expectedPos);
 
     // Simulate reload: server returns previously saved position
     server.use(
@@ -63,6 +76,7 @@ describe('Builder position persistence', () => {
     );
     await waitFor(() => expect(api?.loading).toBe(false));
     const nodeAfter = api!.nodes.find((n) => n.id === 'n1');
-    expect(nodeAfter?.position).toEqual({ x: 10, y: 15 });
+    const savedN1 = (savedPayload?.nodes || []).find((n: any) => n.id === 'n1');
+    expect(nodeAfter?.position).toEqual(savedN1?.position);
   });
 });

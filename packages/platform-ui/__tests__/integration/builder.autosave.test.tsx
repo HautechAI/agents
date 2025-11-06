@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import React, { useEffect } from 'react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './testUtils';
@@ -40,6 +40,12 @@ describe('Builder autosave hydration gating', () => {
         await request.json().catch(() => ({}));
         return HttpResponse.json({ version: Date.now() });
       }),
+      // Absolute variant for base 'http://localhost:3010'
+      http.post('http://localhost:3010/api/graph', async ({ request }) => {
+        postSpy.count += 1;
+        await request.json().catch(() => ({}));
+        return HttpResponse.json({ version: Date.now() });
+      }),
     );
 
     let exposed: ReturnType<typeof useBuilderState> | null = null;
@@ -61,13 +67,17 @@ describe('Builder autosave hydration gating', () => {
     // Ensure no POST happened on hydration
     expect(postSpy.count).toBe(0);
 
+    // Switch to fake timers for deterministic debounce
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     // Perform a user-initiated change: update node data
-    exposed!.updateNodeData('n1', { name: 'edited' });
-
-    // Wait beyond debounce
-    await new Promise((r) => setTimeout(r, 150));
-
-    // Exactly one POST should have occurred
-    expect(postSpy.count).toBe(1);
+    await act(async () => {
+      exposed!.updateNodeData('n1', { name: 'edited' });
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+      await Promise.resolve();
+    });
+    // Exactly one POST should have occurred (debounced)
+    await waitFor(() => expect(postSpy.count).toBe(1));
   });
 });
