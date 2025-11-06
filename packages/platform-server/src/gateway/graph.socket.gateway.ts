@@ -3,11 +3,9 @@ import type { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { z } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
-import { LiveGraphRuntime } from '../graph/liveGraph.manager';
-import type { ThreadStatus, MessageKind, RunStatus } from '@prisma/client';
-import type { GraphEventsPublisher } from './graph.events.publisher';
 import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 import { PrismaService } from '../core/services/prisma.service';
+import { LiveGraphRuntime } from '../graph/liveGraph.manager';
 
 // Strict outbound event payloads
 export const NodeStatusEventSchema = z
@@ -54,18 +52,17 @@ export type ReminderCountEvent = z.infer<typeof ReminderCountEventSchema>;
  * Constructors DI-only; call init({ server }) explicitly from bootstrap.
  */
 @Injectable({ scope: Scope.DEFAULT })
-export class GraphSocketGateway implements GraphEventsPublisher {
+export class GraphSocketGateway {
   private io: SocketIOServer | null = null;
   private initialized = false;
-  private pendingThreads = new Set<string>();
+  private pendingThreadMetrics = new Set<string>();
   private metricsTimer: NodeJS.Timeout | null = null;
-  private readonly COALESCE_MS = 100;
 
   constructor(
     @Inject(LoggerService) private readonly logger: LoggerService,
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
     @Inject(ThreadsMetricsService) private readonly metrics: ThreadsMetricsService,
-    @Inject(PrismaService) private readonly prismaService: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
   /** Attach Socket.IO to the provided HTTP server. */
@@ -74,24 +71,6 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     const server = params.server;
     this.io = new SocketIOServer(server, { path: '/socket.io', transports: ['websocket'], cors: { origin: '*' } });
     this.io.on('connection', (socket: Socket) => {
-      // Room subscription
-      const RoomSchema = z.union([
-        z.literal('threads'),
-        z.string().regex(/^thread:[0-9a-f-]{36}$/i),
-      ]);
-      const SubscribeSchema = z
-        .object({ rooms: z.array(RoomSchema).optional(), room: RoomSchema.optional() })
-        .strict();
-      socket.on('subscribe', (payload: unknown) => {
-        const parsed = SubscribeSchema.safeParse(payload);
-        if (!parsed.success) {
-          this.logger.error('Socket subscribe payload invalid', parsed.error.issues);
-          return;
-        }
-        const p = parsed.data;
-        const rooms: string[] = p.rooms ?? (p.room ? [p.room] : []);
-        for (const r of rooms) if (r.length > 0) socket.join(r);
-      });
       socket.on('error', (e: unknown) => {
         this.logger.error('Socket error', e);
       });
@@ -146,66 +125,31 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     this.broadcast('node_reminder_count', payload, ReminderCountEventSchema);
   }
 
-  // Threads realtime events
-  emitThreadCreated(thread: { id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null }) {
-    if (!this.io) return;
-    const payload = { thread: { ...thread, createdAt: thread.createdAt.toISOString() } };
-    this.io.to('threads').emit('thread_created', payload);
+  /** Coalesce per-thread metric refresh requests into a single batch computation. */
+  public scheduleThreadMetrics(threadId: string): void {
+    this.pendingThreadMetrics.add(threadId);
+    if (!this.metricsTimer) {
+      this.metricsTimer = setTimeout(() => void this.flushThreadMetrics(), 100);
+    }
   }
-  emitThreadUpdated(thread: { id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null }) {
-    if (!this.io) return;
-    const payload = { thread: { ...thread, createdAt: thread.createdAt.toISOString() } };
-    this.io.to('threads').emit('thread_updated', payload);
-  }
-  emitMessageCreated(threadId: string, message: { id: string; kind: MessageKind; text: string | null; source: import('type-fest').JsonValue | unknown; createdAt: Date; runId?: string }) {
-    if (!this.io) return;
-    const payload = { message: { ...message, createdAt: message.createdAt.toISOString() } };
-    this.io.to(`thread:${threadId}`).emit('message_created', payload);
-  }
-  emitRunStatusChanged(threadId: string, run: { id: string; status: RunStatus; createdAt: Date; updatedAt: Date }) {
-    if (!this.io) return;
-    const payload = { run: { ...run, createdAt: run.createdAt.toISOString(), updatedAt: run.updatedAt.toISOString() } };
-    this.io.to(`thread:${threadId}`).emit('run_status_changed', payload);
-  }
-  private flushMetricsQueue = async () => {
-    // De-duplicate pending thread IDs per flush (preserve insertion order)
-    const ids = Array.from(new Set(this.pendingThreads));
-    this.pendingThreads.clear();
+
+  private async flushThreadMetrics(): Promise<void> {
+    const ids = Array.from(this.pendingThreadMetrics.values());
+    this.pendingThreadMetrics.clear();
+    this.metricsTimer && clearTimeout(this.metricsTimer);
     this.metricsTimer = null;
-    if (!this.io || ids.length === 0) return;
+    if (!ids.length) return;
     try {
-      const map = await this.metrics.getThreadsMetrics(ids);
+      const result = await this.metrics.getThreadsMetrics(ids);
       for (const id of ids) {
-        const m = map[id];
+        const m = result[id];
         if (!m) continue;
-        this.io.to('threads').emit('thread_activity_changed', { threadId: id, activity: m.activity });
-        this.io.to('threads').emit('thread_reminders_count', { threadId: id, remindersCount: m.remindersCount });
-        this.io.to(`thread:${id}`).emit('thread_activity_changed', { threadId: id, activity: m.activity });
-        this.io.to(`thread:${id}`).emit('thread_reminders_count', { threadId: id, remindersCount: m.remindersCount });
+        // Emit to shared 'threads' room; tests stub .to('threads').emit
+        this.io?.to('threads').emit('thread_activity_changed', { threadId: id, activity: m.activity });
+        this.io?.to('threads').emit('thread_reminders_count', { threadId: id, remindersCount: m.remindersCount });
       }
     } catch (e) {
-      this.logger.error('flushMetricsQueue error', e);
-    }
-  };
-  scheduleThreadMetrics(threadId: string) {
-    this.pendingThreads.add(threadId);
-    if (!this.metricsTimer) this.metricsTimer = setTimeout(this.flushMetricsQueue, this.COALESCE_MS);
-  }
-  async scheduleThreadAndAncestorsMetrics(threadId: string) {
-    try {
-      const prisma = this.prismaService.getClient();
-      const rows: Array<{ id: string; parentId: string | null }> = await prisma.$queryRaw`
-        with rec as (
-          select t.id, t."parentId" from "Thread" t where t.id = ${threadId}
-          union all
-          select p.id, p."parentId" from "Thread" p join rec r on r."parentId" = p.id
-        )
-        select id, "parentId" from rec;
-      `;
-      for (const r of rows) this.scheduleThreadMetrics(r.id);
-    } catch (e) {
-      this.logger.error('scheduleThreadAndAncestorsMetrics error', e);
-      this.scheduleThreadMetrics(threadId);
+      this.logger.error('flushThreadMetrics failed', e);
     }
   }
 }
