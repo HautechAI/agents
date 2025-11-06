@@ -48,7 +48,7 @@ import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { AgentsThreadsController } from '../agents/threads.controller';
 import { AgentsRemindersController } from '../agents/reminders.controller';
 import { ChannelRegistry } from '../channels/channel.registry';
-import { SlackChannelAdapter } from '../channels/slack.adapter';
+import { TriggerMessagingService } from '../channels/trigger.messaging';
 
 @Module({
   imports: [CoreModule, InfraModule, LLMModule, EnvModule],
@@ -115,7 +115,7 @@ import { SlackChannelAdapter } from '../channels/slack.adapter';
     GraphSocketGateway,
     AgentsPersistenceService,
     ChannelRegistry,
-    SlackChannelAdapter,
+    TriggerMessagingService,
 
     //////// Nodes
 

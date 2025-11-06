@@ -12,9 +12,7 @@ describe('SlackChannelAdapter', () => {
   const make = async () => {
     const { SlackChannelAdapter } = await import('../src/channels/slack.adapter');
     const logger = new LoggerService();
-    const cfg = { slackBotToken: 'xoxb-test' } as any;
-    const vault = { getSecret: async () => 'dummy' } as any;
-    const adapter = new SlackChannelAdapter(logger, cfg, vault);
+    const adapter = new SlackChannelAdapter(logger);
     return { adapter };
   };
 
@@ -80,4 +78,3 @@ describe('SlackChannelAdapter', () => {
     expect(chat.postMessage).toHaveBeenCalledTimes(2);
   });
 });
-

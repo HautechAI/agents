@@ -6,6 +6,7 @@ export const SlackChannelInfoSchema = z
     channel: z.string().min(1),
     thread_ts: z.string().min(1).optional(),
     user: z.string().min(1).optional(),
+    meta: z.object({ triggerNodeId: z.string().min(1) }).optional(),
   })
   .strict();
 

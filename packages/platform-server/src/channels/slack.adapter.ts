@@ -1,40 +1,20 @@
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { WebClient, type ChatPostEphemeralResponse, type ChatPostMessageResponse, type ChatPostMessageArguments } from '@slack/web-api';
 import { LoggerService } from '../core/services/logger.service';
-import { ConfigService } from '../core/services/config.service';
-import { VaultService } from '../vault/vault.service';
-import { parseVaultRef } from '../utils/refs';
 import type { SlackChannelInfo, SlackMessageRef } from './types';
 
 export type SendResult = { ok: boolean; ref?: SlackMessageRef; error?: string; attempts: number };
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class SlackChannelAdapter {
-  constructor(
-    @Inject(LoggerService) private readonly logger: LoggerService,
-    @Inject(ConfigService) private readonly cfg: ConfigService,
-    @Inject(VaultService) private readonly vault: VaultService,
-  ) {}
-
-  private async resolveBotToken(): Promise<string> {
-    const token = this.cfg.slackBotToken;
-    if (!token) throw new Error('SLACK_BOT_TOKEN not configured');
-    const isVaultRef = token.startsWith('${vault:');
-    if (isVaultRef) {
-      const ref = parseVaultRef(token);
-      const val = await this.vault.getSecret(ref);
-      if (!val) throw new Error('Vault secret for SLACK_BOT_TOKEN not found');
-      return String(val);
-    }
-    return token;
-  }
+  constructor(@Inject(LoggerService) private readonly logger: LoggerService) {}
 
   async send(
     info: SlackChannelInfo,
     params: { text: string; broadcast?: boolean; ephemeral_user?: string | null },
-    tokenOverride?: string,
+    tokenOverride: string,
   ): Promise<SendResult> {
-    const token = tokenOverride ?? (await this.resolveBotToken());
+    const token = tokenOverride;
     const client = new WebClient(token, { logLevel: undefined });
     const maxAttempts = 3;
     let attempt = 0;

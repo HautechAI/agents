@@ -5,7 +5,8 @@ import { LoggerService } from '../../../../core/services/logger.service';
 import { VaultService } from '../../../../vault/vault.service';
 import { ReferenceFieldSchema, normalizeTokenRef, parseVaultRef, resolveTokenRef } from '../../../../utils/refs';
 import { SendSlackMessageNode } from './send_slack_message.node';
-import { SlackChannelAdapter, type SendResult } from '../../../../channels/slack.adapter';
+import { TriggerMessagingService } from '../../../../channels/trigger.messaging';
+import { AgentsPersistenceService } from '../../../../agents/agents.persistence.service';
 
 export const SendSlackMessageToolStaticConfigSchema = z
   .object({
@@ -35,7 +36,8 @@ export class SendSlackMessageFunctionTool extends FunctionTool<typeof sendSlackI
     private node: SendSlackMessageNode,
     private logger: LoggerService,
     private vault: VaultService,
-    private adapter: SlackChannelAdapter,
+    private persistence: AgentsPersistenceService,
+    private triggers: TriggerMessagingService,
   ) {
     super();
   }
@@ -49,22 +51,24 @@ export class SendSlackMessageFunctionTool extends FunctionTool<typeof sendSlackI
     return sendSlackInvocationSchema;
   }
 
-  async execute(args: z.infer<typeof sendSlackInvocationSchema>): Promise<string> {
+  async execute(args: z.infer<typeof sendSlackInvocationSchema>, ctx?: any): Promise<string> {
     const { channel: channelInput, text, thread_ts, broadcast, ephemeral_user } = args;
     this.logger.info('send_slack_message: deprecated; prefer send_message');
-    const bot = normalizeTokenRef(this.node.config.bot_token) as TokenRef;
-    if ((bot.source || 'static') === 'vault') parseVaultRef(bot.value);
-    else if (!bot.value.startsWith('xoxb-')) throw new Error('Slack bot token must start with xoxb-');
     const channel = channelInput;
     if (!channel) throw new Error('channel is required');
     try {
-      const token = await resolveTokenRef(bot, { expectedPrefix: 'xoxb-', fieldName: 'bot_token', vault: this.vault });
-      // Delegate to adapter for consistent retries/error mapping, overriding token from legacy config
-      const res: SendResult = await this.adapter.send(
-        { type: 'slack', channel, thread_ts },
-        { text, ephemeral_user, broadcast: !!broadcast },
-        token,
-      );
+      const threadId: string | undefined = ctx?.threadId;
+      if (!threadId) return JSON.stringify({ ok: false, error: 'thread_context_required' });
+      const info = await this.persistence.getThreadChannel(threadId);
+      if (!info || info.type !== 'slack' || !info.meta?.triggerNodeId)
+        return JSON.stringify({ ok: false, error: 'invalid_channel_info' });
+      const messenger = this.triggers.resolve('slack', info.meta.triggerNodeId);
+      if (!messenger) return JSON.stringify({ ok: false, error: 'trigger_not_available' });
+      const res = await messenger.send({ ...info, channel, thread_ts } as any, {
+        text,
+        ephemeral_user,
+        broadcast: !!broadcast,
+      });
       if (!res.ok) return JSON.stringify({ ok: false, error: res.error });
       const ref = res.ref;
       return JSON.stringify({ ok: true, channel: ref?.channel, ts: ref?.ts, thread_ts: ref?.thread_ts, broadcast: !!broadcast, ephemeral: !!ephemeral_user });

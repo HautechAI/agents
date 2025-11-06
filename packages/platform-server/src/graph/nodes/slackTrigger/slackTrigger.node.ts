@@ -9,6 +9,7 @@ import { BufferMessage } from '../agent/messagesBuffer';
 import { HumanMessage } from '@agyn/llm';
 import { stringify as YamlStringify } from 'yaml';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
+import { TriggerMessagingService, createSlackMessenger } from '../../../channels/trigger.messaging';
 
 type TriggerHumanMessage = { kind: 'human'; content: string; info?: Record<string, unknown> };
 type TriggerListener = { invoke: (thread: string, messages: BufferMessage[]) => Promise<void> };
@@ -17,6 +18,10 @@ type TriggerListener = { invoke: (thread: string, messages: BufferMessage[]) => 
 export const SlackTriggerStaticConfigSchema = z
   .object({
     app_token: ReferenceFieldSchema,
+    bot_token: z
+      .union([z.string().min(1).startsWith('xoxb-'), ReferenceFieldSchema])
+      .optional()
+      .describe('Slack bot token for outbound messaging'),
   })
   .strict();
 
@@ -36,6 +41,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     @Inject(LoggerService) protected readonly logger: LoggerService,
     @Inject(VaultService) protected readonly vault: VaultService,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
+    @Inject(TriggerMessagingService) private readonly triggerMessaging: TriggerMessagingService,
   ) {
     super(logger);
   }
@@ -118,13 +124,14 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         };
         // Resolve persistent UUID threadId from Slack alias at ingress
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias);
-        // Persist channel info for routing outbound messages
+        // Persist channel info for routing outbound messages (no secrets)
         try {
           await this.persistence.setThreadChannel(threadId, {
             type: 'slack',
             channel: event.channel || 'unknown',
             thread_ts: (event.thread_ts || event.ts) as string | undefined,
             user: event.user,
+            meta: { triggerNodeId: this.nodeId },
           });
         } catch (e) {
           this.logger.error('SlackTrigger: setThreadChannel failed', { error: (e as { message?: string })?.message || String(e) });
@@ -145,6 +152,8 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     try {
       await client.start();
       this.logger.info('SlackTrigger started');
+      // Register trigger-bound messenger
+      this.triggerMessaging.register('slack', this.nodeId, createSlackMessenger({ logger: this.logger, vault: this.vault }, { bot_token: this.config.bot_token as any }));
     } catch (e) {
       this.logger.error('SlackTrigger.start failed', e);
       this.setStatus('provisioning_error');
@@ -162,6 +171,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     }
     this.client = null;
     this.logger.info('SlackTrigger stopped');
+    this.triggerMessaging.unregister('slack', this.nodeId);
   }
 
   // Fan-out of trigger messages

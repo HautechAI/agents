@@ -2,7 +2,7 @@ import { Inject, Injectable, Scope } from '@nestjs/common';
 import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { LoggerService } from '../core/services/logger.service';
 import { ChannelInfo, type MessageRef } from './types';
-import { SlackChannelAdapter } from './slack.adapter';
+import { TriggerMessagingService } from './trigger.messaging';
 
 export type SendMessageParams = { text: string; broadcast?: boolean; ephemeral_user?: string | null };
 export type SendMessageResult = { ok: boolean; ref?: MessageRef; error?: string; attempts: number };
@@ -12,7 +12,7 @@ export class ChannelRegistry {
   constructor(
     @Inject(LoggerService) private readonly logger: LoggerService,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
-    @Inject(SlackChannelAdapter) private readonly slack: SlackChannelAdapter,
+    @Inject(TriggerMessagingService) private readonly triggers: TriggerMessagingService,
   ) {}
 
   async resolve(threadId: string): Promise<ChannelInfo | null> {
@@ -24,7 +24,11 @@ export class ChannelRegistry {
     if (!info) return { ok: false, error: 'channel_info_missing', attempts: 0 };
     switch (info.type) {
       case 'slack': {
-        const res = await this.slack.send(info, params);
+        const triggerNodeId = info.meta?.triggerNodeId;
+        if (!triggerNodeId) return { ok: false, error: 'invalid_channel_info', attempts: 0 };
+        const messenger = this.triggers.resolve('slack', triggerNodeId);
+        if (!messenger) return { ok: false, error: 'trigger_not_available', attempts: 0 };
+        const res = await messenger.send(info, params);
         return { ok: res.ok, ref: res.ref, error: res.error, attempts: res.attempts };
       }
       default: {
