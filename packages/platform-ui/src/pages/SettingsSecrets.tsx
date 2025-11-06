@@ -9,7 +9,7 @@ function useAdminToken(): [string, (v: string) => void] {
   const [tok, setTok] = useState<string>(() => {
     try { return localStorage.getItem('X-Admin-Token') || ''; } catch { return ''; }
   });
-  function set(v: string) {
+  function setToken(v: string) {
     setTok(v);
     try { if (v) localStorage.setItem("X-Admin-Token", v); else localStorage.removeItem("X-Admin-Token"); } catch { /* ignore */ }
   }
