@@ -212,4 +212,18 @@ describe('RemindMeTool', () => {
     const parsed = typeof res === 'string' ? JSON.parse(res) : res;
     expect(parsed.status).toBe('scheduled');
   });
+
+  it('emits thread metrics request on schedule and completion', async () => {
+    const tool = getToolInstance() as any;
+    const threadId = 't-metrics';
+    const metricSpy = vi.fn();
+    tool.setOnThreadMetricsRequested(metricSpy);
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+    await tool.execute({ delayMs: 10, note: 'm' } as any, { threadId, callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } } as any);
+    expect(metricSpy).toHaveBeenCalledTimes(1);
+    expect(metricSpy).toHaveBeenCalledWith(threadId);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(metricSpy).toHaveBeenCalledTimes(2);
+    expect(metricSpy).toHaveBeenLastCalledWith(threadId);
+  });
 });
