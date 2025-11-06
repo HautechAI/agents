@@ -156,6 +156,7 @@ describe('ContainersController routes', () => {
   });
 
   // Labels are no longer used to derive role in list endpoint
+  // Labels are no longer used to derive role in list endpoint
 
   it('supports sorting by lastUsedAt desc', async () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/containers?sortBy=lastUsedAt&sortDir=desc' }); expect(res.statusCode).toBe(200);
@@ -190,4 +191,3 @@ describe('ContainersController routes', () => {
     expect(items.length).toBe(1);
   });
 });
-

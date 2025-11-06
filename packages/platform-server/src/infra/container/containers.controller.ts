@@ -127,7 +127,6 @@ export class ContainersController {
       take,
     });
 
-    // Map createdAt -> startedAt and return minimal shape
     const items = rows.map((r) => ({
       containerId: r.containerId,
       threadId: r.threadId,
@@ -196,4 +195,3 @@ export class ContainersController {
     return { items };
   }
 }
-

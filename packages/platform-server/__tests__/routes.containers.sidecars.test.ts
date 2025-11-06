@@ -128,4 +128,3 @@ describe('ContainersController sidecars route', () => {
     expect(body.items[0].status).toBe('stopped');
   });
 });
-
