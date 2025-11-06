@@ -91,6 +91,7 @@ export class NcpsKeyService {
         const key = await this.fetchOnce();
         if (key && key !== this.currentKey) {
           // rotate
+          // eslint-disable-next-line max-depth -- rotation bookkeeping within retry loop
           if (this.currentKey) {
             this.previousKey = this.currentKey;
             const minutes = Math.max(0, this.cfg.ncpsRotationGraceMinutes);

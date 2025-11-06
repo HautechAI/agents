@@ -118,6 +118,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
           }),
         );
         for (const { c, cl } of results) {
+          // eslint-disable-next-line max-depth -- narrow filter inside nested lookup
           if (cl?.['hautech.ai/role'] === 'dind') continue;
           container = c;
           break;
@@ -134,7 +135,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
         const existingPlatform = containerLabels?.[PLATFORM_LABEL];
         if (!existingPlatform || existingPlatform !== requestedPlatform) {
           // If DinD is enabled, remove associated DinD sidecar(s) first
+          // eslint-disable-next-line max-depth -- conditional DinD cleanup within nested branch
           if (enableDinD) {
+            // eslint-disable-next-line max-depth -- nested cleanup try block
             try {
               const dinds = await this.containerService.findContainersByLabels({
                 ...labels,
@@ -165,16 +168,20 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
             }
           }
           // Stop and remove old container, then recreate (handle benign errors)
+          // eslint-disable-next-line max-depth -- nested stop within platform-mismatch branch
           try {
             await container.stop();
           } catch (e: unknown) {
             const sc = getStatusCode(e);
+            // eslint-disable-next-line max-depth -- guard benign stop errors
             if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
           }
+          // eslint-disable-next-line max-depth -- nested remove within platform-mismatch branch
           try {
             await container.remove(true);
           } catch (e: unknown) {
             const sc = getStatusCode(e);
+            // eslint-disable-next-line max-depth -- guard benign remove errors
             if (sc !== 404 && sc !== 409) throw e;
           }
           container = undefined;
@@ -185,12 +192,14 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
           await container!.stop();
         } catch (e: unknown) {
           const sc = getStatusCode(e);
+          // eslint-disable-next-line max-depth -- guard benign stop errors
           if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
         }
         try {
           await container!.remove(true);
         } catch (e: unknown) {
           const sc = getStatusCode(e);
+          // eslint-disable-next-line max-depth -- guard benign remove errors
           if (sc !== 404 && sc !== 409) throw e;
         }
         container = undefined;
@@ -358,6 +367,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
             State?: { Running?: boolean; Status?: string };
           };
           const state = inspect?.State;
+          // eslint-disable-next-line max-depth -- deep readiness check nested in polling loop
           if (state && state.Running === false) {
             throw new Error(`DinD sidecar exited unexpectedly: status=${state.Status}`);
           }

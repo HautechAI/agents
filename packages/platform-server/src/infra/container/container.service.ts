@@ -529,6 +529,7 @@ export class ContainerService {
                 const demux = modemObj?.['demuxStream'] as
                   | ((s: NodeJS.ReadableStream, out: NodeJS.WritableStream, err: NodeJS.WritableStream) => void)
                   | undefined;
+                // eslint-disable-next-line max-depth -- nested demux fallback check
                 if (!demux) throw new Error('demuxStream not available');
                 demux(stream, outStdout, outStderr);
               } catch {

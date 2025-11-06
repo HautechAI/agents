@@ -241,6 +241,7 @@ export class LiveGraphRuntime {
       const rec = this.state.executedEdges.get(key);
       if (rec) {
         try {
+          // eslint-disable-next-line max-depth -- conditional reversal within nested try/catch/if
           if (rec.reversible && rec.reversal) await rec.reversal();
           this.unregisterEdgeRecord(rec);
         } catch (e) {
@@ -317,6 +318,7 @@ export class LiveGraphRuntime {
         } else {
           const prevCfg = prevNode.data.config || {};
           const nextCfg = n.data.config || {};
+          // eslint-disable-next-line max-depth -- nested compare inside loops
           if (!configsEqual(prevCfg, nextCfg)) configUpdateNodeIds.push(n.id);
           // dynamicConfig removed
         }
@@ -419,16 +421,22 @@ export class LiveGraphRuntime {
             const pathOk = Array.isArray(path as unknown[]) ? (path as unknown[]).length === 0 : true;
             return hasKeys && pathOk;
           });
+          // eslint-disable-next-line max-depth -- deep error-shape handling for Zod issues
           if (unknownRoot.length > 0) {
             const keys = new Set<string>();
+            // eslint-disable-next-line max-depth -- iterate collected issues
             for (const i of unknownRoot) {
               const ks = (i as { keys?: string[] }).keys;
+              // eslint-disable-next-line max-depth -- flatten keys from issue payloads
               if (Array.isArray(ks)) for (const k of ks) keys.add(k);
             }
+            // eslint-disable-next-line max-depth -- pruning config keys before retry
             if (keys.size > 0) {
               const next: Record<string, unknown> = {};
+              // eslint-disable-next-line max-depth -- reconstruct pruned config map
               for (const [k, v] of Object.entries(current)) if (!keys.has(k)) next[k] = v;
               current = next;
+              // eslint-disable-next-line max-depth -- bounded retry loop
               if (attempt < MAX_RETRIES) {
                 attempt += 1;
                 continue; // retry
@@ -465,6 +473,7 @@ export class LiveGraphRuntime {
       if (rec) {
         // Attempt reversal if reversible
         try {
+          // eslint-disable-next-line max-depth -- conditional reversal within nested try/catch/if
           if (rec.reversible && rec.reversal) await rec.reversal();
         } catch (e) {
           this.logger.error('Edge reversal during node disposal failed', k, e);

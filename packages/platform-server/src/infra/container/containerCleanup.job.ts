@@ -90,8 +90,10 @@ export class ContainerCleanupService {
                   }),
                 );
                 const scCleaned = results.reduce((acc, r) => acc + (r.status === 'fulfilled' && r.value ? 1 : 0), 0);
+                // eslint-disable-next-line max-depth -- narrow log nested within cleanup branch
                 if (scCleaned > 0) this.logger.info(`ContainerCleanup: removed ${scCleaned} DinD sidecar(s) for ${id}`);
                 const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+                // eslint-disable-next-line max-depth -- aggregate nested cleanup errors for reporting
                 if (rejected.length) {
                   throw new AggregateError(rejected.map((r) => r.reason), 'One or more sidecar cleanup tasks failed');
                 }

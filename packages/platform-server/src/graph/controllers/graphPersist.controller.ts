@@ -96,6 +96,7 @@ async upsertGraph(
         for (const n of saved.nodes) {
           const prevS = beforeStatic.get(n.id);
           const currS = JSON.stringify(n.config || {});
+          // eslint-disable-next-line max-depth -- nested inside try/if/for; localized change event
           if (prevS !== currS) {
             // Socket.io Gateway not wired in Nest yet; log and TODO
             this.logger.info('node_config changed for %s (v=%s) [TODO: emit via gateway]', n.id, String(saved.version));

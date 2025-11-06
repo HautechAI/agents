@@ -230,8 +230,10 @@ export class NixController {
         const withInvalid: string[] = [];
         for (const r of rels) {
           const v = String(r?.version ?? '');
+          // eslint-disable-next-line max-depth -- skip duplicates within nested parse branch
           if (!v || seen.has(v)) continue;
           seen.add(v);
+          // eslint-disable-next-line max-depth -- categorize versions with nested validation
           if (semver.valid(v) || semver.valid(semver.coerce(v) || '')) withValid.push(v);
           else withInvalid.push(v);
         }

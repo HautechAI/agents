@@ -341,12 +341,14 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
             }),
           );
           const cleaned = results.reduce((acc, r) => acc + (r.status === 'fulfilled' && r.value ? 1 : 0), 0);
+          // eslint-disable-next-line max-depth -- nested post-cleanup logging
           if (cleaned > 0) {
             this.logger.info(
               `[MCP:${this.config.namespace}] Cleaned ${cleaned} DinD sidecar(s) for temp container ${String(tempContainerId).substring(0, 12)}`,
             );
           }
           const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+          // eslint-disable-next-line max-depth -- aggregate nested cleanup errors for reporting
           if (rejected.length) {
             throw new AggregateError(
               rejected.map((r) => r.reason),

@@ -89,6 +89,7 @@ export class LiteLLMProvisioner extends LLMProvisioner {
         if (!resp.ok) {
           const text = await this.safeReadText(resp);
           this.logger.error('LiteLLM provisioning failed: status=%s, body=%s', String(resp.status), this.redact(text));
+          // eslint-disable-next-line max-depth -- retry condition within request loop
           if (resp.status >= 500 && attempt < maxAttempts) {
             await this.delay(baseDelayMs * Math.pow(2, attempt - 1));
             continue;

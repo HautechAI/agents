@@ -445,6 +445,7 @@ export class GitGraphRepository extends GraphRepository {
       } catch (e: unknown) {
         const err = e as NodeJS.ErrnoException;
         if (err && err.code === 'EEXIST') {
+          // eslint-disable-next-line max-depth -- loop-with-retry timeout check
           if (Date.now() - start > timeout) {
             throw codeError('LOCK_TIMEOUT', 'Lock timeout');
           }
@@ -584,6 +585,7 @@ export class GitGraphRepository extends GraphRepository {
         try {
           const rawVars = await this.runGitCapture(['show', 'HEAD:variables.json'], this.config.graphRepoPath);
           const parsedVars = JSON.parse(rawVars) as Array<{ key: string; value: string }>;
+          // eslint-disable-next-line max-depth -- nested within try/if; safe mapping
           if (Array.isArray(parsedVars)) variables = parsedVars.map((v) => ({ key: String(v.key), value: String(v.value) }));
         } catch {
           // ignore variables read error
