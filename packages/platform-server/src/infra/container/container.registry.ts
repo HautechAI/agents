@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
 import type { PrismaClient, Prisma, ContainerRole } from '@prisma/client';
 import type { ContainerMetadata } from './container.schemas';
-import { ROLE_LABEL } from '../../constants';
 
 export type ContainerStatus = 'running' | 'stopped' | 'terminating' | 'failed';
 
@@ -44,9 +43,7 @@ export class ContainerRegistry {
       labels: args.labels ?? {},
       platform: args.platform,
     } as ContainerMetadata;
-    const role: ContainerRole | null = args.role
-      ? args.role
-      : (metadata.labels?.[ROLE_LABEL] === 'workspace' ? 'workspace' : undefined) ?? null;
+    const role: ContainerRole | null = args.role ?? null;
     await this.prisma.container.upsert({
       where: { containerId: args.containerId },
       create: {
