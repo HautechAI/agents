@@ -22,7 +22,7 @@ describe('CallAgentTool unit', () => {
     const tool = new CallAgentTool(new LoggerService(), new AgentsPersistenceService(new StubPrismaService(createPrismaStub()) as any, new LoggerService(), { getThreadsMetrics: async () => ({}) } as any, new NoopGraphEventsPublisher()));
     await expect(tool.setConfig({ description: 'desc' })).resolves.toBeUndefined();
     const dynamic = tool.getTool();
-    await expect(dynamic.execute({ input: 'hi', threadAlias: 'x' }, { threadId: 't1' } as any)).rejects.toThrowError(
+    await expect(dynamic.execute({ input: 'hi', threadAlias: 'x', summary: 'x summary' }, { threadId: 't1' } as any)).rejects.toThrowError(
       'Agent not set',
     );
   });
@@ -38,7 +38,7 @@ describe('CallAgentTool unit', () => {
   // @ts-expect-error private for unit
     tool['setAgent'](agent as any);
     const dynamic = tool.getTool();
-    const out = await dynamic.execute({ input: 'ping', threadAlias: 'sub' }, { threadId: 't2' } as any);
+    const out = await dynamic.execute({ input: 'ping', threadAlias: 'sub', summary: 'sub summary' }, { threadId: 't2' } as any);
     expect(out).toBe('OK');
   });
 
@@ -63,7 +63,7 @@ describe('CallAgentTool unit', () => {
   // @ts-expect-error private for unit
     tool['setAgent'](agent as any);
     const dynamic = tool.getTool();
-    const out = await dynamic.execute({ input: 'ping', threadAlias: 'sub' }, { threadId: 'parent' } as any);
+    const out = await dynamic.execute({ input: 'ping', threadAlias: 'sub', summary: 'sub summary' }, { threadId: 'parent' } as any);
     expect(out).toBe('OK');
   });
 
@@ -78,7 +78,7 @@ describe('CallAgentTool unit', () => {
   // @ts-expect-error private for unit
     tool['setAgent'](child as any);
     const dynamic = tool.getTool();
-    const res = await dynamic.execute({ input: 'do work', threadAlias: 'c1' }, { threadId: 'p' } as any);
+    const res = await dynamic.execute({ input: 'do work', threadAlias: 'c1', summary: 'c1 summary' }, { threadId: 'p' } as any);
     expect(typeof res).toBe('string');
     expect(JSON.parse(res).status).toBe('sent');
   });
@@ -93,7 +93,7 @@ describe('CallAgentTool unit', () => {
   // @ts-expect-error private for unit
     tool['setAgent'](child as any);
     const dynamic = tool.getTool();
-    const res = await dynamic.execute({ input: 'do work', threadAlias: 'c2' }, { threadId: 'p2' } as any);
+    const res = await dynamic.execute({ input: 'do work', threadAlias: 'c2', summary: 'c2 summary' }, { threadId: 'p2' } as any);
     expect(typeof res).toBe('string');
     expect(JSON.parse(res).status).toBe('sent');
   });

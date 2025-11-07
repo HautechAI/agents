@@ -10,6 +10,7 @@ import { AgentsPersistenceService } from '../../../../agents/agents.persistence.
 export const callAgentInvocationSchema = z.object({
   input: z.string().min(1).describe('Message to forward to the target agent.'),
   threadAlias: z.string().min(1).describe('Child thread alias to resolve under current parent thread.'),
+  summary: z.string().min(1).describe('Initial summary for the child thread.'),
 });
 
 // Interface removed (unused)
@@ -43,7 +44,7 @@ export class CallAgentFunctionTool extends FunctionTool<typeof callAgentInvocati
     if (!targetAgent) return 'Target agent is not connected';
 
     // Resolve subthread UUID by alias under parent UUID
-    const targetThreadId = await this.persistence.getOrCreateSubthreadByAlias('call_agent', threadAlias, parentThreadId);
+    const targetThreadId = await this.persistence.getOrCreateSubthreadByAlias('call_agent', threadAlias, parentThreadId, args.summary);
 
     const message = HumanMessage.fromText(args.input);
     try {

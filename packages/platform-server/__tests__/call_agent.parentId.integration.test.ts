@@ -28,8 +28,8 @@ describe('call_agent integration: creates child thread with parentId', () => {
 
     const dynamic = tool.getTool();
     // Create parent thread and use its UUID in ctx.threadId
-    const parentThreadId = await persistence.getOrCreateThreadByAlias('test', 'parentX');
-    const res = await dynamic.execute({ input: 'do', threadAlias: 'childX' }, { threadId: parentThreadId, finishSignal: new Signal(), callerAgent: { invoke: async () => ResponseMessage.fromText('OK') } } as any);
+    const parentThreadId = await persistence.getOrCreateThreadByAlias('test', 'parentX', 'Parent X');
+    const res = await dynamic.execute({ input: 'do', threadAlias: 'childX', summary: 'Child X' }, { threadId: parentThreadId, finishSignal: new Signal(), callerAgent: { invoke: async () => ResponseMessage.fromText('OK') } } as any);
     expect(res).toBe('OK');
 
     const parent = stub._store.threads.find((t: any) => t.alias === 'parentX');

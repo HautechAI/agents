@@ -25,10 +25,12 @@ export class AgentsPersistenceService {
   /**
    * Resolve a UUID threadId for a globally-unique alias. Alias is only used at ingress.
    */
-  async getOrCreateThreadByAlias(_source: string, alias: string): Promise<string> {
+  async getOrCreateThreadByAlias(_source: string, alias: string, summary: string): Promise<string> {
     const existing = await this.prisma.thread.findUnique({ where: { alias } });
     if (existing) return existing.id;
-    const created = await this.prisma.thread.create({ data: { alias } });
+    const trimmed = (summary ?? '').trim();
+    if (trimmed.length > 1024) throw new Error('Thread summary exceeds max length 1024');
+    const created = await this.prisma.thread.create({ data: { alias, summary: trimmed } });
     this.events.emitThreadCreated({ id: created.id, alias: created.alias, summary: created.summary ?? null, status: created.status, createdAt: created.createdAt, parentId: created.parentId ?? null });
     return created.id;
   }
@@ -37,11 +39,13 @@ export class AgentsPersistenceService {
    * Resolve a child UUID threadId for a subthread alias under a parent threadId.
    * Alias must be globally unique; we compose alias using parent to satisfy uniqueness.
    */
-  async getOrCreateSubthreadByAlias(source: string, alias: string, parentThreadId: string): Promise<string> {
+  async getOrCreateSubthreadByAlias(source: string, alias: string, parentThreadId: string, summary: string): Promise<string> {
     const composed = `${source}:${parentThreadId}:${alias}`;
     const existing = await this.prisma.thread.findUnique({ where: { alias: composed } });
     if (existing) return existing.id;
-    const created = await this.prisma.thread.create({ data: { alias: composed, parentId: parentThreadId } });
+    const trimmed = (summary ?? '').trim();
+    if (trimmed.length > 1024) throw new Error('Thread summary exceeds max length 1024');
+    const created = await this.prisma.thread.create({ data: { alias: composed, parentId: parentThreadId, summary: trimmed } });
     this.events.emitThreadCreated({ id: created.id, alias: created.alias, summary: created.summary ?? null, status: created.status, createdAt: created.createdAt, parentId: created.parentId ?? null });
     this.events.scheduleThreadAndAncestorsMetrics(created.id);
     return created.id;
@@ -62,8 +66,8 @@ export class AgentsPersistenceService {
     threadId: string,
     inputMessages: Array<HumanMessage | SystemMessage | AIMessage>,
   ): Promise<RunStartResult> {
-    const { runId, createdMessages, updatedThread } = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Begin run and persist messages; summary initialization guarded via conditional update
+    const { runId, createdMessages } = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Begin run and persist messages
       const run = await tx.run.create({ data: { threadId, status: 'running' as RunStatus } });
       const createdMessages: Array<{ id: string; kind: MessageKind; text: string | null; source: Prisma.JsonValue; createdAt: Date }> = [];
       await Promise.all(
@@ -75,27 +79,10 @@ export class AgentsPersistenceService {
           createdMessages.push({ id: created.id, kind, text, source: created.source as Prisma.JsonValue, createdAt: created.createdAt });
         }),
       );
-      let updatedThread: { id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null } | null = null;
-      const candidate = this.selectFirstQualifyingText(inputMessages);
-      const sanitized = candidate ? this.sanitizeSummary(candidate) : '';
-      const finalSummary = sanitized ? this.truncateSummary(sanitized, 250) : '';
-      if (finalSummary.length > 0) {
-        // Concurrency-safe: update only if summary is still null
-        const res = await tx.thread.updateMany({ where: { id: threadId, summary: null }, data: { summary: finalSummary } });
-        const count: number = typeof res?.count === 'number' ? res.count : 0;
-        if (count > 0) {
-          const updated = await tx.thread.findUnique({ where: { id: threadId } });
-          if (updated) {
-            updatedThread = { id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status, createdAt: updated.createdAt, parentId: updated.parentId ?? null };
-          }
-        }
-      }
-      return { runId: run.id, createdMessages, updatedThread };
+      return { runId: run.id, createdMessages };
     });
     this.events.emitRunStatusChanged(threadId, { id: runId, status: 'running' as RunStatus, createdAt: new Date(), updatedAt: new Date() });
     for (const m of createdMessages) this.events.emitMessageCreated(threadId, { id: m.id, kind: m.kind, text: m.text, source: m.source as Prisma.JsonValue, createdAt: m.createdAt, runId });
-    if (updatedThread) this.events.emitThreadUpdated(updatedThread);
-    // Consider scheduling ancestors; keeping current semantics per review note
     this.events.scheduleThreadMetrics(threadId);
     return { runId };
   }
@@ -236,52 +223,5 @@ export class AgentsPersistenceService {
     return { kind: 'user' as MessageKind, text: null };
   }
 
-  /**
-   * Select first qualifying message text according to priority:
-   * Human first; if none, fallback to System or AI. Skip empty/whitespace-only.
-   */
-  private selectFirstQualifyingText(input: Array<HumanMessage | SystemMessage | AIMessage>): string | null {
-    const norm = (t: string | null | undefined) => (t ?? '').trim();
-    const firstHuman = input.find((m) => m instanceof HumanMessage && norm((m as HumanMessage).text).length > 0) as HumanMessage | undefined;
-    if (firstHuman) return norm(firstHuman.text);
-    const firstSystem = input.find((m) => m instanceof SystemMessage && norm((m as SystemMessage).text).length > 0) as SystemMessage | undefined;
-    if (firstSystem) return norm(firstSystem.text);
-    const firstAI = input.find((m) => m instanceof AIMessage && norm((m as AIMessage).text).length > 0) as AIMessage | undefined;
-    if (firstAI) return norm(firstAI.text);
-    return null;
-  }
-
-  /**
-   * Sanitize summary text: strip markdown markers, convert links/images, remove backticks/emphasis,
-   * and collapse whitespace to single spaces.
-   */
-  private sanitizeSummary(text: string): string {
-    let out = text;
-    // Convert markdown links and images to labels
-    out = out.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1');
-    out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
-    // Strip fenced code blocks and inline backticks
-    out = out.replace(/```+/g, '');
-    out = out.replace(/`/g, '');
-    // Strip headings at line starts: leading #+ and spaces
-    out = out.replace(/^#{1,6}\s+/gm, '');
-    // Strip emphasis markers: *, **, _, ~
-    out = out.replace(/[*_~]/g, '');
-    // Collapse whitespace (including newlines/tabs) to single spaces
-    out = out.replace(/[\s\t\n\r]+/g, ' ');
-    // Trim leading/trailing spaces
-    out = out.trim();
-    return out;
-  }
-
-  /**
-   * Truncate string at nearest word boundary up to maxLen. If no space before limit, hard-cut.
-   */
-  private truncateSummary(text: string, maxLen: number): string {
-    if (text.length <= maxLen) return text;
-    const cut = text.slice(0, maxLen);
-    const lastSpace = cut.lastIndexOf(' ');
-    if (lastSpace > 0) return cut.slice(0, lastSpace);
-    return cut;
-  }
+  // Summary initialization is upstream-only; no sanitization/truncation here.
 }
