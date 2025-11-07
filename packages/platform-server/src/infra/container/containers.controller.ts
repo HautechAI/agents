@@ -140,23 +140,46 @@ export class ContainersController {
       for (const [k, v] of Object.entries(raw)) if (typeof v === 'string') out[k] = v;
       return out;
     };
-    // Optimize: preselect DinD sidecars for current parent set via JSON-path raw query
+    // Optimize: preselect DinD sidecars for current parent set via JSON-path raw query;
+    // provide a safe fallback when $queryRaw is not implemented by the Prisma stub.
     const parentIds = rows.map((r) => r.containerId);
-    const rawSidecars = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown }>>`
-      SELECT "containerId", "image", "status", "metadata" FROM "Container"
-      WHERE "metadata"->'labels'->>'hautech.ai/role' = 'dind'
-        AND ("metadata"->'labels'->>'hautech.ai/parent_cid') IN (${Prisma.join(parentIds)})
-    `;
-    const isStatus = (s: unknown): s is ContainerStatus =>
-      typeof s === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(s);
     const byParent: Record<string, Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus }>> = {};
-    for (const sc of rawSidecars) {
-      const labels = metaLabelsOf(sc.metadata);
-      const parent = labels['hautech.ai/parent_cid'];
-      if (!parent) continue;
-      const status: ContainerStatus = isStatus(sc.status) ? sc.status : 'failed';
-      const arr = byParent[parent] || (byParent[parent] = []);
-      arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status });
+    const hasQueryRaw = (() => {
+      const obj = this.prisma as unknown as Record<string, unknown>;
+      const fn = obj && (obj['$queryRaw'] as unknown);
+      return typeof fn === 'function';
+    })();
+    if (hasQueryRaw) {
+      const q = Prisma.sql<Array<{ containerId: string; image: string; status: string; metadata: unknown }>>`
+        SELECT "containerId", "image", "status", "metadata" FROM "Container"
+        WHERE "metadata"->'labels'->>'hautech.ai/role' = 'dind'
+          AND ("metadata"->'labels'->>'hautech.ai/parent_cid') IN (${Prisma.join(parentIds)})
+      `;
+      const rawSidecars = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown }>>(q);
+      const isStatus = (s: unknown): s is ContainerStatus =>
+        typeof s === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(s);
+      for (const sc of rawSidecars) {
+        const labels = metaLabelsOf(sc.metadata);
+        const parent = labels['hautech.ai/parent_cid'];
+        if (!parent) continue;
+        const status: ContainerStatus = isStatus(sc.status) ? sc.status : 'failed';
+        const arr = byParent[parent] || (byParent[parent] = []);
+        arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status });
+      }
+    } else {
+      // Fallback: fetch candidates and filter in-memory using metadata.labels
+      const sidecarCandidates = await this.prisma.container.findMany({
+        select: { containerId: true, image: true, status: true, metadata: true },
+      });
+      for (const sc of sidecarCandidates) {
+        const labels = metaLabelsOf(sc.metadata);
+        const role = labels['hautech.ai/role'];
+        const parent = labels['hautech.ai/parent_cid'];
+        if (role !== 'dind') continue;
+        if (!parent || !parentIds.includes(parent)) continue;
+        const arr = byParent[parent] || (byParent[parent] = []);
+        arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status: sc.status });
+      }
     }
 
       const toIso = (d: unknown): string => {
