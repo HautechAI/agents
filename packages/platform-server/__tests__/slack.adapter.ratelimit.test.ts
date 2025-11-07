@@ -3,14 +3,14 @@ import { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import type { ChannelAdapterDeps, ChannelDescriptor, SendMessageOptions } from '../src/messaging/types';
 import type { VaultRef } from '../src/vault/vault.service';
 
-// Mock slack web api to throw rate-limit on first call, then succeed
+// Mock slack web api: ensure prototype.chat exists for instance calls
 vi.mock('@slack/web-api', () => {
-  class WebClient {
-    chat = {
-      postMessage: vi.fn(async () => ({ ok: true, ts: '2222', message: { thread_ts: '2222' } })),
-      postEphemeral: vi.fn(async () => ({ ok: true, message_ts: '2222' })),
-    };
-  }
+  class WebClient {}
+  // Provide prototype chat with spies that tests can manipulate
+  (WebClient.prototype as unknown as { chat: { postMessage: ReturnType<typeof vi.fn>; postEphemeral: ReturnType<typeof vi.fn> } }).chat = {
+    postMessage: vi.fn(async () => ({ ok: true, ts: '2222', message: { thread_ts: '2222' } })),
+    postEphemeral: vi.fn(async () => ({ ok: true, message_ts: '2222' })),
+  };
   return { WebClient };
 });
 
