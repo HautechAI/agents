@@ -10,7 +10,7 @@ describe('Settings/Secrets page', () => {
   afterAll(() => server.close());
   afterEach(() => server.resetHandlers());
 
-  it('shows Missing filter and allows inline write to create key', async () => {
+  it('defaults to Used filter; allows inline write to create key; All shows union', async () => {
     // Mock graph with two required secrets
     server.use(
       http.get(abs('/api/graph'), () =>
@@ -62,10 +62,10 @@ describe('Settings/Secrets page', () => {
       </TestProviders>,
     );
 
-    // Wait for rows to render under Missing filter (default)
-    await screen.findByText('Missing (2)');
-    expect(screen.getByText('secret/github/GH_TOKEN')).toBeInTheDocument();
-    expect(screen.getByText('secret/slack/BOT_TOKEN')).toBeInTheDocument();
+    // Default filter should be Used (shows required keys regardless of presence)
+    await screen.findByRole('button', { name: 'Used' });
+    expect(await screen.findByText('secret/github/GH_TOKEN')).toBeInTheDocument();
+    expect(await screen.findByText('secret/slack/BOT_TOKEN')).toBeInTheDocument();
 
     // Edit github token inline and save
     const editButtons = screen.getAllByRole('button', { name: 'Edit' });
@@ -77,7 +77,7 @@ describe('Settings/Secrets page', () => {
     const saveBtn = screen.getByRole('button', { name: 'Save' });
     fireEvent.click(saveBtn);
 
-    // After save, missing count should drop to 1
+    // After save, missing count should drop to 1 (label updates though Used is active)
     await waitFor(() => expect(screen.getByText('Missing (1)')).toBeInTheDocument());
 
     // Toggle to Used: shows only required keys (2 rows)
@@ -111,5 +111,43 @@ describe('Settings/Secrets page', () => {
 
     await screen.findByText(/Vault (error|not configured)/);
     expect(screen.getByText('secret/slack/BOT_TOKEN')).toBeInTheDocument();
+  });
+
+  it('fetches value on reveal/edit and clears plaintext on cancel', async () => {
+    // Graph with one required
+    server.use(
+      http.get(abs('/api/graph'), () =>
+        HttpResponse.json({ name: 'g', version: 1, updatedAt: new Date().toISOString(), nodes: [
+          { id: 'n1', template: 'githubCloneRepoTool', config: { token: { value: 'secret/github/GH_TOKEN', source: 'vault' } } },
+        ], edges: [] }),
+      ),
+    );
+    server.use(
+      http.get(abs('/api/vault/mounts'), () => HttpResponse.json({ items: ['secret'] })),
+      http.get(abs('/api/vault/kv/:mount/paths'), () => HttpResponse.json({ items: ['github'] })),
+      http.get(abs('/api/vault/kv/:mount/keys'), () => HttpResponse.json({ items: ['GH_TOKEN'] })),
+      http.get(abs('/api/vault/kv/:mount/read'), () => HttpResponse.json({ value: 'gh-secret' })),
+    );
+
+    render(
+      <TestProviders>
+        <SettingsSecrets />
+      </TestProviders>,
+    );
+
+    // Click Edit to fetch
+    const editBtn = await screen.findByRole('button', { name: 'Edit' });
+    fireEvent.click(editBtn);
+
+    // Toggle Show to unmask and verify fetched value appears
+    const showBtn = await screen.findByRole('button', { name: 'Show' });
+    fireEvent.click(showBtn);
+
+    const input = await screen.findByPlaceholderText('Enter secret value');
+    await waitFor(() => expect((input as HTMLInputElement).value).toBe('gh-secret'));
+
+    // Cancel clears plaintext
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByDisplayValue('gh-secret')).not.toBeInTheDocument();
   });
 });

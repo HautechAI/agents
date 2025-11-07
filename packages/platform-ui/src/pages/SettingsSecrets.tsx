@@ -61,15 +61,10 @@ function useSecretsData() {
 }
 
 export function SettingsSecrets() {
-  const { union, graphQ, availQ, mountsQ, missingCount, requiredCount, vaultUnavailable } = useSecretsData();
-  const [filter, setFilter] = useState<SecretFilter>('all');
+  const { union, graphQ, availQ, mountsQ, missingCount, vaultUnavailable } = useSecretsData();
+  const [filter, setFilter] = useState<SecretFilter>('used');
 
-  // Default filter selection: Missing > Used > All
-  useEffect(() => {
-    if (missingCount > 0) setFilter('missing');
-    else if (requiredCount > 0) setFilter('used');
-    else setFilter('all');
-  }, [missingCount, requiredCount]);
+  // Default filter is 'used' per spec (no auto-switching)
 
   const filtered = useMemo(() => {
     if (filter === 'missing') return union.filter((e) => e.required && !e.present);
@@ -131,6 +126,7 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
   const [editing, setEditing] = useState(false);
   const [reveal, setReveal] = useState(false);
   const [value, setValue] = useState('');
+  // local read loading state intentionally not used to avoid global UI changes; may be used for future spinner
 
   useEffect(() => {
     if (!editing) {
@@ -139,6 +135,16 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
       setReveal(false);
     }
   }, [editing]);
+
+  async function fetchCurrentValue() {
+    try {
+      const res = await api.graph.readVaultKey(entry.mount, entry.path, entry.key);
+      if (res && typeof res.value === 'string') setValue(res.value);
+    } catch {
+      // Avoid leaking details; just notify
+      notifyError('Failed to load value');
+    }
+  }
 
   const writeMut = useMutation({
     mutationFn: async () => {
@@ -199,7 +205,16 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
               onChange={(e) => setValue(e.target.value)}
               placeholder={reveal ? 'Enter secret value' : '••••'}
             />
-            <Button variant="ghost" size="icon" aria-label={reveal ? 'Hide' : 'Show'} onClick={() => setReveal((r) => !r)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={reveal ? 'Hide' : 'Show'}
+              onClick={async () => {
+                setReveal((r) => !r);
+                // If revealing while value is empty, fetch current value
+                if (!reveal && !value) await fetchCurrentValue();
+              }}
+            >
               {reveal ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </Button>
             <Button variant="ghost" size="icon" aria-label="Copy" onClick={onCopy} disabled={!reveal || !value}>
@@ -217,7 +232,7 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
             <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={writeMut.isPending}>Cancel</Button>
           </div>
         ) : (
-          <Button size="sm" onClick={() => setEditing(true)}>Edit</Button>
+          <Button size="sm" onClick={async () => { setEditing(true); await fetchCurrentValue(); }}>Edit</Button>
         )}
       </Td>
     </Tr>

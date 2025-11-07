@@ -164,6 +164,17 @@ export const graph = {
     const req = http.get<{ items: string[] }>(`/api/vault/kv/${encodeURIComponent(mount)}/keys`, { params: { path } });
     return opts?.maskErrors === false ? req : req.catch(() => ({ items: [] }));
   },
+  readVaultKey: async (mount: string, path: string, key: string): Promise<{ value: string } | null> => {
+    try {
+      const res = await http.get<{ value: string }>(
+        `/api/vault/kv/${encodeURIComponent(mount)}/read`,
+        { params: { path, key } },
+      );
+      return res ?? null;
+    } catch {
+      return null;
+    }
+  },
   writeVaultKey: (mount: string, body: { path: string; key: string; value: string }) =>
     http.post<{ mount: string; path: string; key: string; version: number }>(`/api/vault/kv/${encodeURIComponent(mount)}/write`, body),
 
