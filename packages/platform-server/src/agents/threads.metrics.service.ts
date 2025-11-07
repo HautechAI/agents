@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { PrismaService } from '../core/services/prisma.service';
 import { LoggerService } from '../core/services/logger.service';
 
@@ -16,9 +16,10 @@ export class ThreadsMetricsService {
     if (!ids || ids.length === 0) return {};
     try {
       type MetricsRow = { root_id: string; reminders_count: number; desc_working: boolean; self_working: boolean };
-      const rows: MetricsRow[] = await this.prisma.$queryRaw`
-        with recursive sel as (
-          select unnest(${ids}::uuid[]) as root_id
+      const uuidList = Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`));
+      const q = Prisma.sql<MetricsRow[]>`
+        with sel as (
+          select unnest(ARRAY[${uuidList}]) as root_id
         ), rec as (
           select t.id as thread_id, t."parentId" as parent_id, t.id as root_id
           from "Thread" t join sel s on t.id = s.root_id
@@ -49,6 +50,7 @@ export class ThreadsMetricsService {
                self_working
         from agg;
       `;
+      const rows: MetricsRow[] = await this.prisma.$queryRaw(q);
       const out: Record<string, ThreadMetrics> = {};
       for (const r of rows) {
         const activity: ThreadMetrics['activity'] = r.self_working ? 'working' : (r.desc_working || r.reminders_count > 0) ? 'waiting' : 'idle';

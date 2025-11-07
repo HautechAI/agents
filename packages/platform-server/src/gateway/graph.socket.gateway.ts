@@ -8,6 +8,7 @@ import type { ThreadStatus, MessageKind, RunStatus } from '@prisma/client';
 import type { GraphEventsPublisher } from './graph.events.publisher';
 import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 import { PrismaService } from '../core/services/prisma.service';
+import { Prisma } from '@prisma/client';
 
 // Strict outbound event payloads
 export const NodeStatusEventSchema = z
@@ -194,14 +195,15 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   async scheduleThreadAndAncestorsMetrics(threadId: string) {
     try {
       const prisma = this.prismaService.getClient();
-      const rows: Array<{ id: string; parentId: string | null }> = await prisma.$queryRaw`
-        with recursive rec as (
-          select t.id, t."parentId" from "Thread" t where t.id = ${threadId}::uuid
+      const q = Prisma.sql<Array<{ id: string; parentId: string | null }>>`
+        with rec as (
+          select t.id, t."parentId" from "Thread" t where t.id = ${threadId}
           union all
           select p.id, p."parentId" from "Thread" p join rec r on r."parentId" = p.id
         )
         select id, "parentId" from rec;
       `;
+      const rows: Array<{ id: string; parentId: string | null }> = await prisma.$queryRaw(q);
       for (const r of rows) this.scheduleThreadMetrics(r.id);
     } catch (e) {
       this.logger.error('scheduleThreadAndAncestorsMetrics error', e);
