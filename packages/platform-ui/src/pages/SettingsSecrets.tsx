@@ -47,7 +47,6 @@ async function discoverVaultKeys(): Promise<SecretKey[]> {
 }
 
 function useSecretsData() {
-  const qc = useQueryClient();
   const graphQ = useQuery({ queryKey: ['graph', 'full'], queryFn: () => api.graph.getFullGraph() });
   const reqKeys = useMemo(() => (graphQ.data ? computeRequiredKeys(graphQ.data as PersistedGraph) : []), [graphQ.data]);
 
