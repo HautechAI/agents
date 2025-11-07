@@ -1,9 +1,225 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Input, Table, Tbody, Td, Th, Thead, Tr, Tooltip, TooltipContent, TooltipTrigger } from '@agyn/ui';
+import { AlertTriangle, Eye, EyeOff, Copy } from 'lucide-react';
+import * as api from '@/api/modules/graph';
+import type { PersistedGraph } from '@agyn/shared';
+import { computeRequiredKeys } from '@/lib/vault/required';
+import { unionWithPresence } from '@/lib/vault/union';
+import type { SecretEntry, SecretFilter, SecretKey } from '@/lib/vault/types';
+import { notifyError, notifySuccess } from '@/lib/notify';
+
+async function discoverVaultKeys(): Promise<SecretKey[]> {
+  const mounts = await api.graph.listVaultMounts();
+  const all: SecretKey[] = [];
+
+  async function listAllPaths(mount: string, prefix = ''): Promise<string[]> {
+    const res = await api.graph.listVaultPaths(mount, prefix);
+    const items = res.items || [];
+    const paths: string[] = [];
+    for (const it of items) {
+      if (it.endsWith('/')) {
+        const deeper = await listAllPaths(mount, `${it}`);
+        paths.push(...deeper);
+      } else {
+        paths.push(it);
+      }
+    }
+    return paths;
+  }
+
+  for (const mount of mounts.items || []) {
+    try {
+      const paths = await listAllPaths(mount, '');
+      for (const p of paths) {
+        try {
+          const keys = await api.graph.listVaultKeys(mount, p);
+          for (const k of keys.items || []) all.push({ mount, path: p, key: k });
+        } catch {
+          // ignore individual path failures
+        }
+      }
+    } catch {
+      // ignore mount failures
+    }
+  }
+  return all;
+}
+
+function useSecretsData() {
+  const qc = useQueryClient();
+  const graphQ = useQuery({ queryKey: ['graph', 'full'], queryFn: () => api.graph.getFullGraph() });
+  const reqKeys = useMemo(() => (graphQ.data ? computeRequiredKeys(graphQ.data as PersistedGraph) : []), [graphQ.data]);
+
+  const availQ = useQuery({ queryKey: ['vault', 'discover'], queryFn: discoverVaultKeys, staleTime: 5 * 60 * 1000 });
+
+  const union = useMemo(() => unionWithPresence(reqKeys, availQ.data ?? []), [reqKeys, availQ.data]);
+  const missingCount = useMemo(() => union.filter((e) => e.required && !e.present).length, [union]);
+  const requiredCount = reqKeys.length;
+  const vaultUnavailable = (availQ.data?.length ?? 0) === 0 && !availQ.isLoading; // heuristic
+
+  return { graphQ, availQ, union, missingCount, requiredCount, vaultUnavailable };
+}
+
 export function SettingsSecrets() {
+  const { union, graphQ, availQ, missingCount, requiredCount, vaultUnavailable } = useSecretsData();
+  const [filter, setFilter] = useState<SecretFilter>('all');
+
+  // Default filter selection: Missing > Used > All
+  useEffect(() => {
+    if (missingCount > 0) setFilter('missing');
+    else if (requiredCount > 0) setFilter('used');
+    else setFilter('all');
+  }, [missingCount, requiredCount]);
+
+  const filtered = useMemo(() => {
+    if (filter === 'missing') return union.filter((e) => e.required && !e.present);
+    if (filter === 'used') return union.filter((e) => e.required);
+    return union;
+  }, [union, filter]);
+
+  const isLoading = graphQ.isLoading || availQ.isLoading;
+
   return (
     <div className="p-4">
       <h1 className="text-xl font-semibold">Settings / Secrets</h1>
-      <p className="text-sm text-muted-foreground">Placeholder page.</p>
+      <p className="text-sm text-muted-foreground mb-3">Manage Vault secrets used by the current graph.</p>
+
+      {vaultUnavailable && (
+        <div className="mb-3 rounded border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm" role="status">
+          Vault not configured/unavailable. Showing graph-required secrets only.
+        </div>
+      )}
+
+      <div className="mb-3 flex items-center gap-2">
+        <Button variant={filter === 'used' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('used')}>
+          Used
+        </Button>
+        <Button variant={filter === 'missing' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('missing')}>
+          Missing{missingCount ? ` (${missingCount})` : ''}
+        </Button>
+        <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')}>
+          All
+        </Button>
+      </div>
+
+      <Table>
+        <Thead>
+          <Tr>
+            <Th>Key</Th>
+            <Th>Value</Th>
+            <Th></Th>
+          </Tr>
+        </Thead>
+        <Tbody>
+          {isLoading ? (
+            <Tr><Td colSpan={3}>Loading...</Td></Tr>
+          ) : filtered.length === 0 ? (
+            <Tr><Td colSpan={3} className="text-muted-foreground">No secrets found.</Td></Tr>
+          ) : (
+            filtered.map((e) => (
+              <SecretsRow key={`${e.mount}::${e.path}::${e.key}`} entry={e} />
+            ))
+          )}
+        </Tbody>
+      </Table>
     </div>
   );
 }
 
+export function SecretsRow({ entry }: { entry: SecretEntry }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [reveal, setReveal] = useState(false);
+  const [value, setValue] = useState('');
+
+  useEffect(() => {
+    if (!editing) {
+      // Clear plaintext when exiting edit mode for security
+      setValue('');
+      setReveal(false);
+    }
+  }, [editing]);
+
+  const writeMut = useMutation({
+    mutationFn: async () => {
+      const v = value.trim();
+      if (!v) throw new Error('Value required');
+      const res = await api.graph.writeVaultKey(entry.mount, { path: entry.path, key: entry.key, value: v });
+      return res;
+    },
+    onSuccess: async () => {
+      // Invalidate specific keys query and discovery
+      await qc.invalidateQueries({ queryKey: ['vault', 'keys', entry.mount, entry.path] });
+      await qc.invalidateQueries({ queryKey: ['vault', 'discover'] });
+      notifySuccess('Secret saved');
+      setEditing(false);
+      // value cleared by effect
+    },
+    onError: (e: unknown) => {
+      const msg = (e as Error)?.message || 'Write failed';
+      notifyError(String(msg));
+    },
+  });
+
+  async function onCopy() {
+    try {
+      if (!reveal) return; // do not copy masked values
+      await navigator.clipboard.writeText(value);
+      notifySuccess('Copied');
+    } catch {
+      /* no-op */
+    }
+  }
+
+  const rowMissing = entry.required && !entry.present;
+  const rowClass = rowMissing ? 'border-l-2 border-red-400' : '';
+
+  return (
+    <Tr className={rowClass} title={rowMissing ? 'Missing in Vault' : undefined}>
+      <Td className="font-mono text-xs whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <span>{entry.mount}/{entry.path}/{entry.key}</span>
+          {rowMissing && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertTriangle className="size-4 text-red-600" />
+              </TooltipTrigger>
+              <TooltipContent>Missing in Vault</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </Td>
+      <Td>
+        {editing ? (
+          <div className="flex items-center gap-2">
+            <Input
+              type={reveal ? 'text' : 'password'}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={reveal ? 'Enter secret value' : '••••'}
+            />
+            <Button variant="ghost" size="icon" aria-label={reveal ? 'Hide' : 'Show'} onClick={() => setReveal((r) => !r)}>
+              {reveal ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </Button>
+            <Button variant="ghost" size="icon" aria-label="Copy" onClick={onCopy} disabled={!reveal || !value}>
+              <Copy className="size-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="text-muted-foreground text-sm select-none">••••</div>
+        )}
+      </Td>
+      <Td className="text-right whitespace-nowrap">
+        {editing ? (
+          <div className="flex items-center gap-2 justify-end">
+            <Button size="sm" onClick={() => writeMut.mutate()} disabled={writeMut.isPending || !value.trim()}>{writeMut.isPending ? 'Saving…' : 'Save'}</Button>
+            <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={writeMut.isPending}>Cancel</Button>
+          </div>
+        ) : (
+          <Button size="sm" onClick={() => setEditing(true)}>Edit</Button>
+        )}
+      </Td>
+    </Tr>
+  );
+}
