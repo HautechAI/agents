@@ -8,7 +8,8 @@ const SlackConfigSchema = z.object({
   slack: z.object({ botToken: z.union([z.string().min(1), ReferenceFieldSchema]) }).strict(),
 });
 
-type SlackConfig = z.infer<typeof SlackConfigSchema>;
+// _SlackConfig type retained for clarity if needed; prefixed to satisfy lint unused-var rule.
+type _SlackConfig = z.infer<typeof SlackConfigSchema>;
 
 export class SlackAdapter implements ChannelAdapter {
   constructor(private deps: ChannelAdapterDeps) {}
@@ -22,7 +23,7 @@ export class SlackAdapter implements ChannelAdapter {
     const token = await resolveTokenRef(ref, {
       expectedPrefix: 'xoxb-',
       fieldName: 'bot_token',
-      vault: this.deps.vault as any,
+      vault: this.deps.vault,
     });
     return token;
   }
@@ -73,7 +74,7 @@ export class SlackAdapter implements ChannelAdapter {
           : undefined;
         const threadIdOut = thread_ts ?? replyTs ?? ts ?? null;
         return { ok: true, channelMessageId: ts, threadId: threadIdOut };
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Detect rate limit safely
         const err = e as unknown;
         type SlackError = { code?: string; data?: { response?: { status?: number; headers?: Record<string, string> } } };

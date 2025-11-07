@@ -28,7 +28,7 @@ describe('send_message tool', () => {
   });
 
   it('sends via slack adapter when descriptor present', async () => {
-    const prismaStub = { getClient: () => ({ thread: { findUnique: async () => ({ channel: { type: 'slack', identifiers: { channelId: 'C1' }, meta: {} }, channelVersion: 1 }) } }) } } as unknown as PrismaService;
+    const prismaStub = { getClient: () => ({ thread: { findUnique: async () => ({ channel: { type: 'slack', identifiers: { channelId: 'C1' }, meta: {} }, channelVersion: 1 }) } }) } as unknown as PrismaService;
     const tool = new SendMessageFunctionTool(new LoggerService(), { getSecret: async () => 'xoxb-abc' } as any, prismaStub, ConfigService.fromEnv());
     const res = await tool.execute({ text: 'hello' } as any, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
@@ -36,4 +36,3 @@ describe('send_message tool', () => {
     expect(obj.channelMessageId).toBe('2001');
   });
 });
-
