@@ -608,21 +608,29 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     }
   }
   private async cleanTempDinDSidecars(tempContainerId: string): Promise<void> {
-    const dinds = await this.containerService.findContainersByLabels(
-      { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': tempContainerId },
-      { all: true },
-    );
+    let dinds: Array<{ stop?: (timeout?: number) => Promise<void>; remove?: (force?: boolean) => Promise<void> }> = [];
+    try {
+      const found = await this.containerService.findContainersByLabels(
+        { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': tempContainerId },
+        { all: true },
+      );
+      dinds = Array.isArray(found) ? found : [];
+    } catch (e) {
+      // In tests, ContainerService may be a minimal stub; guard TypeErrors
+      this.logger.warn(`[MCP:${this.config.namespace}] DinD cleanup: findContainersByLabels failed: ${String(e)}`);
+      return;
+    }
     if (!Array.isArray(dinds) || dinds.length === 0) return;
     const results = await Promise.allSettled(
       dinds.map(async (d) => {
         try {
-          await d.stop(5);
+          if (typeof d?.stop === 'function') await d.stop(5);
         } catch (e: unknown) {
           const sc = (e as { statusCode?: number } | undefined)?.statusCode;
           if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
         }
         try {
-          await d.remove(true);
+          if (typeof d?.remove === 'function') await d.remove(true);
           return true as const;
         } catch (e: unknown) {
           const sc = (e as { statusCode?: number } | undefined)?.statusCode;

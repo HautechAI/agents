@@ -72,6 +72,7 @@ export class ContainersController {
     role: 'workspace' | 'dind' | string;
     sidecars?: Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus }>;
   }> }> {
+    try {
     const {
       status = 'running' as ContainerStatus,
       threadId,
@@ -175,5 +176,10 @@ export class ContainersController {
     });
 
     return { items };
+    } catch (e) {
+      const msg = e && typeof e === 'object' && 'message' in (e as Record<string, unknown>) ? String((e as Error).message) : String(e);
+      this.logger.error(`ContainersController.list error: ${msg}`);
+      throw e;
+    }
   }
 }
