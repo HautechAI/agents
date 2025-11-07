@@ -6,6 +6,7 @@ import { LoggerService } from '../../../../core/services/logger.service';
 import { VaultService } from '../../../../vault/vault.service';
 import { PrismaService } from '../../../../core/services/prisma.service';
 import { ConfigService } from '../../../../core/services/config.service';
+import { SlackRuntimeRegistry } from '../../../../messaging/slack/runtime.registry';
 
 export const SendMessageToolStaticConfigSchema = z.object({}).strict();
 
@@ -19,13 +20,14 @@ export class SendMessageNode extends BaseToolNode<SendMessageConfig> {
     @Inject(VaultService) protected vault: VaultService,
     @Inject(PrismaService) protected prisma: PrismaService,
     @Inject(ConfigService) protected cfg: ConfigService,
+    @Inject(SlackRuntimeRegistry) protected runtime: SlackRuntimeRegistry,
   ) {
     super(logger);
   }
 
   getTool(): SendMessageFunctionTool {
     if (!this.toolInstance) {
-      this.toolInstance = new SendMessageFunctionTool(this.logger, this.vault, this.prisma, this.cfg);
+      this.toolInstance = new SendMessageFunctionTool(this.logger, this.vault, this.prisma, this.cfg, this.runtime);
     }
     return this.toolInstance;
   }

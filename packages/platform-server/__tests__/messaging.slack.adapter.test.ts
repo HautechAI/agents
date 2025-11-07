@@ -15,8 +15,8 @@ vi.mock('@slack/web-api', () => {
 });
 
 describe('SlackAdapter', () => {
-  const deps = { logger: { info: () => {}, error: () => {} } };
-  const adapter = new SlackAdapter(deps as any);
+  const deps = { logger: ({ info: () => {}, error: () => {} } as unknown) as import('../src/core/services/logger.service').LoggerService };
+  const adapter = new SlackAdapter(deps);
   beforeEach(() => {
     vi.resetAllMocks();
   });

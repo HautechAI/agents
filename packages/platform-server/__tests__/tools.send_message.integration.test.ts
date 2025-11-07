@@ -23,7 +23,9 @@ describe('send_message tool', () => {
     process.env.MONGODB_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/test';
     process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'mongodb://localhost:27017/agents';
     const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => undefined };
-    const tool = new SendMessageFunctionTool(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, prismaStub, ConfigService.fromEnv());
+    const { SlackRuntimeRegistry } = await import('../src/messaging/slack/runtime.registry');
+    const runtime = new SlackRuntimeRegistry();
+    const tool = new SendMessageFunctionTool(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, prismaStub, ConfigService.fromEnv(), runtime as any);
     const res = await tool.execute({ text: 'hello' } as any, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(false);
