@@ -1,5 +1,5 @@
 import { WebClient, type ChatPostEphemeralResponse, type ChatPostMessageResponse } from '@slack/web-api';
-import { parseVaultRef, resolveTokenRef, ReferenceFieldSchema } from '../../utils/refs';
+import { parseVaultRef, ReferenceFieldSchema } from '../../utils/refs';
 import type { ChannelAdapter, ChannelAdapterDeps, SendMessageOptions, SendResult } from '../types';
 import type { ChannelDescriptor } from '../types';
 import { SlackIdentifiersSchema } from '../types';
@@ -19,14 +19,21 @@ export class SlackAdapter implements ChannelAdapter {
     const parsed = SlackConfigSchema.safeParse(this.deps.config);
     if (!parsed.success) throw new Error('Slack configuration missing (slack.botToken)');
     const bot = parsed.data.slack.botToken;
-    const ref = typeof bot === 'string' ? { value: bot, source: 'static' as const } : bot;
-    if ((ref.source || 'static') === 'vault') parseVaultRef(ref.value);
-    const token = await resolveTokenRef(ref, {
-      expectedPrefix: 'xoxb-',
-      fieldName: 'bot_token',
-      vault: this.deps.vault,
-    });
-    return token;
+    if (typeof bot === 'string') {
+      if (!bot.startsWith('xoxb-')) throw new Error('Slack bot token must start with xoxb-');
+      return bot;
+    }
+    const ref = bot;
+    const source = ref.source || 'static';
+    if (source === 'vault') {
+      const vr = parseVaultRef(ref.value);
+      const secret = await this.deps.vault.getSecret(vr);
+      if (!secret) throw new Error('Vault secret for bot_token not found');
+      if (!secret.startsWith('xoxb-')) throw new Error('Resolved Slack bot token is invalid (must start with xoxb-)');
+      return secret;
+    }
+    if (!ref.value.startsWith('xoxb-')) throw new Error('Slack bot token must start with xoxb-');
+    return ref.value;
   }
 
   async sendText(input: { threadId: string; text: string; descriptor: ChannelDescriptor; options?: SendMessageOptions }): Promise<SendResult> {
