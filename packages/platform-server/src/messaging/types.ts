@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { VaultService } from '../../vault/vault.service';
+import type { VaultRef } from '../../vault/vault.service';
 
 // Channel descriptor variants
 export const SlackIdentifiersSchema = z
@@ -63,7 +63,8 @@ export type SendResult = {
 
 export interface ChannelAdapterDeps {
   logger: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void; debug?: (...args: unknown[]) => void };
-  vault: VaultService;
+  // Minimal, explicit Vault surface avoids cross-module class typing issues
+  vault: { getSecret: (ref: VaultRef) => Promise<string | undefined> };
   // Adapter configuration shape (Slack only for now)
   config: { slack: { botToken?: string | { value: string; source?: 'static' | 'vault' } } };
 }

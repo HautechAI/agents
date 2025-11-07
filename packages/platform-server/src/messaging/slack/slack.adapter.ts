@@ -8,7 +8,8 @@ export class SlackAdapter implements ChannelAdapter {
   constructor(private deps: ChannelAdapterDeps) {}
 
   private async resolveBotToken(): Promise<string> {
-    const bot = this.deps.config.slack.botToken;
+    const slackCfg: { botToken?: string | { value: string; source?: 'static' | 'vault' } } = this.deps.config.slack;
+    const bot = slackCfg.botToken;
     if (typeof bot === 'string') {
       if (!bot.startsWith('xoxb-')) throw new Error('Slack bot token must start with xoxb-');
       return bot;
