@@ -162,7 +162,7 @@ export class ContainerRegistry {
           OR (("metadata"->>'retryAfter')::timestamptz <= ${iso}::timestamptz)
         )
     `;
-    const terminating = await this.prisma.$queryRaw(q);
+    const terminating = await this.prisma.$queryRaw<Array<{ containerId: string }>>(q);
     const running = await this.prisma.container.findMany({
       where: { status: 'running', killAfterAt: { not: null, lte: now } },
     });
