@@ -32,6 +32,11 @@ export function createPrismaStub() {
         threads[idx] = next as any;
         return threads[idx];
       },
+      updateMany: async ({ where, data }: any) => {
+        const target = threads.find((t) => t.id === where.id && t.summary === null);
+        if (target && Object.prototype.hasOwnProperty.call(data, 'summary')) target.summary = data.summary ?? null;
+        return { count: target ? 1 : 0 };
+      },
       findMany: async (args: any) => {
         let rows = [...threads];
         const where = args?.where || {};

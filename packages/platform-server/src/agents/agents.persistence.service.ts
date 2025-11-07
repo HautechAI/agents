@@ -63,8 +63,7 @@ export class AgentsPersistenceService {
     inputMessages: Array<HumanMessage | SystemMessage | AIMessage>,
   ): Promise<RunStartResult> {
     const { runId, createdMessages, updatedThread } = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Initialize summary on first qualifying beginRun when currently null
-      const thread = await tx.thread.findUnique({ where: { id: threadId } });
+      // Begin run and persist messages; summary initialization guarded via conditional update
       const run = await tx.run.create({ data: { threadId, status: 'running' as RunStatus } });
       const createdMessages: Array<{ id: string; kind: MessageKind; text: string | null; source: Prisma.JsonValue; createdAt: Date }> = [];
       await Promise.all(
@@ -77,14 +76,18 @@ export class AgentsPersistenceService {
         }),
       );
       let updatedThread: { id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null } | null = null;
-      if (thread && thread.summary === null) {
-        const candidate = this.selectFirstQualifyingText(inputMessages);
-        const sanitized = candidate ? this.sanitizeSummary(candidate) : '';
-        const finalSummary = sanitized ? this.truncateSummary(sanitized, 250) : '';
-        // Only update when non-empty result is produced
-        if (finalSummary.length > 0) {
-          const updated = await tx.thread.update({ where: { id: threadId }, data: { summary: finalSummary } });
-          updatedThread = { id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status, createdAt: updated.createdAt, parentId: updated.parentId ?? null };
+      const candidate = this.selectFirstQualifyingText(inputMessages);
+      const sanitized = candidate ? this.sanitizeSummary(candidate) : '';
+      const finalSummary = sanitized ? this.truncateSummary(sanitized, 250) : '';
+      if (finalSummary.length > 0) {
+        // Concurrency-safe: update only if summary is still null
+        const res = await (tx as any).thread.updateMany({ where: { id: threadId, summary: null }, data: { summary: finalSummary } });
+        const count: number = typeof res?.count === 'number' ? res.count : 0;
+        if (count > 0) {
+          const updated = await tx.thread.findUnique({ where: { id: threadId } });
+          if (updated) {
+            updatedThread = { id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status as ThreadStatus, createdAt: updated.createdAt, parentId: updated.parentId ?? null };
+          }
         }
       }
       return { runId: run.id, createdMessages, updatedThread };

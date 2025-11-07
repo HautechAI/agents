@@ -90,4 +90,18 @@ describe('AgentsPersistenceService summary auto-fill on beginRun', () => {
     expect(summary.length).toBe(250);
     expect(summary).toBe('x'.repeat(250));
   });
+
+  it('concurrency-safe idempotency: overlapping beginRunThread only sets summary once', async () => {
+    const stub = createPrismaStub();
+    const publisher = new NoopGraphEventsPublisher();
+    const spy = vi.spyOn(publisher, 'emitThreadUpdated');
+    const svc = new AgentsPersistenceService(new StubPrismaService(stub) as any, new LoggerService(), { getThreadsMetrics: async () => ({}) } as any, publisher);
+    const tid = await svc.getOrCreateThreadByAlias('test', 'alias-8');
+    const p1 = svc.beginRunThread(tid, [HumanMessage.fromText('First summary')]);
+    const p2 = svc.beginRunThread(tid, [HumanMessage.fromText('Second summary')]);
+    await Promise.all([p1, p2]);
+    const final = stub._store.threads.find((x: any) => x.id === tid).summary as string | null;
+    expect(final === 'First summary' || final === 'Second summary').toBe(true);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
 });
