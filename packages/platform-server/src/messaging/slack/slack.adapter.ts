@@ -37,6 +37,16 @@ export class SlackAdapter implements ChannelAdapter {
     const channel = ids.channelId;
     const replyTs = opts.replyTo ?? ids.threadTs ?? undefined;
     const ephemeralUser = ids.ephemeralUser ?? null;
+    // Handle attachments: currently only 'link' is supported; 'file' is not.
+    let finalText = text;
+    const links = Array.isArray(opts.attachments)
+      ? opts.attachments.filter((a) => a && a.type === 'link' && typeof a.url === 'string')
+      : [];
+    if (links.length > 0) {
+      const linkLines = links.map((l) => (l.name ? `<${l.url}|${l.name}>` : String(l.url)));
+      finalText = `${text}\n${linkLines.join('\n')}`;
+    }
+    const hasFile = Array.isArray(opts.attachments) && opts.attachments.some((a) => a && a.type === 'file');
 
     this.deps.logger.info('SlackAdapter.sendText', {
       type: descriptor.type,
@@ -51,11 +61,15 @@ export class SlackAdapter implements ChannelAdapter {
 
     const doSend = async (): Promise<SendResult> => {
       try {
+        if (hasFile) {
+          // Not supported yet via chat.postMessage; instruct to use a dedicated upload tool.
+          return { ok: false, error: 'file_attachments_not_supported' };
+        }
         if (ephemeralUser) {
           const resp: ChatPostEphemeralResponse = await client.chat.postEphemeral({
             channel,
             user: ephemeralUser,
-            text,
+            text: finalText,
             thread_ts: replyTs,
           });
           if (!resp.ok) return { ok: false, error: resp.error || 'unknown_error' };
@@ -63,7 +77,7 @@ export class SlackAdapter implements ChannelAdapter {
         }
         const resp: ChatPostMessageResponse = await client.chat.postMessage({
           channel,
-          text,
+          text: finalText,
           mrkdwn: !!opts.markdown,
           attachments: [],
           ...(replyTs ? { thread_ts: replyTs } : {}),
