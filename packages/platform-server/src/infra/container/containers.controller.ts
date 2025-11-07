@@ -140,9 +140,16 @@ export class ContainersController {
       for (const [k, v] of Object.entries(raw)) if (typeof v === 'string') out[k] = v;
       return out;
     };
+    // Exclude DinD from top-level list (only attach as sidecars)
+    const filteredRows = rows.filter((r) => {
+      const labels = metaLabelsOf(r.metadata);
+      const role = labels['hautech.ai/role'] ?? 'workspace';
+      return role !== 'dind';
+    });
+
     // Optimize: preselect DinD sidecars for current parent set via JSON-path raw query;
     // provide a safe fallback when $queryRaw is not implemented by the Prisma stub.
-    const parentIds = rows.map((r) => r.containerId);
+    const parentIds = filteredRows.map((r) => r.containerId);
     const byParent: Record<string, Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus }>> = {};
     const hasQueryRaw = (() => {
       const obj = this.prisma as unknown as Record<string, unknown>;
@@ -198,7 +205,7 @@ export class ContainersController {
         const t = dt.getTime();
         return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
       };
-    const items = rows.map((r) => {
+    const items = filteredRows.map((r) => {
       const labels = metaLabelsOf(r.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
       return {

@@ -196,15 +196,14 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   async scheduleThreadAndAncestorsMetrics(threadId: string) {
     try {
       const prisma = this.prismaService.getClient();
-      const q = Prisma.sql<Array<{ id: string; parentId: string | null }>>`
+      const rows: Array<{ id: string; parentId: string | null }> = await prisma.$queryRaw<Array<{ id: string; parentId: string | null }>>`
         with rec as (
-          select t.id, t."parentId" from "Thread" t where t.id = ${threadId}
+          select t.id, t."parentId" from "Thread" t where t.id = ${threadId}::uuid
           union all
           select p.id, p."parentId" from "Thread" p join rec r on r."parentId" = p.id
         )
         select id, "parentId" from rec;
       `;
-      const rows: Array<{ id: string; parentId: string | null }> = await prisma.$queryRaw(q);
       for (const r of rows) this.scheduleThreadMetrics(r.id);
     } catch (e) {
       this.logger.error('scheduleThreadAndAncestorsMetrics error', e);
