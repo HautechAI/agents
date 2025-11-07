@@ -18,14 +18,14 @@ export class SendMessageNode extends BaseToolNode<SendMessageConfig> {
     @Inject(LoggerService) protected logger: LoggerService,
     @Inject(VaultService) protected vault: VaultService,
     @Inject(PrismaService) protected prisma: PrismaService,
-    @Inject(ConfigService) protected config: ConfigService,
+    @Inject(ConfigService) protected cfg: ConfigService,
   ) {
     super(logger);
   }
 
   getTool(): SendMessageFunctionTool {
     if (!this.toolInstance) {
-      this.toolInstance = new SendMessageFunctionTool(this.logger, this.vault, this.prisma, this.config);
+      this.toolInstance = new SendMessageFunctionTool(this.logger, this.vault, this.prisma, this.cfg);
     }
     return this.toolInstance;
   }
