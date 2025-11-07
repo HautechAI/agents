@@ -45,7 +45,7 @@ describe('SlackTrigger events', () => {
   it('relays message events from socket-mode client', async () => {
     const logger = makeLogger();
     const vault = { getSecret: async () => 'xapp-abc' } as any;
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as unknown as AgentsPersistenceService;
+    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as AgentsPersistenceService;
     const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence);
     await trig.setConfig({ app_token: { value: 'xapp-abc', source: 'static' } });
     // Subscribe a listener
@@ -75,7 +75,7 @@ describe('SlackTrigger events', () => {
     const vault: { getSecret: (ref: any) => Promise<string> } = {
       getSecret: vi.fn(async () => { throw new Error('vault disabled'); }),
     } as any;
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as unknown as AgentsPersistenceService;
+    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as AgentsPersistenceService;
     const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence);
     await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' } });
     await trig.provision();
@@ -88,7 +88,7 @@ describe('SlackTrigger events', () => {
       isEnabled: () => true,
       getSecret: vi.fn(async () => 'xapp-from-vault'),
     };
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as unknown as AgentsPersistenceService;
+    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as AgentsPersistenceService;
     const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as any, persistence);
     await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' } });
     await trig.provision();
@@ -102,7 +102,7 @@ describe('SlackTrigger events', () => {
       isEnabled: () => true,
       getSecret: vi.fn(async () => 'xoxb-wrong'),
     };
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as unknown as AgentsPersistenceService;
+    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as AgentsPersistenceService;
     const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as any, persistence);
     await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' } });
     await trig.provision();

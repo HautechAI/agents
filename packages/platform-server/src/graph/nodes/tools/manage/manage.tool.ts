@@ -13,6 +13,7 @@ export const ManageInvocationSchema = z
     worker: z.string().min(1).optional().describe('Target worker name (required for send_message).'),
     message: z.string().min(1).optional().describe('Message to send (required for send_message).'),
     threadAlias: z.string().min(1).describe('Child thread alias'),
+    summary: z.string().min(1).optional().describe('Initial summary for created subthread (required when creating).'),
   })
   .strict();
 
@@ -57,7 +58,9 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       if (!worker || !message) throw new Error('worker and message are required for send_message');
       const target = workers.find((w) => w.name === worker);
       if (!target) throw new Error(`Unknown worker: ${worker}`);
-      const childThreadId = await this.persistence.getOrCreateSubthreadByAlias('manage', threadAlias, parentThreadId);
+      const summary = (args.summary ?? '').toString();
+      if (!summary || summary.trim().length === 0) throw new Error('summary is required when creating subthreads');
+      const childThreadId = await this.persistence.getOrCreateSubthreadByAlias('manage', threadAlias, parentThreadId, summary);
       try {
         const res = await target.agent.invoke(childThreadId, [HumanMessage.fromText(message)]);
         return res?.text;

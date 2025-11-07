@@ -13,7 +13,11 @@ export function createPrismaStub() {
 
   const prisma: any = {
     thread: {
-      findUnique: async ({ where: { alias } }: any) => threads.find((t) => t.alias === alias) || null,
+      findUnique: async ({ where }: any) => {
+        if (where?.alias) return threads.find((t) => t.alias === where.alias) || null;
+        if (where?.id) return threads.find((t) => t.id === where.id) || null;
+        return null;
+      },
       create: async ({ data }: any) => {
         const row = { id: newId(), alias: data.alias, parentId: data.parentId ?? null, summary: data.summary ?? null, status: data.status ?? 'open', createdAt: new Date(timeSeed + idSeq) };
         threads.push(row);
@@ -27,6 +31,11 @@ export function createPrismaStub() {
         if (Object.prototype.hasOwnProperty.call(data, 'status')) next.status = data.status;
         threads[idx] = next as any;
         return threads[idx];
+      },
+      updateMany: async ({ where, data }: any) => {
+        const target = threads.find((t) => t.id === where.id && t.summary === null);
+        if (target && Object.prototype.hasOwnProperty.call(data, 'summary')) target.summary = data.summary ?? null;
+        return { count: target ? 1 : 0 };
       },
       findMany: async (args: any) => {
         let rows = [...threads];
@@ -53,6 +62,7 @@ export function createPrismaStub() {
         runs.push(row);
         return row;
       },
+      findUnique: async ({ where: { id } }: any) => runs.find((r) => r.id === id) || null,
       update: async ({ where: { id }, data }: any) => {
         const r = runs.find((x) => x.id === id);
         if (r && data.status) r.status = data.status;

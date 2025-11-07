@@ -19,7 +19,7 @@ class BusyAgent extends AgentNode {
 describe('call_agent sync busy', () => {
   it('returns queued when target thread running (sync)', async () => {
     const module = await Test.createTestingModule({
-      providers: [LoggerService, ConfigService, BusyAgent, { provide: LLMProvisioner, useValue: {} }, { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async () => 'child-t' } }],
+      providers: [LoggerService, ConfigService, BusyAgent, { provide: LLMProvisioner, useValue: {} }, { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async (_src: string, _alias: string, _parent: string, _summary: string) => 'child-t' } }],
     }).compile();
     const agent = await module.resolve(BusyAgent);
     await agent.setConfig({});
@@ -28,7 +28,7 @@ describe('call_agent sync busy', () => {
     await node.setConfig({ response: 'sync' });
     node.setAgent(agent);
     const tool = node.getTool();
-    const res = await tool.execute({ input: 'hi', threadAlias: 'x' }, { callerAgent: agent, threadId: 'caller-t', finishSignal: new Signal() } as any);
+    const res = await tool.execute({ input: 'hi', threadAlias: 'x', summary: 'x summary' }, { callerAgent: agent, threadId: 'caller-t', finishSignal: new Signal() } as any);
     expect(res).toBe('queued');
   });
 });
