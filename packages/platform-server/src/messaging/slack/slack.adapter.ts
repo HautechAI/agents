@@ -2,6 +2,7 @@ import { WebClient, type ChatPostEphemeralResponse, type ChatPostMessageResponse
 import { parseVaultRef, resolveTokenRef, ReferenceFieldSchema } from '../../utils/refs';
 import type { ChannelAdapter, ChannelAdapterDeps, SendMessageOptions, SendResult } from '../types';
 import type { ChannelDescriptor } from '../types';
+import { SlackIdentifiersSchema } from '../types';
 import { z } from 'zod';
 
 const SlackConfigSchema = z.object({
@@ -30,7 +31,7 @@ export class SlackAdapter implements ChannelAdapter {
 
   async sendText(input: { threadId: string; text: string; descriptor: ChannelDescriptor; options?: SendMessageOptions }): Promise<SendResult> {
     const { descriptor, threadId, text } = input;
-    const opts = input.options || {};
+    const opts: SendMessageOptions = input.options ?? {};
     const parsedIds = SlackIdentifiersSchema.safeParse(descriptor.identifiers);
     if (!parsedIds.success) throw new Error('Slack descriptor identifiers invalid');
     const ids = parsedIds.data;
@@ -70,35 +71,45 @@ export class SlackAdapter implements ChannelAdapter {
         });
         if (!resp.ok) return { ok: false, error: resp.error || 'unknown_error' };
         const ts: string | null = resp.ts ?? null;
-        type SlackMsgThread = { thread_ts?: string };
-        const thread_ts: string | undefined = resp.message && 'thread_ts' in (resp.message as SlackMsgThread)
-          ? (resp.message as SlackMsgThread).thread_ts
-          : undefined;
+        let thread_ts: string | undefined;
+        if (resp.message && typeof resp.message === 'object') {
+          const m = resp.message as Record<string, unknown>;
+          if (typeof m.thread_ts === 'string') thread_ts = m.thread_ts;
+        }
         const threadIdOut = thread_ts ?? replyTs ?? ts ?? null;
         return { ok: true, channelMessageId: ts, threadId: threadIdOut };
       } catch (e: unknown) {
-        // Detect rate limit safely
-        const err = e as unknown;
-        type SlackError = { code?: string; data?: { response?: { status?: number; headers?: Record<string, string> } } };
+        // Detect rate limit safely via narrow property checks
         let rateLimited = false;
         let retryAfterMs: number | null = null;
-        if (typeof err === 'object' && err !== null) {
-          const se = err as SlackError;
-          const code = se.code;
-          const status = se.data?.response?.status;
-          const headers = se.data?.response?.headers;
-          const retryAfterHeader = headers?.['retry-after'] ?? headers?.['Retry-After'];
+        if (typeof e === 'object' && e !== null) {
+          const obj = e as Record<string, unknown>;
+          const code = typeof obj.code === 'string' ? obj.code : undefined;
+          const data = obj.data as unknown;
+          const response = typeof data === 'object' && data !== null && 'response' in (data as Record<string, unknown>)
+            ? (data as Record<string, unknown>).response
+            : undefined;
+          const respObj = typeof response === 'object' && response !== null ? (response as Record<string, unknown>) : undefined;
+          const status = respObj && typeof respObj.status === 'number' ? (respObj.status as number) : undefined;
+          const headers = respObj && typeof respObj.headers === 'object' && respObj.headers !== null ? (respObj.headers as Record<string, unknown>) : undefined;
+          const retryRaw = headers
+            ? (typeof headers['retry-after'] === 'string'
+                ? (headers['retry-after'] as string)
+                : typeof headers['Retry-After'] === 'string'
+                ? (headers['Retry-After'] as string)
+                : undefined)
+            : undefined;
           if (code === 'slack_webapi_platform_error' && status === 429) {
             rateLimited = true;
-            const ra = Number(retryAfterHeader);
-            retryAfterMs = Number.isFinite(ra) ? ra * 1000 : null;
+            const raNum = retryRaw ? Number(retryRaw) : NaN;
+            retryAfterMs = Number.isFinite(raNum) ? raNum * 1000 : null;
           }
         }
         if (rateLimited) return { ok: false, error: 'rate_limited', rateLimited: true, retryAfterMs };
         let msg = 'unknown_error';
-        if (typeof err === 'object' && err !== null && 'message' in err) {
-          const m = (err as { message?: string }).message;
-          if (typeof m === 'string' && m) msg = m;
+        if (typeof e === 'object' && e !== null && 'message' in e) {
+          const mVal = (e as { message?: unknown }).message;
+          if (typeof mVal === 'string' && mVal) msg = mVal;
         }
         return { ok: false, error: msg };
       }
