@@ -50,15 +50,9 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     });
     return resolved;
   }
-  // Resolve and validate bot token during config setup; fail fast if invalid
+  // Store config only; token resolution happens during provision
   async setConfig(cfg: SlackTriggerConfig): Promise<void> {
     await super.setConfig(cfg);
-    const token = await resolveTokenRef(this.config.bot_token, {
-      expectedPrefix: 'xoxb-',
-      fieldName: 'bot_token',
-      vault: this.vault,
-    });
-    this.botToken = token;
   }
 
   private async ensureClient(): Promise<SocketModeClient> {
@@ -157,15 +151,27 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
 
   protected async doProvision(): Promise<void> {
     this.logger.info('SlackTrigger.doProvision: starting');
+    // Resolve bot token during provision/setup only
+    try {
+      const token = await resolveTokenRef(this.config.bot_token, {
+        expectedPrefix: 'xoxb-',
+        fieldName: 'bot_token',
+        vault: this.vault,
+      });
+      this.botToken = token;
+    } catch (e) {
+      let msg = 'invalid_or_missing_bot_token';
+      if (typeof e === 'object' && e !== null && 'message' in e) {
+        const mVal = (e as { message?: unknown }).message;
+        if (typeof mVal === 'string' && mVal) msg = mVal;
+      }
+      this.logger.error('SlackTrigger.doProvision: bot token resolution failed', { error: msg });
+      this.setStatus('provisioning_error');
+      throw new Error(msg);
+    }
     const client = await this.ensureClient();
     this.logger.info('Starting SlackTrigger (socket mode)');
     try {
-      // Bot token must already be resolved during config/setup
-      if (!this.botToken) {
-        this.logger.error('SlackTrigger.doProvision: bot token missing or invalid');
-        this.setStatus('provisioning_error');
-        throw new Error('slacktrigger_unprovisioned');
-      }
       await client.start();
       this.logger.info('SlackTrigger started');
     } catch (e) {
