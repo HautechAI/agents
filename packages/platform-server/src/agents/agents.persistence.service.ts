@@ -47,9 +47,8 @@ export class AgentsPersistenceService {
       this.logger.error('Invalid channel descriptor; skipping persistence', { threadId });
       return;
     }
-    const channelValue: Prisma.InputJsonValue = parsed.data as unknown as Prisma.InputJsonValue;
-    const updated = await this.prisma.thread.update({ where: { id: threadId }, data: { channel: channelValue } });
-    this.events.emitThreadUpdated({ id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status as any, createdAt: updated.createdAt, parentId: updated.parentId ?? null });
+    const updated = await this.prisma.thread.update({ where: { id: threadId }, data: { channel: parsed.data as Prisma.InputJsonValue } });
+    this.events.emitThreadUpdated({ id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status, createdAt: updated.createdAt, parentId: updated.parentId ?? null });
   }
 
   /**

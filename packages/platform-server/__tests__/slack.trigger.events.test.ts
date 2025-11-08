@@ -25,7 +25,7 @@ import { SlackTrigger } from '../src/graph/nodes/slackTrigger/slackTrigger.node'
 import { SlackRuntimeRegistry } from '../src/messaging/slack/runtime.registry';
 import { __getLastSocketClient } from '@slack/socket-mode';
 // Avoid importing AgentsPersistenceService to prevent @prisma/client load in unit tests
-vi.mock('../src/agents/agents.persistence.service', () => ({ AgentsPersistenceService: class {} }));
+// We pass a stub object where needed.
 
 describe('SlackTrigger events', () => {
   const makeLogger = (): Pick<LoggerService, 'info' | 'debug' | 'error'> => ({
@@ -46,21 +46,13 @@ describe('SlackTrigger events', () => {
 
   it('relays message events from socket-mode client', async () => {
     const logger = makeLogger();
-<<<<<<< HEAD
-    const vault = { getSecret: async (ref: any) => (String(ref).includes('APP') ? 'xapp-abc' : 'xoxb-bot') } as any;
-    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack', updateThreadChannelDescriptor: async () => undefined } as unknown as any;
+    const vault = { getSecret: async (ref: unknown) => (String(ref).includes('APP') ? 'xapp-abc' : 'xoxb-bot') } as any;
+    const persistence = { getOrCreateThreadByAlias: async () => 't-slack', updateThreadChannelDescriptor: async () => undefined } as any;
     const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence, runtime);
+    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence as any, runtime);
     await trig.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-bot', source: 'static' } });
-=======
-    const vault = { getSecret: async () => 'xoxb-abc' } as { getSecret: (ref: import('../src/vault/vault.service').VaultRef) => Promise<string> };
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack', updateThreadChannelDescriptor: async () => undefined } as unknown as any;
-    const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as import('../src/vault/vault.service').VaultService, persistence, runtime);
-    await trig.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'secret/slack/BOT', source: 'vault' } });
->>>>>>> 3268b80 (refactor(db): drop Thread.channelVersion from schema and migration; refactor(descriptor): version + identifiers only; refactor(slack): runtime token registry; adapter accepts token param; refactor(send_message): use runtime token; docs/env: remove global slack token refs; tests: update for new descriptor and runtime token)
     // Subscribe a listener
-    const received: TriggerMessage[] = [];
+    const received: any[] = [];
     await trig.subscribe({ invoke: async (_t, msgs) => { received.push(...msgs); } });
     await trig.provision();
     // Fire a mock socket-mode 'message' envelope.
@@ -83,19 +75,10 @@ describe('SlackTrigger events', () => {
 
   it('sets status to provisioning_error when vault ref but vault disabled', async () => {
     const logger = makeLogger();
-    const vault: { getSecret: (ref: import('../src/vault/vault.service').VaultRef) => Promise<string> } = {
-      getSecret: vi.fn(async () => { throw new Error('vault disabled'); }),
-<<<<<<< HEAD
-    } as any;
-    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as any;
+    const vault = { getSecret: vi.fn(async () => { throw new Error('vault disabled'); }) } as any;
+    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as any;
     const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence, runtime);
-=======
-    };
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as unknown as any;
-    const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as import('../src/vault/vault.service').VaultService, persistence, runtime);
->>>>>>> 3268b80 (refactor(db): drop Thread.channelVersion from schema and migration; refactor(descriptor): version + identifiers only; refactor(slack): runtime token registry; adapter accepts token param; refactor(send_message): use runtime token; docs/env: remove global slack token refs; tests: update for new descriptor and runtime token)
+    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence as any, runtime);
     await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' }, bot_token: { value: 'secret/slack/BOT', source: 'vault' } });
     await trig.provision();
     expect(trig.status).toBe('provisioning_error');
@@ -103,21 +86,11 @@ describe('SlackTrigger events', () => {
 
   it('resolves app token via vault during provision', async () => {
     const logger = makeLogger();
-    const vault: { isEnabled: () => boolean; getSecret: (ref: import('../src/vault/vault.service').VaultRef) => Promise<string> } = {
-      isEnabled: () => true,
-      getSecret: vi.fn(async () => 'xapp-from-vault'),
-    };
-<<<<<<< HEAD
-    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as any;
+    const vault = { isEnabled: () => true, getSecret: vi.fn(async () => 'xapp-from-vault') } as any;
+    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as any;
     const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as any, persistence, runtime);
+    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence as any, runtime);
     await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' }, bot_token: { value: 'xoxb-bot', source: 'static' } });
-=======
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as unknown as any;
-    const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as import('../src/vault/vault.service').VaultService, persistence, runtime);
-    await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' }, bot_token: { value: 'secret/slack/BOT', source: 'vault' } });
->>>>>>> 3268b80 (refactor(db): drop Thread.channelVersion from schema and migration; refactor(descriptor): version + identifiers only; refactor(slack): runtime token registry; adapter accepts token param; refactor(send_message): use runtime token; docs/env: remove global slack token refs; tests: update for new descriptor and runtime token)
     await trig.provision();
     // Ensure a client was created by the trigger
     expect(__getLastSocketClient()).toBeTruthy();
@@ -125,21 +98,11 @@ describe('SlackTrigger events', () => {
 
   it('fails when resolved app token has wrong prefix', async () => {
     const logger = makeLogger();
-    const vault: { isEnabled: () => boolean; getSecret: (ref: import('../src/vault/vault.service').VaultRef) => Promise<string> } = {
-      isEnabled: () => true,
-      getSecret: vi.fn(async () => 'xoxb-wrong'),
-    };
-<<<<<<< HEAD
-    const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as any;
+    const vault = { isEnabled: () => true, getSecret: vi.fn(async () => 'xoxb-wrong') } as any;
+    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as any;
     const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as any, persistence, runtime);
+    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as any, persistence as any, runtime);
     await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' }, bot_token: { value: 'xoxb-bot', source: 'static' } });
-=======
-    const persistence = { getOrCreateThreadByAlias: async () => 't-slack' } as unknown as any;
-    const runtime = new SlackRuntimeRegistry();
-    const trig = new SlackTrigger(logger as unknown as LoggerService, vault as unknown as import('../src/vault/vault.service').VaultService, persistence, runtime);
-    await trig.setConfig({ app_token: { value: 'secret/slack/APP', source: 'vault' } });
->>>>>>> 3268b80 (refactor(db): drop Thread.channelVersion from schema and migration; refactor(descriptor): version + identifiers only; refactor(slack): runtime token registry; adapter accepts token param; refactor(send_message): use runtime token; docs/env: remove global slack token refs; tests: update for new descriptor and runtime token)
     await trig.provision();
     expect(trig.status).toBe('provisioning_error');
   });
