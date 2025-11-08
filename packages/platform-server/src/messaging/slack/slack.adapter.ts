@@ -24,16 +24,9 @@ export class SlackAdapter {
       });
       if (!resp.ok) return { ok: false, error: resp.error || 'unknown_error' };
       const ts: string | undefined = typeof resp.ts === 'string' ? resp.ts : undefined;
-      let thread_ts_out: string | undefined = undefined;
-      if (
-        resp.message &&
-        typeof resp.message === 'object' &&
-        'thread_ts' in resp.message &&
-        typeof (resp.message as { thread_ts?: unknown }).thread_ts === 'string'
-      ) {
-        thread_ts_out = (resp.message as { thread_ts: string }).thread_ts;
-      }
-      const threadIdOut = thread_ts_out ?? thread_ts ?? ts ?? null;
+      // Stakeholder constraint: derive thread id deterministically without duck typing.
+      // Only use known typed fields: request thread_ts and response ts.
+      const threadIdOut = thread_ts ?? ts ?? null;
       return { ok: true, channelMessageId: ts ?? null, threadId: threadIdOut };
     } catch (e) {
       const msg = e instanceof Error && e.message ? e.message : 'unknown_error';

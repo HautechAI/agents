@@ -22,8 +22,8 @@ vi.mock('@slack/web-api', () => {
 describe('send_message tool', () => {
   it('returns error when descriptor missing', async () => {
     type PrismaClientStub = { thread: { findUnique: (args: { where: { id: string }; select: { channel: true } }) => Promise<{ channel: unknown | null }> } };
-    const prismaStub: Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'> = { getClient: () => ({ thread: { findUnique: async () => ({ channel: null }) } } as PrismaClientStub) } as unknown as Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>;
-    const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => undefined };
+    const prismaStub = ({ getClient: () => ({ thread: { findUnique: async () => ({ channel: null }) } } as PrismaClientStub) } satisfies Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>) as import('../src/core/services/prisma.service').PrismaService;
+    const vaultMock = ({ getSecret: async (_ref: VaultRef) => undefined } satisfies Pick<import('../src/vault/vault.service').VaultService, 'getSecret'>) as import('../src/vault/vault.service').VaultService;
     class SlackAdapterStub implements SlackAdapter {
       constructor(private readonly _logger: LoggerService = new LoggerService()) {}
       async sendText(_input: { token: string; channel: string; text: string; thread_ts?: string }): Promise<import('../src/messaging/types').SendResult> {
@@ -32,8 +32,8 @@ describe('send_message tool', () => {
     }
     const trigger = new SlackTrigger(
       new LoggerService(),
-      vaultMock as unknown as import('../src/vault/vault.service').VaultService,
-      { getOrCreateThreadByAlias: async () => 't1', updateThreadChannelDescriptor: async () => undefined } as Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>,
+      vaultMock,
+      ({ getOrCreateThreadByAlias: async () => 't1', updateThreadChannelDescriptor: async () => undefined } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService,
       prismaStub,
       new SlackAdapterStub(),
     );
@@ -51,8 +51,8 @@ describe('send_message tool', () => {
     // Configure trigger-scoped token (static to avoid vault parsing in test)
     const descriptor = { type: 'slack', identifiers: { channel: 'C1' }, meta: {}, version: 1 };
     type PrismaClientStub2 = { thread: { findUnique: (args: { where: { id: string }; select: { channel: true } }) => Promise<{ channel: unknown | null }> } };
-    const prismaStub2: Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'> = { getClient: () => ({ thread: { findUnique: async () => ({ channel: descriptor }) } } as PrismaClientStub2) } as unknown as Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>;
-    const vaultMock2: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => 'xoxb-abc' };
+    const prismaStub2 = ({ getClient: () => ({ thread: { findUnique: async () => ({ channel: descriptor }) } } as PrismaClientStub2) } satisfies Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>) as import('../src/core/services/prisma.service').PrismaService;
+    const vaultMock2 = ({ getSecret: async (_ref: VaultRef) => 'xoxb-abc' } satisfies Pick<import('../src/vault/vault.service').VaultService, 'getSecret'>) as import('../src/vault/vault.service').VaultService;
     class SlackAdapterStub2 implements SlackAdapter {
       constructor(private readonly _logger: LoggerService = new LoggerService()) {}
       async sendText(_opts: { token: string; channel: string; text: string; thread_ts?: string }): Promise<import('../src/messaging/types').SendResult> {
@@ -61,8 +61,8 @@ describe('send_message tool', () => {
     }
     const trigger = new SlackTrigger(
       new LoggerService(),
-      vaultMock2 as unknown as import('../src/vault/vault.service').VaultService,
-      { getOrCreateThreadByAlias: async () => 't1', updateThreadChannelDescriptor: async () => undefined } as Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>,
+      vaultMock2,
+      ({ getOrCreateThreadByAlias: async () => 't1', updateThreadChannelDescriptor: async () => undefined } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService,
       prismaStub2,
       new SlackAdapterStub2(),
     );
