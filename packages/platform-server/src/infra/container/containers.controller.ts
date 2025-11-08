@@ -158,7 +158,7 @@ export class ContainersController {
     })();
     let sidecarSource: Array<{ containerId: string; image: string; status: unknown; metadata: unknown }> = [];
     if (hasQueryRaw) {
-      const q = Prisma.sql<Array<{ containerId: string; image: string; status: string; metadata: unknown }>>`
+      const q = Prisma.sql`
         SELECT "containerId", "image", "status", "metadata" FROM "Container"
         WHERE "metadata"->'labels'->>'hautech.ai/role' = 'dind'
           AND ("metadata"->'labels'->>'hautech.ai/parent_cid') IN (${Prisma.join(parentIds)})

@@ -15,7 +15,8 @@ export class LoggerService {
 
   warn(message: string, ...optionalParams: unknown[]) {
     console.warn(`[WARN] ${message}`, ...optionalParams);
-    tracingLogger().warn(`${message}\n${this.serialize(optionalParams)}`);
+    // tracing logger lacks warn(); map to info to avoid runtime errors
+    tracingLogger().info(`${message}\n${this.serialize(optionalParams)}`);
   }
 
   error(message: string, ...optionalParams: unknown[]) {

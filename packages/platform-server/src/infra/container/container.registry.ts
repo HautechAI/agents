@@ -154,7 +154,7 @@ export class ContainerRegistry {
   async getExpired(now: Date = new Date()) {
     const iso = now.toISOString();
     // Include terminating containers with no retryAfter or retryAfter <= now; exclude future retryAfter
-    const q = Prisma.sql<Array<{ containerId: string }>>`
+    const q = Prisma.sql`
       SELECT "containerId" FROM "Container"
       WHERE "status" = 'terminating'
         AND (
