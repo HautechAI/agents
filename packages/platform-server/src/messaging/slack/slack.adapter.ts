@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { WebClient, type ChatPostMessageResponse } from '@slack/web-api';
-import type { Message as SlackMessage } from '@slack/web-api/dist/response/ChatPostMessageResponse';
 import type { SendResult } from '../types';
 import { LoggerService } from '../../core/services/logger.service';
 
@@ -24,11 +23,18 @@ export class SlackAdapter {
         ...(thread_ts ? { thread_ts } : {}),
       });
       if (!resp.ok) return { ok: false, error: resp.error || 'unknown_error' };
-      const ts: string | null = resp.ts ?? null;
-      const m = resp.message as SlackMessage | undefined;
-      const thread_ts_out: string | undefined = m?.thread_ts ?? undefined;
+      const ts: string | undefined = typeof resp.ts === 'string' ? resp.ts : undefined;
+      let thread_ts_out: string | undefined = undefined;
+      if (
+        resp.message &&
+        typeof resp.message === 'object' &&
+        'thread_ts' in resp.message &&
+        typeof (resp.message as { thread_ts?: unknown }).thread_ts === 'string'
+      ) {
+        thread_ts_out = (resp.message as { thread_ts: string }).thread_ts;
+      }
       const threadIdOut = thread_ts_out ?? thread_ts ?? ts ?? null;
-      return { ok: true, channelMessageId: ts, threadId: threadIdOut };
+      return { ok: true, channelMessageId: ts ?? null, threadId: threadIdOut };
     } catch (e) {
       const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
       return { ok: false, error: msg };

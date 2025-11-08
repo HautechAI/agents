@@ -76,7 +76,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         event_ts: z.string().optional(),
       })
       .strict();
-    type SlackMessageEvent = z.infer<typeof SlackMessageEventSchema>;
     type SlackEventCallbackBody = { type: 'event_callback'; event?: unknown };
     type SlackMessageEnvelope = {
       ack: () => Promise<void>;
