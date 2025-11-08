@@ -136,11 +136,10 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
     }
   }, [editing]);
 
-  async function fetchCurrentValue(maskErrors = false) {
+  async function fetchCurrentValue() {
     try {
-      const res = await api.graph.readVaultKey(entry.mount, entry.path, entry.key, { maskErrors });
+      const res = await api.graph.readVaultKey(entry.mount, entry.path, entry.key);
       if (res && typeof res.value === 'string') setValue(res.value);
-      else if (maskErrors) notifyError('No value available');
       else notifyError('Failed to load value');
     } catch {
       // Generic error message when not masking
@@ -214,7 +213,7 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
               onClick={async () => {
                 setReveal((r) => !r);
                 // If revealing while value is empty, fetch current value
-                if (!reveal && !value) await fetchCurrentValue(true);
+                if (!reveal && !value) await fetchCurrentValue();
               }}
             >
               {reveal ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -234,7 +233,7 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
             <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={writeMut.isPending}>Cancel</Button>
           </div>
         ) : (
-          <Button size="sm" onClick={async () => { setEditing(true); await fetchCurrentValue(false); }}>Edit</Button>
+          <Button size="sm" onClick={async () => { setEditing(true); await fetchCurrentValue(); }}>Edit</Button>
         )}
       </Td>
     </Tr>
