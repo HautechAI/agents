@@ -29,12 +29,12 @@ describe('send_message tool', () => {
   });
 
   it('sends via slack adapter when descriptor present', async () => {
-    // Configure trigger-scoped token
+    // Configure trigger-scoped token (static to avoid vault parsing in test)
     const descriptor = { type: 'slack', identifiers: { channel: 'C1' }, meta: {}, version: 1 };
     const prismaStub2 = { getClient: () => ({ thread: { findUnique: async () => ({ channel: descriptor }) } }) } as any;
     const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => 'xoxb-abc' };
     const trigger = new SlackTrigger(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, {} as any, prismaStub2);
-    await trigger.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-abc', source: 'vault' } });
+    await trigger.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-abc', source: 'static' } });
     const tool = new SendMessageFunctionTool(new LoggerService(), trigger as any);
     const res = await tool.execute({ message: 'hello' } as any, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
