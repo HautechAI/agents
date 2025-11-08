@@ -24,10 +24,5 @@ export type SendResult = {
   error?: string | null;
 };
 
-export interface ChannelAdapterDeps {
-  logger: LoggerService;
-}
+// Adapters are provided via DI; no custom deps bags or adapter interfaces needed for v1.
 
-export interface ChannelAdapter {
-  sendText(input: { token: string; threadId: string; text: string; descriptor: ChannelDescriptor }): Promise<SendResult>;
-}

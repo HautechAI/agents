@@ -37,6 +37,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     @Inject(VaultService) protected readonly vault: VaultService,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
     @Inject('PrismaService') private readonly prismaService: PrismaService,
+    @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
   ) {
     super(logger);
   }
@@ -242,8 +243,8 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         return { ok: false, error: 'invalid_channel_descriptor' };
       }
       const descriptor = parsed.data;
-      const adapter = new SlackAdapter({ logger: this.logger });
-      const res = await adapter.sendText({ token: this.botToken!, threadId, text, descriptor });
+      const ids = descriptor.identifiers;
+      const res = await this.slackAdapter.sendText({ token: this.botToken!, channel: ids.channel, text, thread_ts: ids.thread_ts });
       return res;
     } catch (e) {
       let msg = 'unknown_error';

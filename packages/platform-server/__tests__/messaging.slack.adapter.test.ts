@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SlackAdapter } from '../src/messaging/slack/slack.adapter';
+import { LoggerService } from '../src/core/services/logger.service';
 
 vi.mock('@slack/web-api', () => {
   let last: any = null;
@@ -15,13 +16,12 @@ vi.mock('@slack/web-api', () => {
 });
 
 describe('SlackAdapter', () => {
-  const deps = { logger: ({ info: () => {}, error: () => {} } as unknown) as import('../src/core/services/logger.service').LoggerService };
-  const adapter = new SlackAdapter(deps);
+  const adapter = new SlackAdapter(new LoggerService());
   beforeEach(() => {
     vi.resetAllMocks();
   });
   it('sends message successfully', async () => {
-    const res = await adapter.sendText({ token: 'xoxb-abc', threadId: 't1', text: 'hello', descriptor: { type: 'slack', version: 1, identifiers: { channel: 'C1' }, meta: {} } as any });
+    const res = await adapter.sendText({ token: 'xoxb-abc', channel: 'C1', text: 'hello' });
     expect(res.ok).toBe(true);
     expect(res.channelMessageId).toBe('1729');
   });
