@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpException, Inject, Param, Post, Qu
 import { KvKeysQueryDto } from './dto/kv-keys.query.dto';
 import { KvPathsQueryDto } from './dto/kv-paths.query.dto';
 import { KvWriteDto } from './dto/kv-write.dto';
+import { KvReadQueryDto } from './dto/kv-read.query.dto';
 import { VaultService } from './vault.service';
 
 @Controller('api/vault')
@@ -24,6 +25,13 @@ export class VaultController {
   async getKeys(@Param('mount') mount: string, @Query() query: KvKeysQueryDto): Promise<{ items: string[] }> {
     const items = await this.vaultService.listKeys(mount, query?.path || '');
     return { items };
+  }
+
+  @Get('kv/:mount/read')
+  async readKv(@Param('mount') mount: string, @Query() query: KvReadQueryDto): Promise<{ value: string } | { error: string }> {
+    const val = await this.vaultService.getSecret({ mount, path: query.path, key: query.key });
+    if (val == null) throw new HttpException({ error: 'not_found' }, 404);
+    return { value: val };
   }
 
   @Post('kv/:mount/write')
