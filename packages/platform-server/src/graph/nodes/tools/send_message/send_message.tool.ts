@@ -6,6 +6,7 @@ import { PrismaService } from '../../../../core/services/prisma.service';
 import { ConfigService } from '../../../../core/services/config.service';
 import { ChannelDescriptorSchema, type SendResult } from '../../../../messaging/types';
 import { SlackAdapter } from '../../../../messaging/slack/slack.adapter';
+import { SlackRuntimeRegistry } from '../../../../messaging/slack/runtime.registry';
 import type { LLMContext } from '../../../../llm/types';
 
 export const sendMessageInvocationSchema = z.object({ message: z.string().min(1).describe('Message text.') }).strict();
@@ -16,6 +17,7 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
     private vault: VaultService,
     private prismaService: PrismaService,
     private config: ConfigService,
+    private runtime: SlackRuntimeRegistry,
   ) {
     super();
   }
@@ -34,7 +36,7 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
     const threadId = ctx?.threadId;
     if (!threadId) return JSON.stringify({ ok: false, error: 'missing_thread_context' });
     const prisma = this.prismaService.getClient();
-    const thread = await prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true, channelVersion: true } });
+    const thread = await prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true } });
     if (!thread || !thread.channel) {
       this.logger.error('SendMessage: missing descriptor for thread', { threadId });
       return JSON.stringify({ ok: false, error: 'missing_channel_descriptor' });
@@ -45,14 +47,15 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
       return JSON.stringify({ ok: false, error: 'invalid_channel_descriptor' });
     }
     const descriptor = parsed.data;
-    const adapterLogger = {
-      info: (...args: unknown[]) => this.logger.info('send_message', args),
-      error: (...args: unknown[]) => this.logger.error('send_message', args),
-      debug: (...args: unknown[]) => this.logger.debug?.('send_message', args),
-    };
+    const adapterLogger = this.logger;
     try {
-      const adapter = new SlackAdapter({ logger: adapterLogger, vault: { getSecret: (ref) => this.vault.getSecret(ref) } });
-      const res: SendResult = await adapter.sendText({ threadId, text: args.message, descriptor });
+      const token = this.runtime.getToken(threadId);
+      if (!token) {
+        this.logger.error('SendMessage: missing runtime token', { threadId });
+        return JSON.stringify({ ok: false, error: 'missing_runtime_token' });
+      }
+      const adapter = new SlackAdapter({ logger: adapterLogger });
+      const res: SendResult = await adapter.sendText({ token, threadId, text: args.message, descriptor });
       return JSON.stringify(res);
     } catch (e) {
       let msg = 'unknown_error';

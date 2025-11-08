@@ -15,13 +15,13 @@ vi.mock('@slack/web-api', () => {
 });
 
 describe('SlackAdapter', () => {
-  const deps = { logger: { info: () => {}, error: () => {} }, vault: { getSecret: async () => 'xoxb-abc' } };
+  const deps = { logger: { info: () => {}, error: () => {} } };
   const adapter = new SlackAdapter(deps as any);
   beforeEach(() => {
     vi.resetAllMocks();
   });
   it('sends message successfully', async () => {
-    const res = await adapter.sendText({ threadId: 't1', text: 'hello', descriptor: { type: 'slack', identifiers: { channelId: 'C1' }, auth: { botToken: { value: 'mount/path/key', source: 'vault' } }, meta: {} } as any });
+    const res = await adapter.sendText({ token: 'xoxb-abc', threadId: 't1', text: 'hello', descriptor: { type: 'slack', version: 1, identifiers: { channel: 'C1' }, meta: {} } as any });
     expect(res.ok).toBe(true);
     expect(res.channelMessageId).toBe('1729');
   });

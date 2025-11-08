@@ -402,7 +402,7 @@ export class ConfigService implements Config {
       agentsDatabaseUrl: process.env.AGENTS_DATABASE_URL,
       corsOrigins: process.env.CORS_ORIGINS,
       // Messaging adapters config
-      slack: { botToken: process.env.SLACK_BOT_TOKEN || (process.env.SLACK_BOT_TOKEN_REF ? { value: process.env.SLACK_BOT_TOKEN_REF, source: 'vault' as const } : undefined) },
+      slack: {},
       github: { token: process.env.GH_TOKEN },
       smtp: { host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, username: process.env.SMTP_USERNAME, password: process.env.SMTP_PASSWORD, from: process.env.SMTP_FROM },
       internalChat: { baseUrl: process.env.INTERNAL_CHAT_BASE_URL, token: process.env.INTERNAL_CHAT_TOKEN },

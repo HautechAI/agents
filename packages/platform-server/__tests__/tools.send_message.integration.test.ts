@@ -17,7 +17,7 @@ vi.mock('@slack/web-api', () => {
 
 describe('send_message tool', () => {
   it('returns error when descriptor missing', async () => {
-    const prismaStub = { getClient: () => ({ thread: { findUnique: async () => ({ channel: null, channelVersion: null }) } }) } as unknown as PrismaService;
+    const prismaStub = { getClient: () => ({ thread: { findUnique: async () => ({ channel: null }) } }) } as unknown as PrismaService;
     // Minimal env to satisfy ConfigService schema
     process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
     process.env.MONGODB_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/test';
@@ -35,12 +35,15 @@ describe('send_message tool', () => {
     process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
     process.env.MONGODB_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/test';
     process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'mongodb://localhost:27017/agents';
-    process.env.SLACK_BOT_TOKEN_REF = process.env.SLACK_BOT_TOKEN_REF || 'secret/slack/bot_token';
-    const prismaStub = { getClient: () => ({ thread: { findUnique: async () => ({ channel: { type: 'slack', identifiers: { channelId: 'C1' }, meta: {} }, channelVersion: 1 }) } }) } as unknown as PrismaService;
-    const descriptor = { type: 'slack', identifiers: { channelId: 'C1' }, auth: { botToken: { value: 'secret/slack/BOT', source: 'vault' } }, meta: {}, version: 1 };
-    const prismaStub2 = { getClient: () => ({ thread: { findUnique: async () => ({ channel: descriptor, channelVersion: 1 }) } }) } as unknown as PrismaService;
+    // No global token; runtime token is provided via SlackRuntimeRegistry
+    const descriptor = { type: 'slack', identifiers: { channel: 'C1' }, meta: {}, version: 1 };
+    const prismaStub2 = { getClient: () => ({ thread: { findUnique: async () => ({ channel: descriptor }) } }) } as unknown as PrismaService;
     const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => 'xoxb-abc' };
-    const tool = new SendMessageFunctionTool(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, prismaStub2, ConfigService.fromEnv());
+    // Provide runtime token via registry
+    const { SlackRuntimeRegistry } = await import('../src/messaging/slack/runtime.registry');
+    const runtime = new SlackRuntimeRegistry();
+    runtime.setToken('t1', 'xoxb-abc');
+    const tool = new SendMessageFunctionTool(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, prismaStub2, ConfigService.fromEnv(), runtime as any);
     const res = await tool.execute({ message: 'hello' } as any, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(true);

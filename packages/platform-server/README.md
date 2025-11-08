@@ -94,5 +94,5 @@ Persistent conversation state (Prisma)
 Messaging
 
 - New `send_message` tool routes replies to the origin channel using a stored `ChannelDescriptor` on `Thread`.
-- Slack adapter is implemented; configure `SLACK_BOT_TOKEN` or `SLACK_BOT_TOKEN_REF` for Vault.
+// Slack adapter: token is provided at runtime via SlackTrigger; no global env tokens needed.
 - Legacy `send_slack_message` remains functional; prefer `send_message` when `Thread.channel` is present.

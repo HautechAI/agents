@@ -18,12 +18,13 @@ Behavior
 - Returns a JSON envelope: `{ ok, channelMessageId?, threadId?, error? }`.
 - Logs adapter type and identifiers; does not log full text.
 
-Slack-only descriptor and token
+Slack-only descriptor and runtime token
 
-- `SlackTrigger` writes the descriptor on ingress: `{ type: 'slack', identifiers: { channelId, threadTs? }, auth: { botToken: string | { value, source: 'vault' } } }`.
-- `SlackAdapter` resolves the bot token only from the descriptor (direct string or via VaultService when `source: 'vault'`).
+- `SlackTrigger` writes the descriptor on ingress: `{ type: 'slack', version: number, identifiers: { channel, thread_ts? } }`.
+- No tokens are persisted. `SlackTrigger` resolves its bot token at runtime and registers it per-thread.
+- `SendMessage` looks up the runtime token for the current thread and passes it to `SlackAdapter`.
 
 Migration
 
-- Add `Thread.channel` (Json?) and `Thread.channelVersion` (Int?).
+- Add `Thread.channel` (Json?).
 - `SlackTrigger` populates the descriptor on ingress for new threads.
