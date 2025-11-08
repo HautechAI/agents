@@ -3,6 +3,7 @@ import { PrismaService } from '../core/services/prisma.service';
 import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
 import type { Prisma, RunStatus, RunMessageType, MessageKind, PrismaClient, ThreadStatus } from '@prisma/client';
+import { ChannelDescriptorSchema } from '../messaging/types';
 import { LoggerService } from '../core/services/logger.service';
 import { ThreadsMetricsService, type ThreadMetrics } from './threads.metrics.service';
 import { GraphEventsPublisher } from '../gateway/graph.events.publisher';
@@ -41,7 +42,13 @@ export class AgentsPersistenceService {
   async updateThreadChannelDescriptor(threadId: string, descriptor: unknown, _version?: number): Promise<void> {
     const existing = await this.prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true } });
     if (existing?.channel) return; // do not overwrite
-    const updated = await this.prisma.thread.update({ where: { id: threadId }, data: { channel: (descriptor as any) } });
+    const parsed = ChannelDescriptorSchema.safeParse(descriptor);
+    if (!parsed.success) {
+      this.logger.error('Invalid channel descriptor; skipping persistence', { threadId });
+      return;
+    }
+    const channelValue: Prisma.InputJsonValue = parsed.data as unknown as Prisma.InputJsonValue;
+    const updated = await this.prisma.thread.update({ where: { id: threadId }, data: { channel: channelValue } });
     this.events.emitThreadUpdated({ id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status as any, createdAt: updated.createdAt, parentId: updated.parentId ?? null });
   }
 

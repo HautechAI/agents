@@ -74,7 +74,7 @@ describe('SlackTrigger events', () => {
 
   it('sets status to provisioning_error when vault ref but vault disabled', async () => {
     const logger = makeLogger();
-    const vault: { getSecret: (ref: any) => Promise<string> } = {
+    const vault: { getSecret: (ref: import('../src/vault/vault.service').VaultRef) => Promise<string> } = {
       getSecret: vi.fn(async () => { throw new Error('vault disabled'); }),
     } as any;
     const persistence = { getOrCreateThreadByAlias: async (_src: string, _alias: string, _summary: string) => 't-slack' } as unknown as AgentsPersistenceService;
@@ -87,7 +87,7 @@ describe('SlackTrigger events', () => {
 
   it('resolves app token via vault during provision', async () => {
     const logger = makeLogger();
-    const vault: { isEnabled: () => boolean; getSecret: (ref: any) => Promise<string> } = {
+    const vault: { isEnabled: () => boolean; getSecret: (ref: import('../src/vault/vault.service').VaultRef) => Promise<string> } = {
       isEnabled: () => true,
       getSecret: vi.fn(async () => 'xapp-from-vault'),
     };
@@ -102,7 +102,7 @@ describe('SlackTrigger events', () => {
 
   it('fails when resolved app token has wrong prefix', async () => {
     const logger = makeLogger();
-    const vault: { isEnabled: () => boolean; getSecret: (ref: any) => Promise<string> } = {
+    const vault: { isEnabled: () => boolean; getSecret: (ref: import('../src/vault/vault.service').VaultRef) => Promise<string> } = {
       isEnabled: () => true,
       getSecret: vi.fn(async () => 'xoxb-wrong'),
     };

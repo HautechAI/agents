@@ -76,13 +76,24 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
       error: (...args: unknown[]) => this.logger.error('send_message', args),
       debug: (...args: unknown[]) => this.logger.debug?.('send_message', args),
     };
-    const adapter = ChannelAdapterRegistry.getAdapter(descriptor, {
-      logger: adapterLogger,
-      vault: { getSecret: (ref) => this.vault.getSecret(ref) },
-      config: { slack: this.config.slack },
-    });
-    this.logger.info('SendMessage: adapter selected', { type: descriptor.type, threadId });
-    const res: SendResult = await adapter.sendText({ threadId, text: args.text, descriptor, options: { correlationId: args.correlationId, markdown: !!args.markdown, broadcast: !!args.broadcast, attachments: args.attachments } });
-    return JSON.stringify(res);
+    try {
+      const adapter = ChannelAdapterRegistry.getAdapter(descriptor, {
+        logger: adapterLogger,
+        vault: { getSecret: (ref) => this.vault.getSecret(ref) },
+        config: { slack: this.config.slack },
+      });
+      this.logger.info('SendMessage: adapter selected', { type: descriptor.type, threadId });
+      const res: SendResult = await adapter.sendText({ threadId, text: args.text, descriptor, options: { correlationId: args.correlationId, markdown: !!args.markdown, broadcast: !!args.broadcast, attachments: args.attachments } });
+      return JSON.stringify(res);
+    } catch (e) {
+      if (args.correlationId) SendMessageFunctionTool.recentKeys.delete(args.correlationId);
+      let msg = 'unknown_error';
+      if (typeof e === 'object' && e !== null && 'message' in e) {
+        const mVal = (e as { message?: unknown }).message;
+        if (typeof mVal === 'string' && mVal) msg = mVal;
+      }
+      this.logger.error('SendMessage: adapter failed', { threadId, error: msg });
+      return JSON.stringify({ ok: false, error: msg });
+    }
   }
 }

@@ -3,7 +3,7 @@ import { SendMessageFunctionTool } from '../src/graph/nodes/tools/send_message/s
 import { LoggerService } from '../src/core/services/logger.service';
 import { PrismaService } from '../src/core/services/prisma.service';
 import { ConfigService } from '../src/core/services/config.service';
-import { VaultService } from '../src/vault/vault.service';
+import type { VaultRef } from '../src/vault/vault.service';
 
 // Mock slack web api
 import { vi } from 'vitest';
@@ -24,7 +24,8 @@ describe('send_message tool', () => {
     process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
     process.env.MONGODB_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/test';
     process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'mongodb://localhost:27017/agents';
-    const tool = new SendMessageFunctionTool(new LoggerService(), { getSecret: async () => null } as any, prismaStub, ConfigService.fromEnv());
+    const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => undefined };
+    const tool = new SendMessageFunctionTool(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, prismaStub, ConfigService.fromEnv());
     const res = await tool.execute({ text: 'hello' } as any, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(false);
@@ -38,7 +39,8 @@ describe('send_message tool', () => {
     process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'mongodb://localhost:27017/agents';
     process.env.SLACK_BOT_TOKEN_REF = process.env.SLACK_BOT_TOKEN_REF || 'secret/slack/bot_token';
     const prismaStub = { getClient: () => ({ thread: { findUnique: async () => ({ channel: { type: 'slack', identifiers: { channelId: 'C1' }, meta: {} }, channelVersion: 1 }) } }) } as unknown as PrismaService;
-    const tool = new SendMessageFunctionTool(new LoggerService(), { getSecret: async () => 'xoxb-abc' } as any, prismaStub, ConfigService.fromEnv());
+    const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => 'xoxb-abc' };
+    const tool = new SendMessageFunctionTool(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, prismaStub, ConfigService.fromEnv());
     const res = await tool.execute({ text: 'hello' } as any, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(true);

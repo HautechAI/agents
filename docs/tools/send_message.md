@@ -10,6 +10,7 @@ Schema
   text: string;
   markdown?: boolean;
   broadcast?: boolean;
+  correlationId?: string; // optional idempotency key
   attachments?: [{ type: 'file' | 'link'; url?: string; name?: string }];
 }
 ```
@@ -20,6 +21,9 @@ Behavior
 - Uses adapter registry to route to the correct channel.
 - Returns a JSON envelope: `{ ok, channelMessageId?, threadId?, error?, rateLimited?, retryAfterMs? }`.
 - Logs adapter type and identifiers; does not log full text.
+- Supports an optional `correlationId` to avoid duplicate sends within a 10-minute TTL window.
+  - If a duplicate `correlationId` is detected, returns `{ ok: false, error: 'duplicate_correlation_id' }`.
+  - On adapter errors, the idempotency key is released to allow retry.
 
 Slack adapter
 
@@ -27,9 +31,11 @@ Slack adapter
 - Supports thread replies via `thread_ts`.
 - Ephemeral messages when `ephemeralUser` is provided by descriptor.
 - Handles rate limits (429) with a single backoff retry.
+- Attachment handling:
+  - Link attachments are appended to the message text as formatted links.
+  - File attachments are not supported in `send_message`; use a dedicated upload tool.
 
 Migration
 
 - Add `Thread.channel` (Json?) and `Thread.channelVersion` (Int?).
 - `SlackTrigger` populates the descriptor on ingress for new threads.
-
