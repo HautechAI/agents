@@ -33,11 +33,11 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   private botToken: string | null = null;
 
   constructor(
-    @Inject(LoggerService) protected readonly logger: LoggerService,
-    @Inject(VaultService) protected readonly vault: VaultService,
-    @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
+    protected readonly logger: LoggerService,
+    protected readonly vault: VaultService,
+    private readonly persistence: AgentsPersistenceService,
     @Inject('PrismaService') private readonly prismaService: PrismaService,
-    @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
+    private readonly slackAdapter: SlackAdapter,
   ) {
     super(logger);
   }
