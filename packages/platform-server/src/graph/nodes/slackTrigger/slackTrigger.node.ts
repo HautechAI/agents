@@ -49,6 +49,16 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     });
     return resolved;
   }
+  // Resolve and validate bot token during config setup; fail fast if invalid
+  async setConfig(cfg: SlackTriggerConfig): Promise<void> {
+    await super.setConfig(cfg);
+    const token = await resolveTokenRef(this.config.bot_token, {
+      expectedPrefix: 'xoxb-',
+      fieldName: 'bot_token',
+      vault: this.vault,
+    });
+    this.botToken = token;
+  }
 
   private async ensureClient(): Promise<SocketModeClient> {
     this.logger.info('SlackTrigger.ensureClient: entering');
@@ -116,15 +126,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
           },
         };
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias, text);
-        // Resolve bot token once and cache; no registry exposure
-        if (!this.botToken) {
-          const botToken = await resolveTokenRef(this.config.bot_token, {
-            expectedPrefix: 'xoxb-',
-            fieldName: 'bot_token',
-            vault: this.vault,
-          });
-          this.botToken = botToken;
-        }
         // Persist descriptor only when channel is present; skip otherwise
         if (typeof event.channel === 'string' && event.channel) {
           const descriptor = {
@@ -158,14 +159,11 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     const client = await this.ensureClient();
     this.logger.info('Starting SlackTrigger (socket mode)');
     try {
-      // Pre-resolve bot token during provision
+      // Bot token must already be resolved during config/setup
       if (!this.botToken) {
-        const botToken = await resolveTokenRef(this.config.bot_token, {
-          expectedPrefix: 'xoxb-',
-          fieldName: 'bot_token',
-          vault: this.vault,
-        });
-        this.botToken = botToken;
+        this.logger.error('SlackTrigger.doProvision: bot token missing or invalid');
+        this.setStatus('provisioning_error');
+        throw new Error('slacktrigger_unprovisioned');
       }
       await client.start();
       this.logger.info('SlackTrigger started');
@@ -228,13 +226,10 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         this.logger.error('SlackTrigger.sendToThread: missing descriptor', { threadId });
         return { ok: false, error: 'missing_channel_descriptor' };
       }
+      // Bot token must be set after provision/setup; do not resolve here
       if (!this.botToken) {
-        const botToken = await resolveTokenRef(this.config.bot_token, {
-          expectedPrefix: 'xoxb-',
-          fieldName: 'bot_token',
-          vault: this.vault,
-        });
-        this.botToken = botToken;
+        this.logger.error('SlackTrigger.sendToThread: trigger not provisioned');
+        return { ok: false, error: 'slacktrigger_unprovisioned' };
       }
       const channelRaw: unknown = thread.channel as unknown;
       if (channelRaw == null) {
