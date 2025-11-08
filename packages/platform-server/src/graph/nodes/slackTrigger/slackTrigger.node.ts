@@ -11,9 +11,9 @@ import { stringify as YamlStringify } from 'yaml';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
 import { PrismaService } from '../../../core/services/prisma.service';
 import { SlackAdapter } from '../../../messaging/slack/slack.adapter';
-import { ChannelDescriptorSchema, type SendResult } from '../../../messaging/types';
+import { ChannelDescriptorSchema, type SendResult, type ChannelDescriptor } from '../../../messaging/types';
 
-type TriggerHumanMessage = { kind: 'human'; content: string; info?: Record<string, unknown> };
+type TriggerHumanMessage = { kind: 'human'; content: string; info?: { user?: string; channel?: string; channel_type?: string; thread_ts?: string; client_msg_id?: string; event_ts?: string } };
 type TriggerListener = { invoke: (thread: string, messages: BufferMessage[]) => Promise<void> };
 
 export const SlackTriggerStaticConfigSchema = z
@@ -61,46 +61,40 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     const appToken = await this.resolveAppToken();
     const client = new SocketModeClient({ appToken, logLevel: undefined });
 
-    type SlackMessageEvent = {
-      type: 'message';
-      text?: string;
-      user?: string;
-      bot_id?: string;
-      subtype?: string;
-      channel?: string;
-      channel_type?: string;
-      ts?: string;
-      thread_ts?: string;
-      client_msg_id?: string;
-      event_ts?: string;
-      [k: string]: unknown;
-    };
-    type SlackEventCallbackBody = {
-      type: 'event_callback';
-      event: SlackMessageEvent | { type: string; [k: string]: unknown };
-      [k: string]: unknown;
-    };
+    const SlackMessageEventSchema = z
+      .object({
+        type: z.literal('message'),
+        text: z.string().optional(),
+        user: z.string().optional(),
+        bot_id: z.string().optional(),
+        subtype: z.string().optional(),
+        channel: z.string().optional(),
+        channel_type: z.string().optional(),
+        ts: z.string().optional(),
+        thread_ts: z.string().optional(),
+        client_msg_id: z.string().optional(),
+        event_ts: z.string().optional(),
+      })
+      .strict();
+    type SlackMessageEvent = z.infer<typeof SlackMessageEventSchema>;
+    type SlackEventCallbackBody = { type: 'event_callback'; event?: unknown };
     type SlackMessageEnvelope = {
       ack: () => Promise<void>;
       envelope_id: string;
-      body: SlackEventCallbackBody;
-      event?: SlackMessageEvent;
+      body?: SlackEventCallbackBody;
+      event?: unknown;
       retry_num?: number;
       retry_reason?: string;
       accepts_response_payload?: boolean;
-      [k: string]: unknown;
-    };
-
-    const isMessageEvent = (ev: unknown): ev is SlackMessageEvent => {
-      return typeof ev === 'object' && ev !== null && (ev as { type?: unknown }).type === 'message';
     };
 
     client.on('message', async (envelope: SlackMessageEnvelope) => {
       try {
         await envelope.ack();
-        const rawEvent = (envelope.body && envelope.body.event) || envelope.event;
-        if (!isMessageEvent(rawEvent)) return;
-        const event = rawEvent;
+        const rawEvent = (envelope.body?.type === 'event_callback' ? envelope.body?.event : undefined) ?? envelope.event;
+        const parsedEvent = SlackMessageEventSchema.safeParse(rawEvent);
+        if (!parsedEvent.success) return;
+        const event = parsedEvent.data;
         if (event.bot_id) return;
         if (typeof event.subtype === 'string') return;
         const text = typeof event.text === 'string' ? event.text : '';
@@ -122,17 +116,21 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias, text);
         // Persist descriptor only when channel is present; skip otherwise
         if (typeof event.channel === 'string' && event.channel) {
-          const descriptor = {
-            type: 'slack' as const,
+          const descriptor: ChannelDescriptor = {
+            type: 'slack',
             version: 1,
             identifiers: {
               channel: event.channel,
               ...(event.thread_ts ? { thread_ts: event.thread_ts } : {}),
             },
-            meta: { channel_type: event.channel_type, client_msg_id: event.client_msg_id, event_ts: event.event_ts },
+            meta: {
+              channel_type: event.channel_type,
+              client_msg_id: event.client_msg_id,
+              event_ts: event.event_ts,
+            },
             createdBy: 'SlackTrigger',
           };
-          await this.persistence.updateThreadChannelDescriptor(threadId, descriptor, 1);
+          await this.persistence.updateThreadChannelDescriptor(threadId, descriptor);
         } else {
           this.logger.warn('SlackTrigger: missing channel in Slack event; not persisting descriptor', {
             threadId,
@@ -159,11 +157,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       });
       this.botToken = token;
     } catch (e) {
-      let msg = 'invalid_or_missing_bot_token';
-      if (typeof e === 'object' && e !== null && 'message' in e) {
-        const mVal = (e as { message?: unknown }).message;
-        if (typeof mVal === 'string' && mVal) msg = mVal;
-      }
+      const msg = e instanceof Error && e.message ? e.message : 'invalid_or_missing_bot_token';
       this.logger.error('SlackTrigger.doProvision: bot token resolution failed', { error: msg });
       this.setStatus('provisioning_error');
       throw new Error(msg);
@@ -214,8 +208,8 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     );
   }
 
-  public listeners<K>(_eventName?: K): Array<(...args: unknown[]) => unknown> {
-    return this._listeners.map((l) => l.invoke as unknown as (...args: unknown[]) => unknown);
+  public listeners(): Array<(thread: string, messages: BufferMessage[]) => Promise<void>> {
+    return this._listeners.map((l) => (async (thread: string, messages: BufferMessage[]) => l.invoke(thread, messages)));
   }
 
   getPortConfig() {
@@ -252,11 +246,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       const res = await this.slackAdapter.sendText({ token: this.botToken!, channel: ids.channel, text, thread_ts: ids.thread_ts });
       return res;
     } catch (e) {
-      let msg = 'unknown_error';
-      if (typeof e === 'object' && e !== null && 'message' in e) {
-        const mVal = (e as { message?: unknown }).message;
-        if (typeof mVal === 'string' && mVal) msg = mVal;
-      }
+      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
       this.logger.error('SlackTrigger.sendToThread failed', { threadId, error: msg });
       return { ok: false, error: msg };
     }

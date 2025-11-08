@@ -11,7 +11,7 @@ describe('ChannelDescriptor validation (Slack-only)', () => {
     expect(ok.success).toBe(true);
   });
   it('rejects missing version', () => {
-    const bad = ChannelDescriptorSchema.safeParse({ type: 'slack', identifiers: { channel: 'C123' }, meta: {} } as any);
+    const bad = ChannelDescriptorSchema.safeParse({ type: 'slack', identifiers: { channel: 'C123' }, meta: {} });
     expect(bad.success).toBe(false);
   });
 });

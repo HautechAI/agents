@@ -3,13 +3,15 @@ import { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import { LoggerService } from '../src/core/services/logger.service';
 
 vi.mock('@slack/web-api', () => {
-  let last: any = null;
+  type ChatPostMessageArguments = { channel: string; text: string; thread_ts?: string };
+  type ChatPostMessageResponse = { ok: boolean; channel?: string; ts?: string; message?: { thread_ts?: string } };
+  let last: { token: string } | null = null;
   class WebClient {
     constructor(token: string) {
       last = { token };
     }
     chat = {
-      postMessage: async (opts: any) => ({ ok: true, channel: opts.channel, ts: '1729', message: { thread_ts: opts.thread_ts || '1729' } }),
+      postMessage: async (opts: ChatPostMessageArguments): Promise<ChatPostMessageResponse> => ({ ok: true, channel: opts.channel, ts: '1729', message: { thread_ts: opts.thread_ts || '1729' } }),
     };
   }
   return { WebClient, __getLastWebClient: () => last };

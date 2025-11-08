@@ -28,7 +28,12 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
   async execute(args: z.infer<typeof sendMessageInvocationSchema>, ctx: LLMContext): Promise<string> {
     const threadId = ctx?.threadId;
     if (!threadId) return JSON.stringify({ ok: false, error: 'missing_thread_context' });
-    const res: SendResult = await this.trigger.sendToThread(threadId, args.message);
-    return JSON.stringify(res);
+    try {
+      const res: SendResult = await this.trigger.sendToThread(threadId, args.message);
+      return JSON.stringify(res);
+    } catch (e) {
+      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
+      return JSON.stringify({ ok: false, error: msg });
+    }
   }
 }

@@ -9,7 +9,14 @@ export const ChannelDescriptorSchema = z
     type: z.literal('slack'),
     version: z.number().int(),
     identifiers: SlackIdentifiersSchema,
-    meta: z.record(z.string(), z.unknown()).default({}),
+    meta: z
+      .object({
+        channel_type: z.string().optional(),
+        client_msg_id: z.string().optional(),
+        event_ts: z.string().optional(),
+      })
+      .strict()
+      .optional(),
     createdBy: z.string().optional(),
   })
   .strict();
