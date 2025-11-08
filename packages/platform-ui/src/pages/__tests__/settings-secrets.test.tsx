@@ -150,4 +150,47 @@ describe('Settings/Secrets page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByDisplayValue('gh-secret')).not.toBeInTheDocument();
   });
+
+  it('shows neutral message on missing secret (404) and keeps input empty', async () => {
+    // Graph with one required
+    server.use(
+      http.get(abs('/api/graph'), () =>
+        HttpResponse.json({ name: 'g', version: 1, updatedAt: new Date().toISOString(), nodes: [
+          { id: 'n1', template: 'githubCloneRepoTool', config: { token: { value: 'secret/github/GH_TOKEN', source: 'vault' } } },
+        ], edges: [] }),
+      ),
+    );
+    server.use(
+      http.get(abs('/api/vault/mounts'), () => HttpResponse.json({ items: ['secret'] })),
+      http.get(abs('/api/vault/kv/:mount/paths'), () => HttpResponse.json({ items: ['github'] })),
+      http.get(abs('/api/vault/kv/:mount/keys'), () => HttpResponse.json({ items: ['GH_TOKEN'] })),
+      http.get(abs('/api/vault/kv/:mount/read'), () => new HttpResponse(null, { status: 404 })),
+    );
+
+    // Spy on alert to capture notifyError
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+    render(
+      <TestProviders>
+        <SettingsSecrets />
+      </TestProviders>,
+    );
+
+    // Click Edit to attempt fetch
+    const editBtn = await screen.findByRole('button', { name: 'Edit' });
+    fireEvent.click(editBtn);
+
+    // Toggle Show to trigger fetch on reveal if needed
+    const showBtn = await screen.findByRole('button', { name: 'Show' });
+    fireEvent.click(showBtn);
+
+    // Expect neutral message and empty input
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('No value available');
+    });
+    const input = screen.getByPlaceholderText('Enter secret value');
+    expect((input as HTMLInputElement).value).toBe('');
+
+    alertSpy.mockRestore();
+  });
 });

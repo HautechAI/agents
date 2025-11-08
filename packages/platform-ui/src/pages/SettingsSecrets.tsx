@@ -141,9 +141,10 @@ export function SecretsRow({ entry }: { entry: SecretEntry }) {
       const res = await api.graph.readVaultKey(entry.mount, entry.path, entry.key);
       if (res && typeof res.value === 'string') setValue(res.value);
       else notifyError('Failed to load value');
-    } catch {
-      // Generic error message when not masking
-      notifyError('Failed to load value');
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } }).response?.status;
+      if (status === 404) notifyError('No value available');
+      else notifyError('Failed to load value');
     }
   }
 

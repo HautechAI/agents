@@ -29,15 +29,9 @@ export class VaultController {
 
   @Get('kv/:mount/read')
   async readKv(@Param('mount') mount: string, @Query() query: KvReadQueryDto): Promise<{ value: string } | { error: string }> {
-    try {
-      const val = await this.vaultService.getSecret({ mount, path: query.path, key: query.key });
-      if (val == null) throw new HttpException({ error: 'vault_read_failed' }, 404);
-      return { value: val };
-    } catch (e: unknown) {
-      const status = statusCodeFrom(e);
-      const code = typeof status === 'number' && Number.isFinite(status) ? Number(status) : 500;
-      throw new HttpException({ error: 'vault_read_failed' }, code);
-    }
+    const val = await this.vaultService.getSecret({ mount, path: query.path, key: query.key });
+    if (val == null) throw new HttpException({ error: 'not_found' }, 404);
+    return { value: val };
   }
 
   @Post('kv/:mount/write')
