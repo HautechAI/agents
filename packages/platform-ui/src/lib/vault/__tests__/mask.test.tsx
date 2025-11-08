@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@agyn/ui';
 import { SecretsRow } from '@/pages/SettingsSecrets';
-import type { SecretEntry } from '../../vault/types';
+import type { SecretEntry } from '@/api/modules/graph';
 
 describe('SecretsRow masking', () => {
   it('toggle mask affects only its row and copy disabled when masked', async () => {
