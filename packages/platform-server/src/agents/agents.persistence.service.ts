@@ -36,6 +36,16 @@ export class AgentsPersistenceService {
   }
 
   /**
+   * Populate thread channel descriptor if not set.
+   */
+  async updateThreadChannelDescriptor(threadId: string, descriptor: unknown, _version?: number): Promise<void> {
+    const existing = await this.prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true } });
+    if (existing?.channel) return; // do not overwrite
+    const updated = await this.prisma.thread.update({ where: { id: threadId }, data: { channel: (descriptor as any) } });
+    this.events.emitThreadUpdated({ id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status as any, createdAt: updated.createdAt, parentId: updated.parentId ?? null });
+  }
+
+  /**
    * Resolve a child UUID threadId for a subthread alias under a parent threadId.
    * Alias must be globally unique; we compose alias using parent to satisfy uniqueness.
    */

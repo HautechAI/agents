@@ -9,24 +9,20 @@ import { BufferMessage } from '../agent/messagesBuffer';
 import { HumanMessage } from '@agyn/llm';
 import { stringify as YamlStringify } from 'yaml';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
+import { SlackRuntimeRegistry } from '../../../messaging/slack/runtime.registry';
 
 type TriggerHumanMessage = { kind: 'human'; content: string; info?: Record<string, unknown> };
 type TriggerListener = { invoke: (thread: string, messages: BufferMessage[]) => Promise<void> };
 
-// Internal schema: accept either plain string or ReferenceField
 export const SlackTriggerStaticConfigSchema = z
   .object({
     app_token: ReferenceFieldSchema,
+    bot_token: ReferenceFieldSchema,
   })
   .strict();
 
-/**
- * SlackTrigger
- * Starts a Socket Mode connection to Slack and relays inbound user messages
- * (non-bot, non-thread broadcast) to subscribers via notify().
- */
 type SlackTokenRef = { value: string; source: 'static' | 'vault' };
-type SlackTriggerConfig = { app_token: SlackTokenRef };
+type SlackTriggerConfig = { app_token: SlackTokenRef; bot_token: SlackTokenRef };
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class SlackTrigger extends Node<SlackTriggerConfig> {
@@ -36,6 +32,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     @Inject(LoggerService) protected readonly logger: LoggerService,
     @Inject(VaultService) protected readonly vault: VaultService,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
+    @Inject(SlackRuntimeRegistry) private readonly runtime: SlackRuntimeRegistry,
   ) {
     super(logger);
   }
@@ -55,7 +52,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     const appToken = await this.resolveAppToken();
     const client = new SocketModeClient({ appToken, logLevel: undefined });
 
-    // Shape observed from SocketModeClient for a message event envelope.
     type SlackMessageEvent = {
       type: 'message';
       text?: string;
@@ -79,7 +75,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       ack: () => Promise<void>;
       envelope_id: string;
       body: SlackEventCallbackBody;
-      event?: SlackMessageEvent; // library may copy body.event here
+      event?: SlackMessageEvent;
       retry_num?: number;
       retry_reason?: string;
       accepts_response_payload?: boolean;
@@ -96,7 +92,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         const rawEvent = (envelope.body && envelope.body.event) || envelope.event;
         if (!isMessageEvent(rawEvent)) return;
         const event = rawEvent;
-        // Filter bot/self and message subtypes (edits, joins, etc.)
         if (event.bot_id) return;
         if (typeof event.subtype === 'string') return;
         const text = typeof event.text === 'string' ? event.text : '';
@@ -116,8 +111,24 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
             event_ts: event.event_ts,
           },
         };
-        // Resolve persistent UUID threadId from Slack alias at ingress
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias, text);
+        const botToken = await resolveTokenRef(this.config.bot_token, {
+          expectedPrefix: 'xoxb-',
+          fieldName: 'bot_token',
+          vault: this.vault,
+        });
+        this.runtime.setToken(threadId, botToken);
+        const descriptor = {
+          type: 'slack' as const,
+          version: 1,
+          identifiers: {
+            channel: event.channel || 'unknown',
+            thread_ts: (event.thread_ts || event.ts || undefined) ?? null,
+          },
+          meta: { channel_type: event.channel_type, client_msg_id: event.client_msg_id, event_ts: event.event_ts },
+          createdBy: 'SlackTrigger',
+        };
+        await this.persistence.updateThreadChannelDescriptor(threadId, descriptor, 1);
         await this.notify(threadId, [msg]);
       } catch (err) {
         this.logger.error('SlackTrigger handler error', err);
@@ -153,7 +164,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     this.logger.info('SlackTrigger stopped');
   }
 
-  // Fan-out of trigger messages
   private _listeners: TriggerListener[] = [];
   async subscribe(listener: TriggerListener): Promise<void> {
     this._listeners.push(listener);
@@ -176,7 +186,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     );
   }
 
-  // Expose listeners for base type compatibility via function
   public listeners<K>(_eventName?: K): Array<(...args: unknown[]) => unknown> {
     return this._listeners.map((l) => l.invoke as unknown as (...args: unknown[]) => unknown);
   }

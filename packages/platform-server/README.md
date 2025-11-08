@@ -90,3 +90,9 @@ Persistent conversation state (Prisma)
 - CI runs Prisma client generation before tests/build:
   - `pnpm --filter @agyn/platform-server prisma:generate`
 - For production deployments, apply migrations with `prisma migrate deploy` as part of your release process.
+
+Messaging
+
+- New `send_message` tool routes replies to the origin channel using a stored `ChannelDescriptor` on `Thread`.
+- Slack adapter is implemented; configure `SLACK_BOT_TOKEN` or `SLACK_BOT_TOKEN_REF` for Vault.
+- Legacy `send_slack_message` remains functional; prefer `send_message` when `Thread.channel` is present.

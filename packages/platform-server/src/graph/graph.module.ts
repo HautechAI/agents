@@ -42,12 +42,14 @@ import { CallAgentNode } from './nodes/tools/call_agent/call_agent.node';
 import { FinishNode } from './nodes/tools/finish/finish.node';
 import { MemoryToolNode } from './nodes/tools/memory/memory.node';
 import { SendSlackMessageNode } from './nodes/tools/send_slack_message/send_slack_message.node';
+import { SendMessageNode } from './nodes/tools/send_message/send_message.node';
 import { ShellCommandNode } from './nodes/tools/shell_command/shell_command.node';
 import { GithubCloneRepoNode } from './nodes/tools/github_clone_repo/github_clone_repo.node';
 import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
 import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { AgentsThreadsController } from '../agents/threads.controller';
 import { AgentsRemindersController } from '../agents/reminders.controller';
+import { SlackRuntimeRegistry } from '../messaging/slack/runtime.registry';
 
 @Module({
   imports: [CoreModule, InfraModule, LLMModule, EnvModule],
@@ -117,6 +119,7 @@ import { AgentsRemindersController } from '../agents/reminders.controller';
     // Centralized threads metrics aggregator
     ThreadsMetricsService,
     AgentsPersistenceService,
+    SlackRuntimeRegistry,
 
     //////// Nodes
 
@@ -147,6 +150,7 @@ import { AgentsRemindersController } from '../agents/reminders.controller';
     FinishNode,
     MemoryToolNode,
     SendSlackMessageNode,
+    SendMessageNode,
     ShellCommandNode,
     GithubCloneRepoNode,
     RemindMeNode,

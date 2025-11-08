@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import { z } from 'zod';
+import { ReferenceFieldSchema } from '../../utils/refs';
 dotenv.config();
 
 export const configSchema = z.object({
@@ -152,6 +153,18 @@ export const configSchema = z.object({
         .map((x) => x.trim())
         .filter((x) => !!x),
     ),
+  // Messaging config (adapters)
+  slack: z
+    .object({
+      botToken: z.union([z.string().min(1), ReferenceFieldSchema]).optional(),
+    })
+    .default({}),
+  github: z.object({ token: z.string().optional() }).default({}),
+  smtp: z
+    .object({ host: z.string().optional(), port: z.string().optional(), username: z.string().optional(), password: z.string().optional(), from: z.string().optional() })
+    .default({}),
+  internalChat: z.object({ baseUrl: z.string().optional(), token: z.string().optional() }).default({}),
+  discord: z.object({ botToken: z.string().optional() }).default({}),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -318,6 +331,23 @@ export class ConfigService implements Config {
     return this.params.corsOrigins ?? [];
   }
 
+  // Messaging getters
+  get slack() {
+    return this.params.slack;
+  }
+  get github() {
+    return this.params.github;
+  }
+  get smtp() {
+    return this.params.smtp;
+  }
+  get internalChat() {
+    return this.params.internalChat;
+  }
+  get discord() {
+    return this.params.discord;
+  }
+
   static fromEnv(): ConfigService {
     const legacy = process.env.NCPS_URL;
     const urlServer = process.env.NCPS_URL_SERVER || legacy;
@@ -371,6 +401,12 @@ export class ConfigService implements Config {
       ncpsAuthToken: process.env.NCPS_AUTH_TOKEN,
       agentsDatabaseUrl: process.env.AGENTS_DATABASE_URL,
       corsOrigins: process.env.CORS_ORIGINS,
+      // Messaging adapters config
+      slack: { botToken: process.env.SLACK_BOT_TOKEN || (process.env.SLACK_BOT_TOKEN_REF ? { value: process.env.SLACK_BOT_TOKEN_REF, source: 'vault' as const } : undefined) },
+      github: { token: process.env.GH_TOKEN },
+      smtp: { host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, username: process.env.SMTP_USERNAME, password: process.env.SMTP_PASSWORD, from: process.env.SMTP_FROM },
+      internalChat: { baseUrl: process.env.INTERNAL_CHAT_BASE_URL, token: process.env.INTERNAL_CHAT_TOKEN },
+      discord: { botToken: process.env.DISCORD_BOT_TOKEN },
     });
     return new ConfigService().init(parsed);
   }
