@@ -20,7 +20,7 @@ export class ThreadsMetricsService {
       let rows: MetricsRow[] = [];
       if (hasQueryRaw) {
         rows = await this.prisma.$queryRaw<MetricsRow[]>`
-          with sel as (
+          with recursive sel as (
             select unnest(${ids}::uuid[]) as root_id
           ), rec as (
             select t.id as thread_id, t."parentId" as parent_id, t.id as root_id

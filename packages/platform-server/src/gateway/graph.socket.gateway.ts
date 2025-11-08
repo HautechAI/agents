@@ -195,7 +195,7 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     try {
       const prisma = this.prismaService.getClient();
       const rows: Array<{ id: string; parentId: string | null }> = await prisma.$queryRaw<Array<{ id: string; parentId: string | null }>>`
-        with rec as (
+        with recursive rec as (
           select t.id, t."parentId" from "Thread" t where t.id = ${threadId}::uuid
           union all
           select p.id, p."parentId" from "Thread" p join rec r on r."parentId" = p.id
