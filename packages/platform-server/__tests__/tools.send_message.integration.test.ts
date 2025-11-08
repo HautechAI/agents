@@ -21,8 +21,8 @@ describe('send_message tool', () => {
     const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => undefined };
     const trigger = new SlackTrigger(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, {} as any, prismaStub);
     await trigger.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-abc', source: 'static' } });
-    const tool = new SendMessageFunctionTool(new LoggerService(), trigger as any);
-    const res = await tool.execute({ text: 'hello' } as any, { threadId: 't1' } as any);
+    const tool = new SendMessageFunctionTool(new LoggerService(), trigger);
+    const res = await tool.execute({ message: 'hello' }, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(false);
     expect(obj.error).toBe('missing_channel_descriptor');
@@ -35,8 +35,8 @@ describe('send_message tool', () => {
     const vaultMock: { getSecret: (ref: VaultRef) => Promise<string | undefined> } = { getSecret: async () => 'xoxb-abc' };
     const trigger = new SlackTrigger(new LoggerService(), vaultMock as unknown as import('../src/vault/vault.service').VaultService, {} as any, prismaStub2);
     await trigger.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-abc', source: 'static' } });
-    const tool = new SendMessageFunctionTool(new LoggerService(), trigger as any);
-    const res = await tool.execute({ message: 'hello' } as any, { threadId: 't1' } as any);
+    const tool = new SendMessageFunctionTool(new LoggerService(), trigger);
+    const res = await tool.execute({ message: 'hello' }, { threadId: 't1' } as any);
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(true);
     expect(obj.channelMessageId).toBe('2001');

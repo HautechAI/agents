@@ -125,17 +125,25 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
           });
           this.botToken = botToken;
         }
-        const descriptor = {
-          type: 'slack' as const,
-          version: 1,
-          identifiers: {
-            channel: event.channel || 'unknown',
-            ...(event.thread_ts ? { thread_ts: event.thread_ts } : {}),
-          },
-          meta: { channel_type: event.channel_type, client_msg_id: event.client_msg_id, event_ts: event.event_ts },
-          createdBy: 'SlackTrigger',
-        };
-        await this.persistence.updateThreadChannelDescriptor(threadId, descriptor, 1);
+        // Persist descriptor only when channel is present; skip otherwise
+        if (typeof event.channel === 'string' && event.channel) {
+          const descriptor = {
+            type: 'slack' as const,
+            version: 1,
+            identifiers: {
+              channel: event.channel,
+              ...(event.thread_ts ? { thread_ts: event.thread_ts } : {}),
+            },
+            meta: { channel_type: event.channel_type, client_msg_id: event.client_msg_id, event_ts: event.event_ts },
+            createdBy: 'SlackTrigger',
+          };
+          await this.persistence.updateThreadChannelDescriptor(threadId, descriptor, 1);
+        } else {
+          this.logger.warn('SlackTrigger: missing channel in Slack event; not persisting descriptor', {
+            threadId,
+            alias,
+          });
+        }
         await this.notify(threadId, [msg]);
       } catch (err) {
         this.logger.error('SlackTrigger handler error', err);
@@ -214,9 +222,8 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   async sendToThread(threadId: string, text: string): Promise<SendResult> {
     try {
       const prisma = this.prismaService.getClient();
-      const thread = (await prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true } })) as {
-        channel: unknown | null;
-      } | null;
+      type ThreadChannelRow = { channel: unknown | null };
+      const thread = (await prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true } })) as ThreadChannelRow | null;
       if (!thread) {
         this.logger.error('SlackTrigger.sendToThread: missing descriptor', { threadId });
         return { ok: false, error: 'missing_channel_descriptor' };
