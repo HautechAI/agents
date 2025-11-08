@@ -35,7 +35,7 @@ export const ChannelDescriptorSchema = z
       InternalChatIdentifiersSchema,
       DiscordIdentifiersSchema,
     ]),
-    meta: z.record(z.any()).default({}),
+    meta: z.record(z.unknown()).default({}),
     createdBy: z.string().optional(),
     version: z.number().int().optional(),
   })
@@ -76,4 +76,3 @@ export interface ChannelAdapter {
     options?: SendMessageOptions;
   }): Promise<SendResult>;
 }
-

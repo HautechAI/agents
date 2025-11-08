@@ -57,14 +57,10 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
     const adapter = ChannelAdapterRegistry.getAdapter(descriptor, {
       logger: this.logger,
       vault: this.vault,
-      config: {
-        slack: { botToken: process.env.SLACK_BOT_TOKEN || (process.env.SLACK_BOT_TOKEN_REF ? { value: process.env.SLACK_BOT_TOKEN_REF, source: 'vault' as const } : undefined) },
-        // future: other adapters
-      },
+      config: { slack: this.config.slack },
     });
     this.logger.info('SendMessage: adapter selected', { type: descriptor.type, threadId });
     const res: SendResult = await adapter.sendText({ threadId, text: args.text, descriptor, options: { markdown: !!args.markdown, broadcast: !!args.broadcast, attachments: args.attachments } });
     return JSON.stringify(res);
   }
 }
-

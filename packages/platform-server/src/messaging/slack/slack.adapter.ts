@@ -66,15 +66,37 @@ export class SlackAdapter implements ChannelAdapter {
           ...(replyTs ? { thread_ts: replyTs } : {}),
         });
         if (!resp.ok) return { ok: false, error: resp.error || 'unknown_error' };
-        const ts = resp.ts || null;
-        const thread_ts = (resp.message && 'thread_ts' in resp.message ? (resp.message as any).thread_ts : undefined) || replyTs || ts;
-        return { ok: true, channelMessageId: ts, threadId: thread_ts ?? null };
+        const ts: string | null = resp.ts ?? null;
+        type SlackMsgThread = { thread_ts?: string };
+        const thread_ts: string | undefined = resp.message && 'thread_ts' in (resp.message as SlackMsgThread)
+          ? (resp.message as SlackMsgThread).thread_ts
+          : undefined;
+        const threadIdOut = thread_ts ?? replyTs ?? ts ?? null;
+        return { ok: true, channelMessageId: ts, threadId: threadIdOut };
       } catch (e: any) {
-        // Detect rate limit
-        const is429 = typeof e?.code === 'string' && e.code === 'slack_webapi_platform_error' && e?.data?.response?.status === 429;
-        const retryAfter = Number(e?.data?.response?.headers?.['retry-after'] ?? e?.data?.response?.headers?.['Retry-After']) || null;
-        if (is429) return { ok: false, error: 'rate_limited', rateLimited: true, retryAfterMs: retryAfter ? retryAfter * 1000 : null };
-        const msg = (e?.message as string) || 'unknown_error';
+        // Detect rate limit safely
+        const err = e as unknown;
+        type SlackError = { code?: string; data?: { response?: { status?: number; headers?: Record<string, string> } } };
+        let rateLimited = false;
+        let retryAfterMs: number | null = null;
+        if (typeof err === 'object' && err !== null) {
+          const se = err as SlackError;
+          const code = se.code;
+          const status = se.data?.response?.status;
+          const headers = se.data?.response?.headers;
+          const retryAfterHeader = headers?.['retry-after'] ?? headers?.['Retry-After'];
+          if (code === 'slack_webapi_platform_error' && status === 429) {
+            rateLimited = true;
+            const ra = Number(retryAfterHeader);
+            retryAfterMs = Number.isFinite(ra) ? ra * 1000 : null;
+          }
+        }
+        if (rateLimited) return { ok: false, error: 'rate_limited', rateLimited: true, retryAfterMs };
+        let msg = 'unknown_error';
+        if (typeof err === 'object' && err !== null && 'message' in err) {
+          const m = (err as { message?: string }).message;
+          if (typeof m === 'string' && m) msg = m;
+        }
         return { ok: false, error: msg };
       }
     };
@@ -90,4 +112,3 @@ export class SlackAdapter implements ChannelAdapter {
     return first;
   }
 }
-
