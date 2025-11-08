@@ -4,7 +4,7 @@ import { LoggerService } from '../../../core/services/logger.service';
 import { VaultService } from '../../../vault/vault.service';
 import { ReferenceFieldSchema, resolveTokenRef } from '../../../utils/refs';
 import Node from '../base/Node';
-import { Inject, Injectable, Scope } from '@nestjs/common';
+import { Injectable, Scope } from '@nestjs/common';
 import { BufferMessage } from '../agent/messagesBuffer';
 import { HumanMessage } from '@agyn/llm';
 import { stringify as YamlStringify } from 'yaml';
@@ -36,7 +36,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     protected readonly logger: LoggerService,
     protected readonly vault: VaultService,
     private readonly persistence: AgentsPersistenceService,
-    @Inject('PrismaService') private readonly prismaService: PrismaService,
+    private readonly prismaService: PrismaService,
     private readonly slackAdapter: SlackAdapter,
   ) {
     super(logger);
@@ -105,9 +105,8 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         if (typeof event.subtype === 'string') return;
         const text = typeof event.text === 'string' ? event.text : '';
         if (!text.trim()) return;
-        const threadIdPart = event.thread_ts || event.ts || 'unknown';
-        const userPart = event.user || 'unknown';
-        const alias = `${userPart}_${threadIdPart}`;
+        const userPart = typeof event.user === 'string' && event.user ? event.user : 'slack';
+        const alias = typeof event.thread_ts === 'string' && event.thread_ts ? `${userPart}_${event.thread_ts}` : userPart;
         const msg: TriggerHumanMessage = {
           kind: 'human',
           content: text,
@@ -115,7 +114,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
             user: event.user,
             channel: event.channel,
             channel_type: event.channel_type,
-            thread_ts: event.thread_ts || event.ts,
+            ...(typeof event.thread_ts === 'string' && event.thread_ts ? { thread_ts: event.thread_ts } : {}),
             client_msg_id: event.client_msg_id,
             event_ts: event.event_ts,
           },
