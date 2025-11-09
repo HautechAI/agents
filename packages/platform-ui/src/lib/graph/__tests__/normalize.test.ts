@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { graph as api } from '@/api/modules/graph';
-
-type RefVal = { value: string; source?: 'static' | 'vault' };
 type TemplateName =
   | 'workspace'
   | 'shellTool'

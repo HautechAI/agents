@@ -20,8 +20,7 @@ type TemplateName =
   | 'memory'
   | 'memoryConnector';
 
-type ReferenceValue = { value: string; source?: 'static' | 'vault' };
-type EnvItem = { key: string; value: string; source?: 'static' | 'vault' };
+// ReferenceValue and EnvItem shapes are inferred where needed; no explicit aliases to avoid unused type lint errors.
 
 function normalizeConfigByTemplate(
   template: TemplateName | string,
