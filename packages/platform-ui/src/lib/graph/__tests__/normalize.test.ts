@@ -78,9 +78,10 @@ describe('normalizeConfigByTemplate idempotence and behavior', () => {
   });
 
   it('is idempotent across multiple runs', () => {
-    const initial = { template: 'shellTool', config: { workdir: '/w', env: [{ key: 'A', value: '1', source: 'static' }] } } as const;
+    const initialConfig: Record<string, unknown> = { workdir: '/w', env: [{ key: 'A', value: '1', source: 'static' }] };
+    const initial = { template: 'shellTool' as const, config: initialConfig };
     const normalize = getNormalize(api);
-    const once = normalize(initial.template, initial.config as unknown as Record<string, unknown>);
+    const once = normalize(initial.template, initial.config);
     const twice = normalize(initial.template, once);
     expect(twice).toEqual(once);
   });
