@@ -15,6 +15,7 @@ class DocParamsDto {
   scope!: MemoryScope;
 
   @IsString()
+  @IsNotEmpty()
   @IsOptional()
   threadId?: string;
 }
@@ -26,12 +27,22 @@ class PathQueryDto {
 }
 
 class PathWithThreadQueryDto extends PathQueryDto {
-  @IsString()
   @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   threadId?: string;
 }
 
-class AppendBodyDto {
+class ThreadAwareDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  threadId?: string;
+}
+
+class ThreadOnlyQueryDto extends ThreadAwareDto {}
+
+class AppendBodyDto extends ThreadAwareDto {
   @IsString()
   @IsNotEmpty()
   path!: string;
@@ -41,7 +52,7 @@ class AppendBodyDto {
   data!: string;
 }
 
-class UpdateBodyDto {
+class UpdateBodyDto extends ThreadAwareDto {
   @IsString()
   @IsNotEmpty()
   path!: string;
@@ -53,7 +64,7 @@ class UpdateBodyDto {
   newStr!: string;
 }
 
-class EnsureDirBodyDto {
+class EnsureDirBodyDto extends ThreadAwareDto {
   @IsString()
   @IsNotEmpty()
   path!: string;
@@ -71,6 +82,17 @@ export class MemoryController {
     return svc.init({ nodeId, scope, threadId });
   }
 
+  private resolveThreadId(scope: MemoryScope, ...candidates: Array<string | undefined>): string | undefined {
+    if (scope !== 'perThread') return undefined;
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        if (trimmed.length > 0) return trimmed;
+      }
+    }
+    throw new HttpException({ error: 'threadId required for perThread scope' }, HttpStatus.BAD_REQUEST);
+  }
+
   @Get('docs')
   async listDocs(): Promise<{ items: Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> }> {
     const prisma = this.prismaSvc.getClient();
@@ -85,7 +107,8 @@ export class MemoryController {
   async list(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ items: Array<{ name: string; kind: 'file'|'dir' }> }> {
     const { nodeId, scope } = params;
     const path = query.path ?? '/';
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId || query.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     const items = await svc.list(path || '/');
     return { items };
   }
@@ -94,7 +117,8 @@ export class MemoryController {
   async stat(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ kind: 'file'|'dir'|'none'; size?: number }> {
     const { nodeId, scope } = params;
     const path = query.path;
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId || query.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     return svc.stat(path);
   }
 
@@ -102,7 +126,8 @@ export class MemoryController {
   async read(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ content: string }> {
     const { nodeId, scope } = params;
     const path = query.path;
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId || query.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     try { const content = await svc.read(path); return { content }; }
     catch (e) {
       const msg = (e as Error)?.message || '';
@@ -114,9 +139,10 @@ export class MemoryController {
 
   @Post(':nodeId/:scope/append')
   @HttpCode(204)
-  async append(@Param() params: DocParamsDto, @Body() body: AppendBodyDto): Promise<void> {
+  async append(@Param() params: DocParamsDto, @Body() body: AppendBodyDto, @Query() query: ThreadOnlyQueryDto): Promise<void> {
     const { nodeId, scope } = params;
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, body.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     try { await svc.append(body.path, body.data); }
     catch (e) {
       const msg = (e as Error)?.message || '';
@@ -126,9 +152,10 @@ export class MemoryController {
   }
 
   @Post(':nodeId/:scope/update')
-  async update(@Param() params: DocParamsDto, @Body() body: UpdateBodyDto): Promise<{ replaced: number }> {
+  async update(@Param() params: DocParamsDto, @Body() body: UpdateBodyDto, @Query() query: ThreadOnlyQueryDto): Promise<{ replaced: number }> {
     const { nodeId, scope } = params;
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, body.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     try { const replaced = await svc.update(body.path, body.oldStr, body.newStr); return { replaced }; }
     catch (e) {
       const msg = (e as Error)?.message || '';
@@ -140,23 +167,26 @@ export class MemoryController {
 
   @Post(':nodeId/:scope/ensure-dir')
   @HttpCode(204)
-  async ensureDir(@Param() params: DocParamsDto, @Body() body: EnsureDirBodyDto): Promise<void> {
+  async ensureDir(@Param() params: DocParamsDto, @Body() body: EnsureDirBodyDto, @Query() query: ThreadOnlyQueryDto): Promise<void> {
     const { nodeId, scope } = params;
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, body.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     await svc.ensureDir(body.path);
   }
 
   @Delete(':nodeId/:scope')
   async remove(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ files: number; dirs: number }> {
     const { nodeId, scope } = params;
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId || query.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     return svc.delete(query.path);
   }
 
   @Get(':nodeId/:scope/dump')
-  async dump(@Param() params: DocParamsDto): Promise<unknown> {
+  async dump(@Param() params: DocParamsDto, @Query() query: ThreadOnlyQueryDto): Promise<unknown> {
     const { nodeId, scope } = params;
-    const svc = this.getSvc(nodeId, scope, params.scope === 'perThread' ? params.threadId : undefined);
+    const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
+    const svc = this.getSvc(nodeId, scope, threadId);
     return svc.dump();
   }
 }
