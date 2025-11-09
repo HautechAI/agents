@@ -12,6 +12,13 @@ type TemplateName =
 type TestNode = { id: string; template: TemplateName; config: Record<string, unknown> };
 type TestGraph = { nodes: TestNode[] };
 
+type NormalizeFn = (t: string, c: Record<string, unknown>) => Record<string, unknown>;
+function getNormalize(x: object): NormalizeFn {
+  const candidate = (x as { __test_normalize?: unknown }).__test_normalize;
+  if (typeof candidate !== 'function') throw new Error('missing __test_normalize');
+  return candidate as NormalizeFn;
+}
+
 // Re-import normalize via api.saveFullGraph serialization behavior
 
 describe('normalizeConfigByTemplate idempotence and behavior', () => {
@@ -29,16 +36,12 @@ describe('normalizeConfigByTemplate idempotence and behavior', () => {
 
     const g: TestGraph = { nodes };
     // Access internal normalize by using the api and intercepting body
+    const normalize = getNormalize(api);
     const body = JSON.parse(JSON.stringify({
       ...g,
       nodes: g.nodes.map((n) => ({
         ...n,
-        config: (api as unknown as { __test_normalize?: (t: string, c: Record<string, unknown>) => Record<string, unknown> }).__test_normalize
-          ? (api as unknown as { __test_normalize: (t: string, c: Record<string, unknown>) => Record<string, unknown> }).__test_normalize(
-              n.template,
-              n.config,
-            )
-          : n.config,
+        config: normalize(n.template, n.config),
       })),
     }));
 
@@ -76,7 +79,7 @@ describe('normalizeConfigByTemplate idempotence and behavior', () => {
 
   it('is idempotent across multiple runs', () => {
     const initial = { template: 'shellTool', config: { workdir: '/w', env: [{ key: 'A', value: '1', source: 'static' }] } } as const;
-    const normalize = (api as unknown as { __test_normalize: (t: string, c: Record<string, unknown>) => Record<string, unknown> }).__test_normalize;
+    const normalize = getNormalize(api);
     const once = normalize(initial.template, initial.config as unknown as Record<string, unknown>);
     const twice = normalize(initial.template, once);
     expect(twice).toEqual(once);
