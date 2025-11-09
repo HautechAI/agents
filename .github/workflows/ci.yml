@@ -105,7 +105,8 @@ jobs:
 
       - name: Run server tests
         env:
-          RUN_MONGOMS: '1'
+          RUN_MONGOMS: '0'
+          MEMORY_STORE: 'postgres'
           MONGOMS_VERSION: '7.0.14'
           AGENTS_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agents_test
         run: pnpm --filter @agyn/platform-server test

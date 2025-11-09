@@ -1,5 +1,4 @@
-import { http } from '../http';
-import { asData } from '../asData';
+import { http, asData } from '../http';
 
 export type MemoryDocItem = { nodeId: string; scope: 'global'|'perThread'; threadId?: string };
 export type ListEntry = { name: string; kind: 'file'|'dir' };
@@ -15,4 +14,3 @@ export const memoryApi = {
   delete: (nodeId: string, scope: 'global'|'perThread', threadId: string | undefined, path: string) => asData<{ files: number; dirs: number }>(http.delete(`/api/memory/${encodeURIComponent(nodeId)}/${encodeURIComponent(scope)}`, { params: { path, threadId } })),
   dump: (nodeId: string, scope: 'global'|'perThread', threadId: string | undefined) => asData(http.get(`/api/memory/${encodeURIComponent(nodeId)}/${encodeURIComponent(scope)}/dump`, { params: { threadId } })),
 };
-

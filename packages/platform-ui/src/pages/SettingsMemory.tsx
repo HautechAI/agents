@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { memoryApi } from '../api/modules/memory';
+import { memoryApi, type MemoryDocItem, type ListEntry } from '../api/modules/memory';
 import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '@agyn/ui';
 
 export function SettingsMemory() {
   const qc = useQueryClient();
-  const docs = useQuery({ queryKey: ['memory/docs'], queryFn: () => memoryApi.listDocs() });
+  const docs = useQuery<{ items: MemoryDocItem[] }>({ queryKey: ['memory/docs'], queryFn: () => memoryApi.listDocs() });
   const [nodeId, setNodeId] = useState<string>('');
   const [scope, setScope] = useState<'global'|'perThread'>('global');
   const [threadId, setThreadId] = useState<string>('');
   const [path, setPath] = useState<string>('/');
   // Derived selection is handled by altering path; no separate selected state needed
-  const list = useQuery({ queryKey: ['memory/list', nodeId, scope, threadId, path], queryFn: () => memoryApi.list(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope });
-  const stat = useQuery({ queryKey: ['memory/stat', nodeId, scope, threadId, path], queryFn: () => memoryApi.stat(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope && !!path });
-  const read = useQuery({ queryKey: ['memory/read', nodeId, scope, threadId, path], queryFn: () => memoryApi.read(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope && !!path && (stat.data?.kind === 'file') });
+  const list = useQuery<{ items: ListEntry[] }>({ queryKey: ['memory/list', nodeId, scope, threadId, path], queryFn: () => memoryApi.list(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope });
+  const stat = useQuery<{ kind: 'file'|'dir'|'none'; size?: number }>({ queryKey: ['memory/stat', nodeId, scope, threadId, path], queryFn: () => memoryApi.stat(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope && !!path });
+  const read = useQuery<{ content: string }>({ queryKey: ['memory/read', nodeId, scope, threadId, path], queryFn: () => memoryApi.read(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope && !!path && (stat.data?.kind === 'file') });
 
   useEffect(() => { /* path-driven selection only */ }, [nodeId, scope, threadId, path]);
 
@@ -22,8 +22,8 @@ export function SettingsMemory() {
   const ensureDir = useMutation({ mutationFn: async () => memoryApi.ensureDir(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), onSuccess: () => { qc.invalidateQueries({ queryKey: ['memory/list', nodeId, scope, threadId, path] }); } });
   const del = useMutation({ mutationFn: async () => memoryApi.delete(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), onSuccess: () => { qc.invalidateQueries({ queryKey: ['memory/list', nodeId, scope, threadId, path] }); } });
 
-  const globalNodes = useMemo(() => (docs.data?.items || []).filter((d) => d.scope === 'global').map((d) => d.nodeId), [docs.data]);
-  const perThreadNodes = useMemo(() => (docs.data?.items || []).filter((d) => d.scope === 'perThread').map((d) => ({ nodeId: d.nodeId, threadId: d.threadId! })), [docs.data]);
+  const globalNodes = useMemo(() => (docs.data?.items || []).filter((d: MemoryDocItem) => d.scope === 'global').map((d: MemoryDocItem) => d.nodeId), [docs.data]);
+  const perThreadNodes = useMemo(() => (docs.data?.items || []).filter((d: MemoryDocItem) => d.scope === 'perThread').map((d: MemoryDocItem) => ({ nodeId: d.nodeId, threadId: d.threadId! })), [docs.data]);
 
   return (
     <div className="p-4 space-y-4">
@@ -64,7 +64,7 @@ export function SettingsMemory() {
           <div className="rounded border p-2 min-h-[200px]">
             {list.data?.items?.length ? (
               <ul className="space-y-1">
-                {list.data.items.map((e) => (
+                {list.data.items.map((e: ListEntry) => (
                   <li key={e.name}>
                     <button
                       className="text-sm hover:underline"

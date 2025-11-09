@@ -11,7 +11,7 @@ const maybeDescribe = URL ? describe : describe.skip;
 
 maybeDescribe('memory_append tool: path normalization and validation', () => {
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
-  beforeAll(async () => { await prisma.$executeRawUnsafe(`DROP TABLE IF NOT EXISTS memories`); });
+  beforeAll(async () => { await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS memories`); });
   const mkTools = () => {
     const db = { getClient: () => prisma } as any;
     const factory = (opts: { threadId?: string }) => { const svc = new MemoryService(db); svc.init({ nodeId: 'nodeT', scope: opts.threadId ? 'perThread' : 'global', threadId: opts.threadId }); return svc; };

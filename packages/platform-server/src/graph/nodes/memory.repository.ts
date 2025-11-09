@@ -429,9 +429,9 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
 
   async ensureSchema(): Promise<void> {
     const prisma = await this.getClient();
-    // Create extension, table, and partial unique indexes idempotently
-    await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
-    await prisma.$executeRawUnsafe(`
+    // Create extension, table, and indexes idempotently
+    await prisma.$executeRaw`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
+    await prisma.$executeRaw`
       CREATE TABLE IF NOT EXISTS memories (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         node_id TEXT NOT NULL,
@@ -442,25 +442,11 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
-    `);
-    await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS idx_memories_lookup ON memories (node_id, scope, thread_id);
-    `);
-    await prisma.$executeRawUnsafe(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uniq_memories_global'
-        ) THEN
-          EXECUTE 'CREATE UNIQUE INDEX uniq_memories_global ON memories (node_id, scope) WHERE scope = ''global''';
-        END IF;
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uniq_memories_per_thread'
-        ) THEN
-          EXECUTE 'CREATE UNIQUE INDEX uniq_memories_per_thread ON memories (node_id, scope, thread_id) WHERE scope = ''perThread'' AND thread_id IS NOT NULL';
-        END IF;
-      END $$;
-    `);
+    `;
+    // Unique constraints and lookup index
+    await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS uniq_memories_global ON memories (node_id, scope) WHERE scope = 'global';`;
+    await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS uniq_memories_per_thread ON memories (node_id, scope, thread_id) WHERE scope = 'perThread' AND thread_id IS NOT NULL;`;
+    await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_memories_lookup ON memories (node_id, scope, thread_id);`;
   }
 
   private async selectForUpdate(filter: { nodeId: string; scope: MemoryScope; threadId?: string }, tx: Prisma.TransactionClient) {

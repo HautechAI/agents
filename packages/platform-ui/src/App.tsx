@@ -22,7 +22,6 @@ import { MonitoringResources } from './pages/MonitoringResources';
 import { SettingsSecrets } from './pages/SettingsSecrets';
 import { SettingsVariables } from './pages/SettingsVariables';
 import { SettingsMemory } from './pages/SettingsMemory';
-import { config } from './config';
 
 const queryClient = new QueryClient();
 
