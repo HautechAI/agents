@@ -18,7 +18,9 @@ maybeDescribe('MemoryController endpoints', () => {
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
 
   beforeAll(async () => {
-    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS memories`);
+    const bootstrap = new MemoryService({ getClient: () => prisma } as any).init({ nodeId: 'bootstrap', scope: 'global' });
+    await bootstrap.ensureIndexes();
+    await prisma.$executeRaw`DELETE FROM memories`;
   });
   afterAll(async () => {
     await prisma.$disconnect();
@@ -34,4 +36,3 @@ maybeDescribe('MemoryController endpoints', () => {
     expect(stat.kind).toBe('file');
   });
 });
-

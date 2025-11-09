@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { MemoryService } from '../src/graph/nodes/memory.repository';
 import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../src/graph/nodes/tools/memory/memory.tool';
@@ -9,7 +9,17 @@ const maybeDescribe = URL ? describe : describe.skip;
 
 maybeDescribe('Memory tool adapters', () => {
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
-  beforeAll(async () => { await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS memories`); });
+  beforeAll(async () => {
+    const bootstrap = new MemoryService({ getClient: () => prisma } as any).init({ nodeId: 'bootstrap', scope: 'global' });
+    await bootstrap.ensureIndexes();
+    await prisma.$executeRaw`DELETE FROM memories`;
+  });
+  beforeEach(async () => {
+    await prisma.$executeRaw`DELETE FROM memories`;
+  });
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
   it('wrap LangChain tools and operate on MemoryService via config.thread_id', async () => {
     const db = { getClient: () => prisma } as any;
     const serviceFactory = (opts: { threadId?: string }) => {

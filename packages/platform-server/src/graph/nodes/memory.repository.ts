@@ -1,6 +1,6 @@
 import { Injectable, Scope, Inject } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 // Storage port for Postgres-backed memory. Minimal operations used by MemoryService.
 interface MemoryRepositoryPort {
@@ -76,7 +76,7 @@ export class MemoryService {
     if (p.includes('$')) throw new Error('invalid path: "$" not allowed');
     // validate segments
     const segs = p.split('/').filter(Boolean);
-    const valid = /^[A-Za-z0-9_ -]+$/;
+    const valid = /^[A-Za-z0-9_. -]+$/;
     for (const s of segs) {
       if (!valid.test(s)) throw new Error(`invalid path segment: ${s}`);
     }
@@ -411,9 +411,13 @@ export class MemoryService {
 }
 
 class PostgresMemoryRepository implements MemoryRepositoryPort {
+  private static schemaInitialized = false;
+  private static schemaInitPromise: Promise<void> | null = null;
+  private static readonly SCHEMA_LOCK = { key1: 0x4d4d, key2: 0x5250 }; // 'MM','RP'
+
   constructor(private prismaSvc: PrismaService) {}
 
-  private async getClient() {
+  private async getClient(): Promise<PrismaClient> {
     return this.prismaSvc.getClient();
   }
 
@@ -429,24 +433,50 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
 
   async ensureSchema(): Promise<void> {
     const prisma = await this.getClient();
-    // Create extension, table, and indexes idempotently
-    await prisma.$executeRaw`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
-    await prisma.$executeRaw`
-      CREATE TABLE IF NOT EXISTS memories (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        node_id TEXT NOT NULL,
-        scope TEXT NOT NULL CHECK (scope IN ('global','perThread')),
-        thread_id TEXT NULL,
-        data JSONB NOT NULL DEFAULT '{}'::jsonb,
-        dirs JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `;
-    // Unique constraints and lookup index
-    await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS uniq_memories_global ON memories (node_id, scope) WHERE scope = 'global';`;
-    await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS uniq_memories_per_thread ON memories (node_id, scope, thread_id) WHERE scope = 'perThread' AND thread_id IS NOT NULL;`;
-    await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_memories_lookup ON memories (node_id, scope, thread_id);`;
+
+    if (PostgresMemoryRepository.schemaInitialized) return;
+
+    if (!PostgresMemoryRepository.schemaInitPromise) {
+      PostgresMemoryRepository.schemaInitPromise = this.performEnsureSchema(prisma)
+        .then(() => {
+          PostgresMemoryRepository.schemaInitialized = true;
+        })
+        .finally(() => {
+          PostgresMemoryRepository.schemaInitPromise = null;
+        });
+    }
+
+    await PostgresMemoryRepository.schemaInitPromise;
+  }
+
+  private async performEnsureSchema(prisma: PrismaClient): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT pg_advisory_lock(${PostgresMemoryRepository.SCHEMA_LOCK.key1}, ${PostgresMemoryRepository.SCHEMA_LOCK.key2})
+      `;
+      try {
+        await tx.$executeRaw`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
+        await tx.$executeRaw`
+          CREATE TABLE IF NOT EXISTS memories (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            node_id TEXT NOT NULL,
+            scope TEXT NOT NULL CHECK (scope IN ('global','perThread')),
+            thread_id TEXT NULL,
+            data JSONB NOT NULL DEFAULT '{}'::jsonb,
+            dirs JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+        `;
+        await tx.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS uniq_memories_global ON memories (node_id, scope) WHERE scope = 'global';`;
+        await tx.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS uniq_memories_per_thread ON memories (node_id, scope, thread_id) WHERE scope = 'perThread' AND thread_id IS NOT NULL;`;
+        await tx.$executeRaw`CREATE INDEX IF NOT EXISTS idx_memories_lookup ON memories (node_id, scope, thread_id);`;
+      } finally {
+        await tx.$queryRaw`
+          SELECT pg_advisory_unlock(${PostgresMemoryRepository.SCHEMA_LOCK.key1}, ${PostgresMemoryRepository.SCHEMA_LOCK.key2})
+        `;
+      }
+    });
   }
 
   private async selectForUpdate(filter: { nodeId: string; scope: MemoryScope; threadId?: string }, tx: Prisma.TransactionClient) {
@@ -476,8 +506,8 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
 
   async getOrCreateDoc(filter: { nodeId: string; scope: MemoryScope; threadId?: string }): Promise<MemoryDoc> {
     const prisma = await this.getClient();
+    await this.ensureSchema();
     return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await this.ensureSchema();
       let row = await this.selectForUpdate(filter, tx);
       if (!row) {
         await tx.$executeRaw`INSERT INTO memories (node_id, scope, thread_id, data, dirs) VALUES (${filter.nodeId}, ${filter.scope}, ${filter.scope === 'perThread' ? filter.threadId ?? null : null}, '{}'::jsonb, '{}'::jsonb)`;
@@ -490,8 +520,8 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
 
   async withDoc<T>(filter: { nodeId: string; scope: MemoryScope; threadId?: string }, fn: (doc: MemoryDoc) => Promise<{ doc: MemoryDoc; result?: T } | { doc?: MemoryDoc; result?: T }>): Promise<T> {
     const prisma = await this.getClient();
+    await this.ensureSchema();
     return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await this.ensureSchema();
       let row = await this.selectForUpdate(filter, tx);
       if (!row) {
         await tx.$executeRaw`INSERT INTO memories (node_id, scope, thread_id, data, dirs) VALUES (${filter.nodeId}, ${filter.scope}, ${filter.scope === 'perThread' ? filter.threadId ?? null : null}, '{}'::jsonb, '{}'::jsonb)`;

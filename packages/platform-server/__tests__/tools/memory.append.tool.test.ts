@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { MemoryService } from '../../src/graph/nodes/memory.repository';
 import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../../src/graph/nodes/tools/memory/memory.tool';
@@ -11,7 +11,17 @@ const maybeDescribe = URL ? describe : describe.skip;
 
 maybeDescribe('memory_append tool: path normalization and validation', () => {
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
-  beforeAll(async () => { await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS memories`); });
+  beforeAll(async () => {
+    const bootstrap = new MemoryService({ getClient: () => prisma } as any).init({ nodeId: 'bootstrap', scope: 'global' });
+    await bootstrap.ensureIndexes();
+    await prisma.$executeRaw`DELETE FROM memories`;
+  });
+  beforeEach(async () => {
+    await prisma.$executeRaw`DELETE FROM memories`;
+  });
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
   const mkTools = () => {
     const db = { getClient: () => prisma } as any;
     const factory = (opts: { threadId?: string }) => { const svc = new MemoryService(db); svc.init({ nodeId: 'nodeT', scope: opts.threadId ? 'perThread' : 'global', threadId: opts.threadId }); return svc; };

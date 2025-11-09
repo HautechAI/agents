@@ -10,16 +10,17 @@ maybeDescribe('MemoryService', () => {
     svc.init({ nodeId: 'n1', scope: 'global' });
     expect(svc.normalizePath('a/b')).toBe('/a/b');
     expect(svc.normalizePath('/a//b/')).toBe('/a/b');
+    expect(svc.normalizePath('greet.txt')).toBe('/greet.txt');
     expect(() => svc.normalizePath('../x')).toThrow();
     expect(() => svc.normalizePath('/a/$b')).toThrow();
   });
 
   it('append/read/update/delete with string-only semantics', async () => {
     const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
-    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS memories`);
     const svc = new MemoryService({ getClient: () => prisma } as any);
     svc.init({ nodeId: 'n1', scope: 'global' });
     await svc.ensureIndexes();
+    await prisma.$executeRaw`DELETE FROM memories`;
 
     await svc.append('/notes/today', 'hello');
     expect(await svc.read('/notes/today')).toBe('hello');
@@ -44,7 +45,9 @@ maybeDescribe('MemoryService', () => {
 
   it('perThread and global scoping', async () => {
     const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
-    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS memories`);
+    const bootstrap = new MemoryService({ getClient: () => prisma } as any).init({ nodeId: 'bootstrap', scope: 'global' });
+    await bootstrap.ensureIndexes();
+    await prisma.$executeRaw`DELETE FROM memories`;
     const g = new MemoryService({ getClient: () => prisma } as any); g.init({ nodeId: 'nodeA', scope: 'global' });
     const t1 = new MemoryService({ getClient: () => prisma } as any); t1.init({ nodeId: 'nodeA', scope: 'perThread', threadId: 't1' });
     const t2 = new MemoryService({ getClient: () => prisma } as any); t2.init({ nodeId: 'nodeA', scope: 'perThread', threadId: 't2' });
