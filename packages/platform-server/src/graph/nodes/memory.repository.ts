@@ -3,11 +3,13 @@ import { PrismaService } from '../../core/services/prisma.service';
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 // Storage port for Postgres-backed memory. Minimal operations used by MemoryService.
+type MemoryFilter = { nodeId: string; scope: MemoryScope; threadId?: string };
+
 interface MemoryRepositoryPort {
   ensureSchema(): Promise<void>;
-  withDoc<T>(filter: { nodeId: string; scope: MemoryScope; threadId?: string }, fn: (doc: MemoryDoc) => Promise<{ doc: MemoryDoc; result?: T } | { doc?: MemoryDoc; result?: T }>): Promise<T>;
-  getDoc(filter: { nodeId: string; scope: MemoryScope; threadId?: string }): Promise<MemoryDoc | null>;
-  getOrCreateDoc(filter: { nodeId: string; scope: MemoryScope; threadId?: string }): Promise<MemoryDoc>;
+  withDoc<T>(filter: MemoryFilter, fn: (doc: MemoryDoc) => Promise<{ doc: MemoryDoc; result?: T } | { doc?: MemoryDoc; result?: T }>): Promise<T>;
+  getDoc(filter: MemoryFilter): Promise<MemoryDoc | null>;
+  getOrCreateDoc(filter: MemoryFilter): Promise<MemoryDoc>;
 }
 
 export type MemoryScope = 'global' | 'perThread';
@@ -63,7 +65,7 @@ export class MemoryService {
     return this;
   }
 
-  /** Collapse multiple slashes, require leading slash, forbid ".." and "$", and allow [A-Za-z0-9_ -] only in segments. */
+  /** Collapse multiple slashes, require leading slash, forbid ".." and "$", and allow [A-Za-z0-9_. -] only in segments. */
   normalizePath(rawPath: string): string {
     if (!rawPath) throw new Error('path is required');
     let p = rawPath.replace(/\\+/g, '/'); // backslashes -> slashes
@@ -88,10 +90,10 @@ export class MemoryService {
     await this.repo.ensureSchema();
   }
 
-  private get filter() {
-    const base: Record<string, unknown> = { nodeId: this.nodeId, scope: this.scope };
-    if (this.scope === 'perThread') base.threadId = this.threadId;
-    return base;
+  private buildFilter(): MemoryFilter {
+    const filter: MemoryFilter = { nodeId: this.nodeId, scope: this.scope };
+    if (this.scope === 'perThread') filter.threadId = this.threadId;
+    return filter;
   }
 
   // Expose minimal debug context without leaking data
@@ -101,12 +103,12 @@ export class MemoryService {
 
   // Check whether a document exists for this {nodeId, scope[, threadId]}
   async checkDocExists(): Promise<boolean> {
-    const found = await this.repo.getDoc(this.filter);
+    const found = await this.repo.getDoc(this.buildFilter());
     return !!found;
   }
 
   private async getDocOrCreate(): Promise<MemoryDoc> {
-    const doc = await this.repo.getOrCreateDoc(this.filter);
+    const doc = await this.repo.getOrCreateDoc(this.buildFilter());
     // Ensure maps exist
     if (!doc.data) (doc as unknown as { data: Record<string, unknown> }).data = {};
     if (!doc.dirs) (doc as unknown as { dirs: Record<string, unknown> }).dirs = {};
@@ -165,7 +167,7 @@ export class MemoryService {
   async ensureDir(path: string): Promise<void> {
     const key = this.dotted(path);
     if (key === '') return; // root
-    await this.repo.withDoc<void>(this.filter, async (doc) => {
+    await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
       const dirs = (doc.dirs ?? {}) as Record<string, unknown>;
       (dirs as Record<string, true>)[key] = true;
       return { doc: { ...doc, dirs } };
@@ -273,7 +275,7 @@ export class MemoryService {
     const parent = lastSlash <= 0 ? '/' : norm.slice(0, lastSlash);
     await this.ensureDir(parent);
     await this.ensureParentDirs(key);
-    await this.repo.withDoc<void>(this.filter, async (doc) => {
+    await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
       const dirs = (doc.dirs ?? {}) as Record<string, unknown>;
       const dataMap = (doc.data ?? {}) as Record<string, string>;
       if (Object.prototype.hasOwnProperty.call(dirs, key)) throw new Error('EISDIR: path is a directory');
@@ -296,7 +298,7 @@ export class MemoryService {
     if (typeof oldStr !== 'string' || typeof newStr !== 'string') throw new Error('update expects string args');
     const key = this.dotted(path);
     let replaced = 0;
-    await this.repo.withDoc<void>(this.filter, async (doc) => {
+    await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
       if (Object.prototype.hasOwnProperty.call(doc.dirs, key)) throw new Error('EISDIR: path is a directory');
       let current: string | undefined = undefined;
       try {
@@ -326,7 +328,7 @@ export class MemoryService {
   async delete(path: string): Promise<{ files: number; dirs: number }> {
     const key = this.dotted(path);
     let out = { files: 0, dirs: 0 };
-    await this.repo.withDoc<void>(this.filter, async (doc) => {
+    await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
       if (key === '') {
         const files = Object.keys(doc.data || {}).length;
         const dirs = Object.keys(doc.dirs || ({} as Record<string, unknown>)).length;
@@ -399,7 +401,7 @@ export class MemoryService {
     if (!key) return;
     const parts = key.split('.');
     if (parts.length <= 1) return;
-    await this.repo.withDoc<void>(this.filter, async (doc) => {
+    await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
       const dirs = { ...(doc.dirs || {}) } as Record<string, true>;
       for (let i = 1; i < parts.length; i++) {
         const dirKey = parts.slice(0, i).join('.');
@@ -473,7 +475,7 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
     }
   }
 
-  private async selectForUpdate(filter: { nodeId: string; scope: MemoryScope; threadId?: string }, tx: Prisma.TransactionClient) {
+  private async selectForUpdate(filter: MemoryFilter, tx: Prisma.TransactionClient) {
     const rows = await tx.$queryRaw<MemoryRow[]>`
       SELECT id, node_id, scope, thread_id, data, dirs, created_at, updated_at
       FROM memories
@@ -485,7 +487,7 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
     return rows[0] ?? null;
   }
 
-  async getDoc(filter: { nodeId: string; scope: MemoryScope; threadId?: string }): Promise<MemoryDoc | null> {
+  async getDoc(filter: MemoryFilter): Promise<MemoryDoc | null> {
     const prisma = await this.getClient();
     const rows = await prisma.$queryRaw<MemoryRow[]>`
       SELECT id, node_id, scope, thread_id, data, dirs, created_at, updated_at
@@ -498,7 +500,7 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
     return PostgresMemoryRepository.rowToDoc(rows[0]);
   }
 
-  async getOrCreateDoc(filter: { nodeId: string; scope: MemoryScope; threadId?: string }): Promise<MemoryDoc> {
+  async getOrCreateDoc(filter: MemoryFilter): Promise<MemoryDoc> {
     const prisma = await this.getClient();
     await this.ensureSchema();
     return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -512,7 +514,7 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
     });
   }
 
-  async withDoc<T>(filter: { nodeId: string; scope: MemoryScope; threadId?: string }, fn: (doc: MemoryDoc) => Promise<{ doc: MemoryDoc; result?: T } | { doc?: MemoryDoc; result?: T }>): Promise<T> {
+  async withDoc<T>(filter: MemoryFilter, fn: (doc: MemoryDoc) => Promise<{ doc: MemoryDoc; result?: T } | { doc?: MemoryDoc; result?: T }>): Promise<T> {
     const prisma = await this.getClient();
     await this.ensureSchema();
     return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
