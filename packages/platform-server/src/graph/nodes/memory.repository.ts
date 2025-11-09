@@ -413,7 +413,7 @@ export class MemoryService {
 class PostgresMemoryRepository implements MemoryRepositoryPort {
   private static schemaInitialized = false;
   private static schemaInitPromise: Promise<void> | null = null;
-  private static readonly SCHEMA_LOCK = { key1: 0x4d4d, key2: 0x5250 }; // 'MM','RP'
+  private static readonly SCHEMA_LOCK_KEY = BigInt(0x4d4d5250); // 'MMRP'
 
   constructor(private prismaSvc: PrismaService) {}
 
@@ -452,7 +452,7 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
   private async performEnsureSchema(prisma: PrismaClient): Promise<void> {
     await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
-        SELECT pg_advisory_lock(${PostgresMemoryRepository.SCHEMA_LOCK.key1}, ${PostgresMemoryRepository.SCHEMA_LOCK.key2})
+        SELECT pg_advisory_lock(${PostgresMemoryRepository.SCHEMA_LOCK_KEY})
       `;
       try {
         await tx.$executeRaw`CREATE EXTENSION IF NOT EXISTS pgcrypto;`;
@@ -473,7 +473,7 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
         await tx.$executeRaw`CREATE INDEX IF NOT EXISTS idx_memories_lookup ON memories (node_id, scope, thread_id);`;
       } finally {
         await tx.$queryRaw`
-          SELECT pg_advisory_unlock(${PostgresMemoryRepository.SCHEMA_LOCK.key1}, ${PostgresMemoryRepository.SCHEMA_LOCK.key2})
+          SELECT pg_advisory_unlock(${PostgresMemoryRepository.SCHEMA_LOCK_KEY})
         `;
       }
     });
