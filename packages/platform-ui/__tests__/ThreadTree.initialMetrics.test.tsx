@@ -11,7 +11,7 @@ describe('ThreadTree initial metrics rendering', () => {
   afterAll(() => server.close());
 
   it('renders activity dot color from initial metrics without socket events', async () => {
-    const handler = ({ request }: { request: Request }) => {
+    const handler: Parameters<typeof http.get>[1] = ({ request }) => {
       const url = new URL(request.url);
       const includeMetrics = url.searchParams.get('includeMetrics');
       const rootsOnly = url.searchParams.get('rootsOnly');
@@ -19,7 +19,7 @@ describe('ThreadTree initial metrics rendering', () => {
 
       if (!(rootsOnly === 'true' || rootsOnly === '1')) return new HttpResponse(null, { status: 400 });
       if (status !== 'open') return new HttpResponse(null, { status: 400 });
-      if (includeMetrics !== 'true') return new HttpResponse(null, { status: 400 });
+      if (!(includeMetrics === 'true' || includeMetrics === '1')) return new HttpResponse(null, { status: 400 });
 
       return HttpResponse.json({
         items: [
@@ -37,8 +37,8 @@ describe('ThreadTree initial metrics rendering', () => {
     };
 
     server.use(
-      http.get('/api/agents/threads', handler as any),
-      http.get(abs('/api/agents/threads'), handler as any),
+      http.get('/api/agents/threads', handler),
+      http.get(abs('/api/agents/threads'), handler),
     );
 
     render(
