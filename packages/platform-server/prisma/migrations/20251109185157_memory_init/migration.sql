@@ -9,8 +9,8 @@ CREATE TABLE "memories" (
     "thread_id" TEXT,
     "data" JSONB NOT NULL DEFAULT '{}',
     "dirs" JSONB NOT NULL DEFAULT '{}',
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT NOW(),
+    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT NOW(),
 
     CONSTRAINT "memories_pkey" PRIMARY KEY ("id")
 );
