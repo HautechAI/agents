@@ -1,0 +1,2 @@
+export const MEMORY_REPOSITORY = Symbol('MEMORY_REPOSITORY');
+

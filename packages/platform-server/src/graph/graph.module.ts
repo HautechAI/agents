@@ -34,6 +34,7 @@ import { RemindersController } from './nodes/tools/remind_me/reminders.controlle
 import { AgentNode } from './nodes/agent/agent.node';
 import { MemoryNode } from './nodes/memory/memory.node';
 import { MemoryService, PostgresMemoryRepository } from './nodes/memory.repository';
+import { MEMORY_REPOSITORY } from './nodes/memory.tokens';
 import { MemoryConnectorNode } from './nodes/memoryConnector/memoryConnector.node';
 import { WorkspaceNode } from './nodes/workspace/workspace.node';
 import { SlackTrigger } from './nodes/slackTrigger/slackTrigger.node';
@@ -129,8 +130,8 @@ import { SlackAdapter } from '../messaging/slack/slack.adapter';
     //////// Nodes
 
     // Provide MemoryService (transient) so ModuleRef can construct it
-    // Provide repository as singleton; MemoryService will inject it
-    PostgresMemoryRepository,
+    // Provide repository as singleton token to avoid TDZ
+    { provide: MEMORY_REPOSITORY, useClass: PostgresMemoryRepository },
     MemoryService,
     // nodes
     AgentNode,

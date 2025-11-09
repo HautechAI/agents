@@ -1,13 +1,14 @@
 import { Injectable, Scope, Inject } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { MEMORY_REPOSITORY } from './memory.tokens';
 
 // Storage port for Postgres-backed memory. Minimal operations used by MemoryService.
 type MemoryFilter = { nodeId: string; scope: MemoryScope; threadId?: string };
 type MemoryDataMap = Record<string, string | Record<string, unknown>>;
 type MemoryDirsMap = Record<string, true | Record<string, unknown>>;
 
-interface MemoryRepositoryPort {
+export interface MemoryRepositoryPort {
   withDoc<T>(filter: MemoryFilter, fn: (doc: MemoryDoc) => Promise<{ doc: MemoryDoc; result?: T } | { doc?: MemoryDoc; result?: T }>): Promise<T>;
   getDoc(filter: MemoryFilter): Promise<MemoryDoc | null>;
   getOrCreateDoc(filter: MemoryFilter): Promise<MemoryDoc>;
@@ -51,7 +52,7 @@ export class MemoryService {
   // Backing repository (Postgres). Inject lazily via PrismaService
   private repo: MemoryRepositoryPort;
 
-  constructor(@Inject(PostgresMemoryRepository) repo: PostgresMemoryRepository) {
+  constructor(@Inject(MEMORY_REPOSITORY) repo: MemoryRepositoryPort) {
     this.repo = repo;
   }
 
