@@ -318,6 +318,8 @@ export class ConfigService implements Config {
     return this.params.corsOrigins ?? [];
   }
 
+  // No global messaging adapter config in Slack-only v1
+
   static fromEnv(): ConfigService {
     const legacy = process.env.NCPS_URL;
     const urlServer = process.env.NCPS_URL_SERVER || legacy;

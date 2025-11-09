@@ -90,3 +90,9 @@ Persistent conversation state (Prisma)
 - CI runs Prisma client generation before tests/build:
   - `pnpm --filter @agyn/platform-server prisma:generate`
 - For production deployments, apply migrations with `prisma migrate deploy` as part of your release process.
+
+Messaging (Slack-only v1)
+
+- `send_message` routes replies to Slack using `Thread.channel` (descriptor written by `SlackTrigger`).
+- SlackTrigger requires bot_token in node config; token is resolved during provision; no global Slack config or tokens.
+- No other adapters are supported in v1; attachments/ephemeral not supported.
