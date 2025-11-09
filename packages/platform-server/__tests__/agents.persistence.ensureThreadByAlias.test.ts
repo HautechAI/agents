@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { LoggerService } from '../src/core/services/logger.service';
 import { NoopGraphEventsPublisher } from '../src/gateway/graph.events.publisher';
@@ -86,6 +86,19 @@ describe('AgentsPersistenceService: alias resolution helpers', () => {
     const child = stub._store.threads.find((tt: any) => tt.id === childId);
     expect(child.summary).toBe(input.slice(0, 256));
     expect((child.summary ?? '').length).toBe(256);
+  });
+
+  it('trims subthread summary whitespace and emits sanitized summary', async () => {
+    const stub = createPrismaStub();
+    const publisher = new NoopGraphEventsPublisher();
+    const emitThreadCreated = vi.spyOn(publisher, 'emitThreadCreated');
+    const svc = new AgentsPersistenceService(new StubPrismaService(stub) as any, new LoggerService(), { getThreadsMetrics: async () => ({}) } as any, publisher);
+    const parentId = await svc.getOrCreateThreadByAlias('test', 'root-trim-child', 'Root summary');
+    const childId = await svc.getOrCreateSubthreadByAlias('manage', 'child-trim', parentId, '   trimmed child   ');
+    const child = stub._store.threads.find((tt: any) => tt.id === childId);
+    expect(child.summary).toBe('trimmed child');
+    const childEvent = emitThreadCreated.mock.calls.find(([thread]) => thread.id === childId);
+    expect(childEvent?.[0]?.summary).toBe('trimmed child');
   });
 
   it('beginRunThread does not mutate Thread.summary', async () => {

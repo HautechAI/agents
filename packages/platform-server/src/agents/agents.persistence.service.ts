@@ -8,6 +8,8 @@ import { LoggerService } from '../core/services/logger.service';
 import { ThreadsMetricsService, type ThreadMetrics } from './threads.metrics.service';
 import { GraphEventsPublisher } from '../gateway/graph.events.publisher';
 
+const SUMMARY_MAX = 256;
+
 export type RunStartResult = { runId: string };
 
 @Injectable()
@@ -24,7 +26,7 @@ export class AgentsPersistenceService {
   }
 
   private sanitizeSummary(summary: string | null | undefined): string {
-    return (summary ?? '').trim().slice(0, 256);
+    return (summary ?? '').trim().slice(0, SUMMARY_MAX);
   }
 
   /**
@@ -176,6 +178,13 @@ export class AgentsPersistenceService {
     return this.prisma.thread.findMany({ where, orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, summary: true, status: true, createdAt: true, parentId: true } });
   }
 
+  /**
+   * Update persisted thread fields.
+   *
+   * Creation helpers sanitize summaries to SUMMARY_MAX so thread cards render consistently
+   * on first load. Updates keep caller-provided text (even if longer) because UI editors
+   * surface the full value for review and trimming happens upstream as needed.
+   */
   async updateThread(threadId: string, data: { summary?: string | null; status?: ThreadStatus }): Promise<void> {
     const patch: Prisma.ThreadUpdateInput = {};
     if (data.summary !== undefined) patch.summary = data.summary;
@@ -242,5 +251,5 @@ export class AgentsPersistenceService {
     return { kind: 'user' as MessageKind, text: null };
   }
 
-  // Summary initialization is upstream-only; no sanitization/truncation here.
+  // Thread creation helpers sanitize summaries via sanitizeSummary; see updateThread JSDoc for edit path.
 }
