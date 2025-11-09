@@ -66,14 +66,26 @@ describe('AgentsPersistenceService: alias resolution helpers', () => {
     expect(child.summary).toBe('child first');
   });
 
-  it('validates summary length <= 1024 and trims whitespace on create', async () => {
+  it('trims and crops summary to 256 characters for root threads', async () => {
     const stub = createPrismaStub();
     const svc = new AgentsPersistenceService(new StubPrismaService(stub) as any, new LoggerService(), { getThreadsMetrics: async () => ({}) } as any, new NoopGraphEventsPublisher());
-    const long = 'x'.repeat(1025);
-    await expect(svc.getOrCreateThreadByAlias('test', 'root-long', long)).rejects.toBeTruthy();
-    const id = await svc.getOrCreateThreadByAlias('test', 'root-trim', '   hello   ');
+    const input = `   ${'abc'.repeat(100)}   `;
+    const expected = input.trim().slice(0, 256);
+    const id = await svc.getOrCreateThreadByAlias('test', 'root-trim', input);
     const t = stub._store.threads.find((tt: any) => tt.id === id);
-    expect(t.summary).toBe('hello');
+    expect(t.summary).toBe(expected);
+    expect((t.summary ?? '').length).toBeLessThanOrEqual(256);
+  });
+
+  it('crops summary to 256 characters for subthreads', async () => {
+    const stub = createPrismaStub();
+    const svc = new AgentsPersistenceService(new StubPrismaService(stub) as any, new LoggerService(), { getThreadsMetrics: async () => ({}) } as any, new NoopGraphEventsPublisher());
+    const parentId = await svc.getOrCreateThreadByAlias('test', 'root-crop', 'Root summary');
+    const input = 'x'.repeat(300);
+    const childId = await svc.getOrCreateSubthreadByAlias('manage', 'child-crop', parentId, input);
+    const child = stub._store.threads.find((tt: any) => tt.id === childId);
+    expect(child.summary).toBe(input.slice(0, 256));
+    expect((child.summary ?? '').length).toBe(256);
   });
 
   it('beginRunThread does not mutate Thread.summary', async () => {
