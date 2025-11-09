@@ -4,6 +4,8 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 // Storage port for Postgres-backed memory. Minimal operations used by MemoryService.
 type MemoryFilter = { nodeId: string; scope: MemoryScope; threadId?: string };
+type MemoryDataMap = Record<string, string | Record<string, unknown>>;
+type MemoryDirsMap = Record<string, true | Record<string, unknown>>;
 
 interface MemoryRepositoryPort {
   ensureSchema(): Promise<void>;
@@ -21,8 +23,8 @@ export interface MemoryDoc {
   // Note: Real Mongo $set with dotted paths (e.g. "data.a.b") creates nested objects.
   // Some legacy docs may have flat dotted keys.
   // Support both shapes for reads/lists.
-  data: Record<string, string | Record<string, unknown>>;
-  dirs: Record<string, true | Record<string, unknown>>;
+  data: MemoryDataMap;
+  dirs: MemoryDirsMap;
 }
 
 export interface StatResult {
@@ -110,9 +112,9 @@ export class MemoryService {
   private async getDocOrCreate(): Promise<MemoryDoc> {
     const doc = await this.repo.getOrCreateDoc(this.buildFilter());
     // Ensure maps exist
-    if (!doc.data) (doc as unknown as { data: Record<string, unknown> }).data = {};
-    if (!doc.dirs) (doc as unknown as { dirs: Record<string, unknown> }).dirs = {};
-    return doc as MemoryDoc;
+    if (!doc.data) doc.data = {} as MemoryDataMap;
+    if (!doc.dirs) doc.dirs = {} as MemoryDirsMap;
+    return doc;
   }
 
   private dotted(path: string): string {
@@ -136,10 +138,8 @@ export class MemoryService {
   // Check quickly if there is any flat dotted child under the prefix
   private hasFlatChild(doc: MemoryDoc, key: string): boolean {
     const prefix = key ? key + '.' : '';
-    const dataKeys = Object.keys(doc.data || {});
-    if (dataKeys.some((k) => typeof k === 'string' && k.startsWith(prefix))) return true;
-    const dirKeys = Object.keys((doc.dirs || {} as Record<string, unknown>));
-    if (dirKeys.some((k) => typeof k === 'string' && k.startsWith(prefix))) return true;
+    if (Object.keys(doc.data).some((k) => typeof k === 'string' && k.startsWith(prefix))) return true;
+    if (Object.keys(doc.dirs).some((k) => typeof k === 'string' && k.startsWith(prefix))) return true;
     return false;
   }
 
@@ -168,9 +168,8 @@ export class MemoryService {
     const key = this.dotted(path);
     if (key === '') return; // root
     await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
-      const dirs = (doc.dirs ?? {}) as Record<string, unknown>;
-      (dirs as Record<string, true>)[key] = true;
-      return { doc: { ...doc, dirs } };
+      const updatedDirs: MemoryDirsMap = { ...doc.dirs, [key]: true };
+      return { doc: { ...doc, dirs: updatedDirs } };
     });
   }
 
@@ -192,7 +191,7 @@ export class MemoryService {
 
     // Back-compat: flat dotted exact file or dir
     if (Object.prototype.hasOwnProperty.call(doc.data, key)) {
-      const v = (doc.data as Record<string, unknown>)[key];
+      const v = doc.data[key];
       if (typeof v === 'string') return { kind: 'file', size: Buffer.byteLength(v || '') };
     }
     if (Object.prototype.hasOwnProperty.call(doc.dirs, key)) return { kind: 'dir' };
@@ -223,7 +222,7 @@ export class MemoryService {
     // Back-compat: flat dotted keys aggregation
     const flatMap = new Map<string, 'file' | 'dir'>();
     const prefix = key === '' ? '' : key + '.';
-    for (const k of Object.keys(doc.data || {})) {
+    for (const k of Object.keys(doc.data)) {
       if (typeof k !== 'string' || !k.startsWith(prefix)) continue;
       const rest = k.slice(prefix.length);
       if (rest.length === 0) continue; // exact key not a child
@@ -233,7 +232,7 @@ export class MemoryService {
       const prev = flatMap.get(seg);
       flatMap.set(seg, prev === 'dir' ? 'dir' : next);
     }
-    for (const k of Object.keys(doc.dirs || {} as Record<string, unknown>)) {
+    for (const k of Object.keys(doc.dirs)) {
       if (typeof k !== 'string' || !k.startsWith(prefix)) continue;
       const rest = k.slice(prefix.length);
       if (rest.length === 0) continue;
@@ -256,7 +255,7 @@ export class MemoryService {
       throw new Error('EISDIR: path is a directory');
     }
     // Fallback: flat dotted exact key
-    const flat = (doc.data as Record<string, unknown> | undefined)?.[key];
+    const flat = doc.data[key];
     if (typeof flat === 'string') return flat;
 
     // Not found; determine if it's a dir
@@ -276,9 +275,7 @@ export class MemoryService {
     await this.ensureDir(parent);
     await this.ensureParentDirs(key);
     await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
-      const dirs = (doc.dirs ?? {}) as Record<string, unknown>;
-      const dataMap = (doc.data ?? {}) as Record<string, string>;
-      if (Object.prototype.hasOwnProperty.call(dirs, key)) throw new Error('EISDIR: path is a directory');
+      if (Object.prototype.hasOwnProperty.call(doc.dirs, key)) throw new Error('EISDIR: path is a directory');
       let current: string | undefined = undefined;
       try {
         const nested = this.getNested(doc.data, key);
@@ -286,9 +283,12 @@ export class MemoryService {
       } catch (_e) {
         // ignore nested lookup errors; fallback to flat map
       }
-      if (current === undefined) current = dataMap[key];
+      if (current === undefined) {
+        const direct = doc.data[key];
+        if (typeof direct === 'string') current = direct;
+      }
       const next = current === undefined ? data : current + (current.endsWith('\n') || data.startsWith('\n') ? '' : '\n') + data;
-      const newData = { ...(doc.data as Record<string, unknown>), [key]: next } as Record<string, unknown>;
+      const newData: MemoryDataMap = { ...doc.data, [key]: next };
       return { doc: { ...doc, data: newData } };
     });
   }
@@ -310,7 +310,10 @@ export class MemoryService {
       } catch (_e) {
         // ignore nested lookup errors; continue with flat map
       }
-      if (current === undefined) current = (doc.data as Record<string, unknown> | undefined)?.[key] as string | undefined;
+      if (current === undefined) {
+        const direct = doc.data[key];
+        if (typeof direct === 'string') current = direct;
+      }
       if (current === undefined) throw new Error('ENOENT: file not found');
       if (oldStr.length === 0) return { doc };
       const parts = String(current).split(oldStr);
@@ -318,7 +321,7 @@ export class MemoryService {
       if (count === 0) return { doc };
       replaced = count;
       const next = parts.join(newStr);
-      const newData = { ...(doc.data as Record<string, unknown>), [key]: next } as Record<string, unknown>;
+      const newData: MemoryDataMap = { ...doc.data, [key]: next };
       return { doc: { ...doc, data: newData } };
     });
     return replaced;
@@ -330,13 +333,15 @@ export class MemoryService {
     let out = { files: 0, dirs: 0 };
     await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
       if (key === '') {
-        const files = Object.keys(doc.data || {}).length;
-        const dirs = Object.keys(doc.dirs || ({} as Record<string, unknown>)).length;
+        const files = Object.keys(doc.data).length;
+        const dirs = Object.keys(doc.dirs).length;
         out = { files, dirs };
-        return { doc: { ...doc, data: {}, dirs: {} } };
+        const clearedData: MemoryDataMap = {};
+        const clearedDirs: MemoryDirsMap = {};
+        return { doc: { ...doc, data: clearedData, dirs: clearedDirs } };
       }
       const prefix = key + '.';
-      const dataObj: Record<string, unknown> = { ...(doc.data || {}) };
+      const dataObj: MemoryDataMap = { ...doc.data };
       let files = 0;
       if (Object.prototype.hasOwnProperty.call(dataObj, key)) {
         delete dataObj[key];
@@ -358,7 +363,7 @@ export class MemoryService {
           files += 1;
         }
       }
-      const dirsObj: Record<string, unknown> = { ...(doc.dirs || {}) };
+      const dirsObj: MemoryDirsMap = { ...doc.dirs };
       let dirs = 0;
       if (Object.prototype.hasOwnProperty.call(dirsObj, key)) {
         delete dirsObj[key];
@@ -379,7 +384,11 @@ export class MemoryService {
   /** Return flat dotted key -> string value map (clone). */
   async getAll(): Promise<Record<string, string>> {
     const doc = await this.getDocOrCreate();
-    return { ...((doc.data as unknown) as Record<string, string>) };
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(doc.data)) {
+      if (typeof value === 'string') out[key] = value;
+    }
+    return out;
   }
 
   /** Convenience dump of entire doc (shallow). */
@@ -387,13 +396,21 @@ export class MemoryService {
     Pick<MemoryDoc, 'nodeId' | 'scope' | 'threadId'> & { data: Record<string, string>; dirs: Record<string, true> }
   > {
     const doc = await this.getDocOrCreate();
+    const dataOut: Record<string, string> = {};
+    for (const [key, value] of Object.entries(doc.data)) {
+      if (typeof value === 'string') dataOut[key] = value;
+    }
+    const dirOut: Record<string, true> = {};
+    for (const [key, value] of Object.entries(doc.dirs)) {
+      if (value === true) dirOut[key] = true;
+    }
     return {
       nodeId: doc.nodeId,
       scope: doc.scope,
       threadId: doc.threadId,
-      data: { ...((doc.data as unknown) as Record<string, string>) },
-      dirs: { ...((doc.dirs as unknown) as Record<string, true>) },
-    } as unknown as Pick<MemoryDoc, 'nodeId' | 'scope' | 'threadId'> & { data: Record<string, string>; dirs: Record<string, true> };
+      data: dataOut,
+      dirs: dirOut,
+    };
   }
 
   // ensure parents of a dotted key are marked as dirs
@@ -402,7 +419,7 @@ export class MemoryService {
     const parts = key.split('.');
     if (parts.length <= 1) return;
     await this.repo.withDoc<void>(this.buildFilter(), async (doc) => {
-      const dirs = { ...(doc.dirs || {}) } as Record<string, true>;
+      const dirs: MemoryDirsMap = { ...doc.dirs };
       for (let i = 1; i < parts.length; i++) {
         const dirKey = parts.slice(0, i).join('.');
         dirs[dirKey] = true;
@@ -428,8 +445,8 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
       nodeId: row.node_id,
       scope: row.scope,
       threadId: row.thread_id ?? undefined,
-      data: (row.data || {}) as Record<string, string | Record<string, unknown>>,
-      dirs: (row.dirs || {}) as Record<string, true | Record<string, unknown>>,
+      data: (row.data || {}) as MemoryDataMap,
+      dirs: (row.dirs || {}) as MemoryDirsMap,
     };
   }
 
@@ -527,7 +544,7 @@ class PostgresMemoryRepository implements MemoryRepositoryPort {
       const current: MemoryDoc = PostgresMemoryRepository.rowToDoc(row as MemoryRow);
       const { doc, result } = await fn(current);
       if (doc) {
-        await tx.$executeRaw`UPDATE memories SET data = ${JSON.stringify(doc.data ?? {})}::jsonb, dirs = ${JSON.stringify(doc.dirs ?? {})}::jsonb, updated_at = NOW() WHERE node_id = ${filter.nodeId} AND scope = ${filter.scope} AND (thread_id IS NOT DISTINCT FROM ${filter.scope === 'perThread' ? filter.threadId ?? null : null})`;
+        await tx.$executeRaw`UPDATE memories SET data = ${JSON.stringify(doc.data)}::jsonb, dirs = ${JSON.stringify(doc.dirs)}::jsonb, updated_at = NOW() WHERE node_id = ${filter.nodeId} AND scope = ${filter.scope} AND (thread_id IS NOT DISTINCT FROM ${filter.scope === 'perThread' ? filter.threadId ?? null : null})`;
       }
       return result as T;
     });
