@@ -2,9 +2,14 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import SlackTriggerConfigView from '@/components/configViews/SlackTriggerConfigView';
 
+type SlackTriggerCfg = {
+  app_token?: { value: string; source?: 'static' | 'vault' };
+  bot_token?: { value: string; source?: 'static' | 'vault' };
+};
+
 describe('SlackTriggerConfigView', () => {
   it('renders both app_token and bot_token fields and emits normalized shapes', () => {
-    let cfg: any = {};
+    let cfg: SlackTriggerCfg = {};
     render(
       <SlackTriggerConfigView
         templateName="slackTrigger"
@@ -79,4 +84,3 @@ describe('SlackTriggerConfigView', () => {
     expect(botInput.type).toBe('text');
   });
 });
-

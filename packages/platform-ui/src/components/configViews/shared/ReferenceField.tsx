@@ -58,6 +58,7 @@ export default function ReferenceField({ label, value, onChange, readOnly, disab
           placeholder={placeholder || (source === 'vault' ? 'mount/path/key' : '')}
           data-testid="ref-value"
           type={masked && source === 'static' && !show ? 'password' : 'text'}
+          autoComplete={masked && source === 'static' ? 'new-password' : undefined}
         />
         {masked && source === 'static' ? (
           <Button

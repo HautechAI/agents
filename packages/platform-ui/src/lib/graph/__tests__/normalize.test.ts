@@ -1,11 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { graph as api } from '@/api/modules/graph';
 
+type RefVal = { value: string; source?: 'static' | 'vault' };
+type TemplateName =
+  | 'workspace'
+  | 'shellTool'
+  | 'sendSlackMessageTool'
+  | 'slackTrigger'
+  | 'githubCloneRepoTool'
+  | 'mcpServer'
+  | 'finishTool'
+  | 'remindMeTool';
+type TestNode = { id: string; template: TemplateName; config: Record<string, unknown> };
+type TestGraph = { nodes: TestNode[] };
+
 // Re-import normalize via api.saveFullGraph serialization behavior
 
 describe('normalizeConfigByTemplate idempotence and behavior', () => {
   it('converts env object to array, wraps tokens, renames workdir, removes extras', () => {
-    const nodes = [
+    const nodes: TestNode[] = [
       { id: '1', template: 'shellTool', config: { workingDir: '/w', env: { A: '1' } } },
       { id: '2', template: 'workspace', config: { env: { B: '2' }, workingDir: '/x', note: 'n' } },
       { id: '3', template: 'sendSlackMessageTool', config: { bot_token: 'xoxb-123', note: 'x' } },
@@ -14,13 +27,21 @@ describe('normalizeConfigByTemplate idempotence and behavior', () => {
       { id: '6', template: 'mcpServer', config: { env: { C: '3' }, image: 'alpine', toolDiscoveryTimeoutMs: 10 } },
       { id: '7', template: 'finishTool', config: { note: 'bye' } },
       { id: '8', template: 'remindMeTool', config: { maxActive: 3 } },
-    ] as any;
+    ];
 
-    const g = { nodes } as any;
+    const g: TestGraph = { nodes };
     // Access internal normalize by using the api and intercepting body
     const body = JSON.parse(JSON.stringify({
       ...g,
-      nodes: g.nodes.map((n: any) => ({ ...n, config: (api as any).__test_normalize ? (api as any).__test_normalize(n.template, n.config) : n.config })),
+      nodes: g.nodes.map((n) => ({
+        ...n,
+        config: (api as unknown as { __test_normalize?: (t: string, c: Record<string, unknown>) => Record<string, unknown> }).__test_normalize
+          ? (api as unknown as { __test_normalize: (t: string, c: Record<string, unknown>) => Record<string, unknown> }).__test_normalize(
+              n.template,
+              n.config,
+            )
+          : n.config,
+      })),
     }));
 
     const cfg1 = body.nodes[0].config;
@@ -56,9 +77,10 @@ describe('normalizeConfigByTemplate idempotence and behavior', () => {
   });
 
   it('is idempotent across multiple runs', () => {
-    const initial = { template: 'shellTool', config: { workdir: '/w', env: [{ key: 'A', value: '1', source: 'static' }] } } as any;
-    const once = (api as any).__test_normalize(initial.template, initial.config);
-    const twice = (api as any).__test_normalize(initial.template, once);
+    const initial = { template: 'shellTool', config: { workdir: '/w', env: [{ key: 'A', value: '1', source: 'static' }] } } as const;
+    const normalize = (api as unknown as { __test_normalize: (t: string, c: Record<string, unknown>) => Record<string, unknown> }).__test_normalize;
+    const once = normalize(initial.template, initial.config as unknown as Record<string, unknown>);
+    const twice = normalize(initial.template, once);
     expect(twice).toEqual(once);
   });
 });
