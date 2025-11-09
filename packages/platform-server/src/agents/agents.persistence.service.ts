@@ -23,15 +23,18 @@ export class AgentsPersistenceService {
     return this.prismaService.getClient();
   }
 
+  private sanitizeSummary(summary: string | null | undefined): string {
+    return (summary ?? '').trim().slice(0, 256);
+  }
+
   /**
    * Resolve a UUID threadId for a globally-unique alias. Alias is only used at ingress.
    */
   async getOrCreateThreadByAlias(_source: string, alias: string, summary: string): Promise<string> {
     const existing = await this.prisma.thread.findUnique({ where: { alias } });
     if (existing) return existing.id;
-    const trimmed = (summary ?? '').trim();
-    if (trimmed.length > 1024) throw new Error('Thread summary exceeds max length 1024');
-    const created = await this.prisma.thread.create({ data: { alias, summary: trimmed } });
+    const sanitized = this.sanitizeSummary(summary);
+    const created = await this.prisma.thread.create({ data: { alias, summary: sanitized } });
     this.events.emitThreadCreated({ id: created.id, alias: created.alias, summary: created.summary ?? null, status: created.status, createdAt: created.createdAt, parentId: created.parentId ?? null });
     return created.id;
   }
@@ -60,9 +63,8 @@ export class AgentsPersistenceService {
     const composed = `${source}:${parentThreadId}:${alias}`;
     const existing = await this.prisma.thread.findUnique({ where: { alias: composed } });
     if (existing) return existing.id;
-    const trimmed = (summary ?? '').trim();
-    if (trimmed.length > 1024) throw new Error('Thread summary exceeds max length 1024');
-    const created = await this.prisma.thread.create({ data: { alias: composed, parentId: parentThreadId, summary: trimmed } });
+    const sanitized = this.sanitizeSummary(summary);
+    const created = await this.prisma.thread.create({ data: { alias: composed, parentId: parentThreadId, summary: sanitized } });
     this.events.emitThreadCreated({ id: created.id, alias: created.alias, summary: created.summary ?? null, status: created.status, createdAt: created.createdAt, parentId: created.parentId ?? null });
     this.events.scheduleThreadAndAncestorsMetrics(created.id);
     return created.id;
