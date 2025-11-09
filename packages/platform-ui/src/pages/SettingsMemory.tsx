@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { memoryApi, type MemoryDocItem, type ListEntry } from '../api/modules/memory';
+import { memoryApi, type ListEntry } from '../api/modules/memory';
 import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '@agyn/ui';
 
 export function SettingsMemory() {
@@ -10,12 +10,12 @@ export function SettingsMemory() {
   const [scope, setScope] = useState<'global'|'perThread'>('global');
   const [threadId, setThreadId] = useState<string>('');
   const [path, setPath] = useState<string>('/');
-  const [selected, setSelected] = useState<ListEntry | null>(null);
+  // Derived selection is handled by altering path; no separate selected state needed
   const list = useQuery({ queryKey: ['memory/list', nodeId, scope, threadId, path], queryFn: () => memoryApi.list(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope });
   const stat = useQuery({ queryKey: ['memory/stat', nodeId, scope, threadId, path], queryFn: () => memoryApi.stat(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope && !!path });
   const read = useQuery({ queryKey: ['memory/read', nodeId, scope, threadId, path], queryFn: () => memoryApi.read(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path), enabled: !!nodeId && !!scope && !!path && (stat.data?.kind === 'file') });
 
-  useEffect(() => { setSelected(null); }, [nodeId, scope, threadId, path]);
+  useEffect(() => { /* path-driven selection only */ }, [nodeId, scope, threadId, path]);
 
   const append = useMutation({ mutationFn: async (payload: { data: string }) => memoryApi.append(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path, payload.data), onSuccess: () => { qc.invalidateQueries({ queryKey: ['memory/read', nodeId, scope, threadId, path] }); } });
   const update = useMutation({ mutationFn: async (payload: { oldStr: string; newStr: string }) => memoryApi.update(nodeId, scope, scope==='perThread' ? threadId || undefined : undefined, path, payload.oldStr, payload.newStr), onSuccess: () => { qc.invalidateQueries({ queryKey: ['memory/read', nodeId, scope, threadId, path] }); } });
@@ -32,7 +32,7 @@ export function SettingsMemory() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
         <div>
           <Label>Scope</Label>
-          <Select value={scope} onValueChange={(v) => setScope(v as any)}>
+          <Select value={scope} onValueChange={(v: string) => setScope(v as 'global' | 'perThread')}>
             <SelectTrigger className="w-full"><SelectValue placeholder="Select scope" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="global">global</SelectItem>
@@ -66,7 +66,14 @@ export function SettingsMemory() {
               <ul className="space-y-1">
                 {list.data.items.map((e) => (
                   <li key={e.name}>
-                    <button className="text-sm hover:underline" onClick={() => setSelected(e)}>
+                    <button
+                      className="text-sm hover:underline"
+                      onClick={() => {
+                        const base = path && path !== '/' ? path : '';
+                        const next = `${base}/${e.name}`.replace(/\/+/, '/');
+                        setPath(next);
+                      }}
+                    >
                       <span className="mr-2 inline-block rounded px-1 text-xs bg-muted">{e.kind}</span>
                       {e.name}
                     </button>
@@ -122,4 +129,3 @@ export function SettingsMemory() {
     </div>
   );
 }
-
