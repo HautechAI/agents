@@ -3,7 +3,7 @@ CREATE TYPE "MemoryScope" AS ENUM ('global', 'perThread');
 
 -- CreateTable
 CREATE TABLE "memories" (
-    "id" UUID NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "node_id" TEXT NOT NULL,
     "scope" "MemoryScope" NOT NULL,
     "thread_id" TEXT,
@@ -26,3 +26,5 @@ CREATE UNIQUE INDEX "uniq_memories_global"
 CREATE UNIQUE INDEX "uniq_memories_per_thread"
   ON "memories"("node_id", "scope", "thread_id")
   WHERE "thread_id" IS NOT NULL;
+-- Ensure extension for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
