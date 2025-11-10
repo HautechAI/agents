@@ -84,12 +84,10 @@ describe('SlackTrigger events', () => {
     const vault = ({ getSecret } satisfies Pick<import('../src/vault/vault.service').VaultService, 'getSecret'>) as import('../src/vault/vault.service').VaultService;
     const getOrCreateThreadByAlias = vi.fn(async () => 't-slack');
     const updateThreadChannelDescriptor = vi.fn(async () => undefined);
-    const upsertThreadThreadTs = vi.fn(async () => undefined);
     const persistence = ({
       getOrCreateThreadByAlias,
       updateThreadChannelDescriptor,
-      upsertThreadThreadTs,
-    } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor' | 'upsertThreadThreadTs'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService;
+    } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService;
     const prismaStub = ({ getClient: () => ({ thread: { findUnique: async () => ({ channel: null }) } }) } satisfies Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>) as import('../src/core/services/prisma.service').PrismaService;
     const slackAdapterStub = ({ sendText: vi.fn() } satisfies Pick<SlackAdapter, 'sendText'>) as SlackAdapter;
     const trig = new SlackTrigger(logger as LoggerService, vault, persistence, prismaStub, slackAdapterStub);
@@ -107,12 +105,11 @@ describe('SlackTrigger events', () => {
       listenerInvoke: listener.invoke,
       getOrCreateThreadByAlias,
       updateThreadChannelDescriptor,
-      upsertThreadThreadTs,
       trig,
     };
   };
 
-  it('relays message events from socket-mode client and persists metadata', async () => {
+  it('persists descriptor for top-level events with root thread ts set to event ts', async () => {
     const { handler, received, getOrCreateThreadByAlias, updateThreadChannelDescriptor } = await setupTrigger();
     const ack = vi.fn<[], Promise<void>>(async () => {});
     const env: SlackEnvelope = {
@@ -126,7 +123,6 @@ describe('SlackTrigger events', () => {
           channel: 'C',
           text: 'hello',
           ts: '1.0',
-          thread_ts: 'thread-1',
           channel_type: 'channel',
           client_msg_id: 'client-1',
           event_ts: 'evt-1',
@@ -136,14 +132,39 @@ describe('SlackTrigger events', () => {
     await handler(env);
     expect(received.length).toBe(1);
     expect(ack).toHaveBeenCalledTimes(1);
-    expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'U_thread-1', 'hello');
+    expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'U_1.0', 'hello');
     expect(updateThreadChannelDescriptor).toHaveBeenCalledWith(
       't-slack',
       expect.objectContaining({
-        identifiers: { channel: 'C', thread_ts: 'thread-1' },
+        identifiers: { channel: 'C', thread_ts: '1.0' },
         meta: expect.objectContaining({ channel_type: 'channel', client_msg_id: 'client-1', event_ts: 'evt-1' }),
       }),
     );
+  });
+
+  it('does not overwrite descriptor for reply events', async () => {
+    const { handler, received, getOrCreateThreadByAlias, updateThreadChannelDescriptor } = await setupTrigger();
+    const ack = vi.fn<[], Promise<void>>(async () => {});
+    const env: SlackEnvelope = {
+      envelope_id: 'reply',
+      ack,
+      body: {
+        type: 'event_callback',
+        event: {
+          type: 'message',
+          user: 'UR',
+          channel: 'CR',
+          text: 'reply content',
+          ts: '5.0',
+          thread_ts: 'root-5',
+        },
+      },
+    };
+    await handler(env);
+    expect(received.length).toBe(1);
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'UR_root-5', 'reply content');
+    expect(updateThreadChannelDescriptor).not.toHaveBeenCalled();
   });
 
   it('relays message events from socket-mode events_api payload', async () => {
@@ -193,6 +214,10 @@ describe('SlackTrigger events', () => {
     expect(received.length).toBe(1);
     expect(ack).toHaveBeenCalledTimes(1);
     expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'UF_3.0', 'fallback');
+    expect(updateThreadChannelDescriptor).toHaveBeenCalledWith(
+      't-slack',
+      expect.objectContaining({ identifiers: { channel: 'CF', thread_ts: '3.0' } }),
+    );
   });
 
   it('acks and filters out non-message or subtype events without notifying listeners', async () => {

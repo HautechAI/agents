@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
 import { MemoryService } from '../src/graph/nodes/memory.service';
 
@@ -15,7 +15,7 @@ maybeDescribe('PostgresMemoryRepository adapter', () => {
 
   beforeAll(async () => {
     svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    await prisma.$executeRaw`DELETE FROM memories`;
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['nodeA'])})`;
   });
   afterAll(async () => {
     await prisma.$disconnect();

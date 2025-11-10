@@ -38,30 +38,9 @@ class DescriptorStore {
   }
 
   setDescriptor(threadId: string, descriptor: ChannelDescriptor): void {
-    this.descriptors.set(threadId, descriptor);
-  }
-
-  mergeDescriptor(threadId: string, descriptor: ChannelDescriptor): void {
-    const existing = this.descriptors.get(threadId);
-    if (!existing) {
+    if (!this.descriptors.has(threadId)) {
       this.descriptors.set(threadId, descriptor);
-      return;
     }
-    if (!existing.identifiers.thread_ts && descriptor.identifiers.thread_ts) {
-      this.descriptors.set(threadId, {
-        ...existing,
-        identifiers: { ...existing.identifiers, thread_ts: descriptor.identifiers.thread_ts },
-      });
-    }
-  }
-
-  upsertThreadTs(threadId: string, threadTs: string): void {
-    const existing = this.descriptors.get(threadId);
-    if (!existing) return;
-    this.descriptors.set(threadId, {
-      ...existing,
-      identifiers: { ...existing.identifiers, thread_ts: threadTs },
-    });
   }
 }
 
@@ -106,16 +85,12 @@ describe('SlackTrigger threading integration', () => {
     const vault = ({ getSecret: vi.fn(async (ref: { value: string }) => (String(ref.value).includes('APP') ? 'xapp-abc' : 'xoxb-bot')) } satisfies Pick<import('../src/vault/vault.service').VaultService, 'getSecret'>) as import('../src/vault/vault.service').VaultService;
     const getOrCreateThreadByAlias = vi.fn(async (_src: string, alias: string) => store.getOrCreateThread(alias));
     const updateThreadChannelDescriptor = vi.fn(async (threadId: string, descriptor: ChannelDescriptor) => {
-      store.mergeDescriptor(threadId, descriptor);
-    });
-    const upsertThreadThreadTs = vi.fn(async (threadId: string, threadTs: string) => {
-      store.upsertThreadTs(threadId, threadTs);
+      store.setDescriptor(threadId, descriptor);
     });
     const persistence = ({
       getOrCreateThreadByAlias,
       updateThreadChannelDescriptor,
-      upsertThreadThreadTs,
-    } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor' | 'upsertThreadThreadTs'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService;
+    } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService;
     const prismaStub = ({
       getClient: () => ({
         thread: {
@@ -137,13 +112,12 @@ describe('SlackTrigger threading integration', () => {
       slackSend,
       getOrCreateThreadByAlias,
       updateThreadChannelDescriptor,
-      upsertThreadThreadTs,
     };
   };
 
   it('replies to top-level channel messages within the same thread', async () => {
     const store = new DescriptorStore();
-    const { handler, trigger, slackSend } = await setup(store);
+    const { handler, trigger, slackSend, updateThreadChannelDescriptor } = await setup(store);
     const ack = vi.fn(async () => {});
     const env: SlackEnvelope = {
       envelope_id: 'env1',
@@ -166,11 +140,29 @@ describe('SlackTrigger threading integration', () => {
     expect(slackSend).toHaveBeenCalledWith({ token: 'xoxb-bot', channel: 'C1', text: 'ack', thread_ts: '1000.1' });
     const descriptor = store.getDescriptor(threadId);
     expect(descriptor?.identifiers.thread_ts).toBe('1000.1');
+    expect(updateThreadChannelDescriptor).toHaveBeenCalledTimes(1);
   });
 
   it('keeps reply events in their originating Slack thread', async () => {
     const store = new DescriptorStore();
-    const { handler, trigger, slackSend } = await setup(store);
+    const { handler, trigger, slackSend, updateThreadChannelDescriptor } = await setup(store);
+    const topLevelAck = vi.fn(async () => {});
+    await handler({
+      envelope_id: 'env-top',
+      ack: topLevelAck,
+      body: {
+        type: 'event_callback',
+        event: {
+          type: 'message',
+          user: 'U2',
+          channel: 'C2',
+          text: 'root text',
+          ts: '2000.9',
+          channel_type: 'im',
+        },
+      },
+    });
+    expect(updateThreadChannelDescriptor).toHaveBeenCalledTimes(1);
     const ack = vi.fn(async () => {});
     const env: SlackEnvelope = {
       envelope_id: 'env2',
@@ -194,23 +186,6 @@ describe('SlackTrigger threading integration', () => {
     expect(slackSend).toHaveBeenCalledWith({ token: 'xoxb-bot', channel: 'C2', text: 'follow-up', thread_ts: '2000.9' });
     const descriptor = store.getDescriptor(threadId);
     expect(descriptor?.identifiers.thread_ts).toBe('2000.9');
-  });
-
-  it('repairs legacy descriptors missing thread_ts after sending a message', async () => {
-    const store = new DescriptorStore();
-    const { trigger, slackSend, upsertThreadThreadTs } = await setup(store);
-    const threadId = store.getOrCreateThread('U3_legacy');
-    store.setDescriptor(threadId, {
-      type: 'slack',
-      version: 1,
-      identifiers: { channel: 'C3' },
-      meta: {},
-      createdBy: 'test',
-    });
-    await trigger.sendToThread(threadId, 'legacy-reply');
-    expect(slackSend).toHaveBeenCalledWith({ token: 'xoxb-bot', channel: 'C3', text: 'legacy-reply', thread_ts: undefined });
-    expect(upsertThreadThreadTs).toHaveBeenCalledWith(threadId, 'generated-thread');
-    const descriptor = store.getDescriptor(threadId);
-    expect(descriptor?.identifiers.thread_ts).toBe('generated-thread');
+    expect(updateThreadChannelDescriptor).toHaveBeenCalledTimes(1);
   });
 });

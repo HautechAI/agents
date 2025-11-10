@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { MemoryController } from '../src/graph/controllers/memory.controller';
 import { ModuleRef } from '@nestjs/core';
 import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
@@ -21,11 +21,11 @@ maybeDescribe('MemoryController endpoints', () => {
 
   beforeAll(async () => {
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    const bootstrap = svc.forMemory('bootstrap', 'global');
-    await prisma.$executeRaw`DELETE FROM memories`;
+    svc.forMemory('bootstrap', 'global');
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['bootstrap', 'nodeC', 'nodeT'])})`;
   });
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memories`;
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['nodeC', 'nodeT'])})`;
   });
   afterAll(async () => {
     await prisma.$disconnect();

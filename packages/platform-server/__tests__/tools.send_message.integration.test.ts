@@ -8,6 +8,14 @@ import type { VaultRef } from '../src/vault/vault.service';
 
 // Mock slack web api
 import { vi } from 'vitest';
+vi.mock('@slack/socket-mode', () => {
+  class MockSocket {
+    on() {}
+    async start() {}
+    async disconnect() {}
+  }
+  return { SocketModeClient: MockSocket };
+});
 vi.mock('@slack/web-api', () => {
   type ChatPostMessageArguments = { channel: string; text: string; thread_ts?: string };
   type ChatPostMessageResponse = { ok: boolean; channel?: string; ts?: string; message?: { thread_ts?: string } };
@@ -36,8 +44,7 @@ describe('send_message tool', () => {
       ({
         getOrCreateThreadByAlias: async () => 't1',
         updateThreadChannelDescriptor: async () => undefined,
-        upsertThreadThreadTs: async () => undefined,
-      } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor' | 'upsertThreadThreadTs'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService,
+      } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService,
       prismaStub,
       new SlackAdapterStub(),
     );
@@ -69,8 +76,7 @@ describe('send_message tool', () => {
       ({
         getOrCreateThreadByAlias: async () => 't1',
         updateThreadChannelDescriptor: async () => undefined,
-        upsertThreadThreadTs: async () => undefined,
-      } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor' | 'upsertThreadThreadTs'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService,
+      } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService,
       prismaStub2,
       new SlackAdapterStub2(),
     );

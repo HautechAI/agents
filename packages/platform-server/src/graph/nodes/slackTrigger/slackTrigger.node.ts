@@ -139,23 +139,25 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
           },
         };
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias, text);
-        // Persist descriptor only when channel is present; skip otherwise
+        // Persist descriptor only when channel present and event is top-level (no thread_ts)
         if (typeof event.channel === 'string' && event.channel) {
-          const descriptor: ChannelDescriptor = {
-            type: 'slack',
-            version: 1,
-            identifiers: {
-              channel: event.channel,
-              ...(rootTs ? { thread_ts: rootTs } : {}),
-            },
-            meta: {
-              channel_type: event.channel_type,
-              client_msg_id: event.client_msg_id,
-              event_ts: event.event_ts,
-            },
-            createdBy: 'SlackTrigger',
-          };
-          await this.persistence.updateThreadChannelDescriptor(threadId, descriptor);
+          if (!event.thread_ts && rootTs) {
+            const descriptor: ChannelDescriptor = {
+              type: 'slack',
+              version: 1,
+              identifiers: {
+                channel: event.channel,
+                thread_ts: rootTs,
+              },
+              meta: {
+                channel_type: event.channel_type,
+                client_msg_id: event.client_msg_id,
+                event_ts: event.event_ts,
+              },
+              createdBy: 'SlackTrigger',
+            };
+            await this.persistence.updateThreadChannelDescriptor(threadId, descriptor);
+          }
         } else {
           this.logger.warn('SlackTrigger: missing channel in Slack event; not persisting descriptor', {
             threadId,
@@ -271,16 +273,12 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       }
       const descriptor = parsed.data;
       const ids = descriptor.identifiers;
-      const hadThreadTs = typeof ids.thread_ts === 'string' && ids.thread_ts.length > 0;
       const res = await this.slackAdapter.sendText({
         token: this.botToken!,
         channel: ids.channel,
         text,
         thread_ts: ids.thread_ts,
       });
-      if (res.ok && !hadThreadTs && typeof res.threadId === 'string' && res.threadId.length > 0) {
-        await this.persistence.upsertThreadThreadTs(threadId, res.threadId);
-      }
       return res;
     } catch (e) {
       const msg = e instanceof Error && e.message ? e.message : 'unknown_error';

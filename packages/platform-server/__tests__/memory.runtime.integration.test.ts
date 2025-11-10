@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { SystemMessage } from '@agyn/llm';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import type { LLMContext } from '../src/llm/types';
@@ -147,11 +147,12 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
 
   beforeAll(async () => {
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    const bootstrap = svc.forMemory('bootstrap', 'global');
+    svc.forMemory('bootstrap', 'global');
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['bootstrap', 'mem'])})`;
   });
 
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memories`;
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['mem'])})`;
   });
 
   afterAll(async () => {

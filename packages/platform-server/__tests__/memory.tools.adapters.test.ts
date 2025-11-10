@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
 import { MemoryService } from '../src/graph/nodes/memory.service';
 import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../src/graph/nodes/tools/memory/memory.tool';
@@ -12,11 +12,11 @@ maybeDescribe('Memory tool adapters', () => {
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   beforeAll(async () => {
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    const bootstrap = svc.forMemory('bootstrap', 'global');
-    await prisma.$executeRaw`DELETE FROM memories`;
+    svc.forMemory('bootstrap', 'global');
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['bootstrap', 'nodeX'])})`;
   });
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memories`;
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['nodeX'])})`;
   });
   afterAll(async () => {
     await prisma.$disconnect();

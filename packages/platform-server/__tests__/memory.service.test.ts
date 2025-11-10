@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
 import { MemoryService } from '../src/graph/nodes/memory.service';
 
@@ -19,9 +19,10 @@ maybeDescribe('MemoryService', () => {
   it('append/read/update/delete with string-only semantics', async () => {
     const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    await prisma.$executeRaw`DELETE FROM memories`;
+    const nodeId = 'memory-service-n1';
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join([nodeId])})`;
 
-    const bound = svc.forMemory('n1', 'global');
+    const bound = svc.forMemory(nodeId, 'global');
     await bound.append('/notes/today', 'hello');
     expect(await bound.read('/notes/today')).toBe('hello');
 
@@ -46,10 +47,11 @@ maybeDescribe('MemoryService', () => {
   it('perThread and global scoping', async () => {
     const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    await prisma.$executeRaw`DELETE FROM memories`;
-    const g = svc.forMemory('nodeA', 'global');
-    const t1 = svc.forMemory('nodeA', 'perThread', 't1');
-    const t2 = svc.forMemory('nodeA', 'perThread', 't2');
+    const nodeId = 'memory-service-scope';
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join([nodeId])})`;
+    const g = svc.forMemory(nodeId, 'global');
+    const t1 = svc.forMemory(nodeId, 'perThread', 't1');
+    const t2 = svc.forMemory(nodeId, 'perThread', 't2');
 
     await g.append('/x', 'G');
     await t1.append('/x', 'T1');
