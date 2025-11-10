@@ -88,7 +88,10 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
     return { message, code };
   }
 
-  async execute(raw: z.infer<typeof UnifiedMemoryToolStaticConfigSchema>): Promise<string> {
+  async execute(
+    raw: z.infer<typeof UnifiedMemoryToolStaticConfigSchema>,
+    ctx?: Record<string, unknown>,
+  ): Promise<string> {
     // First, attempt to parse; if invalid, return EINVAL envelope instead of throw
     const parsed = UnifiedMemoryToolStaticConfigSchema.safeParse(raw);
     if (!parsed.success) {
@@ -115,8 +118,10 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
         code: 'EINVAL',
       });
     }
-    // threadId now derived from args if provided; memory operations generally thread-scoped by node injection
-    const threadId = undefined; // leaving undefined; factory may still scope
+    // Derive threadId from tool call context when available
+    const threadId = (ctx && typeof ctx === 'object' && typeof ctx.threadId === 'string')
+      ? String(ctx.threadId as string)
+      : undefined;
     const serviceOrEnvelope: MemoryToolService | string = (() => {
       try {
         const factory = this.deps.getMemoryFactory();
@@ -144,7 +149,9 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
         }
         case 'list': {
           const entries = await service.list(path || '/');
-          return this.makeEnvelope(command, path, true, { entries });
+          // Map to expected { name, type } structure (type alias for kind)
+          const mapped = entries.map((e) => ({ name: e.name, type: e.kind }));
+          return this.makeEnvelope(command, path, true, { entries: mapped });
         }
         case 'append': {
           if (typeof args.content !== 'string') {
@@ -154,7 +161,8 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
             });
           }
           await service.append(path, args.content);
-          return this.makeEnvelope(command, path, true, { status: 'ok' });
+          // Success envelope without result payload
+          return this.makeEnvelope(command, path, true);
         }
         case 'update': {
           if (typeof args.content !== 'string' || typeof args.oldContent !== 'string') {

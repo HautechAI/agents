@@ -11,9 +11,10 @@ const maybeDescribe = URL ? describe : describe.skip;
 maybeDescribe('E2E: memory tools with Postgres backend', () => {
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   const logger = new LoggerService();
+  let svc: MemoryService;
 
   beforeAll(async () => {
-    const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
+    svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
     const bootstrap = svc.forMemory('bootstrap', 'global');
   });
 
