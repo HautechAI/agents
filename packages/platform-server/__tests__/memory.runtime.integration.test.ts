@@ -1,7 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import type { Db } from 'mongodb';
-import { MongoClient } from 'mongodb';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { PrismaClient } from '@prisma/client';
 import { SystemMessage } from '@agyn/llm';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import type { LLMContext } from '../src/llm/types';
@@ -15,7 +13,9 @@ import {
   MemoryConnectorNode,
   type MemoryConnectorStaticConfig,
 } from '../src/graph/nodes/memoryConnector/memoryConnector.node';
-import { MemoryService, type MemoryScope } from '../src/graph/nodes/memory.repository';
+import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
+import { MemoryService } from '../src/graph/nodes/memory.service';
+import type { MemoryScope } from '../src/graph/nodes/memory.types';
 import type { TemplatePortConfig } from '../src/graph/ports.types';
 
 // Minimal ModuleRef surface used by TemplateRegistry/LiveGraphRuntime in this test
@@ -26,7 +26,7 @@ interface MinimalModuleRef {
 // Test-only CallModel node wrapper that exposes a setMemoryConnector port and injects MemoryConnector message
 class TestCallModelNode extends Node<Record<string, never>> {
   private conn?: MemoryConnectorNode;
-  private db?: Db;
+  private prisma?: PrismaClient;
   private placement: MemoryConnectorStaticConfig['placement'] = 'after_system';
   private content: MemoryConnectorStaticConfig['content'] = 'tree';
   private maxChars = 4000;
@@ -52,12 +52,12 @@ class TestCallModelNode extends Node<Record<string, never>> {
 
   // Non-DI parameters provided via explicit init from tests
   initExtras(params: {
-    db: Db;
+    prisma: PrismaClient;
     placement?: MemoryConnectorStaticConfig['placement'];
     content?: MemoryConnectorStaticConfig['content'];
     maxChars?: number;
   }): void {
-    this.db = params.db;
+    this.prisma = params.prisma;
     if (params.placement) this.placement = params.placement;
     if (params.content) this.content = params.content;
     if (params.maxChars !== undefined) this.maxChars = params.maxChars;
@@ -65,15 +65,15 @@ class TestCallModelNode extends Node<Record<string, never>> {
   }
 
   private configureConnector(): void {
-    if (!this.conn || !this.db) return;
+    if (!this.conn || !this.prisma) return;
     const conn = this.conn;
     // Configure connector static config
     void conn.setConfig({ placement: this.placement, content: this.content, maxChars: this.maxChars });
     // Provide MemoryService factory
     conn.setMemorySource((opts: { threadId?: string }) => {
       const scope: MemoryScope = opts.threadId ? 'perThread' : 'global';
-      const svc = new MemoryService(this.db!);
-      return svc.init({ nodeId: conn.nodeId, scope, threadId: opts.threadId });
+      const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => this.prisma! } as any));
+      return svc.forMemory(conn.nodeId, scope, opts.threadId);
     });
   }
 
@@ -94,7 +94,7 @@ class TestCallModelNode extends Node<Record<string, never>> {
 
 // Build a tiny runtime with two templates: callModel and memoryConnector
 function makeRuntime(
-  db: Db,
+  _prisma: PrismaClient,
   _placement: 'after_system' | 'last_message',
 ): LiveGraphRuntime {
   const logger = new LoggerService();
@@ -128,40 +128,38 @@ function makeRuntime(
 
 async function getLastMessages(runtime: LiveGraphRuntime, nodeId: string): Promise<SystemMessage[]> {
   const cm = runtime.getNodeInstance(nodeId) as TestCallModelNode;
-  const out = await cm.invoke({ messages: [] }, { threadId: 'T', finishSignal: new Signal(), callerAgent: { invoke: async () => new Promise(() => {}) } } as LLMContext);
+  const out = await cm.invoke(
+    { messages: [] },
+    {
+      threadId: 'T',
+      finishSignal: new Signal(),
+      callerAgent: { invoke: async () => new Promise(() => {}) },
+    } as LLMContext,
+  );
   return out.messages;
 }
 
-const RUN_MONGOMS = process.env.RUN_MONGOMS === '1';
+const URL = process.env.AGENTS_DATABASE_URL;
+const maybeDescribe = URL ? describe : describe.skip;
 
-describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGraphRuntime', () => {
-  let mongod: MongoMemoryServer;
-  let client: MongoClient;
-  let db: Db;
+maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () => {
+  const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
 
   beforeAll(async () => {
-    // Pin explicit MongoDB binary to ensure consistency across CI/local (mirrors MONGOMS_VERSION)
-    mongod = await MongoMemoryServer.create({ binary: { version: '7.0.14' } });
-    client = new MongoClient(mongod.getUri());
-    await client.connect();
-    db = client.db('test');
+    const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
+    const bootstrap = svc.forMemory('bootstrap', 'global');
+  });
+
+  beforeEach(async () => {
+    await prisma.$executeRaw`DELETE FROM memories`;
   });
 
   afterAll(async () => {
-    try {
-      await client?.close(true);
-    } catch {
-      // ignore client close errors in tests
-    }
-    try {
-      await mongod?.stop();
-    } catch {
-      // ignore mongod stop errors in tests
-    }
+    await prisma.$disconnect();
   });
 
   it('injects memory after system when placement=after_system', async () => {
-    const runtime = makeRuntime(db, 'after_system');
+    const runtime = makeRuntime(prisma, 'after_system');
     const graph: GraphDefinition = {
       nodes: [
         { id: 'cm', data: { template: 'callModel', config: {} } },
@@ -173,12 +171,12 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
     };
     await runtime.apply(graph);
     // Configure non-DI params
-    (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ db, placement: 'after_system' });
+    (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ prisma, placement: 'after_system' });
 
     // Pre-populate memory under mem nodeId in global scope
-    const svc = new MemoryService(db);
-    svc.init({ nodeId: 'mem', scope: 'global' });
-    await svc.append('/notes/today', 'hello');
+    const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
+    const bound = svc.forMemory('mem', 'global');
+    await bound.append('/notes/today', 'hello');
 
     const msgs = await getLastMessages(runtime, 'cm');
     expect(msgs[0].text).toBe('SYS');
@@ -189,7 +187,7 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
   });
 
   it('appends memory to last when placement=last_message', async () => {
-    const runtime = makeRuntime(db, 'last_message');
+    const runtime = makeRuntime(prisma, 'last_message');
     const graph: GraphDefinition = {
       nodes: [
         { id: 'cm', data: { template: 'callModel', config: {} } },
@@ -200,12 +198,12 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
       ],
     };
     await runtime.apply(graph);
-    (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ db, placement: 'last_message' });
+    (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ prisma, placement: 'last_message' });
 
     // Pre-populate memory
-    const svc = new MemoryService(db);
-    svc.init({ nodeId: 'mem', scope: 'global' });
-    await svc.append('/alpha', 'a');
+    const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
+    const bound = svc.forMemory('mem', 'global');
+    await bound.append('/alpha', 'a');
 
     const msgs = await getLastMessages(runtime, 'cm');
     const last = msgs[msgs.length - 1];
@@ -215,7 +213,7 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
   });
 
   it('maxChars fallback: full -> tree when exceeded; per-thread empty falls back to global', async () => {
-    const runtime = makeRuntime(db, 'after_system');
+    const runtime = makeRuntime(prisma, 'after_system');
     const graph: GraphDefinition = {
       nodes: [
         { id: 'cm', data: { template: 'callModel', config: {} } },
@@ -226,12 +224,12 @@ describe.skipIf(!RUN_MONGOMS)('Runtime integration: memory injection via LiveGra
       ],
     };
     await runtime.apply(graph);
-    (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ db, placement: 'after_system', content: 'full', maxChars: 20 });
+    (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ prisma, placement: 'after_system', content: 'full', maxChars: 20 });
 
     // Populate global memory with a file whose full content would exceed 20 chars.
-    const globalSvc = new MemoryService(db);
-    globalSvc.init({ nodeId: 'mem', scope: 'global' });
-    await globalSvc.append('/long/file', 'aaaaaaaaaaaaaaaaaaaa-long');
+    const globalSvc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
+    const boundGlobal = globalSvc.forMemory('mem', 'global');
+    await boundGlobal.append('/long/file', 'aaaaaaaaaaaaaaaaaaaa-long');
 
     // Expect tree fallback instead of full content
     const msgs = await getLastMessages(runtime, 'cm');

@@ -1,7 +1,8 @@
-import { Inject, Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { z } from 'zod';
-import { MemoryScope, MemoryService } from '../../nodes/memory.repository';
+import type { MemoryScope } from '../../nodes/memory.types';
+import { MemoryService } from '../../nodes/memory.service';
 import Node from '../base/Node';
 import { LoggerService } from '../../../core/services/logger.service';
 
@@ -25,7 +26,7 @@ export type MemoryNodeStaticConfig = z.infer<typeof MemoryNodeStaticConfigSchema
  * MemoryNode factory returns an accessor to build a MemoryService scoped to the node and thread.
  */
 
-@Injectable({ scope: Scope.TRANSIENT })
+@Injectable()
 export class MemoryNode extends Node<MemoryNodeStaticConfig> {
   constructor(
     @Inject(ModuleRef) private moduleRef: ModuleRef,
@@ -41,7 +42,8 @@ export class MemoryNode extends Node<MemoryNodeStaticConfig> {
   getMemoryService(opts: { threadId?: string }): MemoryService {
     const threadId = this.config.scope === 'perThread' ? opts.threadId : undefined;
     const svc = this.moduleRef.get(MemoryService, { strict: false });
-    return svc.init({ nodeId: this.nodeId, scope: this.config.scope, threadId });
+    // Return a bound adapter implementing MemoryService methods for this node/thread
+    return svc.forMemory(this.nodeId, this.config.scope, threadId) as unknown as MemoryService;
   }
 
   getPortConfig() {

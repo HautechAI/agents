@@ -21,6 +21,7 @@ import { MonitoringContainers } from './pages/MonitoringContainers';
 import { MonitoringResources } from './pages/MonitoringResources';
 import { SettingsSecrets } from './pages/SettingsSecrets';
 import { SettingsVariables } from './pages/SettingsVariables';
+import { Memory } from './pages/Memory';
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,9 @@ function App() {
             {/* Monitoring */}
             <Route path="/monitoring/containers" element={<MonitoringContainers />} />
             <Route path="/monitoring/resources" element={<MonitoringResources />} />
+
+            {/* Memory */}
+            <Route path="/memory" element={<Memory />} />
 
             {/* Settings */}
             <Route path="/settings/secrets" element={<SettingsSecrets />} />

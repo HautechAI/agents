@@ -34,7 +34,8 @@ import {
   Gauge,
   KeyRound,
   Menu,
-  ChevronDown
+  ChevronDown,
+  Database,
 } from 'lucide-react';
 import { useUser } from '../user/user.runtime';
 
@@ -43,6 +44,7 @@ const STORAGE_KEYS = {
   agentsOpen: 'ui.sidebar.section.agents.open',
   tracingOpen: 'ui.sidebar.section.tracing.open',
   monitoringOpen: 'ui.sidebar.section.monitoring.open',
+  memoryOpen: 'ui.sidebar.section.memory.open',
   settingsOpen: 'ui.sidebar.section.settings.open'
 };
 
@@ -82,6 +84,7 @@ export function RootLayout() {
   const [agentsOpen, setAgentsOpen] = useStoredBoolean(STORAGE_KEYS.agentsOpen, true);
   const [tracingOpen, setTracingOpen] = useStoredBoolean(STORAGE_KEYS.tracingOpen, false);
   const [monitoringOpen, setMonitoringOpen] = useStoredBoolean(STORAGE_KEYS.monitoringOpen, false);
+  const [memoryOpen, setMemoryOpen] = useStoredBoolean(STORAGE_KEYS.memoryOpen, true);
   const [settingsOpen, setSettingsOpen] = useStoredBoolean(STORAGE_KEYS.settingsOpen, false);
 
   const sections: Section[] = useMemo(
@@ -122,6 +125,16 @@ export function RootLayout() {
         ]
       },
       {
+        id: 'memory',
+        label: 'Memory',
+        icon: Database,
+        isOpen: memoryOpen,
+        setOpen: setMemoryOpen,
+        items: [
+          { label: 'Explorer', to: '/memory', icon: Database }
+        ]
+      },
+      {
         id: 'settings',
         label: 'Settings',
         icon: SettingsIcon,
@@ -129,10 +142,10 @@ export function RootLayout() {
         setOpen: setSettingsOpen,
         items: [
           { label: 'Secrets', to: '/settings/secrets', icon: KeyRound },
-          { label: 'Variables', to: '/settings/variables', icon: KeyRound }
+          { label: 'Variables', to: '/settings/variables', icon: KeyRound },
         ]
       }
-    ], [agentsOpen, tracingOpen, monitoringOpen, settingsOpen, setAgentsOpen, setTracingOpen, setMonitoringOpen, setSettingsOpen]
+    ], [agentsOpen, tracingOpen, monitoringOpen, memoryOpen, settingsOpen, setAgentsOpen, setTracingOpen, setMonitoringOpen, setMemoryOpen, setSettingsOpen]
   );
 
   const { user } = useUser();

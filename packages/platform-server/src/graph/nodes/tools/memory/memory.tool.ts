@@ -2,7 +2,7 @@ import z from 'zod';
 
 import { FunctionTool } from '@agyn/llm';
 import { LoggerService } from '../../../../core/services/logger.service';
-import { MemoryService } from '../../../nodes/memory.repository';
+// Note: MemoryService is consumed via a bound adapter supplied by MemoryNode/graph; no direct import here.
 
 export const UnifiedMemoryToolStaticConfigSchema = z
   .object({
@@ -31,7 +31,7 @@ type MemoryToolService = {
 interface UnifiedMemoryFunctionToolDeps {
   getDescription: () => string;
   getName: () => string;
-  getMemoryFactory: () => ((opts: { threadId?: string }) => MemoryService) | undefined;
+  getMemoryFactory: () => ((opts: { threadId?: string }) => MemoryToolService) | undefined;
   logger: LoggerService;
 }
 
@@ -88,7 +88,10 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
     return { message, code };
   }
 
-  async execute(raw: z.infer<typeof UnifiedMemoryToolStaticConfigSchema>): Promise<string> {
+  async execute(
+    raw: z.infer<typeof UnifiedMemoryToolStaticConfigSchema>,
+    ctx?: Record<string, unknown>,
+  ): Promise<string> {
     // First, attempt to parse; if invalid, return EINVAL envelope instead of throw
     const parsed = UnifiedMemoryToolStaticConfigSchema.safeParse(raw);
     if (!parsed.success) {
@@ -115,23 +118,16 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
         code: 'EINVAL',
       });
     }
-    // threadId now derived from args if provided; memory operations generally thread-scoped by node injection
-    const threadId = undefined; // leaving undefined; factory may still scope
+    // Derive threadId from tool call context when available
+    const threadId = (ctx && typeof ctx === 'object' && typeof ctx.threadId === 'string')
+      ? String(ctx.threadId as string)
+      : undefined;
     const serviceOrEnvelope: MemoryToolService | string = (() => {
       try {
         const factory = this.deps.getMemoryFactory();
         if (!factory) throw new Error('Memory not connected');
-        const created: MemoryService = factory({ threadId }) as MemoryService;
-        // Strictly assert expected interface
-        const svc: MemoryToolService = {
-          getDebugInfo: created.getDebugInfo?.bind(created),
-          read: created.read.bind(created),
-          list: created.list.bind(created),
-          append: created.append.bind(created),
-          update: created.update.bind(created),
-          delete: created.delete.bind(created),
-        };
-        return svc;
+        const created: MemoryToolService = factory({ threadId });
+        return created;
       } catch (e) {
         const err = this.extractError(e);
         return this.makeEnvelope(command, path, false, undefined, {
@@ -143,10 +139,7 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
     if (typeof serviceOrEnvelope === 'string') return serviceOrEnvelope;
     const service = serviceOrEnvelope as MemoryToolService;
     const logger = this.deps.logger;
-    if (isMemoryDebugEnabled()) {
-      const dbg = service.getDebugInfo?.();
-      logger.debug('memory tool invoke', { command, path, threadId, nodeId: dbg?.nodeId, scope: dbg?.scope });
-    }
+    if (isMemoryDebugEnabled()) logger.debug('memory tool invoke', { command, path, threadId });
 
     try {
       switch (command) {
@@ -156,7 +149,9 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
         }
         case 'list': {
           const entries = await service.list(path || '/');
-          return this.makeEnvelope(command, path, true, { entries });
+          // Map to expected { name, type } structure (type alias for kind)
+          const mapped = entries.map((e) => ({ name: e.name, type: e.kind }));
+          return this.makeEnvelope(command, path, true, { entries: mapped });
         }
         case 'append': {
           if (typeof args.content !== 'string') {
@@ -166,7 +161,8 @@ export class UnifiedMemoryFunctionTool extends FunctionTool<typeof UnifiedMemory
             });
           }
           await service.append(path, args.content);
-          return this.makeEnvelope(command, path, true, { status: 'ok' });
+          // Success envelope without result payload
+          return this.makeEnvelope(command, path, true);
         }
         case 'update': {
           if (typeof args.content !== 'string' || typeof args.oldContent !== 'string') {
