@@ -19,7 +19,6 @@ maybeDescribe('MemoryService', () => {
   it('append/read/update/delete with string-only semantics', async () => {
     const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    await svc.ensureIndexes();
     await prisma.$executeRaw`DELETE FROM memories`;
 
     const bound = svc.forMemory('n1', 'global');
@@ -47,7 +46,6 @@ maybeDescribe('MemoryService', () => {
   it('perThread and global scoping', async () => {
     const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    await svc.ensureIndexes();
     await prisma.$executeRaw`DELETE FROM memories`;
     const g = svc.forMemory('nodeA', 'global');
     const t1 = svc.forMemory('nodeA', 'perThread', 't1');

@@ -15,7 +15,6 @@ maybeDescribe('PostgresMemoryRepository adapter', () => {
 
   beforeAll(async () => {
     svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    await svc.ensureIndexes();
     await prisma.$executeRaw`DELETE FROM memories`;
   });
   afterAll(async () => {

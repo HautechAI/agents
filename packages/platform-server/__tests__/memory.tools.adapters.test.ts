@@ -13,7 +13,6 @@ maybeDescribe('Memory tool adapters', () => {
   beforeAll(async () => {
     const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
     const bootstrap = svc.forMemory('bootstrap', 'global');
-    await bootstrap.ensureIndexes();
     await prisma.$executeRaw`DELETE FROM memories`;
   });
   beforeEach(async () => {
