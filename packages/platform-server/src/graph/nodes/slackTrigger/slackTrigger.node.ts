@@ -13,7 +13,18 @@ import { PrismaService } from '../../../core/services/prisma.service';
 import { SlackAdapter } from '../../../messaging/slack/slack.adapter';
 import { ChannelDescriptorSchema, type SendResult, type ChannelDescriptor } from '../../../messaging/types';
 
-type TriggerHumanMessage = { kind: 'human'; content: string; info?: { user?: string; channel?: string; channel_type?: string; thread_ts?: string; client_msg_id?: string; event_ts?: string } };
+type TriggerHumanMessage = {
+  kind: 'human';
+  content: string;
+  info?: {
+    user?: string;
+    channel?: string;
+    channel_type?: string;
+    thread_ts?: string;
+    client_msg_id?: string;
+    event_ts?: string;
+  };
+};
 type TriggerListener = { invoke: (thread: string, messages: BufferMessage[]) => Promise<void> };
 
 export const SlackTriggerStaticConfigSchema = z
@@ -61,21 +72,19 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     const appToken = await this.resolveAppToken();
     const client = new SocketModeClient({ appToken, logLevel: undefined });
 
-    const SlackMessageEventSchema = z
-      .object({
-        type: z.literal('message'),
-        text: z.string().optional(),
-        user: z.string().optional(),
-        bot_id: z.string().optional(),
-        subtype: z.string().optional(),
-        channel: z.string().optional(),
-        channel_type: z.string().optional(),
-        ts: z.string().optional(),
-        thread_ts: z.string().optional(),
-        client_msg_id: z.string().optional(),
-        event_ts: z.string().optional(),
-      })
-      .strict();
+    const SlackMessageEventSchema = z.object({
+      type: z.literal('message'),
+      text: z.string().optional(),
+      user: z.string().optional(),
+      bot_id: z.string().optional(),
+      subtype: z.string().optional(),
+      channel: z.string().optional(),
+      channel_type: z.string().optional(),
+      ts: z.string().optional(),
+      thread_ts: z.string().optional(),
+      client_msg_id: z.string().optional(),
+      event_ts: z.string().optional(),
+    });
     type SlackEventCallbackBody = { type: 'event_callback'; event?: unknown };
     type SlackEventsApiBody = { type: 'events_api'; payload?: { event?: unknown } };
     type SlackMessageEnvelope = {
@@ -99,14 +108,19 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
               ? envelope.body.payload?.event
               : envelope.event;
         const parsedEvent = SlackMessageEventSchema.safeParse(rawEvent);
-        if (!parsedEvent.success) return;
+        if (!parsedEvent.success) {
+          console.log('SlackTrigger: received non-message event or invalid event', { errors: parsedEvent.error });
+          return;
+        }
+
         const event = parsedEvent.data;
         if (event.bot_id) return;
         if (typeof event.subtype === 'string') return;
         const text = typeof event.text === 'string' ? event.text : '';
         if (!text.trim()) return;
         const userPart = typeof event.user === 'string' && event.user ? event.user : 'slack';
-        const alias = typeof event.thread_ts === 'string' && event.thread_ts ? `${userPart}_${event.thread_ts}` : userPart;
+        const alias =
+          typeof event.thread_ts === 'string' && event.thread_ts ? `${userPart}_${event.thread_ts}` : userPart;
         const msg: TriggerHumanMessage = {
           kind: 'human',
           content: text,
@@ -215,7 +229,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   }
 
   public listeners(): Array<(thread: string, messages: BufferMessage[]) => Promise<void>> {
-    return this._listeners.map((l) => (async (thread: string, messages: BufferMessage[]) => l.invoke(thread, messages)));
+    return this._listeners.map((l) => async (thread: string, messages: BufferMessage[]) => l.invoke(thread, messages));
   }
 
   getPortConfig() {
@@ -227,7 +241,10 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     try {
       const prisma = this.prismaService.getClient();
       type ThreadChannelRow = { channel: unknown | null };
-      const thread = (await prisma.thread.findUnique({ where: { id: threadId }, select: { channel: true } })) as ThreadChannelRow | null;
+      const thread = (await prisma.thread.findUnique({
+        where: { id: threadId },
+        select: { channel: true },
+      })) as ThreadChannelRow | null;
       if (!thread) {
         this.logger.error('SlackTrigger.sendToThread: missing descriptor', { threadId });
         return { ok: false, error: 'missing_channel_descriptor' };
@@ -249,7 +266,12 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       }
       const descriptor = parsed.data;
       const ids = descriptor.identifiers;
-      const res = await this.slackAdapter.sendText({ token: this.botToken!, channel: ids.channel, text, thread_ts: ids.thread_ts });
+      const res = await this.slackAdapter.sendText({
+        token: this.botToken!,
+        channel: ids.channel,
+        text,
+        thread_ts: ids.thread_ts,
+      });
       return res;
     } catch (e) {
       const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
