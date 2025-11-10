@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { PostgresMemoryRepository } from '../../src/graph/nodes/memory.repository';
 import { MemoryService } from '../../src/graph/nodes/memory.service';
 import { LoggerService } from '../../src/core/services/logger.service';
@@ -18,8 +18,10 @@ maybeDescribe('E2E: memory tools with Postgres backend', () => {
     const bootstrap = svc.forMemory('bootstrap', 'global');
   });
 
+  const nodeIds = ['node-append-1', 'node-append-2', 'node-lrud-1', 'node-lrud-2'];
+
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memories`;
+    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(nodeIds)})`;
   });
 
   afterAll(async () => {

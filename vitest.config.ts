@@ -1,3 +1,4 @@
+import path from 'path';
 import { defineConfig } from 'vitest/config';
 
 if (!process.stdout.isTTY && process.argv.some((arg) => /^(-w|--watch)(=|$)/.test(arg))) {
@@ -14,6 +15,24 @@ export default defineConfig({
     hookTimeout: 60000,
     coverage: {
       enabled: false,
+    },
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'packages/platform-ui/src'),
+      '@agyn/ui': path.resolve(__dirname, 'packages/ui/src'),
+      '@agyn/tracing-ui': path.resolve(__dirname, 'packages/tracing-ui'),
+      '../tracing/src': path.resolve(__dirname, 'packages/tracing/src'),
+    },
+  },
+  server: {
+    fs: {
+      allow: [
+        path.resolve(__dirname),
+        path.resolve(__dirname, 'packages/ui'),
+        path.resolve(__dirname, 'packages/tracing-ui'),
+        path.resolve(__dirname, 'packages/tracing'),
+      ],
     },
   },
 });

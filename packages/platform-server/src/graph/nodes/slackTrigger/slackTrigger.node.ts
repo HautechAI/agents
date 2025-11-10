@@ -119,8 +119,13 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         const text = typeof event.text === 'string' ? event.text : '';
         if (!text.trim()) return;
         const userPart = typeof event.user === 'string' && event.user ? event.user : 'slack';
-        const alias =
-          typeof event.thread_ts === 'string' && event.thread_ts ? `${userPart}_${event.thread_ts}` : userPart;
+        const rootTs =
+          typeof event.thread_ts === 'string' && event.thread_ts
+            ? event.thread_ts
+            : typeof event.ts === 'string' && event.ts
+              ? event.ts
+              : null;
+        const alias = rootTs ? `${userPart}_${rootTs}` : userPart;
         const msg: TriggerHumanMessage = {
           kind: 'human',
           content: text,
@@ -128,29 +133,31 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
             user: event.user,
             channel: event.channel,
             channel_type: event.channel_type,
-            ...(typeof event.thread_ts === 'string' && event.thread_ts ? { thread_ts: event.thread_ts } : {}),
+            ...(rootTs ? { thread_ts: rootTs } : {}),
             client_msg_id: event.client_msg_id,
             event_ts: event.event_ts,
           },
         };
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias, text);
-        // Persist descriptor only when channel is present; skip otherwise
+        // Persist descriptor only when channel present and event is top-level (no thread_ts)
         if (typeof event.channel === 'string' && event.channel) {
-          const descriptor: ChannelDescriptor = {
-            type: 'slack',
-            version: 1,
-            identifiers: {
-              channel: event.channel,
-              ...(event.thread_ts ? { thread_ts: event.thread_ts } : {}),
-            },
-            meta: {
-              channel_type: event.channel_type,
-              client_msg_id: event.client_msg_id,
-              event_ts: event.event_ts,
-            },
-            createdBy: 'SlackTrigger',
-          };
-          await this.persistence.updateThreadChannelDescriptor(threadId, descriptor);
+          if (!event.thread_ts && rootTs) {
+            const descriptor: ChannelDescriptor = {
+              type: 'slack',
+              version: 1,
+              identifiers: {
+                channel: event.channel,
+                thread_ts: rootTs,
+              },
+              meta: {
+                channel_type: event.channel_type,
+                client_msg_id: event.client_msg_id,
+                event_ts: event.event_ts,
+              },
+              createdBy: 'SlackTrigger',
+            };
+            await this.persistence.updateThreadChannelDescriptor(threadId, descriptor);
+          }
         } else {
           this.logger.warn('SlackTrigger: missing channel in Slack event; not persisting descriptor', {
             threadId,
