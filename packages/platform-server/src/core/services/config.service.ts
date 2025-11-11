@@ -42,6 +42,10 @@ export const configSchema = z.object({
   vaultToken: z.string().optional(),
   // Docker registry mirror URL (used by DinD sidecar)
   dockerMirrorUrl: z.string().min(1).default('http://registry-mirror:5000'),
+  threadCloseTerminateEnabled: z
+    .union([z.boolean(), z.string()])
+    .default('true')
+    .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
   // Nix search/proxy settings
   nixAllowedChannels: z
     .string()
@@ -245,6 +249,10 @@ export class ConfigService implements Config {
     return this.params.dockerMirrorUrl;
   }
 
+  get threadCloseTerminateEnabled(): boolean {
+    return this.params.threadCloseTerminateEnabled;
+  }
+
   // Nix proxy getters
   get nixAllowedChannels(): string[] {
     return this.params.nixAllowedChannels;
@@ -372,6 +380,7 @@ export class ConfigService implements Config {
       ncpsAuthHeader: process.env.NCPS_AUTH_HEADER,
       ncpsAuthToken: process.env.NCPS_AUTH_TOKEN,
       agentsDatabaseUrl: process.env.AGENTS_DATABASE_URL,
+      threadCloseTerminateEnabled: process.env.THREAD_CLOSE_TERMINATE_ENABLED,
       corsOrigins: process.env.CORS_ORIGINS,
     });
     return new ConfigService().init(parsed);

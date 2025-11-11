@@ -176,12 +176,30 @@ export class AgentsPersistenceService {
     return this.prisma.thread.findMany({ where, orderBy: { createdAt: 'desc' }, select: { id: true, alias: true, summary: true, status: true, createdAt: true, parentId: true } });
   }
 
-  async updateThread(threadId: string, data: { summary?: string | null; status?: ThreadStatus }): Promise<void> {
+  async updateThread(
+    threadId: string,
+    data: { summary?: string | null; status?: ThreadStatus },
+  ): Promise<{ previousStatus: ThreadStatus; status: ThreadStatus }> {
     const patch: Prisma.ThreadUpdateInput = {};
     if (data.summary !== undefined) patch.summary = data.summary;
     if (data.status !== undefined) patch.status = data.status;
-    const updated = await this.prisma.thread.update({ where: { id: threadId }, data: patch });
-    this.events.emitThreadUpdated({ id: updated.id, alias: updated.alias, summary: updated.summary ?? null, status: updated.status, createdAt: updated.createdAt, parentId: updated.parentId ?? null });
+
+    const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const current = await tx.thread.findUnique({ where: { id: threadId }, select: { status: true } });
+      const updated = await tx.thread.update({ where: { id: threadId }, data: patch });
+      return { updated, previousStatus: current?.status ?? updated.status };
+    });
+
+    const updated = result.updated;
+    this.events.emitThreadUpdated({
+      id: updated.id,
+      alias: updated.alias,
+      summary: updated.summary ?? null,
+      status: updated.status,
+      createdAt: updated.createdAt,
+      parentId: updated.parentId ?? null,
+    });
+    return { previousStatus: result.previousStatus, status: updated.status };
   }
 
   /** Aggregate subtree metrics for provided root IDs. */
