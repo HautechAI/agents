@@ -50,7 +50,9 @@ describe('ThreadTree initial metrics rendering', () => {
       </TestProviders>,
     );
 
-    await screen.findByText('Root Working');
+    const summaryEl = await screen.findByText('Root Working');
+    expect(summaryEl).toHaveClass('thread-summary');
+    expect(summaryEl).toHaveClass('overflow-hidden');
     const dot = screen.getByLabelText('Activity: working');
     expect(dot).toBeInTheDocument();
     expect(dot.className).toContain('bg-green-500');

@@ -84,8 +84,7 @@ export function ThreadTreeNode({
         </button>
         <button className="flex-1 text-left" onClick={() => onSelect(node.id)}>
           <div
-            className="text-sm font-medium text-gray-900"
-            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            className="thread-summary min-w-0 overflow-hidden text-sm font-medium leading-tight text-gray-900"
             title={summary}
           >
             {summary}

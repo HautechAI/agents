@@ -45,8 +45,8 @@ describe('ThreadTree metrics badges and socket updates', () => {
     render(<TestProviders><ThreadTree status="open" onSelect={() => {}} /></TestProviders>);
     const summaryEl = await screen.findByText('Root A');
     expect(summaryEl).toHaveAttribute('title', 'Root A');
-    const computed = window.getComputedStyle(summaryEl as HTMLElement);
-    expect(computed.getPropertyValue('-webkit-line-clamp')).toBe('2');
+    expect(summaryEl).toHaveClass('thread-summary');
+    expect(summaryEl).toHaveClass('overflow-hidden');
     expect(screen.getByText('Agent 1')).toBeInTheDocument();
     // Activity indicator exists and has no visible text
     const dotIdle = screen.getByLabelText('Activity: idle');
