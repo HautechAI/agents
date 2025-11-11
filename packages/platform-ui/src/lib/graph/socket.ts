@@ -45,6 +45,21 @@ class GraphSocket {
   private threadRemindersListeners = new Set<(payload: ThreadRemindersPayload) => void>();
   private messageCreatedListeners = new Set<(payload: MessageCreatedPayload) => void>();
   private runStatusListeners = new Set<(payload: RunStatusChangedPayload) => void>();
+  private subscribedRooms = new Set<string>();
+  private connectCallbacks = new Set<() => void>();
+  private reconnectCallbacks = new Set<() => void>();
+
+  private emitSubscriptions(rooms: string[]) {
+    if (!rooms.length) return;
+    const sock = this.socket;
+    if (!sock) return;
+    sock.emit('subscribe', { rooms });
+  }
+
+  private resubscribeAll() {
+    if (!this.socket || this.subscribedRooms.size === 0) return;
+    this.emitSubscriptions(Array.from(this.subscribedRooms));
+  }
 
   connect(): Socket<ServerToClientEvents, ClientToServerEvents> {
     if (this.socket) return this.socket;
@@ -63,6 +78,16 @@ class GraphSocket {
       reconnectionDelayMax: 5000,
       withCredentials: true,
     }) as unknown as Socket<ServerToClientEvents, ClientToServerEvents>;
+    const handleConnect = () => {
+      this.resubscribeAll();
+      for (const fn of this.connectCallbacks) fn();
+    };
+    const handleReconnect = () => {
+      this.resubscribeAll();
+      for (const fn of this.reconnectCallbacks) fn();
+    };
+    this.socket.on('connect', handleConnect);
+    this.socket.on('reconnect', handleReconnect);
     // No-op connect listener; optional
     this.socket.on('node_status', (payload: NodeStatusEvent) => {
       const set = this.listeners.get(payload.nodeId);
@@ -129,7 +154,17 @@ class GraphSocket {
   subscribe(rooms: string[]) {
     const sock = this.connect();
     if (!sock) return;
-    sock.emit('subscribe', { rooms });
+    const toJoin: string[] = [];
+    for (const room of rooms) {
+      if (!room || this.subscribedRooms.has(room)) continue;
+      this.subscribedRooms.add(room);
+      toJoin.push(room);
+    }
+    this.emitSubscriptions(toJoin);
+  }
+
+  unsubscribe(rooms: string[]) {
+    for (const room of rooms) this.subscribedRooms.delete(room);
   }
 
   // Threads listeners
@@ -139,6 +174,16 @@ class GraphSocket {
   onThreadRemindersCount(cb: (payload: ThreadRemindersPayload) => void) { this.threadRemindersListeners.add(cb); return () => this.threadRemindersListeners.delete(cb); }
   onMessageCreated(cb: (payload: MessageCreatedPayload) => void) { this.messageCreatedListeners.add(cb); return () => this.messageCreatedListeners.delete(cb); }
   onRunStatusChanged(cb: (payload: RunStatusChangedPayload) => void) { this.runStatusListeners.add(cb); return () => this.runStatusListeners.delete(cb); }
+
+  onConnected(cb: () => void) {
+    this.connectCallbacks.add(cb);
+    return () => this.connectCallbacks.delete(cb);
+  }
+
+  onReconnected(cb: () => void) {
+    this.reconnectCallbacks.add(cb);
+    return () => this.reconnectCallbacks.delete(cb);
+  }
 }
 
 export const graphSocket = new GraphSocket();
