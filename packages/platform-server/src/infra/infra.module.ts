@@ -7,6 +7,7 @@ import { VaultModule } from '../vault/vault.module';
 import { ContainerRegistry } from './container/container.registry';
 import { ContainerService } from './container/container.service';
 import { ContainerCleanupService } from './container/containerCleanup.job';
+import { ContainerThreadTerminationService } from './container/containerThreadTermination.service';
 import { GithubService } from './github/github.client';
 import { PRService } from './github/pr.usecase';
 import { NcpsKeyService } from './ncps/ncpsKey.service';
@@ -46,6 +47,7 @@ import { ArchiveService } from './archive/archive.service';
       },
       inject: [LoggerService, ContainerRegistry],
     },
+    ContainerThreadTerminationService,
     {
       provide: NcpsKeyService,
       useFactory: async (config: ConfigService, logger: LoggerService) => {
@@ -64,6 +66,7 @@ import { ArchiveService } from './archive/archive.service';
     VaultModule,
     ContainerService,
     ContainerCleanupService,
+    ContainerThreadTerminationService,
     NcpsKeyService,
     GithubService,
     PRService,

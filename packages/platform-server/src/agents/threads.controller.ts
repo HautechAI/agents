@@ -3,6 +3,7 @@ import { IsBooleanString, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateI
 import { AgentsPersistenceService } from './agents.persistence.service';
 import { Transform } from 'class-transformer';
 import type { RunMessageType, ThreadStatus } from '@prisma/client';
+import { ContainerThreadTerminationService } from '../infra/container/containerThreadTermination.service';
 
 // Avoid runtime import of Prisma in tests; enumerate allowed values
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'injected', 'output'];
@@ -57,7 +58,10 @@ export class PatchThreadBodyDto {
 
 @Controller('api/agents')
 export class AgentsThreadsController {
-  constructor(@Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService) {}
+  constructor(
+    @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
+    @Inject(ContainerThreadTerminationService) private readonly terminationService: ContainerThreadTerminationService,
+  ) {}
 
   @Get('threads')
   async listThreads(@Query() query: ListThreadsQueryDto) {
@@ -98,7 +102,11 @@ export class AgentsThreadsController {
     const update: { summary?: string | null; status?: ThreadStatus } = {};
     if (body.summary !== undefined) update.summary = body.summary;
     if (body.status !== undefined) update.status = body.status;
-    await this.persistence.updateThread(threadId, update);
+    const result = await this.persistence.updateThread(threadId, update);
+
+    if (result.status === 'closed' && result.previousStatus !== 'closed') {
+      void this.terminationService.terminateByThread(threadId, { synchronous: false });
+    }
     return { ok: true };
   }
 

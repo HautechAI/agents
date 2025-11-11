@@ -8,6 +8,7 @@ import { AgentsPersistenceService } from '../src/agents/agents.persistence.servi
 import { AgentNode } from '../src/graph/nodes/agent/agent.node';
 import { HumanMessage } from '@agyn/llm';
 import { AgentsThreadsController } from '../src/agents/threads.controller';
+import { ContainerThreadTerminationService } from '../src/infra/container/containerThreadTermination.service';
 
 class StubLLMProvisioner extends LLMProvisioner {
   async getLLM(): Promise<{ call: (messages: unknown) => Promise<{ text: string; output: unknown[] }> }> {
@@ -56,6 +57,7 @@ describe('Fail-fast behavior', () => {
             listRunMessages: async () => [],
           },
         },
+        { provide: ContainerThreadTerminationService, useValue: { terminateByThread: vi.fn() } },
       ],
     }).compile();
 
