@@ -58,7 +58,6 @@ describe('Fail-fast behavior', () => {
           },
         },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: vi.fn() } },
-        { provide: ConfigService, useValue: { threadCloseTerminateEnabled: true } },
       ],
     }).compile();
 

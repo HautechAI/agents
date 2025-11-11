@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing';
 import { AgentsThreadsController } from '../src/agents/threads.controller';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { ContainerThreadTerminationService } from '../src/infra/container/containerThreadTermination.service';
-import { ConfigService } from '../src/core/services/config.service';
 
 describe('AgentsThreadsController PATCH threads/:id', () => {
   it('accepts null summary and toggles status', async () => {
@@ -25,29 +24,24 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
             listChildren: async () => [],
           },
         },
-        {
-          provide: ContainerThreadTerminationService,
-          useValue: { terminateByThread: terminate },
-        },
-        {
-          provide: ConfigService,
-          useValue: { threadCloseTerminateEnabled: false },
-        },
+        { provide: ContainerThreadTerminationService, useValue: { terminateByThread: terminate } },
       ],
     }).compile();
 
     const ctrl = await module.resolve(AgentsThreadsController);
     await ctrl.patchThread('t1', { summary: null });
+    expect(terminate).not.toHaveBeenCalled();
     await ctrl.patchThread('t2', { status: 'closed' });
 
     expect(updates).toEqual([
       { id: 't1', data: { summary: null } },
       { id: 't2', data: { status: 'closed' } },
     ]);
-    expect(terminate).not.toHaveBeenCalled();
+    expect(terminate).toHaveBeenCalledTimes(1);
+    expect(terminate).toHaveBeenCalledWith('t2', { synchronous: false });
   });
 
-  it('invokes container termination when closing a thread and flag enabled', async () => {
+  it('invokes container termination when closing a thread', async () => {
     const terminate = vi.fn();
     const updateThread = vi.fn(async () => ({ previousStatus: 'open', status: 'closed' }));
     const module = await Test.createTestingModule({
@@ -64,7 +58,6 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
           },
         },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: terminate } },
-        { provide: ConfigService, useValue: { threadCloseTerminateEnabled: true } },
       ],
     }).compile();
 
@@ -92,7 +85,6 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
           },
         },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: terminate } },
-        { provide: ConfigService, useValue: { threadCloseTerminateEnabled: true } },
       ],
     }).compile();
 

@@ -4,7 +4,6 @@ import { AgentsPersistenceService } from './agents.persistence.service';
 import { Transform } from 'class-transformer';
 import type { RunMessageType, ThreadStatus } from '@prisma/client';
 import { ContainerThreadTerminationService } from '../infra/container/containerThreadTermination.service';
-import { ConfigService } from '../core/services/config.service';
 
 // Avoid runtime import of Prisma in tests; enumerate allowed values
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'injected', 'output'];
@@ -62,7 +61,6 @@ export class AgentsThreadsController {
   constructor(
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
     @Inject(ContainerThreadTerminationService) private readonly terminationService: ContainerThreadTerminationService,
-    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   @Get('threads')
@@ -106,11 +104,7 @@ export class AgentsThreadsController {
     if (body.status !== undefined) update.status = body.status;
     const result = await this.persistence.updateThread(threadId, update);
 
-    if (
-      this.config.threadCloseTerminateEnabled &&
-      result.status === 'closed' &&
-      result.previousStatus !== 'closed'
-    ) {
+    if (result.status === 'closed' && result.previousStatus !== 'closed') {
       void this.terminationService.terminateByThread(threadId, { synchronous: false });
     }
     return { ok: true };
