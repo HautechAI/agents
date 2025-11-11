@@ -5,7 +5,7 @@ CREATE TYPE "RunEventType" AS ENUM ('invocation_message', 'injection', 'llm_call
 CREATE TYPE "RunEventStatus" AS ENUM ('pending', 'running', 'success', 'error', 'cancelled');
 
 -- CreateEnum
-CREATE TYPE "EventSourceKind" AS ENUM ('internal', 'tracing', 'backfill');
+CREATE TYPE "EventSourceKind" AS ENUM ('internal', 'tracing');
 
 -- CreateEnum
 CREATE TYPE "ToolExecStatus" AS ENUM ('success', 'error');

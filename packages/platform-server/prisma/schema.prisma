@@ -140,7 +140,6 @@ enum RunEventStatus {
 enum EventSourceKind {
   internal
   tracing
-  backfill
 }
 
 enum ToolExecStatus {

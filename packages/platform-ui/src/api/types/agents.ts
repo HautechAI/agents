@@ -29,7 +29,7 @@ export type RunMessageItem = { id: string; kind: 'user' | 'assistant' | 'system'
 
 export type RunEventType = 'invocation_message' | 'injection' | 'llm_call' | 'tool_execution' | 'summarization';
 export type RunEventStatus = 'pending' | 'running' | 'success' | 'error' | 'cancelled';
-export type EventSourceKind = 'internal' | 'tracing' | 'backfill';
+export type EventSourceKind = 'internal' | 'tracing';
 export type ToolExecStatus = 'success' | 'error';
 export type AttachmentKind = 'prompt' | 'response' | 'tool_input' | 'tool_output' | 'provider_raw' | 'other';
 

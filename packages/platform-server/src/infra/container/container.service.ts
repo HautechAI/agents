@@ -71,11 +71,6 @@ export class ContainerService {
     });
   }
 
-  async init() {
-    // Move backfillFromDocker into ContainerService to eliminate circular dependency
-    await this.backfillFromDocker();
-  }
-
   /** Public helper to touch last-used timestamp for a container */
   async touchLastUsed(containerId: string): Promise<void> {
     try {
@@ -716,50 +711,6 @@ export class ContainerService {
 
   getDocker(): Docker {
     return this.docker;
-  }
-
-  /** Backfill container registry from current Docker state (workspace and DinD). */
-  private async backfillFromDocker(): Promise<void> {
-    this.logger.info('ContainerService: backfilling registry from Docker');
-    try {
-      const workspaces = await this.findContainersByLabels({ 'hautech.ai/role': 'workspace' }, { all: true });
-      const dinds = await this.findContainersByLabels({ 'hautech.ai/role': 'dind' }, { all: true }).catch(() => []);
-      const list = [...workspaces, ...dinds];
-      const nowIso = new Date().toISOString();
-      const concurrency = 5;
-      let index = 0;
-      const runNext = async (): Promise<void> => {
-        const i = index++;
-        const item = list[i];
-        if (!item) return;
-        try {
-          const labels = await this.getContainerLabels(item.id);
-          const nodeId = labels?.['hautech.ai/node_id'] || 'unknown';
-          const threadId = labels?.['hautech.ai/thread_id'] || '';
-          const inspect = await this.docker.getContainer(item.id).inspect();
-          // created retained for future use; eslint-disable to prevent warning
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const created = inspect?.Created ? new Date(inspect.Created).toISOString() : nowIso;
-          const running = !!inspect?.State?.Running;
-          await this.registry.registerStart({
-            containerId: item.id,
-            nodeId,
-            threadId,
-            image: inspect?.Config?.Image || 'unknown',
-            ttlSeconds: 86400,
-            labels,
-            platform: labels?.['hautech.ai/platform'],
-          });
-          if (!running) await this.registry.markStopped(item.id, 'backfill');
-        } catch (err) {
-          this.logger.error('ContainerService: backfill error for container', item.id, err);
-        }
-        await runNext();
-      };
-      await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, () => runNext()));
-    } catch (e) {
-      this.logger.error('ContainerService: backfill listing error', e);
-    }
   }
 
   /**

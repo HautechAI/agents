@@ -139,39 +139,4 @@ describe('ContainerThreadTerminationService', () => {
     expect(registry.claimForTermination).toHaveBeenCalledWith('cid1', expect.any(String));
   });
 
-  it('discovers and backfills DinD sidecars', async () => {
-    const { service, rows, labels } = createHarness();
-    rows.set('workspace', {
-      containerId: 'workspace',
-      threadId: 'thread-1',
-      status: 'running',
-      metadata: { labels: { 'hautech.ai/role': 'workspace' }, ttlSeconds: 86400 },
-    });
-    labels.set('workspace', { 'hautech.ai/thread_id': 'thread-1', 'hautech.ai/role': 'workspace' });
-    labels.set('sidecar', {
-      'hautech.ai/role': 'dind',
-      'hautech.ai/parent_cid': 'workspace',
-      'hautech.ai/thread_id': 'thread-1',
-    });
-
-    await service.terminateByThread('thread-1', { synchronous: true });
-
-    const sidecar = rows.get('sidecar');
-    expect(sidecar).toBeTruthy();
-    expect(sidecar?.status).toBe('terminating');
-    expect(sidecar?.terminationReason).toBe('thread_closed');
-    expect(sidecar?.metadata.retryAfter).toBe(ISO_NOW);
-  });
-
-  it('backfills missing containers discovered via docker labels', async () => {
-    const { service, rows, labels } = createHarness();
-    labels.set('orphan', { 'hautech.ai/thread_id': 'thread-2', 'hautech.ai/role': 'workspace' });
-
-    await service.terminateByThread('thread-2', { synchronous: true });
-
-    const orphan = rows.get('orphan');
-    expect(orphan?.status).toBe('terminating');
-    expect(orphan?.terminationReason).toBe('thread_closed');
-    expect(orphan?.metadata.retryAfter).toBe(ISO_NOW);
-  });
 });

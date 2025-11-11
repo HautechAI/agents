@@ -42,7 +42,6 @@ import { ArchiveService } from './archive/archive.service';
       provide: ContainerService,
       useFactory: (logger: LoggerService, containerRegistry: ContainerRegistry) => {
         const svc = new ContainerService(logger, containerRegistry);
-        svc.init();
         return svc;
       },
       inject: [LoggerService, ContainerRegistry],
