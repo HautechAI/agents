@@ -148,7 +148,7 @@ export function RunTimelineEventCard({ event }: Props) {
                   <summary className="cursor-pointer">Output</summary>
                   <pre className="bg-gray-100 rounded p-2 overflow-x-auto">{formatJson(event.toolExecution.output)}</pre>
                 </details>
-                {event.toolExecution.raw && (
+                {event.toolExecution.raw !== undefined && event.toolExecution.raw !== null && (
                   <details>
                     <summary className="cursor-pointer">Raw</summary>
                     <pre className="bg-gray-100 rounded p-2 overflow-x-auto">{formatJson(event.toolExecution.raw)}</pre>
@@ -201,7 +201,7 @@ export function RunTimelineEventCard({ event }: Props) {
                         <pre className="bg-white rounded p-2 overflow-x-auto whitespace-pre-wrap">{att.contentText}</pre>
                       </details>
                     )}
-                    {att.contentJson && (
+                    {att.contentJson !== undefined && att.contentJson !== null && (
                       <details>
                         <summary className="cursor-pointer">JSON content</summary>
                         <pre className="bg-white rounded p-2 overflow-x-auto">{formatJson(att.contentJson)}</pre>
