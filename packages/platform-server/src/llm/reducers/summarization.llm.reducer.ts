@@ -95,7 +95,8 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
 
     const previousTokens = await this.countTokensFromMessages(state.messages);
 
-    const task = await withSummarize(
+    let summarizeResponse: SummarizeResponse<{ summary: string; newContext: unknown[] }> | undefined;
+    await withSummarize(
       {
         oldContext: state.messages,
         oldContextTokensCount: previousTokens,
@@ -114,11 +115,13 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
             summary: newSummary,
             newContext: head.map((m) => this.toPlainMessage(m)),
           };
-          return new SummarizeResponse({
+          const wrapped = new SummarizeResponse<{ summary: string; newContext: unknown[] }>({
             raw: rawPayload,
             summary: newSummary,
             newContext: head,
           });
+          summarizeResponse = wrapped;
+          return wrapped;
         } catch (error) {
           this.logger.error('Error during summarization LLM call', error);
           throw error;
@@ -126,17 +129,22 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
       },
     );
 
-    await this.runEvents.recordSummarization({
+    if (!summarizeResponse) {
+      throw new Error('summarization_response_missing');
+    }
+
+    const event = await this.runEvents.recordSummarization({
       runId: ctx.runId,
       threadId: ctx.threadId,
       nodeId: ctx.callerAgent.getAgentNodeId?.() ?? null,
-      summaryText: task.summary ?? '',
+      summaryText: summarizeResponse.summary ?? '',
       oldContextTokens: Math.round(previousTokens),
-      newContextCount: task.newContext?.length ?? head.length,
-      raw: this.toJson(task.raw),
+      newContextCount: summarizeResponse.newContext?.length ?? head.length,
+      raw: this.toJson(summarizeResponse.raw),
     });
+    await this.runEvents.publishEvent(event.id, 'append');
 
-    return { summary: task.summary, messages: head };
+    return { summary: summarizeResponse.summary, messages: head };
   }
 
   /**

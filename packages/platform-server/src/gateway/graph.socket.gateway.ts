@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
 import { LiveGraphRuntime } from '../graph/liveGraph.manager';
 import type { ThreadStatus, MessageKind, RunStatus } from '@prisma/client';
-import type { GraphEventsPublisher } from './graph.events.publisher';
+import type { GraphEventsPublisher, RunEventBroadcast } from './graph.events.publisher';
 import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 import { PrismaService } from '../core/services/prisma.service';
 
@@ -166,6 +166,10 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     if (!this.io) return;
     const payload = { run: { ...run, createdAt: run.createdAt.toISOString(), updatedAt: run.updatedAt.toISOString() } };
     this.io.to(`thread:${threadId}`).emit('run_status_changed', payload);
+  }
+  emitRunEvent(threadId: string, payload: RunEventBroadcast) {
+    if (!this.io) return;
+    this.io.to(`thread:${threadId}`).emit('run_event_appended', payload);
   }
   private flushMetricsQueue = async () => {
     // De-duplicate pending thread IDs per flush (preserve insertion order)

@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw';
 import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { TestProviders, server, abs } from './integration/testUtils';
 import * as socketModule from '../src/lib/graph/socket';
+import { MemoryRouter } from 'react-router-dom';
 
 function t(offsetMs: number) {
   return new Date(1700000000000 + offsetMs).toISOString();
@@ -46,7 +47,9 @@ describe('AgentsThreads realtime updates', () => {
 
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
 
@@ -82,7 +85,9 @@ describe('AgentsThreads realtime updates', () => {
 
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
 
@@ -128,7 +133,9 @@ describe('AgentsThreads realtime updates', () => {
 
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
 
@@ -161,7 +168,9 @@ describe('AgentsThreads realtime updates', () => {
 
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
 
@@ -218,7 +227,9 @@ describe('AgentsThreads realtime updates', () => {
 
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
 

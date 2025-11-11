@@ -3,12 +3,15 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { TestProviders } from './integration/testUtils';
+import { MemoryRouter } from 'react-router-dom';
 
 describe('AgentsThreads layout', () => {
   it('uses non-scrollable outer container with inner scrollable panels', async () => {
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>
     );
     // Outer container

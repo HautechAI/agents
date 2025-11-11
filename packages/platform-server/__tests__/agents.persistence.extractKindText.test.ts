@@ -1,11 +1,51 @@
 import { describe, it, expect, vi } from 'vitest';
 // Mock Prisma client early to avoid generated client requirement
-vi.mock('@prisma/client', () => ({
-  MessageKind: { user: 'user', system: 'system', assistant: 'assistant', tool: 'tool' },
-  RunStatus: { finished: 'finished', running: 'running', terminated: 'terminated' },
-  RunMessageType: { input: 'input', output: 'output', injected: 'injected' },
-  Prisma: { JsonNull: null },
-}));
+vi.mock('@prisma/client', () => {
+  const AnyNull = Symbol('AnyNull');
+  const DbNull = Symbol('DbNull');
+  return {
+    MessageKind: { user: 'user', system: 'system', assistant: 'assistant', tool: 'tool' },
+    RunStatus: { finished: 'finished', running: 'running', terminated: 'terminated' },
+    RunMessageType: { input: 'input', output: 'output', injected: 'injected' },
+    RunEventType: {
+      invocation_message: 'invocation_message',
+      injection: 'injection',
+      llm_call: 'llm_call',
+      tool_execution: 'tool_execution',
+      summarization: 'summarization',
+    },
+    RunEventStatus: {
+      pending: 'pending',
+      running: 'running',
+      success: 'success',
+      error: 'error',
+      cancelled: 'cancelled',
+    },
+    ToolExecStatus: {
+      pending: 'pending',
+      running: 'running',
+      success: 'success',
+      error: 'error',
+    },
+    EventSourceKind: {
+      agent: 'agent',
+      system: 'system',
+      tool: 'tool',
+      reminder: 'reminder',
+      summarizer: 'summarizer',
+      user: 'user',
+    },
+    AttachmentKind: {
+      input_text: 'input_text',
+      llm_prompt: 'llm_prompt',
+      llm_response: 'llm_response',
+      tool_input: 'tool_input',
+      tool_output: 'tool_output',
+      metadata: 'metadata',
+    },
+    Prisma: { JsonNull: null, AnyNull, DbNull },
+  };
+});
 const { AgentsPersistenceService } = await import('../src/agents/agents.persistence.service');
 const { LoggerService } = await import('../src/core/services/logger.service');
 const { NoopGraphEventsPublisher } = await import('../src/gateway/graph.events.publisher');

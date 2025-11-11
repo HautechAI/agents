@@ -15,5 +15,6 @@ export function createRunEventsStub() {
     startToolExecution: vi.fn(async () => makeEvent()),
     completeToolExecution: vi.fn(async () => {}),
     recordSummarization: vi.fn(async () => makeEvent()),
+    publishEvent: vi.fn(async () => null),
   } as const;
 }

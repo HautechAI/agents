@@ -269,6 +269,8 @@ export class AgentNode extends Node<AgentStaticConfig> {
       // Begin run with strictly-typed input messages for persistent threadId
       const started = await this.persistence.beginRunThread(thread, messages);
       runId = started.runId;
+      if (!runId) throw new Error('run_start_failed');
+      const ensuredRunId = runId;
 
       result = await withAgent(
         { threadId: thread, nodeId: this.nodeId, inputParameters: [{ thread }, { messages }] },
@@ -278,7 +280,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
           const finishSignal = new Signal();
           const newState = await loop.invoke(
             { messages },
-            { threadId: thread, runId, finishSignal, callerAgent: this },
+            { threadId: thread, runId: ensuredRunId, finishSignal, callerAgent: this },
             { start: 'load' },
           );
 
@@ -287,23 +289,23 @@ export class AgentNode extends Node<AgentStaticConfig> {
           // Persist injected messages only when using injectAfterTools strategy
           if ((this.config.whenBusy ?? 'wait') === 'injectAfterTools') {
             const injected = newState.messages.filter((m) => m instanceof SystemMessage && !messages.includes(m)) as SystemMessage[];
-            if (injected.length > 0 && runId) {
-              await this.persistence.recordInjected(runId, injected);
+            if (injected.length > 0) {
+              await this.persistence.recordInjected(ensuredRunId, injected);
             }
           }
           if ((finishSignal.isActive && last instanceof ToolCallOutputMessage) || last instanceof ResponseMessage) {
             this.logger.info(`Agent response in thread ${thread}: ${last?.text}`);
             // Persist outputs and complete run
-            if (runId) {
+            if (ensuredRunId) {
               if (last instanceof ResponseMessage) {
                 // Persist strictly typed output items (AIMessage, ToolCallMessage)
                 const outputs: Array<AIMessage | ToolCallMessage> = last.output.filter(
                   (o) => o instanceof AIMessage || o instanceof ToolCallMessage,
                 ) as Array<AIMessage | ToolCallMessage>;
-                await this.persistence.completeRun(runId, 'finished', outputs);
+                await this.persistence.completeRun(ensuredRunId, 'finished', outputs);
               } else if (last instanceof ToolCallOutputMessage) {
                 // Persist tool call output
-                await this.persistence.completeRun(runId, 'finished', [last]);
+                await this.persistence.completeRun(ensuredRunId, 'finished', [last]);
               }
             }
             return last;

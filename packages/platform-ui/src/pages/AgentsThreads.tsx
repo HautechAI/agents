@@ -6,6 +6,7 @@ import { ThreadStatusFilterSwitch, type ThreadStatusFilter } from '@/components/
 import { useThreadRuns } from '@/api/hooks/runs';
 import { runs as runsApi } from '@/api/modules/runs';
 import { graphSocket } from '@/lib/graph/socket';
+import { useNavigate } from 'react-router-dom';
 
 // Thread list rendering moved into ThreadTree component
 type MessageItem = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text?: string | null; source: unknown; createdAt: string };
@@ -85,6 +86,7 @@ export function AgentsThreads() {
   const [statusFilter, setStatusFilter] = useState<ThreadStatusFilter>('open');
   // No run selection in new UX (removed)
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // Cast through unknown to align differing RunMeta shapes between API and UI list types
   const runsQ = useThreadRuns(selectedThreadId) as unknown as UseQueryResult<{ items: RunMeta[] }, Error>;
@@ -314,6 +316,10 @@ export function AgentsThreads() {
                     onToggleJson={toggleJson}
                     isLoading={runsQ.isLoading}
                     error={loadError}
+                    onViewRunTimeline={(run) => {
+                      if (!selectedThreadId) return;
+                      navigate(`/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(run.id)}/timeline`);
+                    }}
                   />
                 </div>
               </div>

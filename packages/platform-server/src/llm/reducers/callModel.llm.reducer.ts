@@ -72,6 +72,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       model: this.model,
       prompt: this.serializeMessages(input),
     });
+    await this.runEvents.publishEvent(llmEvent.id, 'append');
 
     let wrapped: LLMResponse<ResponseMessage> | null = null;
     try {
@@ -117,6 +118,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
         rawResponse,
         toolCalls,
       });
+      await this.runEvents.publishEvent(llmEvent.id, 'update');
 
       const updated: LLMState = {
         ...state,
@@ -131,6 +133,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
         errorMessage: error instanceof Error ? error.message : String(error),
         rawResponse: this.trySerialize(error),
       });
+      await this.runEvents.publishEvent(llmEvent.id, 'update');
       if (error instanceof Error) throw error;
       throw new Error(String(error));
     }

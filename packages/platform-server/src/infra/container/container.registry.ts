@@ -166,7 +166,7 @@ export class ContainerRegistry {
     const running = await this.prisma.container.findMany({
       where: { status: 'running', killAfterAt: { not: null, lte: now } },
     });
-    const termDetails = await this.prisma.container.findMany({ where: { containerId: { in: terminating.map((r) => r.containerId) } } });
+    const termDetails = await this.prisma.container.findMany({ where: { containerId: { in: terminating.map(({ containerId }) => containerId) } } });
     return [...running, ...termDetails];
   }
 
