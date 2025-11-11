@@ -162,37 +162,7 @@ export class ContainerThreadTerminationService {
       return normalized;
     }
 
-    const labels = await this.safeGetContainerLabels(containerId);
-    const nodeId = labels?.['hautech.ai/node_id'] || 'unknown';
-    const labelThreadId = labels?.['hautech.ai/thread_id'];
-    const platform = labels?.['hautech.ai/platform'];
-
-    try {
-      await this.registry.registerStart({
-        containerId,
-        nodeId,
-        threadId: labelThreadId || threadId || '',
-        image: labels?.['hautech.ai/image'] || 'unknown',
-        labels: labels ?? {},
-        platform,
-        ttlSeconds: 86400,
-      });
-      this.logger.info(
-        `ContainerThreadTermination: backfilled registry entry for container=${this.shortId(containerId)} thread=${threadId}`,
-      );
-    } catch (error: unknown) {
-      this.logger.error('ContainerThreadTermination: failed to backfill registry', { threadId, containerId, error });
-    }
-
-    const created = await prisma.container.findUnique({
-      where: { containerId },
-      select: { status: true, metadata: true },
-    });
-    if (!created) return null;
-
-    const normalized = { status: created.status, metadata: this.normalizeMetadata(created.metadata) };
-    cache.set(containerId, normalized);
-    return normalized;
+    return null;
   }
 
   private async safeFindContainersByThread(threadId: string): Promise<ContainerHandle[]> {
@@ -214,15 +184,6 @@ export class ContainerThreadTerminationService {
     } catch (error: unknown) {
       this.logger.error('ContainerThreadTermination: failed to list DinD sidecars', { containerId, error });
       return [];
-    }
-  }
-
-  private async safeGetContainerLabels(containerId: string): Promise<Record<string, string> | undefined> {
-    try {
-      return await this.containerService.getContainerLabels(containerId);
-    } catch (error: unknown) {
-      this.logger.error('ContainerThreadTermination: failed to inspect container labels', { containerId, error });
-      return undefined;
     }
   }
 

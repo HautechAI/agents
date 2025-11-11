@@ -1,17 +1,63 @@
-import { Body, Controller, Get, Inject, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, NotFoundException, Param, Patch, Query } from '@nestjs/common';
 import { IsBooleanString, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
-import { Transform } from 'class-transformer';
-import type { RunMessageType, ThreadStatus } from '@prisma/client';
+import { Transform, Expose } from 'class-transformer';
+import type { RunEventStatus, RunEventType, RunMessageType, ThreadStatus } from '@prisma/client';
 import { ContainerThreadTerminationService } from '../infra/container/containerThreadTermination.service';
 import type { ThreadMetrics } from './threads.metrics.service';
+import { RunEventsService } from '../run-events/run-events.service';
 
 // Avoid runtime import of Prisma in tests; enumerate allowed values
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'injected', 'output'];
 
+export const RunEventTypeValues: ReadonlyArray<RunEventType> = [
+  'invocation_message',
+  'injection',
+  'llm_call',
+  'tool_execution',
+  'summarization',
+];
+
+export const RunEventStatusValues: ReadonlyArray<RunEventStatus> = ['pending', 'running', 'success', 'error', 'cancelled'];
+
+const isRunEventType = (value: string): value is RunEventType => (RunEventTypeValues as ReadonlyArray<string>).includes(value);
+const isRunEventStatus = (value: string): value is RunEventStatus => (RunEventStatusValues as ReadonlyArray<string>).includes(value);
+
 export class ListRunMessagesQueryDto {
   @IsIn(RunMessageTypeValues)
   type!: RunMessageType;
+}
+
+export class RunTimelineEventsQueryDto {
+  @IsOptional()
+  @IsString()
+  types?: string;
+
+  @IsOptional()
+  @IsString()
+  statuses?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  limit?: number;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc';
+
+  @IsOptional()
+  @Expose({ name: 'cursor[ordinal]' })
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  @IsInt()
+  cursorOrdinal?: number;
+
+  @IsOptional()
+  @Expose({ name: 'cursor[id]' })
+  @IsString()
+  cursorId?: string;
 }
 
 export class ListThreadsQueryDto {
@@ -70,6 +116,7 @@ export class AgentsThreadsController {
   constructor(
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
     @Inject(ContainerThreadTerminationService) private readonly terminationService: ContainerThreadTerminationService,
+    @Inject(RunEventsService) private readonly runEvents: RunEventsService,
   ) {}
 
   @Get('threads')
@@ -136,6 +183,61 @@ export class AgentsThreadsController {
   async listRunMessages(@Param('runId') runId: string, @Query() query: ListRunMessagesQueryDto) {
     const items = await this.persistence.listRunMessages(runId, query.type);
     return { items };
+  }
+
+  @Get('runs/:runId/summary')
+  async getRunTimelineSummary(@Param('runId') runId: string) {
+    const summary = await this.runEvents.getRunSummary(runId);
+    if (!summary) throw new NotFoundException('run_not_found');
+    return summary;
+  }
+
+  @Get('runs/:runId/events')
+  async listRunTimelineEvents(
+    @Param('runId') runId: string,
+    @Query() query: RunTimelineEventsQueryDto,
+    @Query('type') typeFilter?: string | string[],
+    @Query('status') statusFilter?: string | string[],
+  ) {
+    const collect = (input?: string | string[]) => {
+      if (!input) return [] as string[];
+      const values = Array.isArray(input) ? input : [input];
+      const tokens: string[] = [];
+      for (const value of values) {
+        for (const token of value.split(',')) {
+          const trimmed = token.trim();
+          if (trimmed.length > 0) tokens.push(trimmed);
+        }
+      }
+      return tokens;
+    };
+
+    const typeValues = Array.from(
+      new Set([
+        ...collect(query.types),
+        ...collect(typeFilter),
+      ]),
+    ).filter((v): v is RunEventType => isRunEventType(v));
+
+    const statusValues = Array.from(
+      new Set([
+        ...collect(query.statuses),
+        ...collect(statusFilter),
+      ]),
+    ).filter((v): v is RunEventStatus => isRunEventStatus(v));
+
+    const cursor = query.cursorOrdinal !== undefined
+      ? { ordinal: query.cursorOrdinal, id: query.cursorId }
+      : undefined;
+
+    return this.runEvents.listRunEvents({
+      runId,
+      types: typeValues.length > 0 ? typeValues : undefined,
+      statuses: statusValues.length > 0 ? statusValues : undefined,
+      limit: query.limit,
+      order: query.order,
+      cursor,
+    });
   }
 
   @Patch('threads/:threadId')

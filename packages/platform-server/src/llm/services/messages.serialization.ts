@@ -29,7 +29,8 @@ export function toPrismaJsonValue(input: unknown): InputJsonValue {
 
   // Arrays: convert each element
   if (Array.isArray(input)) {
-    const arr = input.map((el) => toPrismaJsonValueNullable(el));
+    const arrInput = input as unknown[];
+    const arr = arrInput.map((el: unknown) => toPrismaJsonValueNullable(el));
     return arr;
   }
 

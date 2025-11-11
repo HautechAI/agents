@@ -49,7 +49,51 @@ vi.mock('@slack/socket-mode', () => {
   const __getLastSocketClient = () => last;
   return { SocketModeClient: MockClient, __getLastSocketClient };
 });
-vi.mock('@prisma/client', () => ({ PrismaClient: class {} }));
+vi.mock('@prisma/client', () => {
+  class PrismaClient {}
+  const AnyNull = Symbol('AnyNull');
+  const DbNull = Symbol('DbNull');
+  return {
+    PrismaClient,
+    RunEventType: {
+      invocation_message: 'invocation_message',
+      injection: 'injection',
+      llm_call: 'llm_call',
+      tool_execution: 'tool_execution',
+      summarization: 'summarization',
+    },
+    RunEventStatus: {
+      pending: 'pending',
+      running: 'running',
+      success: 'success',
+      error: 'error',
+      cancelled: 'cancelled',
+    },
+    ToolExecStatus: {
+      pending: 'pending',
+      running: 'running',
+      success: 'success',
+      error: 'error',
+    },
+    EventSourceKind: {
+      agent: 'agent',
+      system: 'system',
+      tool: 'tool',
+      reminder: 'reminder',
+      summarizer: 'summarizer',
+      user: 'user',
+    },
+    AttachmentKind: {
+      input_text: 'input_text',
+      llm_prompt: 'llm_prompt',
+      llm_response: 'llm_response',
+      tool_input: 'tool_input',
+      tool_output: 'tool_output',
+      metadata: 'metadata',
+    },
+    Prisma: { JsonNull: null, AnyNull, DbNull },
+  };
+});
 // Mock PrismaService to avoid loading @prisma/client in unit tests
 vi.mock('../src/core/services/prisma.service', () => {
   class PrismaServiceMock {

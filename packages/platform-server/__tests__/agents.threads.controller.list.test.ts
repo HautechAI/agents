@@ -3,6 +3,12 @@ import { Test } from '@nestjs/testing';
 import { AgentsThreadsController } from '../src/agents/threads.controller';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { ContainerThreadTerminationService } from '../src/infra/container/containerThreadTermination.service';
+import { RunEventsService } from '../src/run-events/run-events.service';
+
+const runEventsStub = {
+  getRunSummary: vi.fn(async () => null),
+  listRunEvents: vi.fn(async () => []),
+} as unknown as RunEventsService;
 
 describe('AgentsThreadsController list endpoints', () => {
   it('requests metrics and agent titles when flags are enabled', async () => {
@@ -24,6 +30,7 @@ describe('AgentsThreadsController list endpoints', () => {
       providers: [
         { provide: AgentsPersistenceService, useValue: persistence },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: vi.fn() } },
+        { provide: RunEventsService, useValue: runEventsStub },
       ],
     }).compile();
 
@@ -68,6 +75,7 @@ describe('AgentsThreadsController list endpoints', () => {
       providers: [
         { provide: AgentsPersistenceService, useValue: persistence },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: vi.fn() } },
+        { provide: RunEventsService, useValue: runEventsStub },
       ],
     }).compile();
 
@@ -94,6 +102,7 @@ describe('AgentsThreadsController list endpoints', () => {
       providers: [
         { provide: AgentsPersistenceService, useValue: persistence },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: vi.fn() } },
+        { provide: RunEventsService, useValue: runEventsStub },
       ],
     }).compile();
 

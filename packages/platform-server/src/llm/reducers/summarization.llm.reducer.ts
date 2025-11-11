@@ -14,12 +14,16 @@ import { stringify } from 'yaml';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMProvisioner } from '../provisioners/llm.provisioner';
 import { LoggerService } from '../../core/services/logger.service';
+import { RunEventsService } from '../../run-events/run-events.service';
+import { toPrismaJsonValue } from '../services/messages.serialization';
+import { Prisma } from '@prisma/client';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(
     @Inject(LLMProvisioner) private readonly provisioner: LLMProvisioner,
     @Inject(LoggerService) protected readonly logger: LoggerService,
+    @Inject(RunEventsService) private readonly runEvents: RunEventsService,
   ) {
     super();
   }
@@ -70,7 +74,7 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
     return messagesTokens + summaryTokens > maxTokens;
   }
 
-  private async summarize(state: LLMState): Promise<LLMState> {
+  private async summarize(state: LLMState, ctx: LLMContext): Promise<LLMState> {
     const { keepTokens, model, systemPrompt } = this.params;
     const messages = state.messages;
     if (!messages.length) return state;
@@ -89,10 +93,13 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
     const foldLines = stringify(tail);
     const userPrompt = `Previous summary:\n${state.summary ?? '(none)'}\n\nFold in the following messages (grouped tool responses kept together):\n${foldLines}\n\nReturn only the updated summary.`;
 
-    const task = await withSummarize(
+    const previousTokens = await this.countTokensFromMessages(state.messages);
+
+    let summarizeResponse: SummarizeResponse<{ summary: string; newContext: unknown[] }> | undefined;
+    await withSummarize(
       {
         oldContext: state.messages,
-        oldContextTokensCount: await this.countTokensFromMessages(state.messages),
+        oldContextTokensCount: previousTokens,
       },
       async () => {
         try {
@@ -104,11 +111,17 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
             ],
           });
           const newSummary = response.text.trim();
-          return new SummarizeResponse({
-            raw: { summary: newSummary, newContext: head },
+          const rawPayload = {
+            summary: newSummary,
+            newContext: head.map((m) => this.toPlainMessage(m)),
+          };
+          const wrapped = new SummarizeResponse<{ summary: string; newContext: unknown[] }>({
+            raw: rawPayload,
             summary: newSummary,
             newContext: head,
           });
+          summarizeResponse = wrapped;
+          return wrapped;
         } catch (error) {
           this.logger.error('Error during summarization LLM call', error);
           throw error;
@@ -116,7 +129,22 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
       },
     );
 
-    return { summary: task.summary, messages: head };
+    if (!summarizeResponse) {
+      throw new Error('summarization_response_missing');
+    }
+
+    const event = await this.runEvents.recordSummarization({
+      runId: ctx.runId,
+      threadId: ctx.threadId,
+      nodeId: ctx.callerAgent.getAgentNodeId?.() ?? null,
+      summaryText: summarizeResponse.summary ?? '',
+      oldContextTokens: Math.round(previousTokens),
+      newContextCount: summarizeResponse.newContext?.length ?? head.length,
+      raw: this.toJson(summarizeResponse.raw),
+    });
+    await this.runEvents.publishEvent(event.id, 'append');
+
+    return { summary: summarizeResponse.summary, messages: head };
   }
 
   /**
@@ -179,8 +207,29 @@ export class SummarizationLLMReducer extends Reducer<LLMState, LLMContext> {
     const shouldSummarize = await this.shouldSummarize(state);
     if (!shouldSummarize) return state;
 
-    const newState = await this.summarize(state);
+    const newState = await this.summarize(state, _ctx);
 
     return newState;
+  }
+
+  private toJson(value: unknown): Prisma.InputJsonValue | null {
+    if (value === null || value === undefined) return null;
+    try {
+      return toPrismaJsonValue(value);
+    } catch {
+      try {
+        return toPrismaJsonValue(JSON.parse(JSON.stringify(value)));
+      } catch (err) {
+        this.logger.warn('Failed to serialize summarization payload for storage', err);
+        return null;
+      }
+    }
+  }
+
+  private toPlainMessage(msg: LLMMessage): unknown {
+    const candidate = msg as unknown as { toPlain?: () => unknown; toJSON?: () => unknown };
+    if (typeof candidate.toPlain === 'function') return candidate.toPlain();
+    if (typeof candidate.toJSON === 'function') return candidate.toJSON();
+    return { type: msg.constructor?.name ?? 'UnknownMessage' };
   }
 }

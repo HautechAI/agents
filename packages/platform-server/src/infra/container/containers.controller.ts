@@ -108,7 +108,16 @@ export class ContainersController {
     const limNum = typeof limit === 'number' ? limit : Number.isFinite(Number(limit)) ? Number(limit) : undefined;
     const take = typeof limNum === 'number' && Number.isFinite(limNum) ? Math.max(1, Math.min(500, limNum)) : 200;
 
-    const rows = await this.prisma.container.findMany({
+    const rows: Array<{
+      containerId: string;
+      threadId: string | null;
+      image: string;
+      status: ContainerStatus;
+      createdAt: Date;
+      lastUsedAt: Date;
+      killAfterAt: Date | null;
+      metadata: unknown;
+    }> = await this.prisma.container.findMany({
       where,
       orderBy,
       select: {
@@ -141,15 +150,15 @@ export class ContainersController {
       return out;
     };
     // Exclude DinD from top-level list (only attach as sidecars)
-    const filteredRows = rows.filter((r) => {
-      const labels = metaLabelsOf(r.metadata);
+    const filteredRows = rows.filter((row) => {
+      const labels = metaLabelsOf(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
       return role !== 'dind';
     });
 
     // Optimize: preselect DinD sidecars for current parent set via JSON-path raw query;
     // provide a safe fallback when $queryRaw is not implemented by the Prisma stub.
-    const parentIds = filteredRows.map((r) => r.containerId);
+    const parentIds = filteredRows.map((row) => row.containerId);
     const byParent: Record<string, Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus }>> = {};
     const hasQueryRaw = (() => {
       const obj = this.prisma as unknown as Record<string, unknown>;
@@ -205,19 +214,19 @@ export class ContainersController {
         const t = dt.getTime();
         return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
       };
-    const items = filteredRows.map((r) => {
-      const labels = metaLabelsOf(r.metadata);
+    const items = filteredRows.map((row) => {
+      const labels = metaLabelsOf(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
       return {
-        containerId: r.containerId,
-        threadId: r.threadId,
-        image: r.image,
-        status: r.status,
-        startedAt: toIso(r.createdAt),
-        lastUsedAt: toIso(r.lastUsedAt),
-        killAfterAt: r.killAfterAt ? toIso(r.killAfterAt) : null,
+        containerId: row.containerId,
+        threadId: row.threadId,
+        image: row.image,
+        status: row.status,
+        startedAt: toIso(row.createdAt),
+        lastUsedAt: toIso(row.lastUsedAt),
+        killAfterAt: row.killAfterAt ? toIso(row.killAfterAt) : null,
         role,
-        sidecars: byParent[r.containerId] || [],
+        sidecars: byParent[row.containerId] || [],
       };
     });
 

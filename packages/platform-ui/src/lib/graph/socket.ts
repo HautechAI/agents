@@ -2,12 +2,14 @@
 import { io, type Socket } from 'socket.io-client';
 import { config } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
+import type { RunTimelineEvent } from '@/api/types/agents';
 
 // Strictly typed server-to-client socket events (listener signatures)
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
 type ThreadSummary = { id: string; alias: string; summary: string | null; status: 'open' | 'closed'; createdAt: string; parentId?: string | null };
 type MessageSummary = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text: string | null; source: unknown; createdAt: string; runId?: string };
 type RunSummary = { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string };
+type RunEventSocketPayload = { runId: string; mutation: 'append' | 'update'; event: RunTimelineEvent };
 interface ServerToClientEvents {
   node_status: (payload: NodeStatusEvent) => void;
   node_state: (payload: NodeStateEvent) => void;
@@ -18,6 +20,7 @@ interface ServerToClientEvents {
   thread_reminders_count: (payload: { threadId: string; remindersCount: number }) => void;
   message_created: (payload: { message: MessageSummary }) => void;
   run_status_changed: (payload: { run: RunSummary }) => void;
+  run_event_appended: (payload: RunEventSocketPayload) => void;
 }
 // Client-to-server emits: subscribe to rooms
 type SubscribePayload = { room?: string; rooms?: string[] };
@@ -32,6 +35,7 @@ type ThreadActivityPayload = { threadId: string; activity: 'working' | 'waiting'
 type ThreadRemindersPayload = { threadId: string; remindersCount: number };
 type MessageCreatedPayload = { message: MessageSummary };
 type RunStatusChangedPayload = { run: RunSummary };
+type RunEventListenerPayload = RunEventSocketPayload;
 
 class GraphSocket {
   // Typed socket instance; null until connected
@@ -45,6 +49,7 @@ class GraphSocket {
   private threadRemindersListeners = new Set<(payload: ThreadRemindersPayload) => void>();
   private messageCreatedListeners = new Set<(payload: MessageCreatedPayload) => void>();
   private runStatusListeners = new Set<(payload: RunStatusChangedPayload) => void>();
+  private runEventListeners = new Set<(payload: RunEventListenerPayload) => void>();
   private subscribedRooms = new Set<string>();
   private connectCallbacks = new Set<() => void>();
   private reconnectCallbacks = new Set<() => void>();
@@ -109,6 +114,9 @@ class GraphSocket {
     this.socket.on('thread_reminders_count', (payload: ThreadRemindersPayload) => { for (const fn of this.threadRemindersListeners) fn(payload); });
     this.socket.on('message_created', (payload: MessageCreatedPayload) => { for (const fn of this.messageCreatedListeners) fn(payload); });
     this.socket.on('run_status_changed', (payload: RunStatusChangedPayload) => { for (const fn of this.runStatusListeners) fn(payload); });
+    this.socket.on('run_event_appended', (payload: RunEventSocketPayload) => {
+      for (const fn of this.runEventListeners) fn(payload);
+    });
     return this.socket;
   }
 
@@ -197,6 +205,12 @@ class GraphSocket {
     this.messageCreatedListeners.add(cb);
     return () => {
       this.messageCreatedListeners.delete(cb);
+    };
+  }
+  onRunEvent(cb: (payload: RunEventListenerPayload) => void) {
+    this.runEventListeners.add(cb);
+    return () => {
+      this.runEventListeners.delete(cb);
     };
   }
   onRunStatusChanged(cb: (payload: RunStatusChangedPayload) => void) {

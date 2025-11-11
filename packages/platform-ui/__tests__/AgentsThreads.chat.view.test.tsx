@@ -3,6 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { TestProviders, server, abs } from './integration/testUtils';
+import { MemoryRouter } from 'react-router-dom';
 // run selection removed; no extra wrappers needed beyond TestProviders
 import { AgentsThreads } from '../src/pages/AgentsThreads';
 
@@ -48,7 +49,9 @@ describe('AgentsThreads chat-like view', () => {
     useThreadsMock();
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
     const threadBtn = await screen.findByRole('button', { name: /Thread A/ });
@@ -66,7 +69,9 @@ describe('AgentsThreads chat-like view', () => {
     useThreadsMock();
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
@@ -118,7 +123,9 @@ describe('AgentsThreads chat-like view', () => {
     );
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
@@ -184,7 +191,13 @@ describe('AgentsThreads chat-like view', () => {
         return HttpResponse.json({ items: [] });
       }),
     );
-    render(<TestProviders><AgentsThreads /></TestProviders>);
+    render(
+      <TestProviders>
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
+      </TestProviders>,
+    );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
     const list2 = await screen.findByTestId('message-list');
     // Both runs should render without scrolling
@@ -200,7 +213,9 @@ describe('AgentsThreads chat-like view', () => {
     );
     render(
       <TestProviders>
-        <AgentsThreads />
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
       </TestProviders>,
     );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
@@ -220,7 +235,13 @@ describe('AgentsThreads chat-like view', () => {
       http.get('/api/agents/runs/run1/messages', () => new HttpResponse(null, { status: 500 })),
       http.get(abs('/api/agents/runs/run1/messages'), () => new HttpResponse(null, { status: 500 })),
     );
-    render(<TestProviders><AgentsThreads /></TestProviders>);
+    render(
+      <TestProviders>
+        <MemoryRouter>
+          <AgentsThreads />
+        </MemoryRouter>
+      </TestProviders>,
+    );
     fireEvent.click(await screen.findByRole('button', { name: /Thread A/ }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });

@@ -9,6 +9,7 @@ import { AgentNode } from '../src/graph/nodes/agent/agent.node';
 import { HumanMessage } from '@agyn/llm';
 import { AgentsThreadsController } from '../src/agents/threads.controller';
 import { ContainerThreadTerminationService } from '../src/infra/container/containerThreadTermination.service';
+import { RunEventsService } from '../src/run-events/run-events.service';
 
 class StubLLMProvisioner extends LLMProvisioner {
   async getLLM(): Promise<{ call: (messages: unknown) => Promise<{ text: string; output: unknown[] }> }> {
@@ -49,6 +50,27 @@ describe('Fail-fast behavior', () => {
     const module = await Test.createTestingModule({
       controllers: [AgentsThreadsController],
       providers: [
+        {
+          provide: RunEventsService,
+          useValue: {
+            getRunSummary: async () => ({
+              status: 'unknown',
+              totalEvents: 0,
+              firstEventAt: null,
+              lastEventAt: null,
+              countsByType: {
+                invocation_message: 0,
+                injection: 0,
+                llm_call: 0,
+                tool_execution: 0,
+                summarization: 0,
+              },
+            }),
+            listRunEvents: async () => ({ items: [], nextCursor: null }),
+            getEventSnapshot: async () => null,
+            publishEvent: async () => null,
+          },
+        },
         {
           provide: AgentsPersistenceService,
           useValue: {

@@ -95,7 +95,13 @@ export class MemoryController {
     const rows = await prisma.$queryRaw<Array<{ node_id: string; scope: string; thread_id: string | null }>>`
       SELECT node_id, scope, thread_id FROM memories ORDER BY node_id ASC
     `;
-    return { items: rows.map((r) => ({ nodeId: r.node_id, scope: r.scope as MemoryScope, threadId: r.thread_id ?? undefined })) };
+    return {
+      items: rows.map((row) => ({
+        nodeId: row.node_id,
+        scope: row.scope as MemoryScope,
+        threadId: row.thread_id ?? undefined,
+      })),
+    };
   }
 
   @Get(':nodeId/:scope/list')

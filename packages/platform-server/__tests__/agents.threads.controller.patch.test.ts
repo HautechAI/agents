@@ -3,6 +3,26 @@ import { Test } from '@nestjs/testing';
 import { AgentsThreadsController } from '../src/agents/threads.controller';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { ContainerThreadTerminationService } from '../src/infra/container/containerThreadTermination.service';
+import { RunEventsService } from '../src/run-events/run-events.service';
+
+const runEventsStub = {
+  getRunSummary: async () => ({
+    status: 'unknown',
+    totalEvents: 0,
+    firstEventAt: null,
+    lastEventAt: null,
+    countsByType: {
+      invocation_message: 0,
+      injection: 0,
+      llm_call: 0,
+      tool_execution: 0,
+      summarization: 0,
+    },
+  }),
+  listRunEvents: async () => ({ items: [], nextCursor: null }),
+  getEventSnapshot: async () => null,
+  publishEvent: async () => null,
+};
 
 describe('AgentsThreadsController PATCH threads/:id', () => {
   it('accepts null summary and toggles status', async () => {
@@ -11,6 +31,10 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
     const module = await Test.createTestingModule({
       controllers: [AgentsThreadsController],
       providers: [
+        {
+          provide: RunEventsService,
+          useValue: runEventsStub,
+        },
         {
           provide: AgentsPersistenceService,
           useValue: {
@@ -57,6 +81,7 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
             listChildren: async () => [],
           },
         },
+        { provide: RunEventsService, useValue: runEventsStub },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: terminate } },
       ],
     }).compile();
@@ -84,6 +109,7 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
             listChildren: async () => [],
           },
         },
+        { provide: RunEventsService, useValue: runEventsStub },
         { provide: ContainerThreadTerminationService, useValue: { terminateByThread: terminate } },
       ],
     }).compile();

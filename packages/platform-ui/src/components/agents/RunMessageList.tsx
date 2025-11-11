@@ -25,9 +25,10 @@ type RunMessageListProps = {
   hasMoreAbove?: boolean;
   loadingMoreAbove?: boolean;
   onLoadMoreAbove?: () => void;
+  onViewRunTimeline?: (run: RunMeta) => void;
 };
 
-export function RunMessageList({ items, showJson, onToggleJson, isLoading, error, hasMoreAbove, loadingMoreAbove, onLoadMoreAbove }: RunMessageListProps) {
+export function RunMessageList({ items, showJson, onToggleJson, isLoading, error, hasMoreAbove, loadingMoreAbove, onLoadMoreAbove, onViewRunTimeline }: RunMessageListProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [atBottom, setAtBottom] = React.useState(true);
 
@@ -81,12 +82,24 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
             const shortId = run.id.slice(0, 8);
             const range = it.start && it.end ? `${new Date(it.start).toLocaleTimeString()}–${new Date(it.end).toLocaleTimeString()}` : '';
             return (
-              <div key={`hdr-${run.id}-${idx}`} className="self-center text-xs text-gray-600 my-1" role="separator" data-testid="run-header">
+              <div key={`hdr-${run.id}-${idx}`} className="self-center text-xs text-gray-600 my-1 flex items-center gap-2" role="separator" data-testid="run-header">
                 <span className="px-2 py-0.5 rounded border bg-white">run {shortId}</span>
-                <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-white"
+                <span
+                  className="inline-block px-1.5 py-0.5 rounded text-white"
                   style={{ backgroundColor: run.status === 'finished' ? '#16a34a' : run.status === 'running' ? '#2563eb' : '#6b7280' }}
-                >{run.status}</span>
-                {range && <span className="ml-2 text-gray-500">{range}</span>}
+                >
+                  {run.status}
+                </span>
+                {range && <span className="text-gray-500">{range}</span>}
+                {onViewRunTimeline && (
+                  <button
+                    type="button"
+                    className="ml-2 px-2 py-0.5 text-xs border rounded bg-white hover:bg-gray-100"
+                    onClick={() => onViewRunTimeline(run)}
+                  >
+                    Timeline
+                  </button>
+                )}
               </div>
             );
           }
