@@ -1,8 +1,7 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { CoreModule } from '../core/core.module';
 import { EnvModule } from '../env/env.module';
 import { EventsModule } from '../events/events.module';
-import { GraphModule } from '../graph/graph.module';
 import { InfraModule } from '../infra/infra.module';
 import { LLMModule } from '../llm/llm.module';
 import { PostgresMemoryRepository } from './memory/memory.repository';
@@ -31,7 +30,7 @@ import { LoggerService } from '../core/services/logger.service';
 import { EnvService } from '../env/env.service';
 
 @Module({
-  imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule, forwardRef(() => GraphModule)],
+  imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule],
   controllers: [RemindersController],
   providers: [
     PostgresMemoryRepository,

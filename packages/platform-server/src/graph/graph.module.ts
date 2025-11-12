@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CoreModule } from '../core/core.module';
 import { ConfigService } from '../core/services/config.service';
@@ -35,7 +35,7 @@ import { NodesModule } from '../nodes/nodes.module';
 import { EventsModule } from '../events/events.module';
 
 @Module({
-  imports: [CoreModule, InfraModule, EnvModule, EventsModule, forwardRef(() => NodesModule)],
+  imports: [CoreModule, InfraModule, EnvModule, EventsModule, NodesModule],
   controllers: [
     RunsController,
     GraphPersistController,
