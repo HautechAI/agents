@@ -14,7 +14,7 @@ import { stringify } from 'yaml';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMProvisioner } from '../provisioners/llm.provisioner';
 import { LoggerService } from '../../core/services/logger.service';
-import { RunEventsService } from '../../run-events/run-events.service';
+import { RunEventsService } from '../../events/run-events.service';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 import { Prisma } from '@prisma/client';
 

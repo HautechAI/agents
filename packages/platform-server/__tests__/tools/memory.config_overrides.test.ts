@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../../src/graph/nodes/tools/memory/memory.tool';
-import { MemoryToolNodeStaticConfigSchema as UnifiedMemoryToolNodeStaticConfigSchema } from '../../src/graph/nodes/tools/memory/memory.node';
+import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../../src/nodes/tools/memory/memory.tool';
+import { MemoryToolNodeStaticConfigSchema as UnifiedMemoryToolNodeStaticConfigSchema } from '../../src/nodes/tools/memory/memory.node';
 import { LoggerService } from '../../src/core/services/logger.service';
 import { TemplateRegistry } from '../../src/graph/templateRegistry';
 import { toJSONSchema } from 'zod';
@@ -10,7 +10,7 @@ describe('UnifiedMemoryTool config overrides and templates exposure', () => {
   it('applies name/description overrides and keeps defaults', async () => {
     // New API: config applied at node level; tool pulls metadata from node
     const logger = new LoggerService();
-    const node = new (await import('../../src/graph/nodes/tools/memory/memory.node')).MemoryToolNode(logger);
+    const node = new (await import('../../src/nodes/tools/memory/memory.node')).MemoryToolNode(logger);
     await node.setConfig({ description: 'Custom desc' });
     const tool = node.getTool();
     expect(tool.name).toBe('memory');
@@ -24,7 +24,7 @@ describe('UnifiedMemoryTool config overrides and templates exposure', () => {
 
   it('accepts string name; schema exposed via templates (no runtime validation)', async () => {
     const logger = new LoggerService();
-    const node = new (await import('../../src/graph/nodes/tools/memory/memory.node')).MemoryToolNode(logger);
+    const node = new (await import('../../src/nodes/tools/memory/memory.node')).MemoryToolNode(logger);
     await node.setConfig({ name: 'Bad-Name' });
     const tool = node.getTool();
     expect(typeof tool.name).toBe('string');

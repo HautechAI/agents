@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { LoggerService } from '../src/core/services/logger.service';
 import { ConfigService } from '../src/core/services/config.service';
-import { AgentNode } from '../src/graph/nodes/agent/agent.node';
+import { AgentNode } from '../src/nodes/agent/agent.node';
 import { AIMessage, HumanMessage, ResponseMessage } from '@agyn/llm';
 import { Loop, Reducer } from '@agyn/llm';
 import type { LLMContext, LLMState } from '../src/llm/types';

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { GraphSocketGateway } from '../src/gateway/graph.socket.gateway';
 import { LoggerService } from '../src/core/services/logger.service';
-import Node from '../src/graph/nodes/base/Node';
+import Node from '../src/nodes/base/Node';
 
 class DummyNode extends Node<Record<string, unknown>> { getPortConfig() { return { sourcePorts: { $self: { kind: 'instance' } } } as const; } }
 

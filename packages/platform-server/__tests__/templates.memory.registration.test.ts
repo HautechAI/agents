@@ -6,15 +6,15 @@ import { ContainerService } from '../src/infra/container/container.service';
 import { ConfigService } from '../src/core/services/config.service';
 import type { MongoService } from '../src/core/services/mongo.service';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
-import { WorkspaceNode } from '../src/graph/nodes/workspace/workspace.node';
-import { ShellCommandNode } from '../src/graph/nodes/tools/shell_command/shell_command.node';
-import { MemoryNode } from '../src/graph/nodes/memory/memory.node';
-import { MemoryConnectorNode } from '../src/graph/nodes/memoryConnector/memoryConnector.node';
+import { WorkspaceNode } from '../src/nodes/workspace/workspace.node';
+import { ShellCommandNode } from '../src/nodes/tools/shell_command/shell_command.node';
+import { MemoryNode } from '../src/nodes/memory/memory.node';
+import { MemoryConnectorNode } from '../src/nodes/memoryConnector/memoryConnector.node';
 import { EnvService } from '../src/env/env.service';
 import { ArchiveService } from '../src/infra/archive/archive.service';
 import { NcpsKeyService } from '../src/infra/ncps/ncpsKey.service';
-import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
-import { MemoryService } from '../src/graph/nodes/memory.service';
+import { PostgresMemoryRepository } from '../src/nodes/memory/memory.repository';
+import { MemoryService } from '../src/nodes/memory/memory.service';
 import { PrismaClient } from '@prisma/client';
 
 // Build a registry and assert memory templates and agent memory port wiring are present.

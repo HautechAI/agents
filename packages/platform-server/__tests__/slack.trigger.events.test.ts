@@ -107,13 +107,13 @@ vi.mock('../src/core/services/prisma.service', () => {
 declare module '@slack/socket-mode' {
   export function __getLastSocketClient(): { handlers: { message?: Array<(env: SlackEnvelope) => Promise<void> | void> } } | null;
 }
-import { SlackTrigger } from '../src/graph/nodes/slackTrigger/slackTrigger.node';
+import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import { __getLastSocketClient } from '@slack/socket-mode';
 import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 // Avoid importing AgentsPersistenceService to prevent @prisma/client load in unit tests
 // We pass a stub object where needed.
 
-import type { BufferMessage } from '../src/graph/nodes/agent/messagesBuffer';
+import type { BufferMessage } from '../src/nodes/agent/messagesBuffer';
 
 describe('SlackTrigger events', () => {
   const makeLogger = (): Pick<LoggerService, 'info' | 'debug' | 'error'> => ({

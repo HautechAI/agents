@@ -4,8 +4,8 @@ import { LoggerService } from '../src/core/services/logger.service';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
 import { EnvService } from '../src/env/env.service';
 import { VaultService } from '../src/vault/vault.service';
-import { ShellCommandNode } from '../src/graph/nodes/tools/shell_command/shell_command.node';
-import { LocalMCPServerNode } from '../src/graph/nodes/mcp/localMcpServer.node';
+import { ShellCommandNode } from '../src/nodes/tools/shell_command/shell_command.node';
+import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 import { Signal } from '../src/signal';
 
 class FakeContainer {

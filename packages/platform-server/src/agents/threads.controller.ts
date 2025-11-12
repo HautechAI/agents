@@ -5,7 +5,7 @@ import { Transform, Expose } from 'class-transformer';
 import type { RunEventStatus, RunEventType, RunMessageType, ThreadStatus } from '@prisma/client';
 import { ContainerThreadTerminationService } from '../infra/container/containerThreadTermination.service';
 import type { ThreadMetrics } from './threads.metrics.service';
-import { RunEventsService } from '../run-events/run-events.service';
+import { RunEventsService } from '../events/run-events.service';
 
 // Avoid runtime import of Prisma in tests; enumerate allowed values
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'injected', 'output'];

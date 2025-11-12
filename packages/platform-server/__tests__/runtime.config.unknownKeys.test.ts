@@ -6,7 +6,7 @@ import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import { GraphDefinition, GraphError } from '../src/graph/types';
 import { ModuleRef } from '@nestjs/core';
-import { MemoryNode, MemoryNodeStaticConfigSchema } from '../src/graph/nodes/memory/memory.node';
+import { MemoryNode, MemoryNodeStaticConfigSchema } from '../src/nodes/memory/memory.node';
 
 const makeRuntime = () => {
   const logger = new LoggerService();

@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { LoggerService } from '../src/core/services/logger.service.js';
-import { ManageToolNode } from '../src/graph/nodes/tools/manage/manage.node';
-import { ManageFunctionTool } from '../src/graph/nodes/tools/manage/manage.tool';
+import { ManageToolNode } from '../src/nodes/tools/manage/manage.node';
+import { ManageFunctionTool } from '../src/nodes/tools/manage/manage.tool';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import { ModuleRef } from '@nestjs/core';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
-import { AgentNode } from '../src/graph/nodes/agent/agent.node';
+import { AgentNode } from '../src/nodes/agent/agent.node';
 import { ConfigService } from '../src/core/services/config.service';
 import { MongoService } from '../src/core/services/mongo.service';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';

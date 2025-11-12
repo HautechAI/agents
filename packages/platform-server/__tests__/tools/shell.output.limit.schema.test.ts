@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ShellToolStaticConfigSchema } from '../../src/graph/nodes/tools/shell_command/shell_command.node';
+import { ShellToolStaticConfigSchema } from '../../src/nodes/tools/shell_command/shell_command.node';
 
 describe('ShellToolStaticConfigSchema outputLimitChars', () => {
   it('accepts 0 (disabled)', () => {
@@ -23,4 +23,3 @@ describe('ShellToolStaticConfigSchema outputLimitChars', () => {
     }
   });
 });
-

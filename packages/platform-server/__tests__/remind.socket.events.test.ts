@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RemindMeNode } from '../src/graph/nodes/tools/remind_me/remind_me.node';
+import { RemindMeNode } from '../src/nodes/tools/remind_me/remind_me.node';
 import { LoggerService } from '../src/core/services/logger.service';
 
 describe('RemindMe socket reminder_count events', () => {

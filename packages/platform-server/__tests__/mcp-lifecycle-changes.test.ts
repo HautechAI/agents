@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LocalMCPServerNode } from '../src/graph/nodes/mcp/localMcpServer.node';
+import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 import { McpServerConfig } from '../src/mcp/types.js';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { ContainerService } from '../src/infra/container/container.service';

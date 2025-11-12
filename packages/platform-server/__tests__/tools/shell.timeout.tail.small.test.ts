@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ShellCommandNode } from '../../src/graph/nodes/tools/shell_command/shell_command.node';
+import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
 import { LoggerService } from '../../src/core/services/logger.service';
 import { ExecTimeoutError } from '../../src/utils/execTimeout';
 import { ContainerHandle } from '../../src/infra/container/container.handle';

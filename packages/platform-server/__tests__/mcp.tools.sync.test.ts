@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LocalMCPServerNode } from '../src/graph/nodes/mcp/localMcpServer.node';
+import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 
 class MockLogger { info=vi.fn(); debug=vi.fn(); error=vi.fn(); }
 class MockContainerService { getDocker(){ return {}; } }

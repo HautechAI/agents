@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { SendSlackMessageNode } from '../src/graph/nodes/tools/send_slack_message/send_slack_message.node';
-import { SendSlackMessageFunctionTool } from '../src/graph/nodes/tools/send_slack_message/send_slack_message.tool';
+import { SendSlackMessageNode } from '../src/nodes/tools/send_slack_message/send_slack_message.node';
+import { SendSlackMessageFunctionTool } from '../src/nodes/tools/send_slack_message/send_slack_message.tool';
 import { LoggerService } from '../src/core/services/logger.service';
 
 vi.mock('@slack/web-api', () => {

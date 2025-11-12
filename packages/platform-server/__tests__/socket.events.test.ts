@@ -4,7 +4,7 @@ import { GraphSocketGateway } from '../src/gateway/graph.socket.gateway';
 import { LoggerService } from '../src/core/services/logger.service';
 import { PrismaService } from '../src/core/services/prisma.service';
 import { ThreadsMetricsService } from '../src/agents/threads.metrics.service';
-import Node from '../src/graph/nodes/base/Node';
+import Node from '../src/nodes/base/Node';
 
 // Minimal Test Node to trigger status changes
 class TestNode extends Node<Record<string, unknown>> {
