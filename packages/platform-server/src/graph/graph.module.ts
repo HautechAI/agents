@@ -7,8 +7,6 @@ import { MongoService } from '../core/services/mongo.service';
 import { ContainerService } from '../infra/container/container.service';
 import { InfraModule } from '../infra/infra.module';
 import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
-import { LLMModule } from '../llm/llm.module';
-import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
 
 import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { AgentsRemindersController } from '../agents/reminders.controller';
@@ -52,9 +50,10 @@ import { NodeStateService } from './nodeState.service';
 import { PortsRegistry } from './ports.registry';
 import { GraphVariablesService } from './services/graphVariables.service';
 import { TemplateRegistry } from './templateRegistry';
+import { RunEventsService } from '../run-events/run-events.service';
 
 @Module({
-  imports: [CoreModule, InfraModule, LLMModule, EnvModule],
+  imports: [CoreModule, InfraModule, EnvModule],
   controllers: [
     RunsController,
     GraphPersistController,
@@ -78,7 +77,6 @@ import { TemplateRegistry } from './templateRegistry';
         containerService: ContainerService,
         configService: ConfigService,
         mongoService: MongoService,
-        provisioner: LLMProvisioner,
         ncpsKeyService: NcpsKeyService,
         module: ModuleRef,
       ) =>
@@ -87,11 +85,10 @@ import { TemplateRegistry } from './templateRegistry';
           containerService,
           configService,
           mongoService,
-          provisioner,
           ncpsKeyService,
           moduleRef: module,
         }),
-      inject: [LoggerService, ContainerService, ConfigService, MongoService, LLMProvisioner, NcpsKeyService, ModuleRef],
+      inject: [LoggerService, ContainerService, ConfigService, MongoService, NcpsKeyService, ModuleRef],
     },
     PortsRegistry,
     {
@@ -162,6 +159,7 @@ import { TemplateRegistry } from './templateRegistry';
     RemindMeNode,
     // Standard DI for GraphVariablesService
     GraphVariablesService,
+    RunEventsService,
   ],
   exports: [
     LiveGraphRuntime,

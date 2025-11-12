@@ -19,7 +19,6 @@ import { MongoService } from './core/services/mongo.service';
 
 import { ContainerService } from './infra/container/container.service';
 import { NcpsKeyService } from './infra/ncps/ncpsKey.service';
-import { LLMProvisioner } from './llm/provisioners/llm.provisioner';
 import { RemindMeNode } from './graph/nodes/tools/remind_me/remind_me.node';
 import { ShellCommandNode } from './graph/nodes/tools/shell_command/shell_command.node';
 import { SendSlackMessageNode } from './graph/nodes/tools/send_slack_message/send_slack_message.node';
@@ -31,7 +30,6 @@ export interface TemplateRegistryDeps {
   containerService: ContainerService;
   configService: ConfigService;
   mongoService: MongoService; // required for memory nodes
-  provisioner: LLMProvisioner;
   ncpsKeyService?: NcpsKeyService;
   moduleRef: ModuleRef;
 }
