@@ -11,7 +11,8 @@ describe('LocalMCPServerNode listTools filtering by enabledTools', () => {
   beforeEach(async () => {
     logger = new MockLogger();
     const nodeStateService = { getSnapshot: vi.fn((_id: string) => ({ mcp: { enabledTools: [] } })) } as any;
-    server = new LocalMCPServerNode(new MockContainerService() as any, logger as any, undefined as any, undefined as any, undefined as any, nodeStateService as any);
+    const moduleRef = { get: vi.fn(() => nodeStateService) } as any;
+    server = new LocalMCPServerNode(new MockContainerService() as any, logger as any, undefined as any, undefined as any, undefined as any, moduleRef);
     // Manually init nodeId since we are not running through runtime
     (server as any).init({ nodeId: 'node-1' });
     await server.setConfig({ namespace: 'ns' } as any);

@@ -14,9 +14,10 @@ import { LocalMCPServerTool } from './localMcpServer.tool';
 import { DEFAULT_MCP_COMMAND, McpError, type McpTool, McpToolCallResult, PersistedMcpState } from './types';
 import { NodeStateService } from '../../graph/nodeState.service';
 import Node from '../base/Node';
-import { Inject, Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope, Optional } from '@nestjs/common';
 import { jsonSchemaToZod } from '@agyn/json-schema-to-zod';
 import { isEqual } from 'lodash-es';
+import { ModuleRef } from '@nestjs/core';
 
 const EnvItemSchema = z
   .object({
@@ -111,9 +112,23 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     @Inject(VaultService) protected vault: VaultService,
     @Inject(EnvService) protected envService: EnvService,
     @Inject(ConfigService) protected configService: ConfigService,
-    @Inject(NodeStateService) protected nodeStateService?: NodeStateService,
+    @Inject(ModuleRef) @Optional() private readonly moduleRef?: ModuleRef,
   ) {
     super(logger);
+  }
+
+  private nodeStateService?: NodeStateService;
+
+  private getNodeStateService(): NodeStateService | undefined {
+    if (!this.nodeStateService) {
+      if (!this.moduleRef) return undefined;
+      try {
+        this.nodeStateService = this.moduleRef.get(NodeStateService, { strict: false });
+      } catch {
+        this.nodeStateService = undefined;
+      }
+    }
+    return this.nodeStateService;
   }
 
   get namespace(): string {
@@ -276,8 +291,9 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
             toolsUpdatedAt: this.lastToolsUpdatedAt,
           },
         };
-        if (this.nodeStateService) {
-          await this.nodeStateService.upsertNodeState(this.nodeId, state as Record<string, unknown>);
+        const nodeStateService = this.getNodeStateService();
+        if (nodeStateService) {
+          await nodeStateService.upsertNodeState(this.nodeId, state as Record<string, unknown>);
         }
       } catch (e) {
         this.logger.error(`[MCP:${this.config.namespace}] Failed to persist state`, e);
@@ -344,7 +360,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     // Prefer NodeStateService snapshot
     let enabledList: string[] | undefined;
     try {
-      const snap = this.nodeStateService?.getSnapshot(this.nodeId) as { mcp?: { enabledTools?: string[] } } | undefined;
+      const snap = this.getNodeStateService()?.getSnapshot(this.nodeId) as { mcp?: { enabledTools?: string[] } } | undefined;
       if (snap && snap.mcp && Array.isArray(snap.mcp.enabledTools)) {
         enabledList = [...snap.mcp.enabledTools];
       }

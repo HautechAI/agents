@@ -4,6 +4,7 @@ import { EnvModule } from '../env/env.module';
 import { EventsModule } from '../events/events.module';
 import { InfraModule } from '../infra/infra.module';
 import { LLMModule } from '../llm/llm.module';
+import { GraphServicesModule } from '../graph/graph-services.module';
 import { PostgresMemoryRepository } from './memory/memory.repository';
 import { MemoryService } from './memory/memory.service';
 import { MemoryNode } from './memory/memory.node';
@@ -21,7 +22,6 @@ import { SendMessageNode } from './tools/send_message/send_message.node';
 import { ShellCommandNode } from './tools/shell_command/shell_command.node';
 import { GithubCloneRepoNode } from './tools/github_clone_repo/github_clone_repo.node';
 import { RemindMeNode } from './tools/remind_me/remind_me.node';
-import { RemindersController } from './tools/remind_me/reminders.controller';
 import { WorkspaceNode } from './workspace/workspace.node';
 import { ContainerService } from '../infra/container/container.service';
 import { ConfigService } from '../core/services/config.service';
@@ -30,8 +30,7 @@ import { LoggerService } from '../core/services/logger.service';
 import { EnvService } from '../env/env.service';
 
 @Module({
-  imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule],
-  controllers: [RemindersController],
+  imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule, GraphServicesModule],
   providers: [
     PostgresMemoryRepository,
     MemoryService,

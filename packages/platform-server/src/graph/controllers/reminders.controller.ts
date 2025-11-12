@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Query, HttpException, HttpStatus, Inject } from '@nestjs/common';
-import { LoggerService } from '../../../core/services/logger.service';
-import { LiveGraphRuntime as RuntimeService } from '../../../graph/liveGraph.manager';
+import { LoggerService } from '../../core/services/logger.service';
+import { LiveGraphRuntime as RuntimeService } from '../liveGraph.manager';
 import type { Reminder } from '@prisma/client';
 
 interface RemindMeInspectable {
