@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "memories" ALTER COLUMN "id" DROP DEFAULT,
+ALTER COLUMN "updated_at" DROP DEFAULT;
