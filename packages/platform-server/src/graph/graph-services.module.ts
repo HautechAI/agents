@@ -1,0 +1,69 @@
+import { Module } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
+import { AgentsPersistenceService } from '../agents/agents.persistence.service';
+import { ThreadsMetricsService } from '../agents/threads.metrics.service';
+import { CoreModule } from '../core/core.module';
+import { ConfigService } from '../core/services/config.service';
+import { LoggerService } from '../core/services/logger.service';
+import { MongoService } from '../core/services/mongo.service';
+import { EventsModule } from '../events/events.module';
+import { InfraModule } from '../infra/infra.module';
+import { ContainerService } from '../infra/container/container.service';
+import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
+import { buildTemplateRegistry } from '../templates';
+import { GitGraphRepository } from './gitGraph.repository';
+import { GraphRepository } from './graph.repository';
+import { MongoGraphRepository } from './graphMongo.repository';
+import { PortsRegistry } from './ports.registry';
+import { TemplateRegistry } from './templateRegistry';
+
+@Module({
+  imports: [CoreModule, InfraModule, EventsModule],
+  providers: [
+    ThreadsMetricsService,
+    {
+      provide: TemplateRegistry,
+      useFactory: (
+        logger: LoggerService,
+        containerService: ContainerService,
+        configService: ConfigService,
+        mongoService: MongoService,
+        ncpsKeyService: NcpsKeyService,
+        moduleRef: ModuleRef,
+      ) =>
+        buildTemplateRegistry({
+          logger,
+          containerService,
+          configService,
+          mongoService,
+          ncpsKeyService,
+          moduleRef,
+        }),
+      inject: [LoggerService, ContainerService, ConfigService, MongoService, NcpsKeyService, ModuleRef],
+    },
+    PortsRegistry,
+    {
+      provide: GraphRepository,
+      useFactory: async (
+        config: ConfigService,
+        logger: LoggerService,
+        mongo: MongoService,
+        templateRegistry: TemplateRegistry,
+      ) => {
+        if (config.graphStore === 'git') {
+          const svc = new GitGraphRepository(config, logger, templateRegistry);
+          await svc.initIfNeeded();
+          return svc;
+        } else {
+          const svc = new MongoGraphRepository(mongo.getDb(), logger, templateRegistry, config);
+          await svc.initIfNeeded();
+          return svc;
+        }
+      },
+      inject: [ConfigService, LoggerService, MongoService, TemplateRegistry],
+    },
+    AgentsPersistenceService,
+  ],
+  exports: [ThreadsMetricsService, TemplateRegistry, PortsRegistry, GraphRepository, AgentsPersistenceService],
+})
+export class GraphServicesModule {}

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { PostgresMemoryRepository } from '../../src/graph/nodes/memory.repository';
-import { MemoryService } from '../../src/graph/nodes/memory.service';
-import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../../src/graph/nodes/tools/memory/memory.tool';
+import { PostgresMemoryRepository } from '../../src/nodes/memory/memory.repository';
+import { MemoryService } from '../../src/nodes/memory/memory.service';
+import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../../src/nodes/tools/memory/memory.tool';
 import { LoggerService } from '../../src/core/services/logger.service';
-import { MemoryToolNode } from '../../src/graph/nodes/tools/memory/memory.node';
+import { MemoryToolNode } from '../../src/nodes/tools/memory/memory.node';
 
 const URL = process.env.AGENTS_DATABASE_URL;
 const maybeDescribe = URL ? describe : describe.skip;

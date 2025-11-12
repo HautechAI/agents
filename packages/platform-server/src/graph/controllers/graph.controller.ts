@@ -4,7 +4,7 @@ import { TemplateRegistry } from '../templateRegistry';
 import type { TemplateNodeSchema } from '../types';
 import { LiveGraphRuntime } from '../liveGraph.manager';
 import { LoggerService } from '../../core/services/logger.service';
-import type { NodeStatusState } from '../../graph/nodes/base/Node';
+import type { NodeStatusState } from '../../nodes/base/Node';
 import { NodeStateService } from '../nodeState.service';
 
 @Controller('api/graph')

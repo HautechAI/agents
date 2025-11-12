@@ -7,15 +7,15 @@ import { Signal } from '../src/signal';
 import { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { GraphDefinition } from '../src/graph/types';
 import { LoggerService } from '../src/core/services/logger.service';
-import Node from '../src/graph/nodes/base/Node';
+import Node from '../src/nodes/base/Node';
 import { GraphRepository } from '../src/graph/graph.repository';
 import {
   MemoryConnectorNode,
   type MemoryConnectorStaticConfig,
-} from '../src/graph/nodes/memoryConnector/memoryConnector.node';
-import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
-import { MemoryService } from '../src/graph/nodes/memory.service';
-import type { MemoryScope } from '../src/graph/nodes/memory.types';
+} from '../src/nodes/memoryConnector/memoryConnector.node';
+import { PostgresMemoryRepository } from '../src/nodes/memory/memory.repository';
+import { MemoryService } from '../src/nodes/memory/memory.service';
+import type { MemoryScope } from '../src/nodes/memory/memory.types';
 import type { TemplatePortConfig } from '../src/graph/ports.types';
 
 // Minimal ModuleRef surface used by TemplateRegistry/LiveGraphRuntime in this test

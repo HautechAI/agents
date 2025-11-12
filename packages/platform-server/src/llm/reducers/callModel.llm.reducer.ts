@@ -3,7 +3,7 @@ import { LLMResponse, withLLM } from '@agyn/tracing';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMContext, LLMMessage, LLMState } from '../types';
 import { LoggerService } from '../../core/services/logger.service';
-import { RunEventsService, ToolCallRecord } from '../../run-events/run-events.service';
+import { RunEventsService, ToolCallRecord } from '../../events/run-events.service';
 import { RunEventStatus, Prisma } from '@prisma/client';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 

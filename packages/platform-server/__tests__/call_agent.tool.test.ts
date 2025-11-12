@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CallAgentTool } from '../src/graph/nodes/tools/call_agent/call_agent.node';
+import { CallAgentTool } from '../src/nodes/tools/call_agent/call_agent.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { ResponseMessage, AIMessage, HumanMessage } from '@agyn/llm';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';

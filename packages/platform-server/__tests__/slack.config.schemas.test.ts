@@ -6,7 +6,7 @@ vi.mock('../src/agents/agents.persistence.service', () => ({ AgentsPersistenceSe
 
 describe('Slack static config schemas', () => {
   it('SendSlackMessageToolStaticConfigSchema: accepts xoxb- tokens or reference field', async () => {
-    const { SendSlackMessageToolStaticConfigSchema } = await import('../src/graph/nodes/tools/send_slack_message/send_slack_message.tool');
+    const { SendSlackMessageToolStaticConfigSchema } = await import('../src/nodes/tools/send_slack_message/send_slack_message.tool');
     expect(() => SendSlackMessageToolStaticConfigSchema.parse({ bot_token: 'xoxb-123' })).not.toThrow();
     expect(() => SendSlackMessageToolStaticConfigSchema.parse({ bot_token: { value: 'xoxb-abc', source: 'static' } })).not.toThrow();
     // vault ref is allowed syntactically; deeper validation occurs in setConfig
@@ -14,7 +14,7 @@ describe('Slack static config schemas', () => {
   });
 
   it('SlackTriggerStaticConfigSchema: requires app_token and bot_token reference fields', async () => {
-    const { SlackTriggerStaticConfigSchema } = await import('../src/graph/nodes/slackTrigger/slackTrigger.node');
+    const { SlackTriggerStaticConfigSchema } = await import('../src/nodes/slackTrigger/slackTrigger.node');
     expect(() => SlackTriggerStaticConfigSchema.parse({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-abc', source: 'static' } })).not.toThrow();
     expect(() => SlackTriggerStaticConfigSchema.parse({ app_token: { value: 'secret/path/APP', source: 'vault' }, bot_token: { value: 'secret/path/BOT', source: 'vault' } })).not.toThrow();
   });

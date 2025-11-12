@@ -3,12 +3,12 @@ import { ResponseMessage, AIMessage, HumanMessage } from '@agyn/llm';
 import { LoggerService } from '../src/core/services/logger.service';
 import { ConfigService } from '../src/core/services/config.service';
 
-import { AgentNode as Agent } from '../src/graph/nodes/agent/agent.node';
+import { AgentNode as Agent } from '../src/nodes/agent/agent.node';
 import { Test } from '@nestjs/testing';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import { PrismaService } from '../src/core/services/prisma.service';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
-import { RunEventsService } from '../src/run-events/run-events.service';
+import { RunEventsService } from '../src/events/run-events.service';
 import { createRunEventsStub } from './helpers/runEvents.stub';
 
 describe('Agent summarization graph', () => {

@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { AgentsThreadsController } from '../src/agents/threads.controller';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { ContainerThreadTerminationService } from '../src/infra/container/containerThreadTermination.service';
-import { RunEventsService } from '../src/run-events/run-events.service';
+import { RunEventsService } from '../src/events/run-events.service';
 
 const runEventsStub = {
   getRunSummary: async () => ({

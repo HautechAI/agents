@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { LoggerService } from '../src/core/services/logger.service';
-import { SlackTrigger } from '../src/graph/nodes/slackTrigger/slackTrigger.node';
+import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 
 type ChannelDescriptor = import('../src/messaging/types').ChannelDescriptor;

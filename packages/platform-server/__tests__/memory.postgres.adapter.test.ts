@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { PostgresMemoryRepository } from '../src/graph/nodes/memory.repository';
-import { MemoryService } from '../src/graph/nodes/memory.service';
+import { PostgresMemoryRepository } from '../src/nodes/memory/memory.repository';
+import { MemoryService } from '../src/nodes/memory/memory.service';
 
 // Integration test against Postgres (requires AGENTS_DATABASE_URL env)
 const URL = process.env.AGENTS_DATABASE_URL;

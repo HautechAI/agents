@@ -15,6 +15,7 @@ export abstract class GraphEventsPublisher {
   abstract emitRunEvent(runId: string, threadId: string, payload: RunEventBroadcast): void;
   abstract scheduleThreadMetrics(threadId: string): void;
   abstract scheduleThreadAndAncestorsMetrics(threadId: string): Promise<void> | void;
+  abstract emitReminderCount(nodeId: string, count: number, updatedAtMs?: number): void;
 }
 
 // No-op publisher for tests or environments without sockets
@@ -26,4 +27,5 @@ export class NoopGraphEventsPublisher extends GraphEventsPublisher {
   emitRunEvent(_runId: string, _threadId: string, _payload: RunEventBroadcast): void {}
   scheduleThreadMetrics(_threadId: string): void {}
   async scheduleThreadAndAncestorsMetrics(_threadId: string): Promise<void> {}
+  emitReminderCount(_nodeId: string, _count: number, _updatedAtMs?: number): void {}
 }

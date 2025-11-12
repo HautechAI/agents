@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RemindMeFunctionTool } from '../src/graph/nodes/tools/remind_me/remind_me.tool';
+import { RemindMeFunctionTool } from '../src/nodes/tools/remind_me/remind_me.tool';
 import { SystemMessage } from '@agyn/llm';
 import { LoggerService } from '../src/core/services/logger.service';
 
@@ -222,7 +222,7 @@ describe('RemindMeTool', () => {
       scheduleThreadMetrics: vi.fn(() => {}),
     };
     // Use node to wire tool registry events to gateway
-    const { RemindMeNode } = await import('../src/graph/nodes/tools/remind_me/remind_me.node');
+    const { RemindMeNode } = await import('../src/nodes/tools/remind_me/remind_me.node');
     const node = new RemindMeNode(logger as any, gatewayStub, prismaStub as any);
     node.init({ nodeId: 'node-m' });
     await node.provision();

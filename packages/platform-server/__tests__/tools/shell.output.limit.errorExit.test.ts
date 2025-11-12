@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ModuleRef } from '@nestjs/core';
-import { ShellCommandNode } from '../../src/graph/nodes/tools/shell_command/shell_command.node';
+import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
 import { LoggerService } from '../../src/core/services/logger.service';
 import type { EnvService } from '../../src/env/env.service';
 import type { ArchiveService } from '../../src/infra/archive/archive.service';

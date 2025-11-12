@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { LoggerService } from '../src/core/services/logger.service';
-import { CallAgentTool } from '../src/graph/nodes/tools/call_agent/call_agent.node';
+import { CallAgentTool } from '../src/nodes/tools/call_agent/call_agent.node';
 import { ResponseMessage, HumanMessage } from '@agyn/llm';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { NoopGraphEventsPublisher } from '../src/gateway/graph.events.publisher';

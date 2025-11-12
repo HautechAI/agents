@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { SendMessageFunctionTool } from '../src/graph/nodes/tools/send_message/send_message.tool';
+import { SendMessageFunctionTool } from '../src/nodes/tools/send_message/send_message.tool';
 import { LoggerService } from '../src/core/services/logger.service';
 // Avoid importing PrismaService to prevent prisma client load
-import { SlackTrigger } from '../src/graph/nodes/slackTrigger/slackTrigger.node';
+import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import type { VaultRef } from '../src/vault/vault.service';
 

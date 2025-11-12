@@ -12,7 +12,7 @@ import { ConfigService } from '../src/core/services/config.service.js';
 import type { Config } from '../src/core/services/config.service.js';
 // PrismaService removed from test harness; use minimal DI stubs
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
-import { AgentNode } from '../src/graph/nodes/agent/agent.node';
+import { AgentNode } from '../src/nodes/agent/agent.node';
 import { MongoService } from '../src/core/services/mongo.service.js';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 

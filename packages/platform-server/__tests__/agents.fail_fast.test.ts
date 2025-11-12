@@ -5,11 +5,11 @@ import { ConfigService } from '../src/core/services/config.service';
 import { ModuleRef } from '@nestjs/core';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
-import { AgentNode } from '../src/graph/nodes/agent/agent.node';
+import { AgentNode } from '../src/nodes/agent/agent.node';
 import { HumanMessage } from '@agyn/llm';
 import { AgentsThreadsController } from '../src/agents/threads.controller';
 import { ContainerThreadTerminationService } from '../src/infra/container/containerThreadTermination.service';
-import { RunEventsService } from '../src/run-events/run-events.service';
+import { RunEventsService } from '../src/events/run-events.service';
 
 class StubLLMProvisioner extends LLMProvisioner {
   async getLLM(): Promise<{ call: (messages: unknown) => Promise<{ text: string; output: unknown[] }> }> {
