@@ -6,7 +6,6 @@ import { AgentsThreadsController } from '../agents/threads.controller';
 import { EnvModule } from '../env/env.module';
 import { GraphSocketGateway } from '../gateway/graph.socket.gateway';
 import { GraphEventsPublisher } from '../gateway/graph.events.publisher';
-import { SlackAdapter } from '../messaging/slack/slack.adapter';
 import { GraphController } from './controllers/graph.controller';
 import { GraphPersistController } from './controllers/graphPersist.controller';
 import { GraphVariablesController } from './controllers/graphVariables.controller';
@@ -46,8 +45,6 @@ import { RemindersController } from './controllers/reminders.controller';
       provide: GraphEventsPublisher,
       useExisting: GraphSocketGateway,
     },
-    // Messaging adapters
-    SlackAdapter,
     // PrismaService is injected by type; no string token aliasing required
     // Standard DI for GraphVariablesService
     GraphVariablesService,

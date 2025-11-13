@@ -11,6 +11,7 @@ import { MemoryNode } from './memory/memory.node';
 import { MemoryConnectorNode } from './memoryConnector/memoryConnector.node';
 import { AgentNode } from './agent/agent.node';
 import { SlackTrigger } from './slackTrigger/slackTrigger.node';
+import { SlackAdapter } from '../messaging/slack/slack.adapter';
 import { LocalMCPServerNode } from './mcp';
 import { ManageToolNode } from './tools/manage/manage.node';
 import { ManageFunctionTool } from './tools/manage/manage.tool';
@@ -32,6 +33,7 @@ import { EnvService } from '../env/env.service';
 @Module({
   imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule, GraphServicesModule],
   providers: [
+    SlackAdapter,
     PostgresMemoryRepository,
     MemoryService,
     MemoryNode,
@@ -62,6 +64,7 @@ import { EnvService } from '../env/env.service';
     },
   ],
   exports: [
+    SlackAdapter,
     PostgresMemoryRepository,
     MemoryService,
     MemoryNode,
