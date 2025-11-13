@@ -259,7 +259,7 @@ describe('AgentsRunTimeline layout and selection', () => {
     expect(getByText('Details')).toBeInTheDocument();
   });
 
-  it('opens details in an accessible modal on mobile and clears selection on close', () => {
+  it('opens details in an accessible modal on mobile and clears selection on close', async () => {
     setMatchMedia(false);
     const { getAllByText, queryByRole, getByRole, getByTestId } = renderPage([
       '/agents/threads/thread-1/runs/run-1',
@@ -272,16 +272,20 @@ describe('AgentsRunTimeline layout and selection', () => {
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: 'Tool Execution — Search Tool' })).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    const overlay = getByRole('presentation');
+    fireEvent.click(overlay);
 
     expect(queryByRole('dialog')).toBeNull();
     expect(getByTestId('location').textContent).not.toContain('eventId=');
+    await waitFor(() => {
+      expect(document.activeElement?.getAttribute('data-event-id')).toBe('event-1');
+    });
   });
 });
 
 describe('AgentsRunTimeline socket reactions', () => {
   it('updates list on run_event_appended and triggers refetch on reconnect', async () => {
-    const { findByText, getByTestId, unmount } = renderPage([
+    const { findByText, getByTestId, getByRole, unmount } = renderPage([
       '/agents/threads/thread-1/runs/run-1?eventId=event-1',
     ]);
 
@@ -306,15 +310,43 @@ describe('AgentsRunTimeline socket reactions', () => {
     await findByText('Summarization');
     expect(summaryRefetch).toHaveBeenCalledTimes(1);
 
+    const listbox = getByRole('listbox');
+
+    await act(async () => {
+      socketMocks.runEvent?.({ runId: 'run-1', event: buildEvent({ ordinal: 10 }), mutation: 'update' });
+    });
+
+    await waitFor(() => {
+      const options = within(listbox).getAllByRole('option');
+      expect(options[options.length - 1]).toHaveAttribute('data-event-id', 'event-1');
+    });
+    expect(summaryRefetch).toHaveBeenCalledTimes(2);
+
+    const successFilter = getByRole('button', { name: 'success' });
+    fireEvent.click(successFilter);
+
+    await waitFor(() => {
+      expect(within(listbox).getAllByRole('option').length).toBeGreaterThan(0);
+    });
+
+    await act(async () => {
+      socketMocks.runEvent?.({ runId: 'run-1', event: buildEvent({ status: 'error', ordinal: 10 }), mutation: 'update' });
+    });
+
+    await waitFor(() => {
+      expect(within(listbox).queryByRole('option', { name: 'Tool Execution — Search Tool' })).toBeNull();
+    });
+    expect(summaryRefetch).toHaveBeenCalledTimes(3);
+
     await act(async () => {
       socketMocks.status?.({ run: { id: 'run-1', status: 'finished', createdAt: '', updatedAt: '' } as any });
     });
-    expect(summaryRefetch).toHaveBeenCalledTimes(2);
+    expect(summaryRefetch).toHaveBeenCalledTimes(4);
 
     await act(async () => {
       socketMocks.reconnect?.();
     });
-    expect(summaryRefetch).toHaveBeenCalledTimes(3);
+    expect(summaryRefetch).toHaveBeenCalledTimes(5);
     expect(eventsRefetch).toHaveBeenCalledTimes(1);
 
     expect(getByTestId('timeline-event-details')).toBeInTheDocument();

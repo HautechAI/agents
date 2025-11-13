@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { RunTimelineEventListItem } from '@/components/agents/RunTimelineEventListItem';
 import { RunTimelineEventDetails } from '@/components/agents/RunTimelineEventDetails';
@@ -9,6 +17,11 @@ import { getEventTypeLabel } from '@/components/agents/runTimelineFormatting';
 
 const EVENT_TYPES: RunEventType[] = ['invocation_message', 'injection', 'llm_call', 'tool_execution', 'summarization'];
 const STATUS_TYPES: RunEventStatus[] = ['pending', 'running', 'success', 'error', 'cancelled'];
+
+const sortTimelineEvents = (a: RunTimelineEvent, b: RunTimelineEvent) => {
+  if (a.ordinal !== b.ordinal) return a.ordinal - b.ordinal;
+  return a.ts.localeCompare(b.ts);
+};
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : false));
@@ -52,8 +65,21 @@ export function AgentsRunTimeline() {
   const [events, setEvents] = useState<RunTimelineEvent[]>([]);
 
   useEffect(() => {
-    if (eventsQuery.data?.items) setEvents(eventsQuery.data.items);
+    if (eventsQuery.data?.items) {
+      const deduped = Array.from(new Map(eventsQuery.data.items.map((item) => [item.id, item])).values());
+      deduped.sort(sortTimelineEvents);
+      setEvents(deduped);
+    }
   }, [eventsQuery.data]);
+
+  const matchesFilters = useCallback(
+    (event: RunTimelineEvent) => {
+      const typeMatch = selectedTypes.length === EVENT_TYPES.length || selectedTypes.includes(event.type);
+      const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(event.status);
+      return typeMatch && statusMatch;
+    },
+    [selectedTypes, selectedStatuses],
+  );
 
   useEffect(() => {
     if (!runId) return;
@@ -61,21 +87,23 @@ export function AgentsRunTimeline() {
     graphSocket.subscribe([room]);
     const off = graphSocket.onRunEvent(({ runId: incomingRunId, event }) => {
       if (incomingRunId !== runId) return;
-      if (selectedTypes.length > 0 && !selectedTypes.includes(event.type)) return;
-      if (selectedStatuses.length > 0 && !selectedStatuses.includes(event.status)) return;
       setEvents((prev) => {
         const idx = prev.findIndex((e) => e.id === event.id);
-        let next: RunTimelineEvent[];
-        if (idx >= 0) {
-          next = [...prev];
-          next[idx] = event;
-        } else {
-          next = [...prev, event];
+        const shouldInclude = matchesFilters(event);
+        if (!shouldInclude) {
+          if (idx === -1) return prev;
+          const next = [...prev];
+          next.splice(idx, 1);
+          return next;
         }
-        next.sort((a, b) => {
-          if (a.ordinal !== b.ordinal) return a.ordinal - b.ordinal;
-          return a.ts.localeCompare(b.ts);
-        });
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = event;
+          next.sort(sortTimelineEvents);
+          return next;
+        }
+        const next = [...prev, event];
+        next.sort(sortTimelineEvents);
         return next;
       });
       summaryQuery.refetch();
@@ -93,7 +121,7 @@ export function AgentsRunTimeline() {
       offReconnect();
       graphSocket.unsubscribe([room]);
     };
-  }, [runId, selectedTypes, selectedStatuses, summaryQuery, eventsQuery]);
+  }, [runId, matchesFilters, summaryQuery, eventsQuery]);
 
   const isDefaultFilters = selectedTypes.length === EVENT_TYPES.length && selectedStatuses.length === 0;
 
@@ -176,6 +204,16 @@ export function AgentsRunTimeline() {
       return next;
     }, { replace: true });
   }, [setSearchParams]);
+
+  const handleMobileModalClose = useCallback(() => {
+    const target = selectedItemRef.current;
+    clearSelection();
+    if (target) {
+      requestAnimationFrame(() => {
+        target.focus();
+      });
+    }
+  }, [clearSelection]);
 
   useEffect(() => {
     const itemsCount = eventsQuery.data?.items?.length ?? 0;
@@ -386,7 +424,7 @@ export function AgentsRunTimeline() {
         </div>
       </div>
 
-      {!isMdUp && selectedEvent && <MobileEventModal event={selectedEvent} onClose={clearSelection} />}
+      {!isMdUp && selectedEvent && <MobileEventModal event={selectedEvent} onClose={handleMobileModalClose} />}
     </div>
   );
 }
@@ -430,8 +468,15 @@ function MobileEventModal({ event, onClose }: { event: RunTimelineEvent; onClose
     return () => root.removeEventListener('keydown', onKey);
   }, []);
 
+  const handleBackdropClick = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      if (e.target === e.currentTarget) onClose();
+    },
+    [onClose],
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/50" role="presentation">
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/50" role="presentation" onClick={handleBackdropClick}>
       <div
         role="dialog"
         aria-modal="true"
