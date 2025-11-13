@@ -32,6 +32,7 @@ export function ThreadTreeNode({
   const runsCount = node.metrics?.runsCount ?? 0;
   const statusLabel = (node.status || 'open') === 'open' ? 'Open' : 'Closed';
   const createdAtLabel = new Date(node.createdAt).toLocaleString();
+  const isRoot = node.parentId == null;
 
   async function loadChildren() {
     setLoading(true);
@@ -114,9 +115,11 @@ export function ThreadTreeNode({
             🕒 {remindersCount}
           </span>
         )}
-        <button className="text-xs border rounded px-2 py-0.5" onClick={toggleStatus} disabled={toggling} aria-busy={toggling} aria-label={(node.status || 'open') === 'open' ? 'Close thread' : 'Reopen thread'}>
-          {(node.status || 'open') === 'open' ? 'Close' : 'Reopen'}
-        </button>
+        {isRoot && (
+          <button className="text-xs border rounded px-2 py-0.5" onClick={toggleStatus} disabled={toggling} aria-busy={toggling} aria-label={(node.status || 'open') === 'open' ? 'Close thread' : 'Reopen thread'}>
+            {(node.status || 'open') === 'open' ? 'Close' : 'Reopen'}
+          </button>
+        )}
       </div>
       {expanded && (
         <ul role="group" className="mt-1" aria-busy={loading}>

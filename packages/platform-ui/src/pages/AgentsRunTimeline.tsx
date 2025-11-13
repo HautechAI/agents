@@ -1,23 +1,44 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { RunTimelineEventCard } from '@/components/agents/RunTimelineEventCard';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { RunTimelineEventListItem } from '@/components/agents/RunTimelineEventListItem';
+import { RunTimelineEventDetails } from '@/components/agents/RunTimelineEventDetails';
 import { useRunTimelineEvents, useRunTimelineSummary } from '@/api/hooks/runs';
 import { graphSocket } from '@/lib/graph/socket';
 import type { RunEventStatus, RunEventType, RunTimelineEvent } from '@/api/types/agents';
+import { getEventTypeLabel } from '@/components/agents/runTimelineFormatting';
 
 const EVENT_TYPES: RunEventType[] = ['invocation_message', 'injection', 'llm_call', 'tool_execution', 'summarization'];
 const STATUS_TYPES: RunEventStatus[] = ['pending', 'running', 'success', 'error', 'cancelled'];
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : false));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia(query);
+    const handler = (event: MediaQueryListEvent) => setMatches(event.matches);
+    setMatches(mql.matches);
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handler);
+      return () => mql.removeEventListener('change', handler);
+    }
+    mql.addListener(handler);
+    return () => mql.removeListener(handler);
+  }, [query]);
+
+  return matches;
+}
 
 export function AgentsRunTimeline() {
   const params = useParams<{ threadId: string; runId: string }>();
   const threadId = params.threadId;
   const runId = params.runId;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedTypes, setSelectedTypes] = useState<RunEventType[]>(EVENT_TYPES);
   const [selectedStatuses, setSelectedStatuses] = useState<RunEventStatus[]>([]);
 
-  // Reset filters when run changes
   useEffect(() => {
     setSelectedTypes(EVENT_TYPES);
     setSelectedStatuses([]);
@@ -28,7 +49,6 @@ export function AgentsRunTimeline() {
 
   const summaryQuery = useRunTimelineSummary(runId);
   const eventsQuery = useRunTimelineEvents(runId, { types: apiTypes, statuses: apiStatuses });
-
   const [events, setEvents] = useState<RunTimelineEvent[]>([]);
 
   useEffect(() => {
@@ -122,10 +142,101 @@ export function AgentsRunTimeline() {
   );
 
   const summary = summaryQuery.data;
-
   const countsByType = summary
     ? typeFilters.map((entry) => ({ label: entry.label, count: summary.countsByType[entry.type] ?? 0 }))
     : [];
+
+  const selectedEventId = searchParams.get('eventId');
+  const selectedEvent = selectedEventId ? events.find((evt) => evt.id === selectedEventId) : undefined;
+  const isMdUp = useMediaQuery('(min-width: 768px)');
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const selectedItemRef = useRef<HTMLDivElement | null>(null);
+
+  const selectEvent = useCallback(
+    (eventId: string, options: { focus?: boolean } = {}) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('eventId', eventId);
+        return next;
+      }, { replace: true });
+      const shouldFocus = options.focus ?? true;
+      if (shouldFocus) {
+        requestAnimationFrame(() => {
+          listRef.current?.focus();
+        });
+      }
+    },
+    [setSearchParams],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('eventId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    const itemsCount = eventsQuery.data?.items?.length ?? 0;
+    if (!events.length) {
+      if (selectedEventId && !eventsQuery.isFetching && itemsCount === 0) {
+        clearSelection();
+      }
+      return;
+    }
+    if (selectedEventId) {
+      const exists = events.some((evt) => evt.id === selectedEventId);
+      if (!exists && isMdUp && !eventsQuery.isFetching) {
+        selectEvent(events[0].id, { focus: false });
+      }
+      return;
+    }
+    if (isMdUp && !eventsQuery.isFetching) {
+      selectEvent(events[0].id, { focus: false });
+    }
+  }, [events, selectedEventId, selectEvent, clearSelection, isMdUp, eventsQuery.isFetching, eventsQuery.data]);
+
+  useEffect(() => {
+    const node = selectedItemRef.current;
+    if (node && typeof node.scrollIntoView === 'function') {
+      node.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedEventId]);
+
+  const handleListKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (!events.length) return;
+      const currentIndex = selectedEventId ? events.findIndex((evt) => evt.id === selectedEventId) : -1;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIndex = currentIndex < 0 ? 0 : Math.min(events.length - 1, currentIndex + 1);
+        const nextEvent = events[nextIndex];
+        if (nextEvent) selectEvent(nextEvent.id, { focus: false });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+        const nextEvent = events[nextIndex];
+        if (nextEvent) selectEvent(nextEvent.id, { focus: false });
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        const nextEvent = events[0];
+        if (nextEvent) selectEvent(nextEvent.id, { focus: false });
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        const nextEvent = events[events.length - 1];
+        if (nextEvent) selectEvent(nextEvent.id, { focus: false });
+      }
+    },
+    [events, selectedEventId, selectEvent],
+  );
+
+  const handleSelect = useCallback(
+    (eventId: string) => {
+      selectEvent(eventId, { focus: isMdUp });
+    },
+    [selectEvent, isMdUp],
+  );
 
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
@@ -143,7 +254,7 @@ export function AgentsRunTimeline() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-5xl mx-auto space-y-4">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4">
           <section className="border rounded-md bg-white p-4 shadow-sm">
             <div className="flex flex-wrap gap-3 items-center">
               <div>
@@ -216,7 +327,7 @@ export function AgentsRunTimeline() {
                   type="button"
                   className="px-3 py-1 text-xs border rounded bg-white hover:bg-gray-100"
                   onClick={() => eventsQuery.refetch()}
-                  disabled={eventsQuery.isFetching || isDefaultFilters}
+                  disabled={eventsQuery.isFetching}
                 >
                   Refresh
                 </button>
@@ -228,13 +339,117 @@ export function AgentsRunTimeline() {
             {eventsQuery.isFetching && <div className="mt-2 text-xs text-gray-500">Loading events…</div>}
           </section>
 
-          <section className="space-y-3" aria-live="polite">
-            {events.length === 0 && !eventsQuery.isFetching ? (
-              <div className="text-sm text-gray-600 border rounded-md bg-white p-4">No events for selected filters.</div>
-            ) : (
-              events.map((event) => <RunTimelineEventCard key={event.id} event={event} />)
-            )}
+          <section className="border rounded-md bg-white shadow-sm md:flex md:min-h-[420px]">
+            <div className="flex flex-col md:w-80 md:flex-none md:border-r">
+              <div className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Events</div>
+              <div className="px-3 py-2 text-xs text-gray-500" aria-live="polite">
+                {events.length === 0 && !eventsQuery.isFetching ? 'No events for selected filters.' : null}
+              </div>
+              <div
+                ref={listRef}
+                role="listbox"
+                aria-label="Run events"
+                aria-busy={eventsQuery.isFetching}
+                aria-activedescendant={selectedEventId ? `run-event-option-${selectedEventId}` : undefined}
+                tabIndex={0}
+                onKeyDown={handleListKeyDown}
+                className="flex-1 overflow-y-auto p-3 space-y-2 focus:outline-none"
+              >
+                {events.map((event) => (
+                  <RunTimelineEventListItem
+                    key={event.id}
+                    event={event}
+                    selected={event.id === selectedEventId}
+                    onSelect={handleSelect}
+                    ref={(node) => {
+                      if (event.id === selectedEventId) {
+                        selectedItemRef.current = node;
+                      } else if (selectedItemRef.current === node) {
+                        selectedItemRef.current = null;
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="hidden md:flex flex-1 flex-col">
+              <div className="border-b px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Details</div>
+              <div className="flex-1 overflow-y-auto p-4">
+                {selectedEvent ? (
+                  <RunTimelineEventDetails event={selectedEvent} />
+                ) : (
+                  <div className="text-sm text-gray-500">Select an event to view details.</div>
+                )}
+              </div>
+            </div>
           </section>
+        </div>
+      </div>
+
+      {!isMdUp && selectedEvent && <MobileEventModal event={selectedEvent} onClose={clearSelection} />}
+    </div>
+  );
+}
+
+function MobileEventModal({ event, onClose }: { event: RunTimelineEvent; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = useMemo(() => `run-event-modal-${event.id}`, [event.id]);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    const root = dialogRef.current;
+    if (!root) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusables = root.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])');
+      const list = Array.from(focusables).filter((el) => el.offsetParent !== null);
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    root.addEventListener('keydown', onKey);
+    return () => root.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/50" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="mt-auto w-full max-h-[90vh] overflow-hidden rounded-t-lg bg-white shadow-lg"
+      >
+        <div ref={dialogRef} className="flex h-full flex-col">
+          <div className="flex items-center justify-between border-b px-4 py-2">
+            <h2 id={titleId} className="text-sm font-semibold text-gray-900">
+              {getEventTypeLabel(event)}
+            </h2>
+            <button ref={closeRef} className="text-xs px-2 py-1 border rounded" onClick={onClose}>
+              Close
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <RunTimelineEventDetails event={event} />
+          </div>
         </div>
       </div>
     </div>
