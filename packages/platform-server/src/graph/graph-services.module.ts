@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { ThreadsMetricsService } from '../agents/threads.metrics.service';
@@ -6,20 +6,31 @@ import { CoreModule } from '../core/core.module';
 import { ConfigService } from '../core/services/config.service';
 import { LoggerService } from '../core/services/logger.service';
 import { MongoService } from '../core/services/mongo.service';
+import { EnvModule } from '../env/env.module';
 import { EventsModule } from '../events/events.module';
 import { InfraModule } from '../infra/infra.module';
 import { ContainerService } from '../infra/container/container.service';
 import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
+import { LLMModule } from '../llm/llm.module';
+import { NodesModule } from '../nodes/nodes.module';
 import { buildTemplateRegistry } from '../templates';
+import { VaultModule } from '../vault/vault.module';
 import { GitGraphRepository } from './gitGraph.repository';
 import { GraphRepository } from './graph.repository';
 import { MongoGraphRepository } from './graphMongo.repository';
 import { PortsRegistry } from './ports.registry';
 import { TemplateRegistry } from './templateRegistry';
-import { LLMModule } from '../llm/llm.module';
 
 @Module({
-  imports: [CoreModule, InfraModule, EventsModule, LLMModule],
+  imports: [
+    CoreModule,
+    InfraModule,
+    EventsModule,
+    LLMModule,
+    EnvModule,
+    VaultModule,
+    forwardRef(() => NodesModule),
+  ],
   providers: [
     ThreadsMetricsService,
     {
