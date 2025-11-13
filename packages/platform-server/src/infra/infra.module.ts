@@ -14,6 +14,7 @@ import { NcpsKeyService } from './ncps/ncpsKey.service';
 import { NixController } from './ncps/nix.controller';
 import { ContainersController } from './container/containers.controller';
 import { ArchiveService } from './archive/archive.service';
+import { NixResolverService } from './nix/nix-resolver.service';
 
 @Module({
   imports: [CoreModule, VaultModule],
@@ -57,6 +58,7 @@ import { ArchiveService } from './archive/archive.service';
       },
       inject: [ConfigService, LoggerService],
     },
+    NixResolverService,
     GithubService,
     PRService,
   ],

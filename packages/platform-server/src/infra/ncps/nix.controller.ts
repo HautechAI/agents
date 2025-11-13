@@ -1,8 +1,9 @@
-import { Controller, Get, Inject, Query, Res } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import semver from 'semver';
 import { ConfigService } from '../../core/services/config.service';
+import { NixResolverError, NixResolverService } from '../nix/nix-resolver.service';
 
 // Upstream base for NixHub
 const NIXHUB_BASE = 'https://www.nixhub.io';
@@ -76,6 +77,7 @@ const NixhubPackageSchema = z.object({
             z.object({
               system: z.string().optional(),
               attribute_path: z.string().optional(),
+              commit_hash: z.string().optional(),
             }),
           )
           .optional(),
@@ -87,6 +89,7 @@ type NixhubPackageJSON = z.infer<typeof NixhubPackageSchema>;
 
 @Controller('api/nix')
 export class NixController {
+  private readonly cfg: ConfigService;
   private cache: LruCache<unknown>;
   private timeoutMs: number;
 
@@ -97,9 +100,12 @@ export class NixController {
     .object({ name: z.string().max(200).regex(SAFE_IDENT), version: z.string().max(100) })
     .strict();
 
-  constructor(@Inject(ConfigService) private cfg: ConfigService) {
-    this.timeoutMs = cfg.nixHttpTimeoutMs;
-    this.cache = new LruCache<unknown>(cfg.nixCacheMax, cfg.nixCacheTtlMs);
+  constructor(configService: ConfigService | undefined, private resolver: NixResolverService) {
+    this.cfg = configService ?? ConfigService.fromEnv();
+    this.timeoutMs = this.safeConfig(() => this.cfg.nixHttpTimeoutMs, 5000);
+    const cacheMax = this.safeConfig(() => this.cfg.nixCacheMax, 500);
+    const cacheTtl = this.safeConfig(() => this.cfg.nixCacheTtlMs, 5 * 60_000);
+    this.cache = new LruCache<unknown>(cacheMax, cacheTtl);
   }
 
   private async fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
@@ -132,31 +138,6 @@ export class NixController {
       }
     }
     throw lastErr;
-  }
-
-  private extractResolvedRelease(
-    json: unknown,
-    name: string,
-    version: string,
-  ): { commitHash: string; attributePath: string } {
-    const parsed = NixhubPackageSchema.safeParse(json);
-    if (!parsed.success || !parsed.data || !Array.isArray(parsed.data.releases))
-      throw Object.assign(new Error(`bad_upstream_json ${JSON.stringify(parsed.error)}`), {
-        code: 'bad_upstream_json',
-      });
-    const rel = parsed.data.releases.find((r) => String(r.version ?? '') === version);
-    if (!rel) throw Object.assign(new Error('release_not_found'), { code: 'release_not_found' });
-    // Prefer x86_64-linux, then aarch64-linux, then first
-    const plats = Array.isArray(rel.platforms) ? rel.platforms : [];
-    const preferred =
-      plats.find((p) => p.system === 'x86_64-linux') ||
-      plats.find((p) => p.system === 'aarch64-linux') ||
-      plats[0];
-    const attributePath = preferred?.attribute_path;
-    const commitHash = rel.commit_hash;
-    if (!attributePath) throw Object.assign(new Error('missing_attribute_path'), { code: 'missing_attribute_path' });
-    if (!commitHash) throw Object.assign(new Error('missing_commit_hash'), { code: 'missing_commit_hash' });
-    return { commitHash, attributePath };
   }
 
   @Get('packages')
@@ -260,14 +241,20 @@ export class NixController {
         return { error: 'validation_error', details: parsed.error.issues };
       }
       const { name, version } = parsed.data;
-      const url = `${NIXHUB_BASE}/packages/${encodeURIComponent(name)}?_data=routes%2F_nixhub.packages.%24pkg._index`;
       const ac = new AbortController();
       const tid = setTimeout(() => ac.abort(), this.timeoutMs);
       try {
-        const json = (await this.fetchJson(url, ac.signal)) as unknown;
-        const { commitHash, attributePath } = this.extractResolvedRelease(json, name, version);
+        const result = await this.resolver.resolve({ name, version, signal: ac.signal });
         reply.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-        return { name, version, commitHash, attributePath };
+        return {
+          name,
+          version,
+          commitHash: result.commitHash,
+          attributePath: result.attributePath,
+          channel: result.channel,
+          source: result.source,
+          cache: result.fromCache,
+        };
       } finally {
         clearTimeout(tid);
       }
@@ -278,18 +265,21 @@ export class NixController {
         reply.code(504);
         return { error: 'timeout' };
       }
+      if (err instanceof NixResolverError) {
+        if (err.kind === 'not_found') {
+          reply.code(404);
+          return { error: 'not_found' };
+        }
+        if (err.kind === 'timeout') {
+          reply.code(504);
+          return { error: 'timeout' };
+        }
+        reply.code(502);
+        return { error: 'upstream_error', status: err.status };
+      }
       if (typeof err.status === 'number') {
         reply.code(err.status === 404 ? 404 : 502);
         return { error: err.status === 404 ? 'not_found' : 'upstream_error', status: err.status };
-      }
-      // Map known extraction errors to 502/404
-      if (err.code && ['bad_upstream_json', 'missing_commit_hash', 'missing_attribute_path'].includes(err.code)) {
-        reply.code(502);
-        return { error: err.code, message: err.message };
-      }
-      if (err.code === 'release_not_found') {
-        reply.code(404);
-        return { error: err.code };
       }
       reply.code(500);
       return { error: 'server_error' };
@@ -307,5 +297,14 @@ export class NixController {
       else withInvalid.push(v);
     }
     return { withValid, withInvalid };
+  }
+
+  private safeConfig<T>(fn: () => T, fallback: T): T {
+    try {
+      const value = fn();
+      return (value ?? fallback) as T;
+    } catch {
+      return fallback;
+    }
   }
 }

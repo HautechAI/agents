@@ -4,12 +4,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { NixController } from '../src/infra/ncps/nix.controller';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
 import type { FastifyReply } from 'fastify';
+import { NixResolverError } from '../src/infra/nix/nix-resolver.service';
 
 const BASE = 'https://www.nixhub.io';
 
 describe('nix controller', () => {
   let controller: NixController;
   let reply: FastifyReply;
+  let resolver: { resolve: ReturnType<typeof vi.fn> };
   beforeEach(() => {
     const cfg = new ConfigService().init(
       configSchema.parse({
@@ -23,13 +25,17 @@ describe('nix controller', () => {
         ncpsRefreshIntervalMs: '0',
       })
     );
-    controller = new NixController(cfg);
+    resolver = { resolve: vi.fn() };
+    controller = new NixController(cfg, resolver as any);
     reply = {
       code: vi.fn(() => reply) as any,
       header: vi.fn(() => reply) as any,
     } as unknown as FastifyReply;
   });
-  afterEach(() => nock.cleanAll());
+  afterEach(() => {
+    nock.cleanAll();
+    resolver.resolve.mockReset();
+  });
 
   it('packages: success mapping and strict upstream URL', async () => {
     const scope = nock(BASE)
@@ -123,44 +129,48 @@ describe('nix controller', () => {
     scope.done();
   });
 
-  it('resolve: success with platform preference and fields', async () => {
-    const scope = nock(BASE).get('/packages/htop').query((q) => q._data === 'routes/_nixhub.packages.$pkg._index').reply(200, {
-      name: 'htop',
-      releases: [
-        { version: '1.0.0', commit_hash: 'old', platforms: [{ system: 'x86_64-darwin', attribute_path: 'htop' }] },
-        { version: '1.2.3', commit_hash: 'abcd1234', platforms: [{ system: 'aarch64-linux', attribute_path: 'a.htop' }, { system: 'x86_64-linux', attribute_path: 'x.htop' }] },
-      ],
+  it('resolve: success delegating to resolver service', async () => {
+    resolver.resolve.mockResolvedValue({
+      attributePath: 'pkgs.htop',
+      commitHash: 'abcd1234',
+      channel: 'nixpkgs-unstable',
+      source: 'nixhub',
+      fromCache: false,
     });
     const body = await controller.resolve({ name: 'htop', version: '1.2.3' }, reply);
-    expect(body).toEqual({ name: 'htop', version: '1.2.3', commitHash: 'abcd1234', attributePath: 'x.htop' });
-    scope.done();
+    expect(resolver.resolve).toHaveBeenCalledWith(expect.objectContaining({ name: 'htop', version: '1.2.3' }));
+    expect(body).toEqual({
+      name: 'htop',
+      version: '1.2.3',
+      commitHash: 'abcd1234',
+      attributePath: 'pkgs.htop',
+      channel: 'nixpkgs-unstable',
+      source: 'nixhub',
+      cache: false,
+    });
   });
 
-  it('resolve: release not found -> 404', async () => {
-    const scope = nock(BASE).get('/packages/abc').query(true).reply(200, { name: 'abc', releases: [{ version: '0.1.0', commit_hash: 'x', platforms: [] }] });
+  it('resolve: resolver not found -> 404', async () => {
+    resolver.resolve.mockRejectedValue(new NixResolverError('not_found'));
     await controller.resolve({ name: 'abc', version: '9.9.9' }, reply);
     expect((reply.code as any).mock.calls[0][0]).toBe(404);
-    scope.done();
-  });
-
-  it('resolve: missing attribute path -> 502', async () => {
-    const scope = nock(BASE).get('/packages/noattr').query(true).reply(200, { name: 'noattr', releases: [{ version: '1.0.0', commit_hash: 'r1', platforms: [{ system: 'x86_64-linux' }] }] });
-    await controller.resolve({ name: 'noattr', version: '1.0.0' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    scope.done();
-  });
-
-  it('resolve: missing commit hash -> 502', async () => {
-    const scope = nock(BASE).get('/packages/nohash').query(true).reply(200, { name: 'nohash', releases: [{ version: '1.0.0', platforms: [{ system: 'x86_64-linux', attribute_path: 'x' }] }] });
-    await controller.resolve({ name: 'nohash', version: '1.0.0' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    scope.done();
   });
 
   it('resolve: timeout -> 504', async () => {
-    const scope = nock(BASE).get('/packages/slow').query(true).delay(500).reply(200, { name: 'slow', releases: [{ version: '1.0.0', commit_hash: 'x', platforms: [{ system: 'x86_64-linux', attribute_path: 'x' }] }] });
+    resolver.resolve.mockRejectedValue(new NixResolverError('timeout'));
     await controller.resolve({ name: 'slow', version: '1.0.0' }, reply);
     expect((reply.code as any).mock.calls[0][0]).toBe(504);
-    scope.done();
+  });
+
+  it('resolve: upstream -> 502', async () => {
+    resolver.resolve.mockRejectedValue(new NixResolverError('upstream', 'nixos_search_unavailable', 502));
+    await controller.resolve({ name: 'pkg', version: '1.0.0' }, reply);
+    expect((reply.code as any).mock.calls[0][0]).toBe(502);
+  });
+
+  it('resolve: unexpected error -> 500', async () => {
+    resolver.resolve.mockRejectedValue(new Error('boom'));
+    await controller.resolve({ name: 'pkg', version: '1.0.0' }, reply);
+    expect((reply.code as any).mock.calls[0][0]).toBe(500);
   });
 });

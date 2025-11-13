@@ -1,14 +1,23 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import nock from 'nock';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { NixController } from '../src/infra/ncps/nix.controller';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
+import { NixResolverService } from '../src/infra/nix/nix-resolver.service';
 
 const BASE = 'https://www.nixhub.io';
 
 describe('NixController E2E (Fastify)', () => {
   let app: NestFastifyApplication;
+  let resolver: { resolve: ReturnType<typeof vi.fn> };
+
+  process.env.NIX_HTTP_TIMEOUT_MS = '200';
+  process.env.NIX_CACHE_MAX = '500';
+  process.env.NIX_CACHE_TTL_MS = String(5 * 60_000);
+  process.env.LLM_PROVIDER = 'openai';
+  process.env.MONGODB_URL = 'mongodb://localhost:27017/test';
+  process.env.AGENTS_DATABASE_URL = 'postgres://localhost:5432/test';
 
   beforeAll(async () => {
     const cfg = new ConfigService().init(
@@ -24,9 +33,13 @@ describe('NixController E2E (Fastify)', () => {
       })
     );
 
+    resolver = { resolve: vi.fn() };
     const moduleRef = await Test.createTestingModule({
       controllers: [NixController],
-      providers: [{ provide: ConfigService, useValue: cfg }],
+      providers: [
+        { provide: ConfigService, useValue: cfg },
+        { provide: NixResolverService, useValue: resolver },
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -37,7 +50,10 @@ describe('NixController E2E (Fastify)', () => {
     await app.close();
   });
 
-  beforeEach(() => nock.cleanAll());
+  beforeEach(() => {
+    nock.cleanAll();
+    resolver.resolve.mockReset();
+  });
   afterEach(() => nock.cleanAll());
 
   it('GET /api/nix/packages returns 200 and sets cache-control', async () => {
@@ -71,4 +87,3 @@ describe('NixController E2E (Fastify)', () => {
     expect(res.statusCode).toBe(400);
   });
 });
-

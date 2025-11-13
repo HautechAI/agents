@@ -43,7 +43,7 @@ export const configSchema = z.object({
   // Docker registry mirror URL (used by DinD sidecar)
   dockerMirrorUrl: z.string().min(1).default('http://registry-mirror:5000'),
   // Nix search/proxy settings
-  nixAllowedChannels: z
+  nixpkgsChannels: z
     .string()
     .default('nixpkgs-unstable,nixos-24.11')
     .transform((s) =>
@@ -72,6 +72,32 @@ export const configSchema = z.object({
     .transform((v) => {
       const n = typeof v === 'number' ? v : Number(v);
       return Number.isFinite(n) ? n : 500;
+    }),
+  nixResolverStrategy: z.enum(['nixhub', 'fallback', 'hybrid']).default('hybrid'),
+  nixResolverTimeoutMs: z
+    .union([z.string(), z.number()])
+    .default('600')
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 600;
+    }),
+  nixResolverTotalBudgetMs: z
+    .union([z.string(), z.number()])
+    .default('1500')
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 1500;
+    }),
+  nixResolverEnableAsync: z
+    .union([z.boolean(), z.string()])
+    .default('true')
+    .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
+  nixResolverCacheTtlMs: z
+    .union([z.string(), z.number()])
+    .default(String(7 * 24 * 60 * 60 * 1000))
+    .transform((v) => {
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : 7 * 24 * 60 * 60 * 1000;
     }),
   // Global MCP tools cache staleness timeout (ms). 0 => never stale by time.
   mcpToolsStaleTimeoutMs: z
@@ -246,8 +272,12 @@ export class ConfigService implements Config {
   }
 
   // Nix proxy getters
+  get nixpkgsChannels(): string[] {
+    return this.params.nixpkgsChannels;
+  }
+  // Backward-compatible alias (used by older callers/tests)
   get nixAllowedChannels(): string[] {
-    return this.params.nixAllowedChannels;
+    return this.nixpkgsChannels;
   }
   get nixHttpTimeoutMs(): number {
     return this.params.nixHttpTimeoutMs;
@@ -257,6 +287,21 @@ export class ConfigService implements Config {
   }
   get nixCacheMax(): number {
     return this.params.nixCacheMax;
+  }
+  get nixResolverStrategy(): 'nixhub' | 'fallback' | 'hybrid' {
+    return this.params.nixResolverStrategy;
+  }
+  get nixResolverTimeoutMs(): number {
+    return this.params.nixResolverTimeoutMs;
+  }
+  get nixResolverTotalBudgetMs(): number {
+    return this.params.nixResolverTotalBudgetMs;
+  }
+  get nixResolverEnableAsync(): boolean {
+    return this.params.nixResolverEnableAsync;
+  }
+  get nixResolverCacheTtlMs(): number {
+    return this.params.nixResolverCacheTtlMs;
   }
 
   // MCP tools cache staleness timeout (global default)
@@ -350,10 +395,15 @@ export class ConfigService implements Config {
       vaultAddr: process.env.VAULT_ADDR,
       vaultToken: process.env.VAULT_TOKEN,
       dockerMirrorUrl: process.env.DOCKER_MIRROR_URL,
-      nixAllowedChannels: process.env.NIX_ALLOWED_CHANNELS,
+      nixpkgsChannels: process.env.NIXPKGS_CHANNELS || process.env.NIX_ALLOWED_CHANNELS,
       nixHttpTimeoutMs: process.env.NIX_HTTP_TIMEOUT_MS,
       nixCacheTtlMs: process.env.NIX_CACHE_TTL_MS,
       nixCacheMax: process.env.NIX_CACHE_MAX,
+      nixResolverStrategy: process.env.NIX_RESOLVER_STRATEGY,
+      nixResolverTimeoutMs: process.env.NIX_RESOLVER_TIMEOUT_MS,
+      nixResolverTotalBudgetMs: process.env.NIX_RESOLVER_TOTAL_BUDGET_MS,
+      nixResolverEnableAsync: process.env.NIX_RESOLVER_ENABLE_ASYNC,
+      nixResolverCacheTtlMs: process.env.NIX_RESOLVER_CACHE_TTL_MS,
       mcpToolsStaleTimeoutMs: process.env.MCP_TOOLS_STALE_TIMEOUT_MS,
       ncpsEnabled: process.env.NCPS_ENABLED,
       // Preserve legacy for backward compatibility; prefer dual URLs above
