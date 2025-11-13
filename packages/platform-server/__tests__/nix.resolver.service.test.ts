@@ -103,6 +103,31 @@ describe('NixResolverService', () => {
     expect(store[0]?.attributePath).toBe('pkgs.htop');
   });
 
+  it('prefers requested system when nixhub returns multiple platforms', async () => {
+    const scope = nock('https://www.nixhub.io')
+      .get('/packages/multi')
+      .query(true)
+      .reply(200, {
+        name: 'multi',
+        releases: [
+          {
+            version: '1.0.0',
+            platforms: [
+              { system: 'aarch64-darwin', attribute_path: 'pkgs.multi-darwin', commit_hash: 'dddddddddddddddddddddddddddddddddddddddd' },
+              { system: 'x86_64-linux', attribute_path: 'pkgs.multi-linux', commit_hash: 'cccccccccccccccccccccccccccccccccccccccc' },
+            ],
+          },
+        ],
+      });
+
+    const result = await service.resolve({ name: 'multi', version: '1.0.0', system: 'x86_64-linux' });
+
+    expect(result.attributePath).toBe('pkgs.multi-linux');
+    expect(result.commitHash).toBe('cccccccccccccccccccccccccccccccccccccccc');
+    expect(result.source).toBe('nixhub');
+    scope.done();
+  });
+
   it('falls back to nix search when nixhub lacks commit', async () => {
     const nixhubScope = nock('https://www.nixhub.io')
       .get('/packages/pkg')

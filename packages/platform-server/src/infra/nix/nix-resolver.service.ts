@@ -4,7 +4,7 @@ import { ConfigService } from '../../core/services/config.service';
 import { LoggerService } from '../../core/services/logger.service';
 import { MongoService } from '../../core/services/mongo.service';
 import { attributeFamilyCandidates } from './attribute-family';
-import { NixhubClient, NixhubPackageSchema } from './nixhub.client';
+import { NixhubClient, NixhubPackageSchema, type NixhubPackageJSON } from './nixhub.client';
 import { NixSearchClient, type NixSearchHit } from './nixos-search.client';
 import { NixResolutionRepository, type NixResolutionSource } from './nix-resolution.repository';
 import { TimedLruCache } from './timed-lru';
@@ -44,6 +44,8 @@ type CacheEntry = {
   channel: string;
   source: NixResolutionSource;
 };
+
+type NixhubPlatform = NonNullable<NonNullable<NixhubPackageJSON['releases']>[number]['platforms']>[number];
 
 @Injectable()
 export class NixResolverService {
@@ -155,7 +157,7 @@ export class NixResolverService {
 
     if (strategy !== 'fallback') {
       budgetCheck();
-      const nixhubResult = await this.tryNixhub({ name, version, channels, signal: timeoutSignal, budgetCheck }).catch((err) => {
+      const nixhubResult = await this.tryNixhub({ name, version, system, channels, signal: timeoutSignal, budgetCheck }).catch((err) => {
         if (err instanceof NixResolverError && err.kind !== 'not_found') throw err;
         errors.push(err);
         return null;
@@ -201,11 +203,12 @@ export class NixResolverService {
   private async tryNixhub(args: {
     name: string;
     version: string;
+    system: string;
     channels: string[];
     signal?: AbortSignal;
     budgetCheck: () => void;
   }): Promise<{ kind: 'success'; attributePath: string; commitHash: string; channel: string } | { kind: 'not_found' } | null> {
-    const { name, version, channels, signal, budgetCheck } = args;
+    const { name, version, system, channels, signal, budgetCheck } = args;
     try {
       budgetCheck();
       const pkg = await this.nixhubClient.fetchPackage(name, { signal, timeoutMs: this.resolverTimeoutMs });
@@ -215,8 +218,8 @@ export class NixResolverService {
       }
       const release = parsed.data.releases?.find((rel) => String(rel.version ?? '') === version);
       if (!release) return { kind: 'not_found' };
-      const platforms = release.platforms ?? [];
-      const preferred = platforms.find((p) => p.attribute_path && p.commit_hash) ?? platforms[0];
+      const platforms = (release.platforms ?? []) as NixhubPlatform[];
+      const preferred = this.pickPreferredPlatform(platforms, system);
       const attributePath = preferred?.attribute_path;
       const commitHash = preferred?.commit_hash ?? release.commit_hash;
       if (!attributePath || !commitHash) {
@@ -240,6 +243,17 @@ export class NixResolverService {
       }
       throw err;
     }
+  }
+
+  private pickPreferredPlatform(platforms: NixhubPlatform[], system: string): NixhubPlatform | undefined {
+    if (!platforms?.length) return undefined;
+    const usable = (p: NixhubPlatform | undefined) => !!p?.attribute_path;
+    const order = Array.from(new Set([system, 'x86_64-linux', 'aarch64-linux'].filter(Boolean)));
+    for (const sys of order) {
+      const match = platforms.find((p) => p?.system === sys && usable(p));
+      if (match) return match;
+    }
+    return platforms.find((p) => usable(p));
   }
 
   private async tryNixSearch(args: {
