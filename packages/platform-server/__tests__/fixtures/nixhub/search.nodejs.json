@@ -1,21 +1,76 @@
 {
   "query": "nodejs",
-  "total_results": 3,
+  "total_results": 14,
   "results": [
     {
       "name": "nodejs",
-      "summary": "Evented I/O for V8 JavaScript",
-      "last_updated": "2024-08-14T14:03:12Z"
+      "summary": "Event-driven I/O framework for the V8 JavaScript engine",
+      "last_updated": "2025-11-12T10:38:40Z"
     },
     {
-      "name": "nodejs_22",
-      "summary": "Node.js 22 runtime",
-      "last_updated": "2024-08-10T09:45:00Z"
+      "name": "nodejs-slim",
+      "summary": "Event-driven I/O framework for the V8 JavaScript engine",
+      "last_updated": "2025-11-12T10:38:40Z"
+    },
+    {
+      "name": "nodejs_latest",
+      "summary": "Event-driven I/O framework for the V8 JavaScript engine",
+      "last_updated": "2023-02-24T09:01:09Z"
+    },
+    {
+      "name": "nodejs-slim_latest",
+      "summary": "Event-driven I/O framework for the V8 JavaScript engine",
+      "last_updated": "2023-02-24T09:01:09Z"
+    },
+    {
+      "name": "nodejs-16_x-openssl_1_1",
+      "summary": "Event-driven I/O framework for the V8 JavaScript engine",
+      "last_updated": "2023-01-31T09:49:33Z"
+    },
+    {
+      "name": "nodejsInstallExecutables",
+      "summary": "",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "nodejsInstallManuals",
+      "summary": "",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "dockerfile-language-server-nodejs",
+      "summary": "Language server for Dockerfiles powered by Node.js, TypeScript, and VSCode technologies",
+      "last_updated": "2025-07-28T17:09:23Z"
+    },
+    {
+      "name": "matrix-sdk-crypto-nodejs",
+      "summary": "No-network-IO implementation of a state machine that handles E2EE for Matrix clients",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "matrix-sdk-crypto-nodejs-0_1_0-beta_3",
+      "summary": "No-network-IO implementation of a state machine that handles E2EE for Matrix clients",
+      "last_updated": "2025-02-07T11:26:36Z"
+    },
+    {
+      "name": "elmPackages.nodejs",
+      "summary": "Event-driven I/O framework for the V8 JavaScript engine",
+      "last_updated": "2025-11-12T10:38:40Z"
     },
     {
       "name": "nodePackages.nodejs",
-      "summary": "Node.js available via nodePackages",
-      "last_updated": "2024-08-09T06:30:00Z"
+      "summary": "Event-driven I/O framework for the V8 JavaScript engine",
+      "last_updated": "2025-11-12T10:38:40Z"
+    },
+    {
+      "name": "emacs27Packages.nodejs-repl",
+      "summary": "",
+      "last_updated": "2022-04-13T09:49:25Z"
+    },
+    {
+      "name": "emacs28Packages.nodejs-repl",
+      "summary": "",
+      "last_updated": "2022-10-22T16:07:30Z"
     }
   ]
 }

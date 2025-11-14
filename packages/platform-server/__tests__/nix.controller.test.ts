@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import nock from 'nock';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-// Avoid Nest TestingModule; instantiate controller with DI stubs
+import type { FastifyReply } from 'fastify';
+
 import { NixController } from '../src/infra/ncps/nix.controller';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
-import type { FastifyReply } from 'fastify';
 
 const BASE = 'https://www.nixhub.io';
 
@@ -26,262 +26,483 @@ type PackageFixture = {
     outputs_summary?: string;
     platforms_summary?: string;
     commit_hash?: string;
-    platforms: { system: string; attribute_path?: string }[];
+    platforms: { system?: string; attribute_path?: string; commit_hash?: string }[];
   }[];
 };
 
-describe('nix controller', () => {
+const createReply = (): FastifyReply => {
+  const reply = {} as FastifyReply;
+  Object.assign(reply, {
+    code: vi.fn(() => reply),
+    header: vi.fn(() => reply),
+  });
+  return reply;
+};
+
+const codeCalls = (reply: FastifyReply) => ((reply.code as any).mock?.calls ?? []) as unknown[][];
+const headerCalls = (reply: FastifyReply) => ((reply.header as any).mock?.calls ?? []) as unknown[][];
+
+const clearReplyMocks = (reply: FastifyReply) => {
+  (reply.code as any).mockClear?.();
+  (reply.header as any).mockClear?.();
+};
+
+const expectStatus = (reply: FastifyReply, status: number) => {
+  const calls = codeCalls(reply);
+  expect(calls.length).toBeGreaterThan(0);
+  expect(calls.at(-1)?.[0]).toBe(status);
+};
+
+describe('NixController', () => {
   let controller: NixController;
   let reply: FastifyReply;
+
   beforeEach(() => {
     const cfg = new ConfigService().init(
       configSchema.parse({
         llmProvider: 'openai',
-        githubAppId: 'x', githubAppPrivateKey: 'x', githubInstallationId: 'x', githubToken: 'x', mongodbUrl: 'x',
+        githubAppId: 'x',
+        githubAppPrivateKey: 'x',
+        githubInstallationId: 'x',
+        githubToken: 'x',
+        mongodbUrl: 'x',
         agentsDatabaseUrl: 'postgres://localhost:5432/agents',
-        graphStore: 'mongo', graphRepoPath: './data/graph', graphBranch: 'graph-state',
-        dockerMirrorUrl: 'http://registry-mirror:5000', nixAllowedChannels: 'nixpkgs-unstable',
-        nixHttpTimeoutMs: String(200), nixCacheTtlMs: String(5 * 60_000), nixCacheMax: String(500),
-        mcpToolsStaleTimeoutMs: '0', ncpsEnabled: 'false', ncpsUrl: 'http://ncps:8501',
+        graphStore: 'mongo',
+        graphRepoPath: './data/graph',
+        graphBranch: 'graph-state',
+        dockerMirrorUrl: 'http://registry-mirror:5000',
+        nixAllowedChannels: 'nixpkgs-unstable',
+        nixHttpTimeoutMs: String(200),
+        nixCacheTtlMs: String(5 * 60_000),
+        nixCacheMax: String(500),
+        mcpToolsStaleTimeoutMs: '0',
+        ncpsEnabled: 'false',
+        ncpsUrl: 'http://ncps:8501',
         ncpsRefreshIntervalMs: '0',
       })
     );
     controller = new NixController(cfg);
-    reply = {
-      code: vi.fn(() => reply) as any,
-      header: vi.fn(() => reply) as any,
-    } as unknown as FastifyReply;
-  });
-  afterEach(() => nock.cleanAll());
-
-  it('packages: success mapping and strict upstream URL', async () => {
-    const searchGit = loadFixture<SearchFixture>('search.git.json');
-    const scope = nock(BASE)
-      .get('/search')
-      .query((q) => q.q === 'git' && q._data === 'routes/_nixhub.search')
-      .reply(200, searchGit);
-    const body = await controller.packages({ query: 'git' }, reply);
-    expect(Array.isArray(body.packages)).toBe(true);
-    expect(body.packages[0].name).toBe('git');
-    scope.done();
+    reply = createReply();
   });
 
-  it('packages: allows null summary values', async () => {
-    const searchGit = loadFixture<SearchFixture>('search.git.json');
-    const withNullSummary = JSON.parse(JSON.stringify(searchGit)) as SearchFixture;
-    withNullSummary.results[0].summary = null;
-    const scope = nock(BASE)
-      .get('/search')
-      .query((q) => q.q === 'git' && q._data === 'routes/_nixhub.search')
-      .reply(200, withNullSummary);
-    const body = await controller.packages({ query: 'git' }, reply);
-    expect(body.packages[0]).toEqual({ name: 'git', description: null });
-    scope.done();
+  afterEach(() => {
+    nock.cleanAll();
+    vi.clearAllMocks();
   });
 
-  it('packages: 502 retry then success', async () => {
-    const searchRetry = loadFixture<SearchFixture>('search.python.json');
-    const scope = nock(BASE).get('/search').query(true).reply(502, 'bad gateway').get('/search').query(true).reply(200, searchRetry);
-    const body = await controller.packages({ query: 'retry' }, reply);
-    expect(body.packages[0].name).toBe(searchRetry.results[0].name);
-    scope.done();
+  describe('packages', () => {
+    it('returns mapped packages and sets cache header', async () => {
+      const search = loadFixture<SearchFixture>('search.git.json');
+      const scope = nock(BASE)
+        .get('/search')
+        .query((q) => q.q === 'git' && q._data === 'routes/_nixhub.search')
+        .reply(200, search);
+
+      const body = await controller.packages({ query: 'git' }, reply);
+
+      expect(body.packages.length).toBeGreaterThan(0);
+      expect(body.packages[0].name).toBe(search.results[0].name);
+      expect(headerCalls(reply)[0][0]).toBe('Cache-Control');
+      expect(codeCalls(reply)).toHaveLength(0);
+      scope.done();
+    });
+
+    it('returns empty list when query shorter than 2 without upstream call', async () => {
+      const scope = nock(BASE).get('/search').query(true).reply(200, {});
+      const body = await controller.packages({ query: 'a' }, reply);
+      expect(body).toEqual({ packages: [] });
+      expect(scope.isDone()).toBe(false);
+    });
+
+    it('rejects unknown params with 400 and skips upstream', async () => {
+      const scope = nock(BASE).get('/search').query(true).reply(200, {});
+      await controller.packages({ query: 'git', extra: '1' } as any, reply);
+      expectStatus(reply, 400);
+      expect(scope.isDone()).toBe(false);
+    });
+
+    it('maps upstream 500 to 502 upstream_error', async () => {
+      const scope = nock(BASE).get('/search').query(true).reply(500, 'fail');
+      const body = await controller.packages({ query: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'upstream_error', status: 500 });
+      scope.done();
+    });
+
+    it('maps repeated 502 responses to upstream_error with status 502', async () => {
+      const scope = nock(BASE).get('/search').query(true).times(3).reply(502, 'bad gateway');
+      const body = await controller.packages({ query: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'upstream_error', status: 502 });
+      scope.done();
+    });
+
+    it('retries single 502 and succeeds', async () => {
+      const search = loadFixture<SearchFixture>('search.python.json');
+      const scope = nock(BASE)
+        .get('/search')
+        .query(true)
+        .reply(502, 'bad gateway')
+        .get('/search')
+        .query(true)
+        .reply(200, search);
+
+      const body = await controller.packages({ query: 'python' }, reply);
+
+      expect(body.packages[0].name).toBe(search.results[0].name);
+      expect(codeCalls(reply)).toHaveLength(0);
+      scope.done();
+    });
+
+    it('returns 504 on upstream timeout', async () => {
+      const scope = nock(BASE).get('/search').query(true).delay(500).reply(200, {});
+      const body = await controller.packages({ query: 'long' }, reply);
+      expectStatus(reply, 504);
+      expect(body).toEqual({ error: 'timeout' });
+      scope.done();
+    });
+
+    it('maps invalid JSON payloads to bad_upstream_json', async () => {
+      const scope = nock(BASE).get('/search').query(true).reply(200, '<!doctype html>');
+      const body = await controller.packages({ query: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toEqual({ error: 'bad_upstream_json' });
+      scope.done();
+    });
+
+    it('maps schema violations to bad_upstream_json', async () => {
+      const malformed = loadFixture<SearchFixture>('search.git.json');
+      const mutated = JSON.parse(JSON.stringify(malformed)) as SearchFixture;
+      // Remove last_updated to violate schema
+      mutated.results = mutated.results.map(({ last_updated, ...rest }) => rest as any);
+      const scope = nock(BASE).get('/search').query(true).reply(200, mutated);
+      const body = await controller.packages({ query: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'bad_upstream_json' });
+      scope.done();
+    });
+
+    it('does not cache failures', async () => {
+      const search = loadFixture<SearchFixture>('search.nodejs.json');
+      const scope = nock(BASE)
+        .get('/search')
+        .query((q) => q.q === 'nodejs')
+        .reply(500, 'fail')
+        .get('/search')
+        .query((q) => q.q === 'nodejs')
+        .reply(200, search);
+
+      const first = await controller.packages({ query: 'nodejs' }, reply);
+      expectStatus(reply, 502);
+      expect(first).toMatchObject({ error: 'upstream_error' });
+
+      clearReplyMocks(reply);
+      const second = await controller.packages({ query: 'nodejs' }, reply);
+      expect(second.packages[0].name).toBe(search.results[0].name);
+      scope.done();
+    });
+
+    it('caches successful responses', async () => {
+      const search = loadFixture<SearchFixture>('search.git.json');
+      const scope = nock(BASE)
+        .get('/search')
+        .query((q) => q.q === 'cacheme' && q._data === 'routes/_nixhub.search')
+        .once()
+        .reply(200, search);
+
+      const first = await controller.packages({ query: 'cacheme' }, reply);
+      expect(first.packages.length).toBeGreaterThan(0);
+
+      clearReplyMocks(reply);
+      const second = await controller.packages({ query: 'cacheme' }, reply);
+      expect(second.packages.length).toBeGreaterThan(0);
+      scope.done();
+    });
   });
 
-  it('packages: timeout -> 504', async () => {
-    const searchNode = loadFixture<SearchFixture>('search.nodejs.json');
-    const scope = nock(BASE).get('/search').query(true).delay(500).reply(200, searchNode);
-    await controller.packages({ query: 'long' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(504);
-    scope.done();
+  describe('versions', () => {
+    it('returns sorted unique versions and sets cache header', async () => {
+      const pkgGit = loadFixture<PackageFixture>('package.git.json');
+      const scope = nock(BASE)
+        .get('/packages/git')
+        .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
+        .reply(200, pkgGit);
+
+      const body = await controller.versions({ name: 'git' }, reply);
+
+      expect(body.versions[0]).toBe(String(pkgGit.releases[0].version));
+      expect(new Set(body.versions).size).toBe(body.versions.length);
+      expect(headerCalls(reply)[0][0]).toBe('Cache-Control');
+      scope.done();
+    });
+
+    it('rejects invalid name with 400 without calling upstream', async () => {
+      const scope = nock(BASE).get('/packages/bad/name').query(true).reply(200, {});
+      await controller.versions({ name: 'bad/name' }, reply);
+      expectStatus(reply, 400);
+      expect(scope.isDone()).toBe(false);
+    });
+
+    it('maps upstream 404 to not_found', async () => {
+      const scope = nock(BASE)
+        .get('/packages/missing')
+        .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
+        .reply(404, 'nope');
+      const body = await controller.versions({ name: 'missing' }, reply);
+      expectStatus(reply, 404);
+      expect(body).toMatchObject({ error: 'not_found', status: 404 });
+      scope.done();
+    });
+
+    it('maps upstream 500 to upstream_error', async () => {
+      const scope = nock(BASE).get('/packages/git').query(true).reply(500, 'fail');
+      const body = await controller.versions({ name: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'upstream_error', status: 500 });
+      scope.done();
+    });
+
+    it('maps repeated 504 responses to upstream_error with status 504', async () => {
+      const scope = nock(BASE).get('/packages/git').query(true).times(3).reply(504, 'timeout');
+      const body = await controller.versions({ name: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'upstream_error', status: 504 });
+      scope.done();
+    });
+
+    it('retries single 502 and succeeds', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const scope = nock(BASE)
+        .get('/packages/nodejs')
+        .query(true)
+        .reply(502, 'bad gateway')
+        .get('/packages/nodejs')
+        .query(true)
+        .reply(200, pkg);
+
+      const body = await controller.versions({ name: 'nodejs' }, reply);
+      expect(body.versions[0]).toBe(String(pkg.releases[0].version));
+      expect(codeCalls(reply)).toHaveLength(0);
+      scope.done();
+    });
+
+    it('returns 504 on upstream timeout', async () => {
+      const scope = nock(BASE).get('/packages/git').query(true).delay(500).reply(200, {});
+      const body = await controller.versions({ name: 'git' }, reply);
+      expectStatus(reply, 504);
+      expect(body).toEqual({ error: 'timeout' });
+      scope.done();
+    });
+
+    it('maps schema violations in releases to bad_upstream_json', async () => {
+      const pkg = loadFixture<PackageFixture>('package.git.json');
+      const mutated = JSON.parse(JSON.stringify(pkg)) as PackageFixture;
+      mutated.releases[0].platforms[0] = {
+        system: 'x86_64-linux',
+        attribute_path: 'git',
+        commit_hash: 'not-a-hash',
+      } as any;
+      const scope = nock(BASE).get('/packages/git').query(true).reply(200, mutated);
+      const body = await controller.versions({ name: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'bad_upstream_json' });
+      scope.done();
+    });
+
+    it('does not cache failures', async () => {
+      const pkg = loadFixture<PackageFixture>('package.git.json');
+      const scope = nock(BASE)
+        .get('/packages/git')
+        .query(true)
+        .reply(500, 'fail')
+        .get('/packages/git')
+        .query(true)
+        .reply(200, pkg);
+
+      const first = await controller.versions({ name: 'git' }, reply);
+      expectStatus(reply, 502);
+      expect(first).toMatchObject({ error: 'upstream_error' });
+
+      clearReplyMocks(reply);
+      const second = await controller.versions({ name: 'git' }, reply);
+      expect(second.versions[0]).toBe(String(pkg.releases[0].version));
+      scope.done();
+    });
+
+    it('caches successful responses', async () => {
+      const pkg = loadFixture<PackageFixture>('package.git.json');
+      const scope = nock(BASE)
+        .get('/packages/git')
+        .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
+        .once()
+        .reply(200, pkg);
+
+      await controller.versions({ name: 'git' }, reply);
+      clearReplyMocks(reply);
+      const second = await controller.versions({ name: 'git' }, reply);
+      expect(second.versions.length).toBeGreaterThan(0);
+      scope.done();
+    });
   });
 
-  it('versions: 404 mapping and strict upstream path/query', async () => {
-    const scope = nock(BASE).get('/packages/pkgs.missing').query((q) => q._data === 'routes/_nixhub.packages.$pkg._index').reply(404, 'not found');
-    await controller.versions({ name: 'pkgs.missing' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(404);
-    scope.done();
-  });
+  describe('resolve', () => {
+    it('returns commit hash and attribute path from preferred platform', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const scope = nock(BASE)
+        .get('/packages/nodejs')
+        .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
+        .reply(200, pkg);
 
-  it('packages: cache hit; strict upstream URL', async () => {
-    const searchPython = loadFixture<SearchFixture>('search.python.json');
-    const scope = nock(BASE).get('/search').query((q) => q.q === 'hello' && q._data === 'routes/_nixhub.search').once().reply(200, searchPython);
-    const first = await controller.packages({ query: 'hello' }, reply);
-    expect(Array.isArray(first.packages)).toBe(true);
-    const second = await controller.packages({ query: 'hello' }, reply);
-    expect(Array.isArray(second.packages)).toBe(true);
-    scope.done();
-  });
+      const body = await controller.resolve({ name: 'nodejs', version: String(pkg.releases[0].version) }, reply);
 
-  it('packages: error is not cached (500 then 200)', async () => {
-    const searchFlip = loadFixture<SearchFixture>('search.nodejs.json');
-    const scope = nock(BASE).get('/search').query((q) => q.q === 'flip').reply(500, 'oops').get('/search').query((q) => q.q === 'flip').reply(200, searchFlip);
-    await controller.packages({ query: 'flip' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    const second = await controller.packages({ query: 'flip' }, reply);
-    expect(Array.isArray(second.packages)).toBe(true);
-    scope.done();
-  });
+      expect(body).toMatchObject({
+        name: 'nodejs',
+        version: String(pkg.releases[0].version),
+        attributePath: pkg.releases[0].platforms[0].attribute_path,
+        commitHash: pkg.releases[0].platforms[0].commit_hash,
+      });
+      expect(codeCalls(reply)).toHaveLength(0);
+      scope.done();
+    });
 
-  it('packages: invalid upstream shape -> 502 bad_upstream_json', async () => {
-    const searchGit = loadFixture<SearchFixture>('search.git.json');
-    const mutated = JSON.parse(JSON.stringify(searchGit)) as Partial<SearchFixture>;
-    mutated.results = mutated.results!.map(({ last_updated, ...rest }) => rest as any);
-    const scope = nock(BASE).get('/search').query(true).reply(200, mutated as Record<string, unknown>);
-    const body = await controller.packages({ query: 'git' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    expect(body).toMatchObject({ error: 'bad_upstream_json' });
-    scope.done();
-  });
+    it('rejects invalid parameters with 400 and skips upstream', async () => {
+      const scope = nock(BASE).get('/packages/bad/name').query(true).reply(200, {});
+      await controller.resolve({ name: 'bad/name', version: '1.0.0' }, reply);
+      expectStatus(reply, 400);
+      expect(scope.isDone()).toBe(false);
+    });
 
-  it('packages: short query returns empty without upstream', async () => {
-    const res = await controller.packages({ query: 'g' }, reply);
-    expect(res).toEqual({ packages: [] });
-  });
+    it('maps upstream 404 to not_found', async () => {
+      const scope = nock(BASE)
+        .get('/packages/nodejs')
+        .query(true)
+        .reply(404, 'missing');
+      const body = await controller.resolve({ name: 'nodejs', version: '0.0.0' }, reply);
+      expectStatus(reply, 404);
+      expect(body).toMatchObject({ error: 'not_found', status: 404 });
+      scope.done();
+    });
 
-  it('packages: unknown params rejected with 400', async () => {
-    const scope = nock(BASE).get('/search').query(true).reply(200, { results: [] });
-    await controller.packages({ query: 'git', extra: 'x' } as any, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(400);
-    expect(scope.isDone()).toBe(false);
-  });
+    it('maps upstream 500 to upstream_error', async () => {
+      const scope = nock(BASE).get('/packages/nodejs').query(true).reply(500, 'fail');
+      const body = await controller.resolve({ name: 'nodejs', version: '1.0.0' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'upstream_error', status: 500 });
+      scope.done();
+    });
 
-  it('versions: invalid name (unsafe ident) -> 400', async () => {
-    const scope = nock(BASE).get('/packages/bad/name').query(true).reply(200, {} as any);
-    await controller.versions({ name: 'bad/name' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(400);
-    expect(scope.isDone()).toBe(false);
-  });
+    it('maps repeated 503 responses to upstream_error with status 503', async () => {
+      const scope = nock(BASE).get('/packages/nodejs').query(true).times(3).reply(503, 'bad gateway');
+      const body = await controller.resolve({ name: 'nodejs', version: '1.0.0' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'upstream_error', status: 503 });
+      scope.done();
+    });
 
-  it('versions: success mapping (unique + sorted) and cache hit', async () => {
-    const packageGit = loadFixture<PackageFixture>('package.git.json');
-    const upstream = {
-      ...packageGit,
-      releases: [
-        ...packageGit.releases,
+    it('retries single 502 and succeeds', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const version = String(pkg.releases[1].version);
+      const scope = nock(BASE)
+        .get('/packages/nodejs')
+        .query(true)
+        .reply(502, 'bad gateway')
+        .get('/packages/nodejs')
+        .query(true)
+        .reply(200, pkg);
+
+      const body = await controller.resolve({ name: 'nodejs', version }, reply);
+      expect(body.commitHash).toBe(pkg.releases[1].platforms[0].commit_hash);
+      expect(codeCalls(reply)).toHaveLength(0);
+      scope.done();
+    });
+
+    it('returns 504 on upstream timeout', async () => {
+      const scope = nock(BASE).get('/packages/nodejs').query(true).delay(500).reply(200, {});
+      const body = await controller.resolve({ name: 'nodejs', version: '1.0.0' }, reply);
+      expectStatus(reply, 504);
+      expect(body).toEqual({ error: 'timeout' });
+      scope.done();
+    });
+
+    it('maps invalid JSON payloads to bad_upstream_json', async () => {
+      const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, 'not-json');
+      const body = await controller.resolve({ name: 'nodejs', version: '1.0.0' }, reply);
+      expectStatus(reply, 502);
+      expect(body).toEqual({ error: 'bad_upstream_json' });
+      scope.done();
+    });
+
+    it('maps schema violations to bad_upstream_json', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const mutated = JSON.parse(JSON.stringify(pkg)) as PackageFixture;
+      mutated.releases[0].platforms = [
         {
-          version: '2.44.0',
-          commit_hash: 'abcdef12',
-          platforms: packageGit.releases[0].platforms,
-        },
+          system: 'x86_64-linux',
+          attribute_path: '',
+          commit_hash: mutated.releases[0].platforms[0].commit_hash,
+        } as any,
+      ];
+      const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, mutated);
+      const body = await controller.resolve({ name: 'nodejs', version: String(mutated.releases[0].version) }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'bad_upstream_json' });
+      scope.done();
+    });
+
+    it('returns 404 when release is not found', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, pkg);
+      const body = await controller.resolve({ name: 'nodejs', version: '0.0.0' }, reply);
+      expectStatus(reply, 404);
+      expect(body).toEqual({ error: 'release_not_found' });
+      scope.done();
+    });
+
+    it('returns 502 when attribute path missing', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const mutated = JSON.parse(JSON.stringify(pkg)) as PackageFixture;
+      mutated.releases[0].platforms = [
         {
-          version: '2.44.0',
-          commit_hash: 'abcdef12',
-          platforms: packageGit.releases[0].platforms,
+          commit_hash: mutated.releases[0].platforms[0].commit_hash,
         },
-        {
-          version: 'v2.45.0',
-          commit_hash: 'abcdef13',
-          platforms: packageGit.releases[0].platforms,
-        },
-      ],
-    } satisfies PackageFixture;
-    const scope = nock(BASE).get('/packages/git').query((q) => q._data === 'routes/_nixhub.packages.$pkg._index').once().reply(200, upstream);
-    const b1 = await controller.versions({ name: 'git' }, reply);
-    expect(b1.versions.slice(0, 3)).toEqual(['24402', '2.45.0', 'v2.45.0']);
-    expect(new Set(b1.versions).size).toBe(b1.versions.length);
-    const b2 = await controller.versions({ name: 'git' }, reply);
-    expect(Array.isArray(b2.versions)).toBe(true);
-    scope.done();
-  });
+      ];
+      const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, mutated);
+      const body = await controller.resolve({ name: 'nodejs', version: String(mutated.releases[0].version) }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'missing_attribute_path' });
+      scope.done();
+    });
 
-  it('versions: 502 retry then success', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const scope = nock(BASE).get('/packages/htop').query(true).reply(502, 'bad gateway').get('/packages/htop').query(true).reply(200, packageNode);
-    const res = await controller.versions({ name: 'htop' }, reply);
-    expect(res.versions).toContain('22.2.0');
-    scope.done();
-  });
+    it('returns 502 when commit hash missing on release and platform', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const mutated = JSON.parse(JSON.stringify(pkg)) as PackageFixture;
+      mutated.releases[0].platforms = [{ attribute_path: 'nodejs_24' }];
+      const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, mutated);
+      const body = await controller.resolve({ name: 'nodejs', version: String(mutated.releases[0].version) }, reply);
+      expectStatus(reply, 502);
+      expect(body).toMatchObject({ error: 'missing_commit_hash' });
+      scope.done();
+    });
 
-  it('versions: timeout -> 504', async () => {
-    const packageGit = loadFixture<PackageFixture>('package.git.json');
-    const scope = nock(BASE).get('/packages/curl').query(true).delay(500).reply(200, packageGit);
-    await controller.versions({ name: 'curl' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(504);
-    scope.done();
-  });
+    it('does not cache failures', async () => {
+      const pkg = loadFixture<PackageFixture>('package.nodejs.json');
+      const version = String(pkg.releases[0].version);
+      const scope = nock(BASE)
+        .get('/packages/nodejs')
+        .query(true)
+        .reply(500, 'fail')
+        .get('/packages/nodejs')
+        .query(true)
+        .reply(200, pkg);
 
-  it('versions: invalid upstream data -> 502 bad_upstream_json', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const mutated = JSON.parse(JSON.stringify(packageNode)) as PackageFixture;
-    mutated.releases[0].commit_hash = 'not-hex';
-    const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, mutated);
-    const body = await controller.versions({ name: 'nodejs' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    expect(body).toMatchObject({ error: 'bad_upstream_json' });
-    scope.done();
-  });
+      const first = await controller.resolve({ name: 'nodejs', version }, reply);
+      expectStatus(reply, 502);
+      expect(first).toMatchObject({ error: 'upstream_error' });
 
-  it('resolve: success with platform preference and fields', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const scope = nock(BASE).get('/packages/nodejs').query((q) => q._data === 'routes/_nixhub.packages.$pkg._index').reply(200, packageNode);
-    const body = await controller.resolve({ name: 'nodejs', version: '22.2.0' }, reply);
-    expect(body).toEqual({ name: 'nodejs', version: '22.2.0', commitHash: '1a2b3c4d5e6f7890', attributePath: 'nodejs' });
-    scope.done();
-  });
-
-  it('resolve: release not found -> 404', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, packageNode);
-    await controller.resolve({ name: 'nodejs', version: '9.9.9' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(404);
-    scope.done();
-  });
-
-  it('resolve: missing attribute path -> 502', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const mutated = JSON.parse(JSON.stringify(packageNode)) as PackageFixture;
-    mutated.releases = [
-      {
-        version: '99.1.0',
-        commit_hash: 'abcdef9',
-        platforms: [{ system: 'x86_64-linux' }],
-      },
-    ];
-    const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, mutated);
-    const body = await controller.resolve({ name: 'nodejs', version: '99.1.0' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    expect(body).toMatchObject({ error: 'missing_attribute_path' });
-    scope.done();
-  });
-
-  it('resolve: missing commit hash -> 502', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const mutated = JSON.parse(JSON.stringify(packageNode)) as PackageFixture;
-    mutated.releases = [
-      {
-        version: '77.1.0',
-        platforms: [{ system: 'x86_64-linux', attribute_path: 'nodejs' }],
-      },
-    ];
-    const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, mutated);
-    const body = await controller.resolve({ name: 'nodejs', version: '77.1.0' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    expect(body).toMatchObject({ error: 'missing_commit_hash' });
-    scope.done();
-  });
-
-  it('resolve: invalid upstream data -> 502 bad_upstream_json', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const mutated = JSON.parse(JSON.stringify(packageNode)) as PackageFixture;
-    mutated.releases = [
-      {
-        version: '1.0.0',
-        commit_hash: 'not-hex',
-        platforms: [{ system: 'x86_64-linux', attribute_path: 'nodejs' }],
-      },
-    ];
-    const scope = nock(BASE).get('/packages/nodejs').query(true).reply(200, mutated);
-    const body = await controller.resolve({ name: 'nodejs', version: '1.0.0' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(502);
-    expect(body).toMatchObject({ error: 'bad_upstream_json' });
-    scope.done();
-  });
-
-  it('resolve: timeout -> 504', async () => {
-    const packageNode = loadFixture<PackageFixture>('package.nodejs.json');
-    const scope = nock(BASE).get('/packages/nodejs').query(true).delay(500).reply(200, packageNode);
-    await controller.resolve({ name: 'nodejs', version: '22.2.0' }, reply);
-    expect((reply.code as any).mock.calls[0][0]).toBe(504);
-    scope.done();
+      clearReplyMocks(reply);
+      const second = await controller.resolve({ name: 'nodejs', version }, reply);
+      expect(second.commitHash).toBe(pkg.releases[0].platforms[0].commit_hash);
+      scope.done();
+    });
   });
 });

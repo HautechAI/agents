@@ -114,8 +114,8 @@ Nix proxy
   - 404 `{ error: 'not_found' }`
   - 400 `{ error: 'validation_error' }`
   - 504 `{ error: 'timeout' }`
-- GET `/api/nix/package-info?name=`
-  - 200 `{ name: string, releases: Array<{ version: string, attribute_path?: string, commit_hash?: string, platforms?: string[] }> }`
+- GET `/api/nix/resolve?name=&version=`
+  - 200 `{ name: string, version: string, attributePath: string, commitHash: string }`
   - 404 `{ error: 'not_found' }`
   - 400 `{ error: 'validation_error' }`
   - 504 `{ error: 'timeout' }`

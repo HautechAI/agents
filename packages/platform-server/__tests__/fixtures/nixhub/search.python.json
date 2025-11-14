@@ -1,16 +1,121 @@
 {
   "query": "python",
-  "total_results": 2,
+  "total_results": 23,
   "results": [
     {
       "name": "python",
-      "summary": "High-level programming language",
-      "last_updated": "2024-08-12T12:00:00Z"
+      "summary": "High-level dynamically-typed programming language",
+      "last_updated": "2025-10-22T20:59:19Z"
     },
     {
-      "name": "python311",
-      "summary": "Python 3.11 interpreter",
-      "last_updated": "2024-08-08T07:15:42Z"
+      "name": "python-cosmopolitan",
+      "summary": "Actually Portable Python using Cosmopolitan",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "python-launcher",
+      "summary": "Implementation of the `py` command for Unix-based platforms",
+      "last_updated": "2025-11-12T10:38:40Z"
+    },
+    {
+      "name": "python-qt",
+      "summary": "PythonQt is a dynamic Python binding for the Qt framework. It offers an easy way to embed the Python scripting language into your C++ Qt applications",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "python-swiftclient",
+      "summary": "Python bindings to the OpenStack Object Storage API",
+      "last_updated": "2023-02-24T18:08:35Z"
+    },
+    {
+      "name": "python-language-server",
+      "summary": "Microsoft Language Server for Python",
+      "last_updated": "2023-02-14T00:52:29Z"
+    },
+    {
+      "name": "python-matter-server",
+      "summary": "Python server to interact with Matter",
+      "last_updated": "2025-11-12T10:38:40Z"
+    },
+    {
+      "name": "python-full",
+      "summary": "High-level dynamically-typed programming language",
+      "last_updated": "2025-07-28T17:09:23Z"
+    },
+    {
+      "name": "python-minimal",
+      "summary": "High-level dynamically-typed programming language",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "cyclonedx-python",
+      "summary": "Creates CycloneDX Software Bill of Materials (SBOM) from Python projects",
+      "last_updated": "2025-11-08T12:28:21Z"
+    },
+    {
+      "name": "gst-python",
+      "summary": "Python bindings for GStreamer",
+      "last_updated": "2020-08-30T16:47:05Z"
+    },
+    {
+      "name": "gst_python",
+      "summary": "Python bindings for GStreamer",
+      "last_updated": "2020-08-30T16:47:05Z"
+    },
+    {
+      "name": "kdev-python",
+      "summary": "Python support for KDevelop",
+      "last_updated": "2023-02-24T09:01:09Z"
+    },
+    {
+      "name": "mod_python",
+      "summary": "An Apache module that embeds the Python interpreter within the server",
+      "last_updated": "2023-02-24T09:01:09Z"
+    },
+    {
+      "name": "nautilus-python",
+      "summary": "Python bindings for the Nautilus Extension API",
+      "last_updated": "2025-11-12T10:38:40Z"
+    },
+    {
+      "name": "nemo-python",
+      "summary": "Python bindings for the Nemo extension library",
+      "last_updated": "2025-11-02T15:04:35Z"
+    },
+    {
+      "name": "oil-python",
+      "summary": "A new unix shell - Old python build",
+      "last_updated": "2024-03-08T13:51:52Z"
+    },
+    {
+      "name": "selinux-python",
+      "summary": "SELinux policy core utilities written in Python",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "openapi-python-client",
+      "summary": "Generate modern Python clients from OpenAPI",
+      "last_updated": "2025-11-07T02:32:13Z"
+    },
+    {
+      "name": "qemu-python-utils",
+      "summary": "Python tooling used by the QEMU project to build, configure, and test QEMU",
+      "last_updated": "2025-10-24T23:52:36Z"
+    },
+    {
+      "name": "update-python-libraries",
+      "summary": "",
+      "last_updated": "2025-11-04T19:54:02Z"
+    },
+    {
+      "name": "python27Packages.python",
+      "summary": "A high-level dynamically-typed programming language",
+      "last_updated": "2020-11-22T19:04:20Z"
+    },
+    {
+      "name": "python310Packages.python",
+      "summary": "A high-level dynamically-typed programming language",
+      "last_updated": "2023-12-13T22:54:10Z"
     }
   ]
 }
