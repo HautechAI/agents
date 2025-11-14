@@ -1,5 +1,5 @@
 import React from 'react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RunTimelineEventDetails } from '../RunTimelineEventDetails';
@@ -60,7 +60,51 @@ beforeEach(() => {
   }
 });
 
+afterEach(() => {
+  if (Object.getOwnPropertyDescriptor(window.navigator, 'clipboard')) {
+    delete (window.navigator as Navigator & { clipboard?: unknown }).clipboard;
+  }
+});
+
 describe('RunTimelineEventDetails', () => {
+  it('omits placeholders and exposes raw event button', () => {
+    const event = buildEvent({ durationMs: null, nodeId: null, toolExecution: undefined });
+    const timestamp = new Date(event.ts).toLocaleString();
+
+    render(<RunTimelineEventDetails event={event} />);
+
+    expect(screen.getByRole('button', { name: 'View raw event' })).toBeInTheDocument();
+    expect(screen.getByText(timestamp)).toBeInTheDocument();
+    expect(screen.queryByText(/Node:/i)).toBeNull();
+    expect(screen.queryByText(/Source:/i)).toBeNull();
+    expect(screen.queryByText(/Metadata/i)).toBeNull();
+    expect(screen.queryByText(/Raw payload/i)).toBeNull();
+  });
+
+  it('opens raw modal, copies payload, and restores focus on close', async () => {
+    const event = buildEvent({ durationMs: 1500 });
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(<RunTimelineEventDetails event={event} />);
+
+    const trigger = screen.getByRole('button', { name: 'View raw event' });
+    await user.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Raw event data' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(writeText).toHaveBeenCalledWith(JSON.stringify(event, null, 2));
+    expect(screen.getByText('Copied!')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
   it('defaults output viewer to json for objects and allows switching', async () => {
     const user = userEvent.setup();
     render(<RunTimelineEventDetails event={buildEvent()} />);
@@ -122,7 +166,7 @@ describe('RunTimelineEventDetails', () => {
     expect(screen.queryByText('Raw response')).toBeNull();
   });
 
-  it('renders response and tool calls when provided', () => {
+  it('renders response, tool calls, and attachments when provided', () => {
     const event = buildEvent({
       type: 'llm_call',
       llmCall: {
@@ -136,6 +180,16 @@ describe('RunTimelineEventDetails', () => {
         rawResponse: { content: 'All good' },
         toolCalls: [{ callId: 'tool-1', name: 'search', arguments: { q: 'hi' } }],
       },
+      attachments: [
+        {
+          id: 'att-resp',
+          kind: 'response',
+          isGzip: false,
+          sizeBytes: 64,
+          contentJson: null,
+          contentText: 'response attachment',
+        },
+      ],
       toolExecution: undefined,
     });
 
@@ -147,28 +201,9 @@ describe('RunTimelineEventDetails', () => {
       expect(within(responseContainer).getByText('All good')).toBeInTheDocument();
     }
 
-    const toolCallsLabel = screen.getByText(/Tool calls/);
-    expect(toolCallsLabel).toBeInTheDocument();
+    expect(screen.getByText(/Tool calls/)).toBeInTheDocument();
     expect(screen.getByText(/search/)).toBeInTheDocument();
-    expect(screen.queryByText('Raw response')).toBeNull();
-  });
-
-  it('omits raw message source in invocation message details', () => {
-    const event = buildEvent({
-      type: 'invocation_message',
-      message: {
-        messageId: 'msg-1',
-        role: 'user',
-        kind: 'text',
-        text: 'Hello',
-        source: { foo: 'secret' },
-        createdAt: '2024-01-01T00:00:00.000Z',
-      },
-      toolExecution: undefined,
-    });
-
-    render(<RunTimelineEventDetails event={event} />);
-    expect(screen.queryByText(/"foo": "secret"/)).toBeNull();
+    expect(screen.getByText(/Response attachment/)).toBeInTheDocument();
   });
 
   it('does not crash when sessionStorage access is blocked', () => {
@@ -210,30 +245,28 @@ describe('RunTimelineEventDetails', () => {
     expect(screen.queryByText(/Ended/)).toBeNull();
   });
 
-  it('lists prompt and response attachments in the attachments section only', () => {
-    const attachments = [
-      {
-        id: 'att-prompt',
-        kind: 'prompt' as const,
-        isGzip: false,
-        sizeBytes: 128,
-        contentJson: null,
-        contentText: 'Prompt body',
-      },
-      {
-        id: 'att-response',
-        kind: 'response' as const,
-        isGzip: false,
-        sizeBytes: 256,
-        contentJson: { value: 'resp' },
-        contentText: null,
-      },
-    ];
-
+  it('renders prompt attachments within the context column only', () => {
     const event = buildEvent({
       type: 'llm_call',
-      attachments,
       toolExecution: undefined,
+      attachments: [
+        {
+          id: 'att-prompt',
+          kind: 'prompt',
+          isGzip: false,
+          sizeBytes: 128,
+          contentJson: null,
+          contentText: 'Prompt body',
+        },
+        {
+          id: 'att-extra',
+          kind: 'other',
+          isGzip: false,
+          sizeBytes: 16,
+          contentJson: { foo: 'bar' },
+          contentText: null,
+        },
+      ],
       llmCall: {
         provider: 'openai',
         model: 'gpt-test',
@@ -241,18 +274,18 @@ describe('RunTimelineEventDetails', () => {
         topP: null,
         stopReason: null,
         contextItemIds: [],
-        responseText: 'Answer',
-        rawResponse: { content: 'Answer' },
+        responseText: null,
+        rawResponse: null,
         toolCalls: [],
       },
     });
 
     render(<RunTimelineEventDetails event={event} />);
 
+    expect(screen.getByText(/Prompt attachment/)).toBeInTheDocument();
     expect(screen.getByText('Attachments')).toBeInTheDocument();
-    expect(screen.getByText('Prompt attachments (1)')).toBeInTheDocument();
-    expect(screen.getByText('Response attachments (1)')).toBeInTheDocument();
-    expect(screen.queryByText(/Response attachment \(/)).toBeNull();
+    expect(screen.queryByText('Prompt attachments (1)')).toBeNull();
+    expect(screen.getByText(/other \(att/)).toBeInTheDocument();
   });
 
   it('hides tool call metadata when no identifier is present', () => {

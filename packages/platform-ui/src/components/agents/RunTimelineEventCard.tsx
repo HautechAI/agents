@@ -12,12 +12,13 @@ export function RunTimelineEventCard({ event }: Props) {
   const timestamp = new Date(event.ts).toLocaleString();
   const durationLabel = formatDuration(event.durationMs);
   const typeLabel = getEventTypeLabel(event);
+  const headerDetail = durationLabel ? `${timestamp} • ${durationLabel}` : timestamp;
 
   return (
     <div className="border rounded-md bg-white shadow-sm p-3" data-testid="timeline-event">
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div className="flex flex-col text-left">
-          <span className="text-xs text-gray-500">{timestamp} • {durationLabel}</span>
+          <span className="text-xs text-gray-500">{headerDetail}</span>
           <span className="text-sm font-semibold">{typeLabel}</span>
         </div>
         <div className="flex items-center gap-2">

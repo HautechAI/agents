@@ -10,6 +10,9 @@ type Props = {
 
 export const RunTimelineEventListItem = forwardRef<HTMLDivElement, Props>(({ event, selected, onSelect }, ref) => {
   const timestamp = new Date(event.ts).toLocaleTimeString();
+  const durationLabel = formatDuration(event.durationMs);
+  const infoItems: string[] = [timestamp];
+  if (durationLabel) infoItems.push(durationLabel);
 
   return (
     <div
@@ -27,9 +30,12 @@ export const RunTimelineEventListItem = forwardRef<HTMLDivElement, Props>(({ eve
         <span className={`text-white text-[10px] px-2 py-0.5 rounded ${STATUS_COLORS[event.status] ?? 'bg-gray-500'}`}>{event.status}</span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
-        <span>{timestamp}</span>
-        <span aria-hidden="true">•</span>
-        <span>{formatDuration(event.durationMs)}</span>
+        {infoItems.map((content, index) => (
+          <span key={`${event.id}-info-${index}`} className="flex items-center gap-2">
+            {index > 0 && <span aria-hidden="true">•</span>}
+            <span>{content}</span>
+          </span>
+        ))}
       </div>
     </div>
   );

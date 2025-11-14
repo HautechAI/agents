@@ -56,4 +56,16 @@ describe('RunTimelineEventCard', () => {
     expect(screen.queryByText(/Error code:/)).toBeNull();
     expect(screen.queryByText(/Error:/)).toBeNull();
   });
+
+  it('does not render duration bullet when duration is missing', () => {
+    const eventWithoutDuration: RunTimelineEvent = {
+      ...baseEvent,
+      durationMs: null,
+      endedAt: null,
+    };
+    render(<RunTimelineEventCard event={eventWithoutDuration} />);
+    const timestamp = new Date(eventWithoutDuration.ts).toLocaleString();
+    const header = screen.getByText(timestamp);
+    expect(header.textContent).toBe(timestamp);
+  });
 });

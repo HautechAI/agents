@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { stringify as stringifyYaml } from 'yaml';
 import type { RunTimelineEvent } from '@/api/types/agents';
 import { STATUS_COLORS, formatDuration, getEventTypeLabel } from './runTimelineFormatting';
+import { RawEventModal } from './RawEventModal';
 
 const wrapStyle = {
   whiteSpace: 'pre-wrap',
@@ -255,83 +256,142 @@ function renderAttachmentContent(attachment: Attachment, tone: 'default' | 'mute
   return <div className="text-[11px] text-gray-500">No preview available</div>;
 }
 
+function InlineList({ items }: { items: ReactNode[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
+      {items.map((item, index) => (
+        <span key={`inline-${index}`} className="flex items-center gap-2">
+          {index > 0 && <span aria-hidden="true">•</span>}
+          <span>{item}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) {
-  const timestamp = new Date(event.ts).toLocaleString();
-  const headerMetaItems: string[] = [timestamp];
-  const durationLabel = formatDuration(event.durationMs);
-  if (durationLabel !== '—') headerMetaItems.push(durationLabel);
-  if (event.nodeId) headerMetaItems.push(`Node: ${event.nodeId}`);
+  const [showRaw, setShowRaw] = useState(false);
+  const timestamp = useMemo(() => new Date(event.ts).toLocaleString(), [event.ts]);
+  const durationLabel = useMemo(() => formatDuration(event.durationMs), [event.durationMs]);
+
+  const primaryItems = useMemo<ReactNode[]>(() => {
+    const items: ReactNode[] = [timestamp];
+    if (durationLabel) items.push(durationLabel);
+    if (event.nodeId) items.push(`Node: ${event.nodeId}`);
+    return items;
+  }, [timestamp, durationLabel, event.nodeId]);
+
+  const secondaryItems = useMemo<ReactNode[]>(() => {
+    const items: ReactNode[] = [];
+    if (event.sourceSpanId) items.push(`Span: ${event.sourceSpanId}`);
+    return items;
+  }, [event.sourceSpanId]);
+
   const promptAttachments = event.attachments.filter((att) => att.kind === 'prompt');
   const responseAttachments = event.attachments.filter((att) => att.kind === 'response');
   const toolInputAttachments = event.attachments.filter((att) => att.kind === 'tool_input');
   const toolOutputAttachments = event.attachments.filter((att) => att.kind === 'tool_output');
-  const providerRawAttachments = event.attachments.filter((att) => att.kind === 'provider_raw');
   const remainingAttachments = event.attachments.filter(
     (att) => !['prompt', 'response', 'tool_input', 'tool_output', 'provider_raw'].includes(att.kind),
   );
 
-  const shouldShowAttachmentsSection =
-    promptAttachments.length > 0 ||
-    responseAttachments.length > 0 ||
-    providerRawAttachments.length > 0 ||
-    remainingAttachments.length > 0;
+  const shouldShowAttachmentsSection = remainingAttachments.length > 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 text-xs text-gray-700" data-testid="timeline-event-details">
       <section className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-900">
-          <span>{getEventTypeLabel(event)}</span>
-          <span className={`text-white text-[11px] px-2 py-0.5 rounded ${STATUS_COLORS[event.status] ?? 'bg-gray-500'}`}>{event.status}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <span>{getEventTypeLabel(event)}</span>
+            <span className={`text-white text-[11px] px-2 py-0.5 rounded ${STATUS_COLORS[event.status] ?? 'bg-gray-500'}`}>{event.status}</span>
+          </div>
+          <button
+            type="button"
+            className="ml-auto rounded border px-2 py-1 text-[11px] text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            onClick={() => setShowRaw(true)}
+          >
+            View raw event
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
-          {headerMetaItems.map((item, index) => (
-            <div key={item + index} className="flex items-center gap-2">
-              {index > 0 && <span aria-hidden="true">•</span>}
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
+        <InlineList items={primaryItems} />
+        <InlineList items={secondaryItems} />
         {event.errorCode && <div className="text-red-600">Error code: {event.errorCode}</div>}
         {event.errorMessage && <div className="text-red-600">Error: {event.errorMessage}</div>}
       </section>
 
       {event.llmCall && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-600">
-            {event.llmCall.model && (
-              <span>
-                <span className="font-medium text-gray-800">Model:</span> {event.llmCall.model}
-              </span>
-            )}
-            <span>
-              <span className="font-medium text-gray-800">Context items:</span> {event.llmCall.contextItemIds.length}
-            </span>
-          </div>
-          <div className="flex min-h-[260px] flex-col gap-4 md:min-h-[320px] md:flex-row md:gap-6">
-            <div className="flex min-h-0 flex-1 flex-col border">
-              <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Context</header>
-              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-                {event.llmCall.contextItemIds.length > 0 ? textBlock(event.llmCall.contextItemIds.join('\n')) : null}
+        <section className="flex min-h-[260px] flex-col gap-4 md:min-h-[320px] md:flex-row md:gap-6">
+          <div className="flex min-h-0 flex-1 flex-col border">
+            <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Context</header>
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
+              <div className="space-y-1 text-[11px] text-gray-600">
+                {event.llmCall.provider && (
+                  <div>
+                    <span className="font-medium text-gray-800">Provider:</span> {event.llmCall.provider}
+                  </div>
+                )}
+                {event.llmCall.model && (
+                  <div>
+                    <span className="font-medium text-gray-800">Model:</span> {event.llmCall.model}
+                  </div>
+                )}
+                {event.llmCall.temperature !== null && event.llmCall.temperature !== undefined && (
+                  <div>
+                    <span className="font-medium text-gray-800">Temperature:</span> {event.llmCall.temperature}
+                  </div>
+                )}
+                {event.llmCall.topP !== null && event.llmCall.topP !== undefined && (
+                  <div>
+                    <span className="font-medium text-gray-800">Top P:</span> {event.llmCall.topP}
+                  </div>
+                )}
+                {event.llmCall.stopReason && (
+                  <div>
+                    <span className="font-medium text-gray-800">Stop reason:</span> {event.llmCall.stopReason}
+                  </div>
+                )}
+                <div>
+                  <span className="font-medium text-gray-800">Context items:</span> {event.llmCall.contextItemIds.length}
+                </div>
               </div>
+              {event.llmCall.contextItemIds.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-medium text-gray-800">Context item IDs</div>
+                  {textBlock(event.llmCall.contextItemIds.join('\n'))}
+                </div>
+              )}
+              {promptAttachments.map((att) => (
+                <div key={att.id} className="space-y-1">
+                  <div className="text-[11px] font-medium text-gray-800">Prompt attachment ({att.id.slice(0, 8)})</div>
+                  {renderAttachmentContent(att)}
+                </div>
+              ))}
             </div>
-            <div className="flex min-h-0 flex-1 flex-col border">
-              <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Output</header>
-              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
-                {event.llmCall.responseText && (
-                  <div className="space-y-1">
-                    <div className="text-[11px] font-medium text-gray-800">Response</div>
-                    {textBlock(event.llmCall.responseText)}
-                  </div>
-                )}
-                {event.llmCall.toolCalls.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-medium text-gray-800">Tool calls ({event.llmCall.toolCalls.length})</div>
-                    {event.llmCall.toolCalls.map((tc) => (
-                      <div key={tc.callId}>{jsonBlock({ callId: tc.callId, name: tc.name, arguments: tc.arguments })}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col border">
+            <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Output</header>
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
+              {event.llmCall.responseText && (
+                <div className="space-y-1">
+                  <div className="text-[11px] font-medium text-gray-800">Response</div>
+                  {textBlock(event.llmCall.responseText)}
+                </div>
+              )}
+              {event.llmCall.toolCalls.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-medium text-gray-800">Tool calls ({event.llmCall.toolCalls.length})</div>
+                  {event.llmCall.toolCalls.map((tc) => (
+                    <div key={tc.callId}>{jsonBlock({ callId: tc.callId, name: tc.name, arguments: tc.arguments })}</div>
+                  ))}
+                </div>
+              )}
+              {responseAttachments.map((att) => (
+                <div key={att.id} className="space-y-1">
+                  <div className="text-[11px] font-medium text-gray-800">Response attachment ({att.id.slice(0, 8)})</div>
+                  {renderAttachmentContent(att)}
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -386,6 +446,9 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
             <div>Role: {event.message.role}</div>
             {event.message.kind && <div>Kind: {event.message.kind}</div>}
             {event.message.text && <div>{textBlock(event.message.text)}</div>}
+            {event.message.source !== null && event.message.source !== undefined && (
+              <div>{jsonBlock(event.message.source, 'default')}</div>
+            )}
           </div>
         </section>
       )}
@@ -424,30 +487,6 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
         <section className="space-y-2">
           <h4 className="text-sm font-semibold text-gray-800">Attachments</h4>
           <div className="space-y-3">
-            {providerRawAttachments.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">Provider payloads ({providerRawAttachments.length})</div>
-                {providerRawAttachments.map((att) => (
-                  <div key={`provider-${att.id}`}>{renderAttachmentContent(att, 'muted')}</div>
-                ))}
-              </div>
-            )}
-            {promptAttachments.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">Prompt attachments ({promptAttachments.length})</div>
-                {promptAttachments.map((att) => (
-                  <div key={`prompt-${att.id}`}>{renderAttachmentContent(att)}</div>
-                ))}
-              </div>
-            )}
-            {responseAttachments.length > 0 && (
-              <div className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">Response attachments ({responseAttachments.length})</div>
-                {responseAttachments.map((att) => (
-                  <div key={`response-${att.id}`}>{renderAttachmentContent(att)}</div>
-                ))}
-              </div>
-            )}
             {remainingAttachments.map((att) => (
               <div key={att.id} className="space-y-1">
                 <div className="text-[11px] font-medium text-gray-800">
@@ -459,6 +498,8 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
           </div>
         </section>
       )}
+
+      {showRaw && <RawEventModal event={event} onClose={() => setShowRaw(false)} />}
     </div>
   );
 }

@@ -254,7 +254,7 @@ describe('AgentsRunTimeline layout and selection', () => {
     expect(getByTestId('location').textContent).toContain('eventId=event-1');
 
     expect(getByText('Events')).toBeInTheDocument();
-    expect(getByText('Details')).toBeInTheDocument();
+    expect(getByRole('button', { name: 'View raw event' })).toBeInTheDocument();
   });
 
   it('opens details in an accessible modal on mobile and clears selection on close', () => {

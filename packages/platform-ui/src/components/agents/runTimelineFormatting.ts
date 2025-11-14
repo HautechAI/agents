@@ -16,12 +16,12 @@ export const STATUS_COLORS: Record<RunEventStatus, string> = {
   cancelled: 'bg-yellow-500',
 };
 
-export function formatDuration(ms: number | null): string {
-  if (!ms || Number.isNaN(ms)) return '—';
-  if (ms < 1000) return `${ms} ms`;
+export function formatDuration(ms: number | null | undefined): string | null {
+  if (ms === null || ms === undefined || Number.isNaN(ms)) return null;
+  if (ms < 1000 && ms > -1000) return `${ms} ms`;
   const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(2)} s`;
-  const minutes = Math.floor(seconds / 60);
+  if (seconds < 60 && seconds > -60) return `${seconds.toFixed(2)} s`;
+  const minutes = Math.trunc(seconds / 60);
   const remSeconds = seconds % 60;
   return `${minutes}m ${remSeconds.toFixed(1)}s`;
 }

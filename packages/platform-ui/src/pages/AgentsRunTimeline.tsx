@@ -378,7 +378,6 @@ export function AgentsRunTimeline() {
             </div>
           </section>
           <section className="hidden min-h-0 flex-1 flex-col md:flex">
-            <header className="border-b px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Details</header>
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
               {selectedEvent ? (
                 <RunTimelineEventDetails event={selectedEvent} />
