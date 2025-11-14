@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import nock from 'nock';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { NixController } from '../src/infra/ncps/nix.controller';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
+import { LoggerService } from '../src/core/services/logger.service';
 
 const BASE = 'https://www.nixhub.io';
 
@@ -24,9 +25,14 @@ describe('NixController E2E (Fastify)', () => {
       })
     );
 
+    const loggerStub = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+
     const moduleRef = await Test.createTestingModule({
       controllers: [NixController],
-      providers: [{ provide: ConfigService, useValue: cfg }],
+      providers: [
+        { provide: ConfigService, useValue: cfg },
+        { provide: LoggerService, useValue: loggerStub },
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -71,4 +77,3 @@ describe('NixController E2E (Fastify)', () => {
     expect(res.statusCode).toBe(400);
   });
 });
-

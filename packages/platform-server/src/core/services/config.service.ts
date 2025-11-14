@@ -73,6 +73,16 @@ export const configSchema = z.object({
       const n = typeof v === 'number' ? v : Number(v);
       return Number.isFinite(n) ? n : 500;
     }),
+  nixhubDebugLog: z
+    .union([z.boolean(), z.string()])
+    .default('false')
+    .transform((v) => {
+      if (typeof v === 'string') {
+        const lower = v.toLowerCase();
+        return lower === '1' || lower === 'true' || lower === 'yes';
+      }
+      return !!v;
+    }),
   // Global MCP tools cache staleness timeout (ms). 0 => never stale by time.
   mcpToolsStaleTimeoutMs: z
     .union([z.string(), z.number()])
@@ -259,6 +269,10 @@ export class ConfigService implements Config {
     return this.params.nixCacheMax;
   }
 
+  get nixhubDebugLog(): boolean {
+    return this.params.nixhubDebugLog;
+  }
+
   // MCP tools cache staleness timeout (global default)
   get mcpToolsStaleTimeoutMs(): number {
     return this.params.mcpToolsStaleTimeoutMs ?? 0;
@@ -354,6 +368,7 @@ export class ConfigService implements Config {
       nixHttpTimeoutMs: process.env.NIX_HTTP_TIMEOUT_MS,
       nixCacheTtlMs: process.env.NIX_CACHE_TTL_MS,
       nixCacheMax: process.env.NIX_CACHE_MAX,
+      nixhubDebugLog: process.env.NIXHUB_DEBUG_LOG,
       mcpToolsStaleTimeoutMs: process.env.MCP_TOOLS_STALE_TIMEOUT_MS,
       ncpsEnabled: process.env.NCPS_ENABLED,
       // Preserve legacy for backward compatibility; prefer dual URLs above

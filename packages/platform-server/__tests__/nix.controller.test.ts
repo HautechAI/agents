@@ -3,31 +3,56 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Avoid Nest TestingModule; instantiate controller with DI stubs
 import { NixController } from '../src/infra/ncps/nix.controller';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
+import type { LoggerService } from '../src/core/services/logger.service';
 import type { FastifyReply } from 'fastify';
 
 const BASE = 'https://www.nixhub.io';
 
+const BASE_CONFIG = {
+  llmProvider: 'openai',
+  githubAppId: 'x',
+  githubAppPrivateKey: 'x',
+  githubInstallationId: 'x',
+  githubToken: 'x',
+  mongodbUrl: 'x',
+  agentsDatabaseUrl: 'postgres://localhost:5432/agents',
+  graphStore: 'mongo',
+  graphRepoPath: './data/graph',
+  graphBranch: 'graph-state',
+  dockerMirrorUrl: 'http://registry-mirror:5000',
+  nixAllowedChannels: 'nixpkgs-unstable',
+  nixHttpTimeoutMs: String(200),
+  nixCacheTtlMs: String(5 * 60_000),
+  nixCacheMax: String(500),
+  mcpToolsStaleTimeoutMs: '0',
+  ncpsEnabled: 'false',
+  ncpsUrl: 'http://ncps:8501',
+  ncpsRefreshIntervalMs: '0',
+} as const;
+
+const createLoggerStub = () => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn(),
+});
+
+const createReplyStub = (): FastifyReply => {
+  const stub: Partial<FastifyReply> = {};
+  stub.code = vi.fn(() => stub as FastifyReply) as any;
+  stub.header = vi.fn(() => stub as FastifyReply) as any;
+  return stub as FastifyReply;
+};
+
 describe('nix controller', () => {
   let controller: NixController;
   let reply: FastifyReply;
+  let loggerStub: ReturnType<typeof createLoggerStub>;
   beforeEach(() => {
-    const cfg = new ConfigService().init(
-      configSchema.parse({
-        llmProvider: 'openai',
-        githubAppId: 'x', githubAppPrivateKey: 'x', githubInstallationId: 'x', githubToken: 'x', mongodbUrl: 'x',
-        agentsDatabaseUrl: 'postgres://localhost:5432/agents',
-        graphStore: 'mongo', graphRepoPath: './data/graph', graphBranch: 'graph-state',
-        dockerMirrorUrl: 'http://registry-mirror:5000', nixAllowedChannels: 'nixpkgs-unstable',
-        nixHttpTimeoutMs: String(200), nixCacheTtlMs: String(5 * 60_000), nixCacheMax: String(500),
-        mcpToolsStaleTimeoutMs: '0', ncpsEnabled: 'false', ncpsUrl: 'http://ncps:8501',
-        ncpsRefreshIntervalMs: '0',
-      })
-    );
-    controller = new NixController(cfg);
-    reply = {
-      code: vi.fn(() => reply) as any,
-      header: vi.fn(() => reply) as any,
-    } as unknown as FastifyReply;
+    const cfg = new ConfigService().init(configSchema.parse(BASE_CONFIG));
+    loggerStub = createLoggerStub();
+    controller = new NixController(cfg, loggerStub as unknown as LoggerService);
+    reply = createReplyStub();
   });
   afterEach(() => nock.cleanAll());
 
@@ -161,6 +186,75 @@ describe('nix controller', () => {
     const scope = nock(BASE).get('/packages/slow').query(true).delay(500).reply(200, { name: 'slow', releases: [{ version: '1.0.0', commit_hash: 'x', platforms: [{ system: 'x86_64-linux', attribute_path: 'x' }] }] });
     await controller.resolve({ name: 'slow', version: '1.0.0' }, reply);
     expect((reply.code as any).mock.calls[0][0]).toBe(504);
+    scope.done();
+  });
+
+  it('resolve: nodejs debug logging emits release subset when enabled', async () => {
+    const cfg = new ConfigService().init(configSchema.parse({ ...BASE_CONFIG, nixhubDebugLog: '1' }));
+    const debugLogger = createLoggerStub();
+    const nodeController = new NixController(cfg, debugLogger as unknown as LoggerService);
+    const nodeReply = createReplyStub();
+    const scope = nock(BASE)
+      .get('/packages/nodejs')
+      .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
+      .once()
+      .reply(200, {
+        name: 'nodejs',
+        releases: [
+          {
+            version: '24.11.0',
+            commit_hash: 'abcd2411',
+            platforms: [
+              { system: 'x86_64-linux', attribute_path: 'legacy.nodejs_24_11' },
+              { system: 'aarch64-linux', attribute_path: 'nodejs-24_11.aarch64' },
+            ],
+          },
+          {
+            version: '24.10.0',
+            commit_hash: 'abcd2410',
+            platforms: [
+              { system: 'x86_64-linux', attribute_path: 'legacy.nodejs_24_10' },
+              { system: 'aarch64-linux', attribute_path: 'nodejs-24_10.aarch64' },
+            ],
+          },
+        ],
+      });
+
+    await nodeController.resolve({ name: 'nodejs', version: '24.11.0' }, nodeReply);
+    await nodeController.resolve({ name: 'nodejs', version: '24.10.0' }, nodeReply);
+
+    expect(debugLogger.info).toHaveBeenCalledTimes(2);
+    const infoMock = debugLogger.info as ReturnType<typeof vi.fn>;
+    const firstCall = infoMock.mock.calls[0];
+    const secondCall = infoMock.mock.calls[1];
+    expect(firstCall[0]).toBe('NixHub nodejs upstream releases');
+    expect(secondCall[0]).toBe('NixHub nodejs upstream releases');
+    expect(firstCall[1]).toMatchObject({
+      requestedVersion: '24.11.0',
+      releases: [
+        expect.objectContaining({
+          version: '24.11.0',
+          commit_hash: 'abcd2411',
+          platforms: expect.arrayContaining([
+            expect.objectContaining({ attribute_path: 'legacy.nodejs_24_11' }),
+            expect.objectContaining({ attribute_path: 'nodejs-24_11.aarch64' }),
+          ]),
+        }),
+      ],
+    });
+    expect(secondCall[1]).toMatchObject({
+      requestedVersion: '24.10.0',
+      releases: [
+        expect.objectContaining({
+          version: '24.10.0',
+          commit_hash: 'abcd2410',
+          platforms: expect.arrayContaining([
+            expect.objectContaining({ attribute_path: 'legacy.nodejs_24_10' }),
+          ]),
+        }),
+      ],
+    });
+
     scope.done();
   });
 });

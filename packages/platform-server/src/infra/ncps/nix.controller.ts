@@ -3,6 +3,7 @@ import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import semver from 'semver';
 import { ConfigService } from '../../core/services/config.service';
+import { LoggerService } from '../../core/services/logger.service';
 
 // Upstream base for NixHub
 const NIXHUB_BASE = 'https://www.nixhub.io';
@@ -89,6 +90,7 @@ type NixhubPackageJSON = z.infer<typeof NixhubPackageSchema>;
 export class NixController {
   private cache: LruCache<unknown>;
   private timeoutMs: number;
+  private readonly nodejsDebugLogEnabled: boolean;
 
   // Strict query schemas (unknown params -> 400)
   private packagesQuerySchema = z.object({ query: z.string().optional() }).strict();
@@ -97,9 +99,13 @@ export class NixController {
     .object({ name: z.string().max(200).regex(SAFE_IDENT), version: z.string().max(100) })
     .strict();
 
-  constructor(@Inject(ConfigService) private cfg: ConfigService) {
+  constructor(
+    @Inject(ConfigService) private cfg: ConfigService,
+    @Inject(LoggerService) private readonly logger: LoggerService,
+  ) {
     this.timeoutMs = cfg.nixHttpTimeoutMs;
     this.cache = new LruCache<unknown>(cfg.nixCacheMax, cfg.nixCacheTtlMs);
+    this.nodejsDebugLogEnabled = cfg.nixhubDebugLog;
   }
 
   private async fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
@@ -140,6 +146,7 @@ export class NixController {
     version: string,
   ): { commitHash: string; attributePath: string } {
     const parsed = NixhubPackageSchema.safeParse(json);
+    this.maybeLogNodejsPayload(name, version, parsed, json);
     if (!parsed.success || !parsed.data || !Array.isArray(parsed.data.releases))
       throw Object.assign(new Error(`bad_upstream_json ${JSON.stringify(parsed.error)}`), {
         code: 'bad_upstream_json',
@@ -295,6 +302,61 @@ export class NixController {
       return { error: 'server_error' };
     }
   }
+
+  private shouldLogNodejs(name: string): boolean {
+    return this.nodejsDebugLogEnabled && name === 'nodejs';
+  }
+
+  private maybeLogNodejsPayload(
+    name: string,
+    version: string,
+    parsed: ReturnType<typeof NixhubPackageSchema.safeParse>,
+    raw: unknown,
+  ) {
+    if (!this.shouldLogNodejs(name)) return;
+    if (parsed.success) {
+      const releases = Array.isArray(parsed.data.releases) ? parsed.data.releases : [];
+      const matched = releases.filter((rel) => String(rel?.version ?? '') === version);
+      const target = (matched.length > 0 ? matched : releases).slice(0, 5);
+      const formatted = target.map((rel) => ({
+        version: String(rel?.version ?? ''),
+        commit_hash: rel?.commit_hash ?? null,
+        platforms: Array.isArray(rel?.platforms)
+          ? rel.platforms.map((plat) => ({
+              system: plat?.system ?? null,
+              attribute_path: plat?.attribute_path ?? null,
+            }))
+          : [],
+      }));
+      this.logger.info('NixHub nodejs upstream releases', {
+        name,
+        requestedVersion: version,
+        totalReleases: releases.length,
+        matchedCount: matched.length,
+        releases: formatted,
+      });
+    } else {
+      this.logger.warn('NixHub nodejs upstream parse error', {
+        name,
+        requestedVersion: version,
+        issues: parsed.error.issues?.slice(0, 5) ?? [],
+        rawPreview: this.serializeRaw(raw),
+      });
+    }
+  }
+
+  private serializeRaw(raw: unknown): string {
+    try {
+      const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      if (!str) return '';
+      const limit = 1000;
+      if (str.length <= limit) return str;
+      return `${str.slice(0, limit)}…(+${str.length - limit} chars)`;
+    } catch {
+      return '[unserializable]';
+    }
+  }
+
   private collectVersions(rels: NonNullable<NixhubPackageJSON['releases']>): { withValid: string[]; withInvalid: string[] } {
     const seen = new Set<string>();
     const withValid: string[] = [];
