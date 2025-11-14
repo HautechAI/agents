@@ -147,9 +147,35 @@ export function AgentsRunTimeline() {
   );
 
   const summary = summaryQuery.data;
-  const countsByType = summary
-    ? typeFilters.map((entry) => ({ label: entry.label, count: summary.countsByType[entry.type] ?? 0 }))
-    : [];
+  const summaryItems = useMemo(
+    () => {
+      const items: Array<{ label: string; value: string }> = [
+        {
+          label: 'Status',
+          value: summary ? summary.status : summaryQuery.isLoading ? 'Loading…' : '—',
+        },
+        {
+          label: 'Total events',
+          value: summary ? String(summary.totalEvents) : '—',
+        },
+        {
+          label: 'First',
+          value: summary?.firstEventAt ? new Date(summary.firstEventAt).toLocaleString() : '—',
+        },
+        {
+          label: 'Last',
+          value: summary?.lastEventAt ? new Date(summary.lastEventAt).toLocaleString() : '—',
+        },
+      ];
+      if (summary) {
+        typeFilters.forEach((entry) => {
+          items.push({ label: entry.label, value: String(summary.countsByType[entry.type] ?? 0) });
+        });
+      }
+      return items;
+    },
+    [summary, summaryQuery.isLoading, typeFilters],
+  );
 
   const selectedEventId = searchParams.get('eventId');
   const selectedEvent = selectedEventId ? events.find((evt) => evt.id === selectedEventId) : undefined;
@@ -244,148 +270,121 @@ export function AgentsRunTimeline() {
   );
 
   return (
-    <div className="absolute inset-0 flex flex-col overflow-hidden">
-      <div className="border-b px-4 py-3 flex items-center gap-4">
-        <button type="button" className="text-sm text-blue-600 hover:underline" onClick={() => navigate(-1)}>
-          ← Back
-        </button>
-        <h1 className="text-xl font-semibold">Run Timeline</h1>
-        {threadId && (
-          <Link to={`/agents/threads`} className="text-sm text-blue-600 hover:underline">
-            Thread {threadId.slice(0, 8)}
-          </Link>
+    <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 border-b px-6 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="text-sm text-blue-600 hover:underline" onClick={() => navigate(-1)}>
+            ← Back
+          </button>
+          <h1 className="text-xl font-semibold">Run Timeline</h1>
+          {threadId && (
+            <Link to={`/agents/threads`} className="text-sm text-blue-600 hover:underline">
+              Thread {threadId.slice(0, 8)}
+            </Link>
+          )}
+          {runId && <span className="text-sm text-gray-600">Run {runId.slice(0, 8)}</span>}
+          <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-gray-600">
+            {summaryItems.map((item) => (
+              <span key={item.label} className="flex items-center gap-1">
+                <span className="uppercase tracking-wide text-[10px] text-gray-500">{item.label}</span>
+                <span className="font-medium text-gray-800">{item.value}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs uppercase tracking-wide text-gray-500">Types</span>
+          {typeFilters.map((entry) => (
+            <button
+              key={entry.type}
+              type="button"
+              onClick={() => toggleType(entry.type)}
+              className={`px-3 py-1 text-xs border ${entry.active ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+            >
+              {entry.label}
+            </button>
+          ))}
+          <span className="ml-4 text-xs uppercase tracking-wide text-gray-500">Statuses</span>
+          {statusFilters.map((entry) => (
+            <button
+              key={entry.status}
+              type="button"
+              onClick={() => toggleStatus(entry.status)}
+              className={`px-3 py-1 text-xs border ${entry.active ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-transparent text-gray-700 hover:bg-gray-100'}`}
+            >
+              {entry.status}
+            </button>
+          ))}
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              className="px-3 py-1 text-xs border bg-transparent hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              onClick={() => {
+                setSelectedTypes(EVENT_TYPES);
+                setSelectedStatuses([]);
+              }}
+              disabled={isDefaultFilters}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 text-xs border bg-transparent hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              onClick={() => eventsQuery.refetch()}
+              disabled={eventsQuery.isFetching}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+        {eventsQuery.isError && (
+          <div className="mt-2 text-xs text-red-600">{(eventsQuery.error as Error)?.message ?? 'Failed to load events'}</div>
         )}
-        {runId && <span className="ml-auto text-sm text-gray-600">Run {runId.slice(0, 8)}</span>}
+        {eventsQuery.isFetching && <div className="mt-2 text-xs text-gray-500">Loading events…</div>}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4">
-          <section className="border rounded-md bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap gap-3 items-center">
-              <div>
-                <div className="text-sm font-semibold">Status</div>
-                <div className="text-lg font-semibold">
-                  {summary ? summary.status : summaryQuery.isLoading ? 'Loading…' : 'Unknown'}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600">Total events</div>
-                <div className="text-lg font-semibold">{summary ? summary.totalEvents : '—'}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600">First event</div>
-                <div className="text-sm">{summary?.firstEventAt ? new Date(summary.firstEventAt).toLocaleString() : '—'}</div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600">Last event</div>
-                <div className="text-sm">{summary?.lastEventAt ? new Date(summary.lastEventAt).toLocaleString() : '—'}</div>
-              </div>
+      <div className="flex-1 min-h-0 px-4 py-4 md:px-6 md:py-6">
+        <div className="flex h-full min-h-0 flex-col gap-4 md:flex-row md:gap-6">
+          <section className="flex min-h-0 w-full flex-col border md:w-[360px] md:flex-none md:border-r">
+            <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Events</header>
+            <div className="px-3 py-2 text-xs text-gray-500" aria-live="polite">
+              {events.length === 0 && !eventsQuery.isFetching ? 'No events for selected filters.' : null}
             </div>
-            <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-700">
-              {countsByType.map((entry) => (
-                <div key={entry.label} className="px-3 py-1 rounded-full bg-gray-100">
-                  {entry.label}: {entry.count}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="border rounded-md bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap gap-2 items-center">
-              <h2 className="text-sm font-semibold mr-2">Filter events</h2>
-              {typeFilters.map((entry) => (
-                <button
-                  key={entry.type}
-                  type="button"
-                  onClick={() => toggleType(entry.type)}
-                  className={`px-3 py-1 text-xs rounded-full border ${entry.active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2 items-center">
-              <span className="text-xs uppercase tracking-wide text-gray-500">Statuses</span>
-              {statusFilters.map((entry) => (
-                <button
-                  key={entry.status}
-                  type="button"
-                  onClick={() => toggleStatus(entry.status)}
-                  className={`px-3 py-1 text-xs rounded-full border ${entry.active ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
-                >
-                  {entry.status}
-                </button>
-              ))}
-              <div className="ml-auto flex gap-2">
-                <button
-                  type="button"
-                  className="px-3 py-1 text-xs border rounded bg-white hover:bg-gray-100"
-                  onClick={() => {
-                    setSelectedTypes(EVENT_TYPES);
-                    setSelectedStatuses([]);
+            <div
+              ref={listRef}
+              role="listbox"
+              aria-label="Run events"
+              aria-busy={eventsQuery.isFetching}
+              aria-activedescendant={selectedEventId ? `run-event-option-${selectedEventId}` : undefined}
+              tabIndex={0}
+              onKeyDown={handleListKeyDown}
+              className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2 focus:outline-none"
+            >
+              {events.map((event) => (
+                <RunTimelineEventListItem
+                  key={event.id}
+                  event={event}
+                  selected={event.id === selectedEventId}
+                  onSelect={handleSelect}
+                  ref={(node) => {
+                    if (event.id === selectedEventId) {
+                      selectedItemRef.current = node;
+                    } else if (selectedItemRef.current === node) {
+                      selectedItemRef.current = null;
+                    }
                   }}
-                  disabled={isDefaultFilters}
-                >
-                  Reset
-                </button>
-                <button
-                  type="button"
-                  className="px-3 py-1 text-xs border rounded bg-white hover:bg-gray-100"
-                  onClick={() => eventsQuery.refetch()}
-                  disabled={eventsQuery.isFetching}
-                >
-                  Refresh
-                </button>
-              </div>
+                />
+              ))}
             </div>
-            {eventsQuery.isError && (
-              <div className="mt-2 text-xs text-red-600">{(eventsQuery.error as Error)?.message ?? 'Failed to load events'}</div>
-            )}
-            {eventsQuery.isFetching && <div className="mt-2 text-xs text-gray-500">Loading events…</div>}
           </section>
-
-          <section className="border rounded-md bg-white shadow-sm md:flex md:min-h-[420px]">
-            <div className="flex flex-col md:w-80 md:flex-none md:border-r">
-              <div className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Events</div>
-              <div className="px-3 py-2 text-xs text-gray-500" aria-live="polite">
-                {events.length === 0 && !eventsQuery.isFetching ? 'No events for selected filters.' : null}
-              </div>
-              <div
-                ref={listRef}
-                role="listbox"
-                aria-label="Run events"
-                aria-busy={eventsQuery.isFetching}
-                aria-activedescendant={selectedEventId ? `run-event-option-${selectedEventId}` : undefined}
-                tabIndex={0}
-                onKeyDown={handleListKeyDown}
-                className="flex-1 overflow-y-auto p-3 space-y-2 focus:outline-none"
-              >
-                {events.map((event) => (
-                  <RunTimelineEventListItem
-                    key={event.id}
-                    event={event}
-                    selected={event.id === selectedEventId}
-                    onSelect={handleSelect}
-                    ref={(node) => {
-                      if (event.id === selectedEventId) {
-                        selectedItemRef.current = node;
-                      } else if (selectedItemRef.current === node) {
-                        selectedItemRef.current = null;
-                      }
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="hidden md:flex flex-1 flex-col">
-              <div className="border-b px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Details</div>
-              <div className="flex-1 overflow-y-auto p-4">
-                {selectedEvent ? (
-                  <RunTimelineEventDetails event={selectedEvent} />
-                ) : (
-                  <div className="text-sm text-gray-500">Select an event to view details.</div>
-                )}
-              </div>
+          <section className="hidden min-h-0 flex-1 flex-col md:flex">
+            <header className="border-b px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Details</header>
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+              {selectedEvent ? (
+                <RunTimelineEventDetails event={selectedEvent} />
+              ) : (
+                <div className="text-sm text-gray-500">Select an event to view details.</div>
+              )}
             </div>
           </section>
         </div>

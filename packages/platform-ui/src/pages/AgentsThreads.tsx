@@ -282,48 +282,45 @@ export function AgentsThreads() {
   const toggleJson = (id: string) => setShowJson((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
-    // Non-scrollable outer page; inner panels handle scroll independently
     <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden">
-      {/* Header bar */}
-      <div className="shrink-0 border-b px-4 py-3">
+      <div className="shrink-0 border-b px-6 py-3">
         <h1 className="text-xl font-semibold">Agents / Threads</h1>
       </div>
 
-      {/* Content area */}
-      <div className="flex-1 min-h-0 p-4">
-        {/* Mobile: single internally scrollable panel wrapper; desktop uses independent panel scrolls */}
+      <div className="flex-1 min-h-0 px-4 py-4 md:px-6 md:py-6">
         <div className="h-full min-h-0 overflow-y-auto md:overflow-hidden" data-testid="mobile-panel">
-          <div className="flex h-full min-h-0 flex-col md:flex-row gap-4">
-            {/* Threads tree panel */}
-            <div className="flex min-h-0 w-full md:w-96 shrink-0 flex-col overflow-visible md:overflow-hidden border rounded-md" data-testid="threads-panel">
-              <div className="border-b px-2 py-2 text-sm font-medium flex items-center gap-3">
+          <div className="flex h-full min-h-0 flex-col gap-4 md:flex-row">
+            <section
+              className="flex min-h-0 w-full shrink-0 flex-col border-b md:w-[340px] md:flex-none md:border-b-0 md:border-r"
+              data-testid="threads-panel"
+            >
+              <header className="flex items-center justify-between border-b px-3 py-2 text-sm font-medium">
                 <span>Threads</span>
                 <ThreadStatusFilterSwitch value={statusFilter} onChange={(v) => setStatusFilter(v)} />
-              </div>
-              <div className="flex-1 md:overflow-y-auto p-2">
+              </header>
+              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
                 <ThreadTree status={statusFilter} onSelect={(id) => setSelectedThreadId(id)} selectedId={selectedThreadId} />
               </div>
-            </div>
+            </section>
 
-            {/* Unified messages across all runs panel */}
-            <div className="flex h-[60vh] md:h-full min-h-0 min-w-0 md:flex-1 flex-col overflow-visible md:overflow-hidden border rounded-md" data-testid="messages-panel">
-              <div className="border-b px-2 py-2 text-sm font-medium">Thread: {selectedThreadId || '(none selected)'}</div>
-              <div className="flex-1 min-h-0 p-2">
-                <div className="h-full border rounded p-2">
-                  <RunMessageList
-                    items={unifiedItems}
-                    showJson={showJson}
-                    onToggleJson={toggleJson}
-                    isLoading={runsQ.isLoading}
-                    error={loadError}
-                    onViewRunTimeline={(run) => {
-                      if (!selectedThreadId) return;
-                      navigate(`/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(run.id)}/timeline`);
-                    }}
-                  />
-                </div>
+            <section className="flex h-[60vh] min-h-0 min-w-0 flex-col md:h-full md:flex-1" data-testid="messages-panel">
+              <header className="border-b px-3 py-2 text-sm font-medium">
+                Thread: {selectedThreadId || '(none selected)'}
+              </header>
+              <div className="flex-1 min-h-0 overflow-hidden px-3 py-2">
+                <RunMessageList
+                  items={unifiedItems}
+                  showJson={showJson}
+                  onToggleJson={toggleJson}
+                  isLoading={runsQ.isLoading}
+                  error={loadError}
+                  onViewRunTimeline={(run) => {
+                    if (!selectedThreadId) return;
+                    navigate(`/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(run.id)}/timeline`);
+                  }}
+                />
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>
