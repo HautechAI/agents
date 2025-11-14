@@ -229,7 +229,8 @@ function normalizeMetadata(value: unknown, logger?: LoggerLike): Prisma.InputJso
 }
 
 function toCanonicalJson(value: Prisma.InputJsonValue | typeof Prisma.JsonNull): unknown {
-  if (value === Prisma.JsonNull || value === Prisma.DbNull || value === Prisma.AnyNull) return null;
+  const maybeNull = value as unknown;
+  if (maybeNull === Prisma.JsonNull || maybeNull === Prisma.DbNull || maybeNull === Prisma.AnyNull) return null;
   if (Array.isArray(value)) return value.map((entry) => toCanonicalJson(entry as Prisma.InputJsonValue));
   if (value && typeof value === 'object') {
     const entries = Object.entries(value as Record<string, Prisma.InputJsonValue>).sort(([a], [b]) => a.localeCompare(b));
