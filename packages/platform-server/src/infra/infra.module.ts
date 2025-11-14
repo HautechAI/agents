@@ -30,13 +30,18 @@ import { ArchiveService } from './archive/archive.service';
     },
     {
       provide: ContainerCleanupService,
-      useFactory: (registry: ContainerRegistry, containers: ContainerService, logger: LoggerService) => {
-        const svc = new ContainerCleanupService(registry, containers, logger);
+      useFactory: (
+        registry: ContainerRegistry,
+        containers: ContainerService,
+        logger: LoggerService,
+        config: ConfigService,
+      ) => {
+        const svc = new ContainerCleanupService(registry, containers, logger, config);
         svc.start();
 
         return svc;
       },
-      inject: [ContainerRegistry, ContainerService, LoggerService],
+      inject: [ContainerRegistry, ContainerService, LoggerService, ConfigService],
     },
     {
       provide: ContainerService,
