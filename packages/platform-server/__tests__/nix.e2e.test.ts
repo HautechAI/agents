@@ -76,4 +76,22 @@ describe('NixController E2E (Fastify)', () => {
     const res = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: '/api/nix/packages?query=git&extra=x' });
     expect(res.statusCode).toBe(400);
   });
+
+  it('GET /api/nix/versions maps repeated upstream 503 to 502 upstream_error', async () => {
+    const scope = nock(BASE)
+      .get('/packages/nodejs')
+      .query((q) => q._data === 'routes/_nixhub.packages.$pkg._index')
+      .times(3)
+      .reply(503, 'bad gateway');
+
+    const res = await app
+      .getHttpAdapter()
+      .getInstance()
+      .inject({ method: 'GET', url: '/api/nix/versions?name=nodejs' });
+
+    expect(res.statusCode).toBe(502);
+    const body = JSON.parse(res.body);
+    expect(body).toMatchObject({ error: 'upstream_error', status: 503 });
+    scope.done();
+  });
 });

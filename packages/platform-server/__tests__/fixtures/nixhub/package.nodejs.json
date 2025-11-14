@@ -1,30 +1,5169 @@
 {
   "name": "nodejs",
-  "summary": "Evented I/O for V8 JavaScript",
+  "summary": "Event-driven I/O framework for the V8 JavaScript engine",
   "releases": [
     {
-      "version": "22.2.0",
-      "last_updated": "2024-08-14T14:03:12Z",
-      "outputs_summary": "bin, lib",
-      "platforms_summary": "linux, darwin",
-      "commit_hash": "1a2b3c4d5e6f7890",
+      "version": "24.11.0",
+      "last_updated": "2025-11-12T10:38:40Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
       "platforms": [
-        { "system": "x86_64-linux", "attribute_path": "nodejs" },
-        { "system": "aarch64-linux", "attribute_path": "nodejs-aarch64" }
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "91c9a64ce2a84e648d0cf9671274bb9c2fb9ba60"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "f6b44b2401525650256b977063dbcf830f762369"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "e1ebeec86b771e9d387dd02d82ffdc77ac753abc"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "7241bcbb4f099a66aafca120d37c65e8dda32717"
+        }
       ]
     },
     {
-      "version": "21.9.0",
-      "commit_hash": "abcdef1234567",
+      "version": "24.10.0",
+      "last_updated": "2025-10-27T19:50:41Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
       "platforms": [
-        { "system": "x86_64-linux", "attribute_path": "nodejs-21" }
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "1666250dbe4141e4ca8aaf89b40a3a51c2e36144"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "d5faa84122bc0a1fd5d378492efce4e289f8eac1"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "01b6809f7f9d1183a2b3e081f0a1e6f8f415cb09"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "01b6809f7f9d1183a2b3e081f0a1e6f8f415cb09"
+        }
+      ]
+    },
+    {
+      "version": "24.9.0",
+      "last_updated": "2025-10-09T02:37:25Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "2dad7af78a183b6c486702c18af8a9544f298377"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "bce5fe2bb998488d8e7e7856315f90496723793c"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "bce5fe2bb998488d8e7e7856315f90496723793c"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "bce5fe2bb998488d8e7e7856315f90496723793c"
+        }
+      ]
+    },
+    {
+      "version": "24.8.0",
+      "last_updated": "2025-10-01T12:36:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "ee4cd98afba682ca27242f2d7fdbd8583f6ef51a"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "9547cfd27b5158eb612a6812dfc5c7b3d118b996"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "51c8f9cfaae8306d135095bcdb3df9027f95542d"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "f4b140d5b253f5e2a1ff4e5506edbf8267724bde"
+        }
+      ]
+    },
+    {
+      "version": "24.5.0",
+      "last_updated": "2025-08-12T09:17:37Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "372d9eeeafa5b15913201e2b92e8e539ac7c64d1"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "372d9eeeafa5b15913201e2b92e8e539ac7c64d1"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "9585e9192aadc13ec3e49f33f8333bd3cda524df"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "641d909c4a7538f1539da9240dedb1755c907e40"
+        }
+      ]
+    },
+    {
+      "version": "24.4.1",
+      "last_updated": "2025-08-01T14:55:05Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "e7eabdc701d7dbb810fd91a97ec358caa4c1fc50"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "8679b16e11becd487b45d568358ddf9d5640d860"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "648f70160c03151bc2121d179291337ad6bc564b"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "648f70160c03151bc2121d179291337ad6bc564b"
+        }
+      ]
+    },
+    {
+      "version": "24.4.0",
+      "last_updated": "2025-07-18T03:30:42Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "e821e03193486359aa942372be2d9c1f377b7a18"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "e821e03193486359aa942372be2d9c1f377b7a18"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "e821e03193486359aa942372be2d9c1f377b7a18"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "e821e03193486359aa942372be2d9c1f377b7a18"
+        }
+      ]
+    },
+    {
+      "version": "24.3.0",
+      "last_updated": "2025-07-13T22:45:35Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        }
+      ]
+    },
+    {
+      "version": "24.2.0",
+      "last_updated": "2025-06-24T02:18:21Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "69dfebb3d175bde602f612915c5576a41b18486b"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "69dfebb3d175bde602f612915c5576a41b18486b"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "076e8c6678d8c54204abcb4b1b14c366835a58bb"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "076e8c6678d8c54204abcb4b1b14c366835a58bb"
+        }
+      ]
+    },
+    {
+      "version": "24.1.0",
+      "last_updated": "2025-06-18T03:01:18Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "5395fb3ab3f97b9b7abca147249fa2e8ed27b192"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "f45e75fc63fc8a7ffc3da382b2f6b681c5b71875"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "c539ae8d21e49776966d714f82fba33b1fca78bc"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "c539ae8d21e49776966d714f82fba33b1fca78bc"
+        }
+      ]
+    },
+    {
+      "version": "24.0.2",
+      "last_updated": "2025-05-21T18:43:04Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "8c441601c43232976179eac52dde704c8bdf81ed"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "8c441601c43232976179eac52dde704c8bdf81ed"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "8c441601c43232976179eac52dde704c8bdf81ed"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "f0d925b947cca0bbe7f2d25115cbaf021844aba7"
+        }
+      ]
+    },
+    {
+      "version": "24.0.1",
+      "last_updated": "2025-05-18T01:51:26Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "8406224e30c258025cb8b31704bdb977a8f1f009"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "8406224e30c258025cb8b31704bdb977a8f1f009"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "8406224e30c258025cb8b31704bdb977a8f1f009"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "3fcbdcfc707e0aa42c541b7743e05820472bdaec"
+        }
+      ]
+    },
+    {
+      "version": "24.0.0",
+      "last_updated": "2025-05-07T00:09:58Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "out (Linux only), dev (Linux only), libv8 (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "b3582c75c7f21ce0b429898980eddbbf05c68e55"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "b3582c75c7f21ce0b429898980eddbbf05c68e55"
+        }
+      ]
+    },
+    {
+      "version": "24.0.0-rc.3",
+      "last_updated": "2025-05-06T08:06:31Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "out (Linux only), dev (Linux only), libv8 (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "1cb1c02a6b1b7cf67e3d7731cbbf327a53da9679"
+        },
+        {
+          "attribute_path": "nodejs_24",
+          "commit_hash": "1cb1c02a6b1b7cf67e3d7731cbbf327a53da9679"
+        }
+      ]
+    },
+    {
+      "version": "23.11.0",
+      "last_updated": "2025-05-04T22:22:57Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "ed30f8aba41605e3ab46421e3dcb4510ec560ff8"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "6b1c028bce9c89e9824cde040d6986d428296055"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "6b1c028bce9c89e9824cde040d6986d428296055"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "f21e4546e3ede7ae34d12a84602a22246b31f7e0"
+        }
+      ]
+    },
+    {
+      "version": "23.10.0",
+      "last_updated": "2025-03-23T05:31:05Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "dd613136ee91f67e5dba3f3f41ac99ae89c5406b"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "dd613136ee91f67e5dba3f3f41ac99ae89c5406b"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "8f76cf16b17c51ae0cc8e55488069593f6dab645"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "8f76cf16b17c51ae0cc8e55488069593f6dab645"
+        }
+      ]
+    },
+    {
+      "version": "23.9.0",
+      "last_updated": "2025-03-13T11:38:39Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "573c650e8a14b2faa0041645ab18aed7e60f0c9a"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "5954d3359cc7178623da6c7fd23dc7f7504d7187"
+        }
+      ]
+    },
+    {
+      "version": "23.8.0",
+      "last_updated": "2025-02-23T09:42:26Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        }
+      ]
+    },
+    {
+      "version": "23.7.0",
+      "last_updated": "2025-02-07T11:26:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        }
+      ]
+    },
+    {
+      "version": "23.6.1",
+      "last_updated": "2025-01-22T14:55:48Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "606996d74f6e2a12635d41c1bf58bfc7ea3bb5ec"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "606996d74f6e2a12635d41c1bf58bfc7ea3bb5ec"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "606996d74f6e2a12635d41c1bf58bfc7ea3bb5ec"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "606996d74f6e2a12635d41c1bf58bfc7ea3bb5ec"
+        }
+      ]
+    },
+    {
+      "version": "23.6.0",
+      "last_updated": "2025-01-21T12:51:11Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "e1996d7bdaf4eafdb85690079b9e02b25dc14e4f"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "e1996d7bdaf4eafdb85690079b9e02b25dc14e4f"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "e1996d7bdaf4eafdb85690079b9e02b25dc14e4f"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "e1996d7bdaf4eafdb85690079b9e02b25dc14e4f"
+        }
+      ]
+    },
+    {
+      "version": "23.5.0",
+      "last_updated": "2025-01-19T08:16:51Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        }
+      ]
+    },
+    {
+      "version": "23.2.0",
+      "last_updated": "2024-12-23T21:10:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "566e53c2ad750c84f6d31f9ccb9d00f823165550"
+        }
+      ]
+    },
+    {
+      "version": "23.1.0",
+      "last_updated": "2024-11-03T14:18:04Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        },
+        {
+          "attribute_path": "nodejs_23",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        }
+      ]
+    },
+    {
+      "version": "22.14.0",
+      "last_updated": "2025-06-06T01:46:53Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "6ad174a6dc07c7742fc64005265addf87ad08615"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "59138c7667b7970d205d6a05a8bfa2d78caa3643"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "3d1f29646e4b57ed468d60f9d286cde23a8d1707"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "3108eaa516ae22c2360928589731a4f1581526ef"
+        }
+      ]
+    },
+    {
+      "version": "22.13.1",
+      "last_updated": "2025-02-07T11:26:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        }
+      ]
+    },
+    {
+      "version": "22.12.0",
+      "last_updated": "2025-01-19T08:16:51Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        }
+      ]
+    },
+    {
+      "version": "22.11.0",
+      "last_updated": "2024-12-23T21:10:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        }
+      ]
+    },
+    {
+      "version": "22.10.0",
+      "last_updated": "2024-12-03T12:40:06Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "566e53c2ad750c84f6d31f9ccb9d00f823165550"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "566e53c2ad750c84f6d31f9ccb9d00f823165550"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "566e53c2ad750c84f6d31f9ccb9d00f823165550"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "566e53c2ad750c84f6d31f9ccb9d00f823165550"
+        }
+      ]
+    },
+    {
+      "version": "22.9.0",
+      "last_updated": "2024-10-13T23:44:06Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        }
+      ]
+    },
+    {
+      "version": "22.8.0",
+      "last_updated": "2024-09-10T15:01:03Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5ed627539ac84809c78b2dd6d26a5cebeb5ae269"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5ed627539ac84809c78b2dd6d26a5cebeb5ae269"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5ed627539ac84809c78b2dd6d26a5cebeb5ae269"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5ed627539ac84809c78b2dd6d26a5cebeb5ae269"
+        }
+      ]
+    },
+    {
+      "version": "22.6.0",
+      "last_updated": "2024-08-31T10:12:23Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        }
+      ]
+    },
+    {
+      "version": "22.5.1",
+      "last_updated": "2024-08-14T11:41:26Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        }
+      ]
+    },
+    {
+      "version": "22.4.1",
+      "last_updated": "2024-07-31T08:48:38Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "c3392ad349a5227f4a3464dce87bcc5046692fce"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "c3392ad349a5227f4a3464dce87bcc5046692fce"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "c3392ad349a5227f4a3464dce87bcc5046692fce"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "c3392ad349a5227f4a3464dce87bcc5046692fce"
+        }
+      ]
+    },
+    {
+      "version": "22.3.0",
+      "last_updated": "2024-07-10T06:55:44Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "aa9461550594533c29866d42f861b6ff079a7fb6"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "aa9461550594533c29866d42f861b6ff079a7fb6"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "b60793b86201040d9dee019a05089a9150d08b5b"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "b60793b86201040d9dee019a05089a9150d08b5b"
+        }
+      ]
+    },
+    {
+      "version": "22.2.0",
+      "last_updated": "2024-06-12T20:55:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        }
+      ]
+    },
+    {
+      "version": "22.0.0",
+      "last_updated": "2024-05-12T16:19:40Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "3281bec7174f679eabf584591e75979a258d8c40"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "3281bec7174f679eabf584591e75979a258d8c40"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "3281bec7174f679eabf584591e75979a258d8c40"
+        },
+        {
+          "attribute_path": "nodejs_22",
+          "commit_hash": "3281bec7174f679eabf584591e75979a258d8c40"
+        }
+      ]
+    },
+    {
+      "version": "21.7.3",
+      "last_updated": "2024-04-19T21:36:04Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "92d295f588631b0db2da509f381b4fb1e74173c5"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "92d295f588631b0db2da509f381b4fb1e74173c5"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "92d295f588631b0db2da509f381b4fb1e74173c5"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "92d295f588631b0db2da509f381b4fb1e74173c5"
+        }
+      ]
+    },
+    {
+      "version": "21.7.2",
+      "last_updated": "2024-04-05T14:44:07Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "8311011fcea909e0cc9684ada784dae080fbfb60"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "8311011fcea909e0cc9684ada784dae080fbfb60"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "8311011fcea909e0cc9684ada784dae080fbfb60"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "8311011fcea909e0cc9684ada784dae080fbfb60"
+        }
+      ]
+    },
+    {
+      "version": "21.7.1",
+      "last_updated": "2024-04-02T02:53:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        }
+      ]
+    },
+    {
+      "version": "21.7.0",
+      "last_updated": "2024-03-08T13:51:52Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a343533bccc62400e8a9560423486a3b6c11a23b"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a343533bccc62400e8a9560423486a3b6c11a23b"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a343533bccc62400e8a9560423486a3b6c11a23b"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a343533bccc62400e8a9560423486a3b6c11a23b"
+        }
+      ]
+    },
+    {
+      "version": "21.6.2",
+      "last_updated": "2024-02-24T23:06:34Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "9a9dae8f6319600fa9aebde37f340975cab4b8c0"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "9a9dae8f6319600fa9aebde37f340975cab4b8c0"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "9a9dae8f6319600fa9aebde37f340975cab4b8c0"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "9a9dae8f6319600fa9aebde37f340975cab4b8c0"
+        }
+      ]
+    },
+    {
+      "version": "21.6.1",
+      "last_updated": "2024-02-10T18:15:24Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        }
+      ]
+    },
+    {
+      "version": "21.6.0",
+      "last_updated": "2024-01-17T15:31:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "f36047a5a4b5631f75210859abac7f97ba1ba7a7"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "f36047a5a4b5631f75210859abac7f97ba1ba7a7"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "f36047a5a4b5631f75210859abac7f97ba1ba7a7"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "f36047a5a4b5631f75210859abac7f97ba1ba7a7"
+        }
+      ]
+    },
+    {
+      "version": "21.5.0",
+      "last_updated": "2024-01-14T03:55:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        }
+      ]
+    },
+    {
+      "version": "21.4.0",
+      "last_updated": "2023-12-18T02:58:18Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "ca16221251951e9c6261a1a2bb4f9389038d3632"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "ca16221251951e9c6261a1a2bb4f9389038d3632"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "ca16221251951e9c6261a1a2bb4f9389038d3632"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "ca16221251951e9c6261a1a2bb4f9389038d3632"
+        }
+      ]
+    },
+    {
+      "version": "21.3.0",
+      "last_updated": "2023-12-13T22:54:10Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "fd04bea4cbf76f86f244b9e2549fca066db8ddff"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "fd04bea4cbf76f86f244b9e2549fca066db8ddff"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "fd04bea4cbf76f86f244b9e2549fca066db8ddff"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "fd04bea4cbf76f86f244b9e2549fca066db8ddff"
+        }
+      ]
+    },
+    {
+      "version": "21.2.0",
+      "last_updated": "2023-11-17T14:14:56Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        }
+      ]
+    },
+    {
+      "version": "21.1.0",
+      "last_updated": "2023-10-25T20:49:13Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "75a52265bda7fd25e06e3a67dee3f0354e73243c"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "75a52265bda7fd25e06e3a67dee3f0354e73243c"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "75a52265bda7fd25e06e3a67dee3f0354e73243c"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "75a52265bda7fd25e06e3a67dee3f0354e73243c"
+        }
+      ]
+    },
+    {
+      "version": "21.0.0",
+      "last_updated": "2023-10-21T11:05:41Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "44881e03af1c730cbb1d72a4d41274a2c957813a"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "44881e03af1c730cbb1d72a4d41274a2c957813a"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "44881e03af1c730cbb1d72a4d41274a2c957813a"
+        },
+        {
+          "attribute_path": "nodejs_21",
+          "commit_hash": "44881e03af1c730cbb1d72a4d41274a2c957813a"
+        }
+      ]
+    },
+    {
+      "version": "20.19.5",
+      "last_updated": "2025-11-12T10:38:40Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "91c9a64ce2a84e648d0cf9671274bb9c2fb9ba60"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "f6b44b2401525650256b977063dbcf830f762369"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "f6b44b2401525650256b977063dbcf830f762369"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "e1ebeec86b771e9d387dd02d82ffdc77ac753abc"
+        }
+      ]
+    },
+    {
+      "version": "20.19.4",
+      "last_updated": "2025-08-11T23:54:17Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "5a983011e0f4b3b286aaa73e011ce32b1449a528"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "5a983011e0f4b3b286aaa73e011ce32b1449a528"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "641d909c4a7538f1539da9240dedb1755c907e40"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "641d909c4a7538f1539da9240dedb1755c907e40"
+        }
+      ]
+    },
+    {
+      "version": "20.19.3",
+      "last_updated": "2025-07-19T04:40:28Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "6b4955211758ba47fac850c040a27f23b9b4008f"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "fa0ef8a6bb1651aa26c939aeb51b5f499e86b0ec"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        }
+      ]
+    },
+    {
+      "version": "20.19.2",
+      "last_updated": "2025-06-30T02:52:09Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b95255df2360a45ddbb03817a68869d5cb01bf96"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b95255df2360a45ddbb03817a68869d5cb01bf96"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "80d50fc87924c2a0d346372d242c27973cf8cdbf"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "322d8a3c6940039f7cff179a8b09c5d7ca06359d"
+        }
+      ]
+    },
+    {
+      "version": "20.19.1",
+      "last_updated": "2025-05-18T01:51:26Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "8406224e30c258025cb8b31704bdb977a8f1f009"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "3fcbdcfc707e0aa42c541b7743e05820472bdaec"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "12a55407652e04dcf2309436eb06fef0d3713ef3"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "12a55407652e04dcf2309436eb06fef0d3713ef3"
+        }
+      ]
+    },
+    {
+      "version": "20.19.0",
+      "last_updated": "2025-05-07T00:09:58Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b3582c75c7f21ce0b429898980eddbbf05c68e55"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "1cb1c02a6b1b7cf67e3d7731cbbf327a53da9679"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "ed30f8aba41605e3ab46421e3dcb4510ec560ff8"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "6b1c028bce9c89e9824cde040d6986d428296055"
+        }
+      ]
+    },
+    {
+      "version": "20.18.3",
+      "last_updated": "2025-03-11T17:52:14Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        }
+      ]
+    },
+    {
+      "version": "20.18.2",
+      "last_updated": "2025-02-07T11:26:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        }
+      ]
+    },
+    {
+      "version": "20.18.1",
+      "last_updated": "2025-01-19T08:16:51Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        }
+      ]
+    },
+    {
+      "version": "20.18.0",
+      "last_updated": "2024-11-16T04:25:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "34a626458d686f1b58139620a8b2793e9e123bba"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "34a626458d686f1b58139620a8b2793e9e123bba"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "34a626458d686f1b58139620a8b2793e9e123bba"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "34a626458d686f1b58139620a8b2793e9e123bba"
+        }
+      ]
+    },
+    {
+      "version": "20.17.0",
+      "last_updated": "2024-10-13T23:44:06Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        }
+      ]
+    },
+    {
+      "version": "20.16.0",
+      "last_updated": "2024-08-31T10:12:23Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "5629520edecb69630a3f4d17d3d33fc96c13f6fe"
+        }
       ]
     },
     {
       "version": "20.15.1",
-      "commit_hash": "0fedcba987654321",
+      "last_updated": "2024-08-14T11:41:26Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
       "platforms": [
-        { "system": "x86_64-darwin", "attribute_path": "nodejs-darwin" }
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        }
+      ]
+    },
+    {
+      "version": "20.14.0",
+      "last_updated": "2024-07-10T06:55:44Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "aa9461550594533c29866d42f861b6ff079a7fb6"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "aa9461550594533c29866d42f861b6ff079a7fb6"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b60793b86201040d9dee019a05089a9150d08b5b"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b60793b86201040d9dee019a05089a9150d08b5b"
+        }
+      ]
+    },
+    {
+      "version": "20.12.2",
+      "last_updated": "2024-06-12T20:55:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        }
+      ]
+    },
+    {
+      "version": "20.11.1",
+      "last_updated": "2024-04-02T02:53:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        }
+      ]
+    },
+    {
+      "version": "20.11.0",
+      "last_updated": "2024-02-10T18:15:24Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        }
+      ]
+    },
+    {
+      "version": "20.10.0",
+      "last_updated": "2024-01-14T03:55:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "dd5621df6dcb90122b50da5ec31c411a0de3e538"
+        }
+      ]
+    },
+    {
+      "version": "20.9.0",
+      "last_updated": "2023-11-17T14:14:56Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        }
+      ]
+    },
+    {
+      "version": "20.8.0",
+      "last_updated": "2023-09-29T17:45:58Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "c182df2e68bd97deb32c7e4765adfbbbcaf75b60"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "c182df2e68bd97deb32c7e4765adfbbbcaf75b60"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "c182df2e68bd97deb32c7e4765adfbbbcaf75b60"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "c182df2e68bd97deb32c7e4765adfbbbcaf75b60"
+        }
+      ]
+    },
+    {
+      "version": "20.7.0",
+      "last_updated": "2023-09-27T18:02:17Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        }
+      ]
+    },
+    {
+      "version": "20.6.1",
+      "last_updated": "2023-09-15T06:49:28Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        }
+      ]
+    },
+    {
+      "version": "20.5.1",
+      "last_updated": "2023-09-06T20:35:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "efd23a1c9ae8c574e2ca923c2b2dc336797f4cc4"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "efd23a1c9ae8c574e2ca923c2b2dc336797f4cc4"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "efd23a1c9ae8c574e2ca923c2b2dc336797f4cc4"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "efd23a1c9ae8c574e2ca923c2b2dc336797f4cc4"
+        }
+      ]
+    },
+    {
+      "version": "20.5.0",
+      "last_updated": "2023-08-08T11:45:39Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        }
+      ]
+    },
+    {
+      "version": "20.4.0",
+      "last_updated": "2023-07-16T12:21:17Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "12d2f0da28a47f907825939630b4a0e8122fabe3"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "12d2f0da28a47f907825939630b4a0e8122fabe3"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "29bcead8405cfe4c00085843eb372cc43837bb9d"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "29bcead8405cfe4c00085843eb372cc43837bb9d"
+        }
+      ]
+    },
+    {
+      "version": "20.3.1",
+      "last_updated": "2023-06-27T08:49:46Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b38e95ea6c15b9ce098556f410d715b262fa386a"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b38e95ea6c15b9ce098556f410d715b262fa386a"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b38e95ea6c15b9ce098556f410d715b262fa386a"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "b38e95ea6c15b9ce098556f410d715b262fa386a"
+        }
+      ]
+    },
+    {
+      "version": "20.3.0",
+      "last_updated": "2023-06-18T07:20:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        }
+      ]
+    },
+    {
+      "version": "20.2.0",
+      "last_updated": "2023-06-05T20:59:02Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "932fc16b263f26803d3960e4400bc13dde84a972"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "932fc16b263f26803d3960e4400bc13dde84a972"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "932fc16b263f26803d3960e4400bc13dde84a972"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "932fc16b263f26803d3960e4400bc13dde84a972"
+        }
+      ]
+    },
+    {
+      "version": "20.1.0",
+      "last_updated": "2023-05-14T19:13:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        }
+      ]
+    },
+    {
+      "version": "20.0.0",
+      "last_updated": "2023-05-07T16:00:40Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "e040aab15638aaf8d0786894851a2b1ca09a7baf"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "e040aab15638aaf8d0786894851a2b1ca09a7baf"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "e040aab15638aaf8d0786894851a2b1ca09a7baf"
+        },
+        {
+          "attribute_path": "nodejs_20",
+          "commit_hash": "e040aab15638aaf8d0786894851a2b1ca09a7baf"
+        }
+      ]
+    },
+    {
+      "version": "19.9.0",
+      "last_updated": "2023-05-14T19:13:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_19",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_19",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_19",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_19",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        }
+      ]
+    },
+    {
+      "version": "19.8.1",
+      "last_updated": "2023-03-28T10:29:13Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        }
+      ]
+    },
+    {
+      "version": "19.8.0",
+      "last_updated": "2023-03-15T10:17:02Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "126f49a01de5b7e35a43fd43f891ecf6d3a51459"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "126f49a01de5b7e35a43fd43f891ecf6d3a51459"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "126f49a01de5b7e35a43fd43f891ecf6d3a51459"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "126f49a01de5b7e35a43fd43f891ecf6d3a51459"
+        }
+      ]
+    },
+    {
+      "version": "19.7.0",
+      "last_updated": "2023-02-26T12:03:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "84e33aea0f7a8375c92458c5b6cad75fa1dd561b"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "84e33aea0f7a8375c92458c5b6cad75fa1dd561b"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "84e33aea0f7a8375c92458c5b6cad75fa1dd561b"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "84e33aea0f7a8375c92458c5b6cad75fa1dd561b"
+        }
+      ]
+    },
+    {
+      "version": "19.6.1",
+      "last_updated": "2023-02-18T23:39:43Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        }
+      ]
+    },
+    {
+      "version": "19.6.0",
+      "last_updated": "2023-02-14T00:52:29Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        }
+      ]
+    },
+    {
+      "version": "19.5.0",
+      "last_updated": "2023-01-31T09:49:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        }
+      ]
+    },
+    {
+      "version": "19.4.0",
+      "last_updated": "2023-01-17T09:21:52Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "2d38b664b4400335086a713a0036aafaa002c003"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "2d38b664b4400335086a713a0036aafaa002c003"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "2d38b664b4400335086a713a0036aafaa002c003"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "2d38b664b4400335086a713a0036aafaa002c003"
+        }
+      ]
+    },
+    {
+      "version": "19.2.0",
+      "last_updated": "2022-12-17T09:19:40Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        }
+      ]
+    },
+    {
+      "version": "19.1.0",
+      "last_updated": "2022-11-25T14:42:37Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "55b3f68bda6d4f4dc6092eed0508063f154fa4fd"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "55b3f68bda6d4f4dc6092eed0508063f154fa4fd"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "6b5019a48f876f3288efc626fa8b70ad0c64eb46"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "6b5019a48f876f3288efc626fa8b70ad0c64eb46"
+        }
+      ]
+    },
+    {
+      "version": "19.0.1",
+      "last_updated": "2022-11-10T13:14:32Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out (Linux only), libv8 (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "72d8853228c9758820c39b8659415b6d89279493"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "72d8853228c9758820c39b8659415b6d89279493"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "72d8853228c9758820c39b8659415b6d89279493"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "72d8853228c9758820c39b8659415b6d89279493"
+        }
+      ]
+    },
+    {
+      "version": "19.0.0",
+      "last_updated": "2022-11-04T08:04:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-19_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        }
+      ]
+    },
+    {
+      "version": "18.20.8",
+      "last_updated": "2025-04-23T03:04:08Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, dev, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "507b63021ada5fee621b6ca371c4fca9ca46f52c"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "ebe4301cbd8f81c4f8d3244b3632338bbeb6d49c"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "ebe4301cbd8f81c4f8d3244b3632338bbeb6d49c"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "ebe4301cbd8f81c4f8d3244b3632338bbeb6d49c"
+        }
+      ]
+    },
+    {
+      "version": "18.20.7",
+      "last_updated": "2025-03-23T05:31:05Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "dd613136ee91f67e5dba3f3f41ac99ae89c5406b"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "dd613136ee91f67e5dba3f3f41ac99ae89c5406b"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "94c4dbe77c0740ebba36c173672ca15a7926c993"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        }
+      ]
+    },
+    {
+      "version": "18.20.6",
+      "last_updated": "2025-02-23T09:42:26Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2d068ae5c6516b2d04562de50a58c682540de9bf"
+        }
+      ]
+    },
+    {
+      "version": "18.20.5",
+      "last_updated": "2025-01-19T08:16:51Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        }
+      ]
+    },
+    {
+      "version": "18.20.4",
+      "last_updated": "2024-11-03T14:18:04Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4ae2e647537bcdbb82265469442713d066675275"
+        }
+      ]
+    },
+    {
+      "version": "18.20.2",
+      "last_updated": "2024-07-10T06:55:44Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "aa9461550594533c29866d42f861b6ff079a7fb6"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "aa9461550594533c29866d42f861b6ff079a7fb6"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "b60793b86201040d9dee019a05089a9150d08b5b"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "b60793b86201040d9dee019a05089a9150d08b5b"
+        }
+      ]
+    },
+    {
+      "version": "18.20.1",
+      "last_updated": "2024-04-07T17:50:05Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "3c1b6f75344e207a67536d834886ee9b4577ebe7"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "3c1b6f75344e207a67536d834886ee9b4577ebe7"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "3c1b6f75344e207a67536d834886ee9b4577ebe7"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "3c1b6f75344e207a67536d834886ee9b4577ebe7"
+        }
+      ]
+    },
+    {
+      "version": "18.19.1",
+      "last_updated": "2024-04-02T02:53:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "080a4a27f206d07724b88da096e27ef63401a504"
+        }
+      ]
+    },
+    {
+      "version": "18.20.0",
+      "last_updated": "2024-03-27T09:47:59Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2230a20f2b5a14f2db3d7f13a2dc3c22517e790b"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2230a20f2b5a14f2db3d7f13a2dc3c22517e790b"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2230a20f2b5a14f2db3d7f13a2dc3c22517e790b"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "2230a20f2b5a14f2db3d7f13a2dc3c22517e790b"
+        }
+      ]
+    },
+    {
+      "version": "18.19.0",
+      "last_updated": "2024-02-10T18:15:24Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        }
+      ]
+    },
+    {
+      "version": "18.18.2",
+      "last_updated": "2023-11-17T14:14:56Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        }
+      ]
+    },
+    {
+      "version": "18.18.0",
+      "last_updated": "2023-09-27T18:02:17Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "517501bcf14ae6ec47efd6a17dda0ca8e6d866f9"
+        }
+      ]
+    },
+    {
+      "version": "18.17.1",
+      "last_updated": "2023-09-15T06:49:28Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "46688f8eb5cd6f1298d873d4d2b9cf245e09e88e"
+        }
+      ]
+    },
+    {
+      "version": "18.17.0",
+      "last_updated": "2023-08-08T11:45:39Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4e6868b1aa3766ab1de169922bb3826143941973"
+        }
+      ]
+    },
+    {
+      "version": "18.16.1",
+      "last_updated": "2023-07-24T21:56:31Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "dfcffbd74fd6f0419370d8240e445252a39f4d10"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "dfcffbd74fd6f0419370d8240e445252a39f4d10"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "dfcffbd74fd6f0419370d8240e445252a39f4d10"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "dfcffbd74fd6f0419370d8240e445252a39f4d10"
+        }
+      ]
+    },
+    {
+      "version": "18.16.0",
+      "last_updated": "2023-06-18T07:20:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        },
+        {
+          "attribute_path": "nodejs_18",
+          "commit_hash": "4d887ae7666a6ffb79e1767d8fd417daf9e4220f"
+        }
+      ]
+    },
+    {
+      "version": "18.15.0",
+      "last_updated": "2023-04-13T03:55:09Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "96ba1c52e54e74c3197f4d43026b3f3d92e83ff9"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "96ba1c52e54e74c3197f4d43026b3f3d92e83ff9"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "96ba1c52e54e74c3197f4d43026b3f3d92e83ff9"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "96ba1c52e54e74c3197f4d43026b3f3d92e83ff9"
+        }
+      ]
+    },
+    {
+      "version": "18.14.2",
+      "last_updated": "2023-03-16T17:26:55Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "194c2aa446b2b059886bb68be15ef6736d5a8c31"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "194c2aa446b2b059886bb68be15ef6736d5a8c31"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "194c2aa446b2b059886bb68be15ef6736d5a8c31"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "194c2aa446b2b059886bb68be15ef6736d5a8c31"
+        }
+      ]
+    },
+    {
+      "version": "18.14.1",
+      "last_updated": "2023-02-18T23:39:43Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "06365ba4549654b7ce58c33365c1282800e83a9e"
+        }
+      ]
+    },
+    {
+      "version": "18.14.0",
+      "last_updated": "2023-02-14T00:52:29Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        }
+      ]
+    },
+    {
+      "version": "18.13.0",
+      "last_updated": "2023-01-31T09:49:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e3945057be467f32028ff6b67403be08285ad8c8"
+        }
+      ]
+    },
+    {
+      "version": "18.12.1",
+      "last_updated": "2022-12-17T09:19:40Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        }
+      ]
+    },
+    {
+      "version": "18.12.0",
+      "last_updated": "2022-11-04T08:04:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        }
+      ]
+    },
+    {
+      "version": "18.10.0",
+      "last_updated": "2022-10-22T16:07:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        }
+      ]
+    },
+    {
+      "version": "18.9.1",
+      "last_updated": "2022-10-11T10:16:04Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e0ed589d7422c1d7a1bdd1e81289e2428c6ec2a3"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e0ed589d7422c1d7a1bdd1e81289e2428c6ec2a3"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e0ed589d7422c1d7a1bdd1e81289e2428c6ec2a3"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "e0ed589d7422c1d7a1bdd1e81289e2428c6ec2a3"
+        }
+      ]
+    },
+    {
+      "version": "18.9.0",
+      "last_updated": "2022-09-12T23:24:01Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        }
+      ]
+    },
+    {
+      "version": "18.8.0",
+      "last_updated": "2022-08-27T08:52:24Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "ed0fab06cc1ca9799e6dda30529c963b95c4dc2a"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "ed0fab06cc1ca9799e6dda30529c963b95c4dc2a"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "ed0fab06cc1ca9799e6dda30529c963b95c4dc2a"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "ed0fab06cc1ca9799e6dda30529c963b95c4dc2a"
+        }
+      ]
+    },
+    {
+      "version": "18.7.0",
+      "last_updated": "2022-08-20T23:29:36Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "07d2cffa61fbb4bd9dc2e0cb0bb4fe146d420bd6"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "07d2cffa61fbb4bd9dc2e0cb0bb4fe146d420bd6"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "07d2cffa61fbb4bd9dc2e0cb0bb4fe146d420bd6"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "07d2cffa61fbb4bd9dc2e0cb0bb4fe146d420bd6"
+        }
+      ]
+    },
+    {
+      "version": "18.6.0",
+      "last_updated": "2022-07-19T17:55:53Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        }
+      ]
+    },
+    {
+      "version": "18.5.0",
+      "last_updated": "2022-07-10T00:44:28Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "7802f1b6479d6f04bea5cc94e8290ea61e210ecf"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "7802f1b6479d6f04bea5cc94e8290ea61e210ecf"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "7802f1b6479d6f04bea5cc94e8290ea61e210ecf"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "7802f1b6479d6f04bea5cc94e8290ea61e210ecf"
+        }
+      ]
+    },
+    {
+      "version": "18.4.0",
+      "last_updated": "2022-07-08T15:07:10Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "334ec8b503c3981e37a04b817a70e8d026ea9e84"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "334ec8b503c3981e37a04b817a70e8d026ea9e84"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "334ec8b503c3981e37a04b817a70e8d026ea9e84"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "334ec8b503c3981e37a04b817a70e8d026ea9e84"
+        }
+      ]
+    },
+    {
+      "version": "18.3.0",
+      "last_updated": "2022-06-02T17:14:19Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        }
+      ]
+    },
+    {
+      "version": "18.2.0",
+      "last_updated": "2022-05-28T02:13:38Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        }
+      ]
+    },
+    {
+      "version": "18.1.0",
+      "last_updated": "2022-05-18T02:28:07Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        }
+      ]
+    },
+    {
+      "version": "18.0.0",
+      "last_updated": "2022-05-03T02:40:48Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out (Linux only), libv8 (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        },
+        {
+          "attribute_path": "nodejs-18_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        }
+      ]
+    },
+    {
+      "version": "17.9.0",
+      "last_updated": "2022-05-18T02:28:07Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        }
+      ]
+    },
+    {
+      "version": "17.8.0",
+      "last_updated": "2022-03-25T14:41:56Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "30d3d79b7d3607d56546dd2a6b49e156ba0ec634"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "30d3d79b7d3607d56546dd2a6b49e156ba0ec634"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "30d3d79b7d3607d56546dd2a6b49e156ba0ec634"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "30d3d79b7d3607d56546dd2a6b49e156ba0ec634"
+        }
+      ]
+    },
+    {
+      "version": "17.7.2",
+      "last_updated": "2022-03-21T18:25:50Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        }
+      ]
+    },
+    {
+      "version": "17.5.0",
+      "last_updated": "2022-03-13T09:24:18Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "a4684b5462b6c66dd7ad2a7dfb2e5c1fca5582e4"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "02177737c5d977444df41e0f5d6124c48c64bba3"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "02177737c5d977444df41e0f5d6124c48c64bba3"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "3a641defd170a4ef25ce8c7c64cb13f91f867fca"
+        }
+      ]
+    },
+    {
+      "version": "17.4.0",
+      "last_updated": "2022-02-09T15:24:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        }
+      ]
+    },
+    {
+      "version": "17.3.1",
+      "last_updated": "2022-01-12T06:31:35Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "b458e5133fba2c873649f071f7a8dfeae52ebd17"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "b458e5133fba2c873649f071f7a8dfeae52ebd17"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "b458e5133fba2c873649f071f7a8dfeae52ebd17"
+        }
+      ]
+    },
+    {
+      "version": "17.3.0",
+      "last_updated": "2022-01-09T02:18:44Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        }
+      ]
+    },
+    {
+      "version": "17.2.0",
+      "last_updated": "2021-12-10T14:39:04Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "91ca3ab15fb7800fd48b84a9940e2432db778d1f"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "91ca3ab15fb7800fd48b84a9940e2432db778d1f"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "91ca3ab15fb7800fd48b84a9940e2432db778d1f"
+        }
+      ]
+    },
+    {
+      "version": "17.1.0",
+      "last_updated": "2021-12-09T05:58:48Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        }
+      ]
+    },
+    {
+      "version": "17.0.1",
+      "last_updated": "2021-11-02T07:46:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "481afad2658993463d390b184e259d73fcd374ea"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "481afad2658993463d390b184e259d73fcd374ea"
+        },
+        {
+          "attribute_path": "nodejs-17_x",
+          "commit_hash": "481afad2658993463d390b184e259d73fcd374ea"
+        }
+      ]
+    },
+    {
+      "version": "16.20.2",
+      "last_updated": "2023-11-17T14:14:56Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        }
+      ]
+    },
+    {
+      "version": "16.20.0",
+      "last_updated": "2023-05-14T19:13:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        },
+        {
+          "attribute_path": "nodejs_16",
+          "commit_hash": "3007746b3f5bfcb49e102b517bca891822a41b31"
+        }
+      ]
+    },
+    {
+      "version": "16.19.1",
+      "last_updated": "2023-03-28T10:29:13Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98f3b08f58ff125ef02d55cd52a83f44f245f2ea"
+        }
+      ]
+    },
+    {
+      "version": "16.19.0",
+      "last_updated": "2023-02-14T00:52:29Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "0a25e2c87e784bf7e06e7833ec0e06d34836959a"
+        }
+      ]
+    },
+    {
+      "version": "16.18.1",
+      "last_updated": "2022-12-17T09:19:40Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        }
+      ]
+    },
+    {
+      "version": "16.18.0",
+      "last_updated": "2022-11-04T08:04:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "01e9ba9666a3fb137621f35d012710bb5af44860"
+        }
+      ]
+    },
+    {
+      "version": "16.17.1",
+      "last_updated": "2022-10-22T16:07:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        }
+      ]
+    },
+    {
+      "version": "16.17.0",
+      "last_updated": "2022-09-12T23:24:01Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        }
+      ]
+    },
+    {
+      "version": "16.16.0",
+      "last_updated": "2022-08-16T08:43:52Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6c6409e965a6c883677be7b9d87a95fab6c3472e"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6c6409e965a6c883677be7b9d87a95fab6c3472e"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6c6409e965a6c883677be7b9d87a95fab6c3472e"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6c6409e965a6c883677be7b9d87a95fab6c3472e"
+        }
+      ]
+    },
+    {
+      "version": "16.15.1",
+      "last_updated": "2022-06-02T17:14:19Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        }
+      ]
+    },
+    {
+      "version": "16.15.0",
+      "last_updated": "2022-07-19T17:55:53Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        }
+      ]
+    },
+    {
+      "version": "16.15.1",
+      "last_updated": "2022-06-02T17:14:19Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        },
+        {
+          "attribute_path": "nodejs",
+          "commit_hash": "059530fbdb1a2e0f78e896a93d6b6da5999485d9"
+        }
+      ]
+    },
+    {
+      "version": "16.15.0",
+      "last_updated": "2022-07-19T17:55:53Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        }
+      ]
+    },
+    {
+      "version": "16.14.2",
+      "last_updated": "2022-04-25T00:37:51Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out (Linux only), libv8 (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "b43d3db76831cb80db01dd2ed50d66175fa2a325"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "b43d3db76831cb80db01dd2ed50d66175fa2a325"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "b43d3db76831cb80db01dd2ed50d66175fa2a325"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "b43d3db76831cb80db01dd2ed50d66175fa2a325"
+        }
+      ]
+    },
+    {
+      "version": "16.14.0",
+      "last_updated": "2022-03-13T09:24:18Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "a4684b5462b6c66dd7ad2a7dfb2e5c1fca5582e4"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "02177737c5d977444df41e0f5d6124c48c64bba3"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "02177737c5d977444df41e0f5d6124c48c64bba3"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "3a641defd170a4ef25ce8c7c64cb13f91f867fca"
+        }
+      ]
+    },
+    {
+      "version": "16.13.2",
+      "last_updated": "2022-02-09T15:24:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        }
+      ]
+    },
+    {
+      "version": "16.13.1",
+      "last_updated": "2022-01-09T02:18:44Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        }
+      ]
+    },
+    {
+      "version": "16.13.0",
+      "last_updated": "2021-12-03T17:41:48Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "2df15ba83d0510a56f2583fd3481723835acb5a1"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "2df15ba83d0510a56f2583fd3481723835acb5a1"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "2df15ba83d0510a56f2583fd3481723835acb5a1"
+        }
+      ]
+    },
+    {
+      "version": "16.12.0",
+      "last_updated": "2021-10-22T02:15:45Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        }
+      ]
+    },
+    {
+      "version": "16.10.0",
+      "last_updated": "2021-10-04T06:34:54Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "ee084c02040e864eeeb4cf4f8538d92f7c675671"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "ee084c02040e864eeeb4cf4f8538d92f7c675671"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "b5182c214fac1e6db9f28ed8a7cfc2d0c255c763"
+        }
+      ]
+    },
+    {
+      "version": "16.9.1",
+      "last_updated": "2021-09-15T17:07:59Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "2bb5cbf7f8b99a8d1d6646abe5ab993f6823212f"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "2bb5cbf7f8b99a8d1d6646abe5ab993f6823212f"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "2bb5cbf7f8b99a8d1d6646abe5ab993f6823212f"
+        }
+      ]
+    },
+    {
+      "version": "16.9.0",
+      "last_updated": "2021-09-09T23:12:09Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "9fe2e640cc8540bacc4764892317f908d3562bc3"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "9fe2e640cc8540bacc4764892317f908d3562bc3"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "9fe2e640cc8540bacc4764892317f908d3562bc3"
+        }
+      ]
+    },
+    {
+      "version": "16.8.0",
+      "last_updated": "2021-09-01T12:52:41Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        }
+      ]
+    },
+    {
+      "version": "16.7.0",
+      "last_updated": "2021-08-23T17:18:58Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "002e0737ff526e15e30ce6be41fc0037d8e88ab7"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "002e0737ff526e15e30ce6be41fc0037d8e88ab7"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "002e0737ff526e15e30ce6be41fc0037d8e88ab7"
+        }
+      ]
+    },
+    {
+      "version": "16.6.2",
+      "last_updated": "2021-08-19T13:27:31Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "14b0f20fa1f56438b74100513c9b1f7c072cf789"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "14b0f20fa1f56438b74100513c9b1f7c072cf789"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "14b0f20fa1f56438b74100513c9b1f7c072cf789"
+        }
+      ]
+    },
+    {
+      "version": "16.6.1",
+      "last_updated": "2021-08-09T21:28:07Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "3f7771d65cca13a229e11f4aeaaf9245414a2134"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "3f7771d65cca13a229e11f4aeaaf9245414a2134"
+        }
+      ]
+    },
+    {
+      "version": "16.5.0",
+      "last_updated": "2021-08-05T06:27:40Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6dc0549183672acd39d735a465098ca9deeff6ad"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "6dc0549183672acd39d735a465098ca9deeff6ad"
+        }
+      ]
+    },
+    {
+      "version": "16.6.0",
+      "last_updated": "2021-08-01T02:58:48Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "404cd360c2607bcfe8d05a7d5ae609d6605f7e22"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "404cd360c2607bcfe8d05a7d5ae609d6605f7e22"
+        }
+      ]
+    },
+    {
+      "version": "16.4.2",
+      "last_updated": "2021-07-07T11:28:43Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "4c0834929cafb7478a5e82616d484578a80a3e41"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "4c0834929cafb7478a5e82616d484578a80a3e41"
+        }
+      ]
+    },
+    {
+      "version": "16.4.1",
+      "last_updated": "2021-07-05T19:22:21Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "3e0ce8c5d478d06b37a4faa7a4cc8642c6bb97de"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "3e0ce8c5d478d06b37a4faa7a4cc8642c6bb97de"
+        }
+      ]
+    },
+    {
+      "version": "16.4.0",
+      "last_updated": "2021-06-29T14:40:08Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "db6e089456cdddcd7e2c1d8dac37a505c797e8fa"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "db6e089456cdddcd7e2c1d8dac37a505c797e8fa"
+        }
+      ]
+    },
+    {
+      "version": "16.3.0",
+      "last_updated": "2021-06-21T09:39:32Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "fdb42a72ec4298fb204b885105c6823b33897f09"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "fdb42a72ec4298fb204b885105c6823b33897f09"
+        }
+      ]
+    },
+    {
+      "version": "16.2.0",
+      "last_updated": "2021-06-02T10:24:24Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "239da47116274ee326a965d80b3ed1d3bf08af62"
+        },
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "3847a2a8595bba68214ac4b7e3da3fc00776989b"
+        }
+      ]
+    },
+    {
+      "version": "16.1.0",
+      "last_updated": "2021-05-17T21:30:44Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "3528c4151ee7c124f5a5cb1d01cb8d6a2dd8d62d"
+        }
+      ]
+    },
+    {
+      "version": "16.0.0",
+      "last_updated": "2021-05-03T18:16:27Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-16_x",
+          "commit_hash": "0111666954f772565cd83c3b7bea179e7808515c"
+        }
+      ]
+    },
+    {
+      "version": "15.14.0",
+      "last_updated": "2021-05-17T21:30:44Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "3528c4151ee7c124f5a5cb1d01cb8d6a2dd8d62d"
+        }
+      ]
+    },
+    {
+      "version": "15.13.0",
+      "last_updated": "2021-04-02T00:58:33Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "54c1e44240d8a527a8f4892608c4bce5440c3ecb"
+        }
+      ]
+    },
+    {
+      "version": "15.12.0",
+      "last_updated": "2021-03-19T17:37:14Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "733b33a07eac62a01f738f4bf15aa46b4c84168b"
+        }
+      ]
+    },
+    {
+      "version": "15.11.0",
+      "last_updated": "2021-03-11T20:36:18Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "fde0082ca4b830b1d9d69b4f4189322512f067d7"
+        }
+      ]
+    },
+    {
+      "version": "15.10.0",
+      "last_updated": "2021-02-27T20:39:16Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "5df05c902cde398e056eb6271d5fe13e418db4c6"
+        }
+      ]
+    },
+    {
+      "version": "15.9.0",
+      "last_updated": "2021-02-23T09:53:36Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "93a812bb9f9c398bd5b9636ab3674dcfe8cfb884"
+        }
+      ]
+    },
+    {
+      "version": "15.8.0",
+      "last_updated": "2021-02-19T05:56:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "b4e193a23a1c5d8794794e65cabf1f1135d07fd9"
+        }
+      ]
+    },
+    {
+      "version": "15.7.0",
+      "last_updated": "2021-01-31T03:57:17Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "b76d44b9612b0f2117cbce00a9e9508f068c752e"
+        }
+      ]
+    },
+    {
+      "version": "15.6.0",
+      "last_updated": "2021-01-18T12:47:57Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "4eccd6f731627ba5ad9915bcf600c9329a34ca78"
+        }
+      ]
+    },
+    {
+      "version": "15.5.1",
+      "last_updated": "2021-01-14T13:26:31Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "956afcd713a4f94a4acb4460d339dc638bac3d0a"
+        }
+      ]
+    },
+    {
+      "version": "15.5.0",
+      "last_updated": "2021-01-04T12:51:49Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "f6e519f39e4d6ee694c2a3d5de8f3f263c57980b"
+        }
+      ]
+    },
+    {
+      "version": "15.4.0",
+      "last_updated": "2020-12-16T12:38:43Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "00941cd747e9bc1c3326d1362dbc7e9cfe18cf53"
+        }
+      ]
+    },
+    {
+      "version": "15.3.0",
+      "last_updated": "2020-12-13T12:06:53Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "62fab0d98ae9f62c41832ec2986bb7d8622786a0"
+        }
+      ]
+    },
+    {
+      "version": "15.2.1",
+      "last_updated": "2020-11-22T19:04:20Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "272744825d28f9cea96fe77fe685c8ba2af8eb12"
+        }
+      ]
+    },
+    {
+      "version": "15.2.0",
+      "last_updated": "2020-11-18T16:15:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "6625284c397b44bc9518a5a1567c1b5aae455c08"
+        }
+      ]
+    },
+    {
+      "version": "15.1.0",
+      "last_updated": "2020-11-10T05:52:12Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "dd1b7e377f6d77ddee4ab84be11173d3566d6a18"
+        }
+      ]
+    },
+    {
+      "version": "15.0.1",
+      "last_updated": "2020-10-25T07:12:25Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-15_x",
+          "commit_hash": "7ad5e816faba3f808e2a8815b14d0f023a4e2160"
+        }
+      ]
+    },
+    {
+      "version": "14.21.3",
+      "last_updated": "2023-11-17T14:14:56Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs_14",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_14",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_14",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        },
+        {
+          "attribute_path": "nodejs_14",
+          "commit_hash": "a71323f68d4377d12c04a5410e214495ec598d4c"
+        }
+      ]
+    },
+    {
+      "version": "14.21.1",
+      "last_updated": "2022-11-21T15:52:25Z",
+      "platforms_summary": "macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6b5019a48f876f3288efc626fa8b70ad0c64eb46"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6b5019a48f876f3288efc626fa8b70ad0c64eb46"
+        }
+      ]
+    },
+    {
+      "version": "14.19.3",
+      "last_updated": "2022-06-20T04:45:15Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "72bbea9db7d727ed044e60b5f5febc60a3c5c955"
+        }
+      ]
+    },
+    {
+      "version": "14.19.2",
+      "last_updated": "2022-05-18T02:28:07Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "52dc75a4fee3fdbcb792cb6fba009876b912bfe0"
+        }
+      ]
+    },
+    {
+      "version": "14.19.1",
+      "last_updated": "2022-05-03T02:40:48Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        }
+      ]
+    },
+    {
+      "version": "14.19.0",
+      "last_updated": "2022-02-15T04:21:50Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "3a641defd170a4ef25ce8c7c64cb13f91f867fca"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "3a641defd170a4ef25ce8c7c64cb13f91f867fca"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "3a641defd170a4ef25ce8c7c64cb13f91f867fca"
+        }
+      ]
+    },
+    {
+      "version": "14.18.3",
+      "last_updated": "2022-02-09T15:24:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        }
+      ]
+    },
+    {
+      "version": "14.18.2",
+      "last_updated": "2022-01-09T02:18:44Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        }
+      ]
+    },
+    {
+      "version": "14.18.1",
+      "last_updated": "2022-01-01T05:55:45Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6f05cfdb1e78d36c0337516df674560e4b51c79b"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6f05cfdb1e78d36c0337516df674560e4b51c79b"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6f05cfdb1e78d36c0337516df674560e4b51c79b"
+        }
+      ]
+    },
+    {
+      "version": "14.18.0",
+      "last_updated": "2021-10-22T02:15:45Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        }
+      ]
+    },
+    {
+      "version": "14.17.6",
+      "last_updated": "2021-09-26T10:07:29Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "b5182c214fac1e6db9f28ed8a7cfc2d0c255c763"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "b5182c214fac1e6db9f28ed8a7cfc2d0c255c763"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "b5182c214fac1e6db9f28ed8a7cfc2d0c255c763"
+        }
+      ]
+    },
+    {
+      "version": "14.17.5",
+      "last_updated": "2021-09-01T12:52:41Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        }
+      ]
+    },
+    {
+      "version": "14.17.4",
+      "last_updated": "2021-08-01T02:58:48Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "404cd360c2607bcfe8d05a7d5ae609d6605f7e22"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "404cd360c2607bcfe8d05a7d5ae609d6605f7e22"
+        }
+      ]
+    },
+    {
+      "version": "14.17.3",
+      "last_updated": "2021-07-26T10:49:44Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "2030abed5863fc11eccac0735f27a0828376c84e"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "2030abed5863fc11eccac0735f27a0828376c84e"
+        }
+      ]
+    },
+    {
+      "version": "14.17.2",
+      "last_updated": "2021-07-05T19:22:21Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "3e0ce8c5d478d06b37a4faa7a4cc8642c6bb97de"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "3e0ce8c5d478d06b37a4faa7a4cc8642c6bb97de"
+        }
+      ]
+    },
+    {
+      "version": "14.17.1",
+      "last_updated": "2021-06-29T14:40:08Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "db6e089456cdddcd7e2c1d8dac37a505c797e8fa"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "db6e089456cdddcd7e2c1d8dac37a505c797e8fa"
+        }
+      ]
+    },
+    {
+      "version": "14.17.0",
+      "last_updated": "2021-06-02T10:24:24Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "239da47116274ee326a965d80b3ed1d3bf08af62"
+        },
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "3847a2a8595bba68214ac4b7e3da3fc00776989b"
+        }
+      ]
+    },
+    {
+      "version": "14.16.1",
+      "last_updated": "2021-05-17T21:30:44Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "3528c4151ee7c124f5a5cb1d01cb8d6a2dd8d62d"
+        }
+      ]
+    },
+    {
+      "version": "14.16.0",
+      "last_updated": "2021-04-02T00:58:33Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "54c1e44240d8a527a8f4892608c4bce5440c3ecb"
+        }
+      ]
+    },
+    {
+      "version": "14.15.5",
+      "last_updated": "2021-02-19T05:56:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "b4e193a23a1c5d8794794e65cabf1f1135d07fd9"
+        }
+      ]
+    },
+    {
+      "version": "14.15.4",
+      "last_updated": "2021-01-31T03:57:17Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "b76d44b9612b0f2117cbce00a9e9508f068c752e"
+        }
+      ]
+    },
+    {
+      "version": "14.15.3",
+      "last_updated": "2021-01-04T12:51:49Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "f6e519f39e4d6ee694c2a3d5de8f3f263c57980b"
+        }
+      ]
+    },
+    {
+      "version": "14.15.1",
+      "last_updated": "2020-12-13T12:06:53Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "62fab0d98ae9f62c41832ec2986bb7d8622786a0"
+        }
+      ]
+    },
+    {
+      "version": "14.15.0",
+      "last_updated": "2020-11-18T16:15:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "6625284c397b44bc9518a5a1567c1b5aae455c08"
+        }
+      ]
+    },
+    {
+      "version": "14.14.0",
+      "last_updated": "2020-10-25T07:12:25Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "7ad5e816faba3f808e2a8815b14d0f023a4e2160"
+        }
+      ]
+    },
+    {
+      "version": "14.9.0",
+      "last_updated": "2020-09-22T06:38:26Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "83162ab3b97d0e13b08e28938133381a7515c1e3"
+        }
+      ]
+    },
+    {
+      "version": "14.8.0",
+      "last_updated": "2020-08-25T08:51:33Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "b9ba82ef8ad6d8997840332ca3a2986e360291e3"
+        }
+      ]
+    },
+    {
+      "version": "14.7.0",
+      "last_updated": "2020-08-05T17:04:13Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "e5b91d92a01178f9eecc0c7dd09a89e29fe9cc6f"
+        }
+      ]
+    },
+    {
+      "version": "14.6.0",
+      "last_updated": "2020-07-25T14:18:40Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "2b7c0dcdaab946153b0eaba5f2420f15ea27b0d6"
+        }
+      ]
+    },
+    {
+      "version": "14.5.0",
+      "last_updated": "2020-07-14T01:56:14Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "aca0bbe791c220f8360bd0dd8e9dce161253b341"
+        }
+      ]
+    },
+    {
+      "version": "14.4.0",
+      "last_updated": "2020-06-30T02:44:55Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-14_x",
+          "commit_hash": "e912fb83d2155a393e7146da98cda0e455a80fb6"
+        }
+      ]
+    },
+    {
+      "version": "13.14.0",
+      "last_updated": "2020-07-14T01:56:14Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-13_x",
+          "commit_hash": "aca0bbe791c220f8360bd0dd8e9dce161253b341"
+        }
+      ]
+    },
+    {
+      "version": "12.22.12",
+      "last_updated": "2022-05-28T02:13:38Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out (Linux only), libv8 (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "24c33ab7952544ad355d0677c9eea931b23f371c"
+        }
+      ]
+    },
+    {
+      "version": "12.22.11",
+      "last_updated": "2022-03-21T18:25:50Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        }
+      ]
+    },
+    {
+      "version": "12.22.10",
+      "last_updated": "2022-03-13T09:24:18Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "a4684b5462b6c66dd7ad2a7dfb2e5c1fca5582e4"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "02177737c5d977444df41e0f5d6124c48c64bba3"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "02177737c5d977444df41e0f5d6124c48c64bba3"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "3a641defd170a4ef25ce8c7c64cb13f91f867fca"
+        }
+      ]
+    },
+    {
+      "version": "12.22.9",
+      "last_updated": "2022-02-09T15:24:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, libv8",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        }
+      ]
+    },
+    {
+      "version": "12.22.8",
+      "last_updated": "2022-01-09T02:18:44Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "cf26d7da025a6df4ea053a9f17e4e1d50cf5fa92"
+        }
+      ]
+    },
+    {
+      "version": "12.22.7",
+      "last_updated": "2021-12-09T05:58:48Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        }
+      ]
+    },
+    {
+      "version": "12.22.6",
+      "last_updated": "2021-10-04T06:34:54Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "ee084c02040e864eeeb4cf4f8538d92f7c675671"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "ee084c02040e864eeeb4cf4f8538d92f7c675671"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "b5182c214fac1e6db9f28ed8a7cfc2d0c255c763"
+        }
+      ]
+    },
+    {
+      "version": "12.22.5",
+      "last_updated": "2021-09-01T12:52:41Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "6cc260cfd60f094500b79e279069b499806bf6d8"
+        }
+      ]
+    },
+    {
+      "version": "12.22.4",
+      "last_updated": "2021-08-01T02:58:48Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "404cd360c2607bcfe8d05a7d5ae609d6605f7e22"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "404cd360c2607bcfe8d05a7d5ae609d6605f7e22"
+        }
+      ]
+    },
+    {
+      "version": "12.22.3",
+      "last_updated": "2021-07-26T10:49:44Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "2030abed5863fc11eccac0735f27a0828376c84e"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "2030abed5863fc11eccac0735f27a0828376c84e"
+        }
+      ]
+    },
+    {
+      "version": "12.22.2",
+      "last_updated": "2021-07-05T19:22:21Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "3e0ce8c5d478d06b37a4faa7a4cc8642c6bb97de"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "3e0ce8c5d478d06b37a4faa7a4cc8642c6bb97de"
+        }
+      ]
+    },
+    {
+      "version": "12.22.1",
+      "last_updated": "2021-06-29T14:40:08Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "db6e089456cdddcd7e2c1d8dac37a505c797e8fa"
+        },
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "db6e089456cdddcd7e2c1d8dac37a505c797e8fa"
+        }
+      ]
+    },
+    {
+      "version": "12.22.0",
+      "last_updated": "2021-04-02T00:58:33Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "54c1e44240d8a527a8f4892608c4bce5440c3ecb"
+        }
+      ]
+    },
+    {
+      "version": "12.21.0",
+      "last_updated": "2021-03-19T17:37:14Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "733b33a07eac62a01f738f4bf15aa46b4c84168b"
+        }
+      ]
+    },
+    {
+      "version": "12.20.2",
+      "last_updated": "2021-02-19T05:56:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "b4e193a23a1c5d8794794e65cabf1f1135d07fd9"
+        }
+      ]
+    },
+    {
+      "version": "12.20.1",
+      "last_updated": "2021-01-31T03:57:17Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "b76d44b9612b0f2117cbce00a9e9508f068c752e"
+        }
+      ]
+    },
+    {
+      "version": "12.20.0",
+      "last_updated": "2021-01-04T12:51:49Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "f6e519f39e4d6ee694c2a3d5de8f3f263c57980b"
+        }
+      ]
+    },
+    {
+      "version": "12.19.1",
+      "last_updated": "2020-11-22T19:04:20Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "272744825d28f9cea96fe77fe685c8ba2af8eb12"
+        }
+      ]
+    },
+    {
+      "version": "12.19.0",
+      "last_updated": "2020-11-18T16:15:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "6625284c397b44bc9518a5a1567c1b5aae455c08"
+        }
+      ]
+    },
+    {
+      "version": "12.18.4",
+      "last_updated": "2020-09-22T06:38:26Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "83162ab3b97d0e13b08e28938133381a7515c1e3"
+        }
+      ]
+    },
+    {
+      "version": "12.18.3",
+      "last_updated": "2020-09-09T10:48:30Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "51428e8d38271d14146211867984b8742d304ea4"
+        }
+      ]
+    },
+    {
+      "version": "12.18.2",
+      "last_updated": "2020-07-14T01:56:14Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "aca0bbe791c220f8360bd0dd8e9dce161253b341"
+        }
+      ]
+    },
+    {
+      "version": "12.18.1",
+      "last_updated": "2020-06-30T02:44:55Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "e912fb83d2155a393e7146da98cda0e455a80fb6"
+        }
+      ]
+    },
+    {
+      "version": "12.18.0",
+      "last_updated": "2020-06-18T07:06:33Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-12_x",
+          "commit_hash": "9480bae337095fd24f61380bce3174fdfe926a00"
+        }
+      ]
+    },
+    {
+      "version": "10.24.1",
+      "last_updated": "2022-05-28T02:13:38Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out (Linux only), libv8 (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        },
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        },
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        },
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "33582b3ee1d3edbe331b455ed423bc97e3fb7498"
+        }
+      ]
+    },
+    {
+      "version": "10.24.0",
+      "last_updated": "2021-04-02T00:58:33Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "54c1e44240d8a527a8f4892608c4bce5440c3ecb"
+        }
+      ]
+    },
+    {
+      "version": "10.23.3",
+      "last_updated": "2021-02-19T05:56:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "b4e193a23a1c5d8794794e65cabf1f1135d07fd9"
+        }
+      ]
+    },
+    {
+      "version": "10.23.2",
+      "last_updated": "2021-01-31T03:57:17Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "b76d44b9612b0f2117cbce00a9e9508f068c752e"
+        }
+      ]
+    },
+    {
+      "version": "10.23.1",
+      "last_updated": "2021-01-18T12:47:57Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "4eccd6f731627ba5ad9915bcf600c9329a34ca78"
+        }
+      ]
+    },
+    {
+      "version": "10.23.0",
+      "last_updated": "2021-01-04T12:51:49Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "f6e519f39e4d6ee694c2a3d5de8f3f263c57980b"
+        }
+      ]
+    },
+    {
+      "version": "10.22.1",
+      "last_updated": "2020-10-25T07:12:25Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "7ad5e816faba3f808e2a8815b14d0f023a4e2160"
+        }
+      ]
+    },
+    {
+      "version": "10.22.0",
+      "last_updated": "2020-09-09T10:48:30Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "51428e8d38271d14146211867984b8742d304ea4"
+        }
+      ]
+    },
+    {
+      "version": "10.21.0",
+      "last_updated": "2020-07-14T01:56:14Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "nodejs-10_x",
+          "commit_hash": "aca0bbe791c220f8360bd0dd8e9dce161253b341"
+        }
       ]
     }
   ]

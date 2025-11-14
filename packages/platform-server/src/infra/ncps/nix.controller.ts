@@ -71,12 +71,19 @@ export class NixController {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
-        if ([502, 503, 504].includes(res.status)) throw new Error(`upstream_${res.status}`);
+        if ([502, 503, 504].includes(res.status)) {
+          throw Object.assign(new Error(`upstream_${res.status}`), { status: res.status });
+        }
         if (!res.ok) {
           const txt = await res.text().catch(() => '');
           throw Object.assign(new Error(`upstream_${res.status}`), { status: res.status, body: txt });
         }
-        const json = (await res.json()) as unknown;
+        let json: unknown;
+        try {
+          json = await res.json();
+        } catch (parseErr) {
+          throw Object.assign(new Error('bad_upstream_json'), { code: 'bad_upstream_json', cause: parseErr });
+        }
         this.cache.set(url, json);
         return json;
       } catch (e) {
@@ -108,7 +115,7 @@ export class NixController {
       plats.find((p) => p.system === 'aarch64-linux') ||
       plats[0];
     const attributePath = preferred?.attribute_path;
-    const commitHash = rel.commit_hash;
+    const commitHash = rel.commit_hash ?? preferred?.commit_hash;
     if (!attributePath) throw Object.assign(new Error('missing_attribute_path'), { code: 'missing_attribute_path' });
     if (!commitHash) throw Object.assign(new Error('missing_commit_hash'), { code: 'missing_commit_hash' });
     return { commitHash, attributePath };
@@ -150,6 +157,10 @@ export class NixController {
       if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };
+      }
+      if ((err as { code?: string }).code === 'bad_upstream_json') {
+        reply.code(502);
+        return { error: 'bad_upstream_json' };
       }
       if (err instanceof ZodError) {
         reply.code(502);
@@ -200,6 +211,10 @@ export class NixController {
         reply.code(502);
         return { error: 'bad_upstream_json', details: err.issues };
       }
+      if ((err as { code?: string }).code === 'bad_upstream_json') {
+        reply.code(502);
+        return { error: 'bad_upstream_json' };
+      }
       if (typeof err.status === 'number') {
         reply.code(err.status === 404 ? 404 : 502);
         return { error: err.status === 404 ? 'not_found' : 'upstream_error', status: err.status };
@@ -241,6 +256,10 @@ export class NixController {
       if (typeof err.status === 'number') {
         reply.code(err.status === 404 ? 404 : 502);
         return { error: err.status === 404 ? 'not_found' : 'upstream_error', status: err.status };
+      }
+      if (err.code === 'bad_upstream_json') {
+        reply.code(502);
+        return { error: 'bad_upstream_json' };
       }
       if (err instanceof ZodError) {
         reply.code(502);

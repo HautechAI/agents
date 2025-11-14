@@ -3,18 +3,1035 @@
   "summary": "Distributed version control system",
   "releases": [
     {
-      "version": "2.45.0",
-      "commit_hash": "1234567abcdef",
+      "version": "2.51.0",
+      "last_updated": "2025-11-08T12:28:21Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
       "platforms": [
-        { "system": "x86_64-linux", "attribute_path": "git" },
-        { "system": "aarch64-linux", "attribute_path": "git-aarch64" }
+        {
+          "attribute_path": "git",
+          "commit_hash": "f6b44b2401525650256b977063dbcf830f762369"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "f1e8ae508a9a467a9f51d29b8639e96db2b52c30"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "01b6809f7f9d1183a2b3e081f0a1e6f8f415cb09"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "01b6809f7f9d1183a2b3e081f0a1e6f8f415cb09"
+        }
       ]
     },
     {
-      "version": 24402,
-      "commit_hash": "deadbeefcafebabe",
+      "version": "2.50.1",
+      "last_updated": "2025-08-12T09:17:37Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
       "platforms": [
-        { "system": "x86_64-linux", "attribute_path": "git-legacy" }
+        {
+          "attribute_path": "git",
+          "commit_hash": "372d9eeeafa5b15913201e2b92e8e539ac7c64d1"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "372d9eeeafa5b15913201e2b92e8e539ac7c64d1"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "648f70160c03151bc2121d179291337ad6bc564b"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "648f70160c03151bc2121d179291337ad6bc564b"
+        }
+      ]
+    },
+    {
+      "version": "2.50.0",
+      "last_updated": "2025-07-24T15:00:16Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "b74a30dbc0a72e20df07d43109339f780b439291"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "2baf8e1658cba84a032c3a8befb1e7b06629242a"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "a421ac6595024edcfbb1ef950a3712b89161c359"
+        }
+      ]
+    },
+    {
+      "version": "2.49.0",
+      "last_updated": "2025-07-09T16:14:05Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "be9e214982e20b8310878ac2baa063a961c1bdf6"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "9b008d60392981ad674e04016d25619281550a9d"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "076e8c6678d8c54204abcb4b1b14c366835a58bb"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "076e8c6678d8c54204abcb4b1b14c366835a58bb"
+        }
+      ]
+    },
+    {
+      "version": "2.48.1",
+      "last_updated": "2025-04-13T09:22:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "18dd725c29603f582cf1900e0d25f9f1063dbf11"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "f6db44a8daa59c40ae41ba6e5823ec77fe0d2124"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "dd613136ee91f67e5dba3f3f41ac99ae89c5406b"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0d534853a55b5d02a4ababa1d71921ce8f0aee4c"
+        }
+      ]
+    },
+    {
+      "version": "2.47.2",
+      "last_updated": "2025-02-20T02:45:56Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "dad564433178067be1fbdfcce23b546254b6d641"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "dad564433178067be1fbdfcce23b546254b6d641"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d98abf5cf5914e5e4e9d57205e3af55ca90ffc1d"
+        }
+      ]
+    },
+    {
+      "version": "2.47.1",
+      "last_updated": "2025-02-05T23:13:39Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "1da52dd49a127ad74486b135898da2cef8c62665"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "494b2407ef95997176211a8758638205916873a9"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "50165c4f7eb48ce82bd063e1fb8047a0f515f8ce"
+        }
+      ]
+    },
+    {
+      "version": "2.47.0",
+      "last_updated": "2025-01-19T05:21:23Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "aa6ae0afa6adeb5c202a168e51eda1d3da571117"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "733994ea06585b76621073160e87b0bfac7fc5ae"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "de1864217bfa9b5845f465e771e0ecb48b30e02d"
+        }
+      ]
+    },
+    {
+      "version": "2.46.1",
+      "last_updated": "2024-10-30T07:09:13Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "2d2a9ddbe3f2c00747398f3dc9b05f7f2ebb0f53"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "062c4f59744fcffa2e5aa3ef443dc8b4d1674ed6"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d4f247e89f6e10120f911e2e2d2254a050d0f732"
+        }
+      ]
+    },
+    {
+      "version": "2.46.0",
+      "last_updated": "2024-10-10T05:33:31Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "b69de56fac8c2b6f8fd27f2eca01dcda8e0a4221"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "2b58bfe2c0d73341362870a0f1e50b2b8f2e4b84"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "5ed627539ac84809c78b2dd6d26a5cebeb5ae269"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "5ed627539ac84809c78b2dd6d26a5cebeb5ae269"
+        }
+      ]
+    },
+    {
+      "version": "2.45.2",
+      "last_updated": "2024-08-31T01:22:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "192e7407cc66e2eccc3a6c5ad3834dd62fae3800"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "4c30668e1edb7348169407f218fa7c71a94b17f3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465"
+        }
+      ]
+    },
+    {
+      "version": "2.45.1",
+      "last_updated": "2024-07-05T12:16:31Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "4284c2b73c8bce4b46a6adf23e16d9e2ec8da4bb"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d9c0b9d611277e42e6db055636ba0409c59db6d2"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "a9858885e197f984d92d7fe64e9fff6b2e488d40"
+        }
+      ]
+    },
+    {
+      "version": "2.44.1",
+      "last_updated": "2024-06-11T23:38:24Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "e913ae340076bbb73d9f4d3d065c2bca7caafb16"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "4bf2ef5ac2bf016aabe80b09ba5c0eef9829a664"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "3f316d2a50699a78afe5e77ca486ad553169061e"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "3f316d2a50699a78afe5e77ca486ad553169061e"
+        }
+      ]
+    },
+    {
+      "version": "2.44.0",
+      "last_updated": "2024-05-21T17:27:28Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "e381a1288138aceda0ac63db32c7be545b446921"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "02923630b89aa1ab36ef8e422501a6f4fd4b2016"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "3281bec7174f679eabf584591e75979a258d8c40"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "3281bec7174f679eabf584591e75979a258d8c40"
+        }
+      ]
+    },
+    {
+      "version": "2.43.2",
+      "last_updated": "2024-03-17T18:53:16Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "34ad8c9f29a18b4dd97a9ad40ceb16954f24afe7"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "6af7e814afb3b62171eee1edc31989ee61528d25"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "a343533bccc62400e8a9560423486a3b6c11a23b"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "a343533bccc62400e8a9560423486a3b6c11a23b"
+        }
+      ]
+    },
+    {
+      "version": "2.43.1",
+      "last_updated": "2024-03-07T02:56:54Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "f945939fd679284d736112d3d5410eb867f3b31c"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "fa9a51752f1b5de583ad5213eb621be071806663"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "9a9dae8f6319600fa9aebde37f340975cab4b8c0"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "9a9dae8f6319600fa9aebde37f340975cab4b8c0"
+        }
+      ]
+    },
+    {
+      "version": "2.43.0",
+      "last_updated": "2024-02-23T12:51:13Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "48b75eb6e521f2303cb3cd53a94ec80021b422aa"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "52e1f314725b09b354336d17c7b8bd2442b7b8e4"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "10b813040df67c4039086db0f6eaf65c536886c6"
+        }
+      ]
+    },
+    {
+      "version": "2.42.0",
+      "last_updated": "2024-01-09T23:22:09Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "eabe8d3eface69f5bb16c18f8662a702f50c20d5"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d6863cbcbbb80e71cecfc03356db1cda38919523"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "fd04bea4cbf76f86f244b9e2549fca066db8ddff"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "fd04bea4cbf76f86f244b9e2549fca066db8ddff"
+        }
+      ]
+    },
+    {
+      "version": "2.41.0",
+      "last_updated": "2023-09-13T08:26:01Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "1697b7d480449b01111e352021f46e5879e47643"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "efd23a1c9ae8c574e2ca923c2b2dc336797f4cc4"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "efd23a1c9ae8c574e2ca923c2b2dc336797f4cc4"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "efd23a1c9ae8c574e2ca923c2b2dc336797f4cc4"
+        }
+      ]
+    },
+    {
+      "version": "2.40.1",
+      "last_updated": "2023-06-17T14:26:26Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "2c09e8eb8717e240ef9c5727c1cc9186db9fb309"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "683f2f5ba2ea54abb633d0b17bc9f7f6dede5799"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "932fc16b263f26803d3960e4400bc13dde84a972"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "932fc16b263f26803d3960e4400bc13dde84a972"
+        }
+      ]
+    },
+    {
+      "version": "2.40.0",
+      "last_updated": "2023-04-30T16:05:34Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "3056e9c39564559985ed9ed514f4789fb93a00ce"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "54abe781c482f51ff4ff534ebaba77db5bd97442"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "358a179550508bf2dafdf1657a94b7f65d91c4bf"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "358a179550508bf2dafdf1657a94b7f65d91c4bf"
+        }
+      ]
+    },
+    {
+      "version": "2.39.2",
+      "last_updated": "2023-04-20T19:28:33Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "7048a48bc79b4361f77740420000d2b5454b0df7"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0a4206a51b386e5cda731e8ac78d76ad924c7125"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "96ba1c52e54e74c3197f4d43026b3f3d92e83ff9"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "96ba1c52e54e74c3197f4d43026b3f3d92e83ff9"
+        }
+      ]
+    },
+    {
+      "version": "2.39.1",
+      "last_updated": "2023-02-25T19:16:54Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "bf592ea571b11dfee17a74d022f0b481ca5f1319"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "38b7104fd1db0046ceed579f5dab4e62f136589c"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "38b7104fd1db0046ceed579f5dab4e62f136589c"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "38b7104fd1db0046ceed579f5dab4e62f136589c"
+        }
+      ]
+    },
+    {
+      "version": "2.39.0",
+      "last_updated": "2023-01-31T08:30:41Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "ea692c2ad1afd6384e171eabef4f0887d2b882d3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "ea692c2ad1afd6384e171eabef4f0887d2b882d3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "2d38b664b4400335086a713a0036aafaa002c003"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "2d38b664b4400335086a713a0036aafaa002c003"
+        }
+      ]
+    },
+    {
+      "version": "2.38.1",
+      "last_updated": "2023-01-11T19:42:47Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "68e03abb2fd8db50eaee69ad58b208451143e005"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d744fdbab93b048ec24cc7baf7598618d0eb9d3b"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "80c24eeb9ff46aa99617844d0c4168659e35175f"
+        }
+      ]
+    },
+    {
+      "version": "2.38.0",
+      "last_updated": "2022-11-02T09:06:34Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "a704b9029586266f63807f64a6718f1a65b0f83b"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "ced197be72099edcfa68ebed8b87af7b04851f45"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "31acb601e388eb7d552f137dbe5cb4677fdf1c3c"
+        }
+      ]
+    },
+    {
+      "version": "2.37.3",
+      "last_updated": "2022-10-21T14:30:30Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "45454cd8ede6df14a8ae3c645a2f09fa2ca6c0d4"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "d2cfe468f81b5380a24a4de4f66c57d94ee9ca0e"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "e0ed589d7422c1d7a1bdd1e81289e2428c6ec2a3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "e0ed589d7422c1d7a1bdd1e81289e2428c6ec2a3"
+        }
+      ]
+    },
+    {
+      "version": "2.37.2",
+      "last_updated": "2022-09-29T06:27:24Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "c4d0026e7346ad2006c2ba730d5a712c18195aab"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "4dd035239719fc7992a4214934ecaf2a943d5ec0"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "994df04c3c700fe9edb1b69b82ba3c627e5e04ff"
+        }
+      ]
+    },
+    {
+      "version": "2.37.1",
+      "last_updated": "2022-08-24T00:18:08Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "eb569cf5cc4ff90eb78896c04ee1fd377acc7e1b"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "4821bf3be25f279f8d2bc5504ba6b435a3df8131"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "6c6409e965a6c883677be7b9d87a95fab6c3472e"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "6c6409e965a6c883677be7b9d87a95fab6c3472e"
+        }
+      ]
+    },
+    {
+      "version": "2.37.0",
+      "last_updated": "2022-07-27T16:02:38Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "8f73de28e63988da02426ebb17209e3ae07f103b"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "b04e7f5ce45856bdd9d25d7b4ee3d924f56cf390"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "6f884c2f43c7bb105816303eb4867da672ec6f39"
+        }
+      ]
+    },
+    {
+      "version": "2.36.1",
+      "last_updated": "2022-07-19T14:25:57Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "d57f20b903c801b9325aea6279a4d61d19368fb0"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0b683abff06fe55755ea992ba47f2e787081a30f"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "334ec8b503c3981e37a04b817a70e8d026ea9e84"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "334ec8b503c3981e37a04b817a70e8d026ea9e84"
+        }
+      ]
+    },
+    {
+      "version": "2.36.0",
+      "last_updated": "2022-05-28T11:40:54Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, debug (Linux only), doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "17b62c338f2a0862a58bb6951556beecd98ccda9"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "cce0667703fce3a1162dd252cf0864fdf83466ab"
+        }
+      ]
+    },
+    {
+      "version": "2.35.3",
+      "last_updated": "2022-04-28T11:56:12Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out (Linux only), debug (Linux only), doc (Linux only)",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "6ff202cb7be0c92c81b4db0f4b7b8c8e969e8001"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0bbb65673c0ba31047c9ba6c4cd211556b534a4e"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0bbb65673c0ba31047c9ba6c4cd211556b534a4e"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0bbb65673c0ba31047c9ba6c4cd211556b534a4e"
+        }
+      ]
+    },
+    {
+      "version": "2.35.1",
+      "last_updated": "2022-04-13T09:49:25Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "0343e3415784b2cd9c68924294794f7dbee12ab3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "0343e3415784b2cd9c68924294794f7dbee12ab3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "4c3c80df545ec5cb26b5480979c3e3f93518cbe5"
+        }
+      ]
+    },
+    {
+      "version": "2.34.1",
+      "last_updated": "2022-02-09T15:24:27Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "out, doc",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "98bb5b77c8c6666824a4c13d23befa1e07210ef1"
+        }
+      ]
+    },
+    {
+      "version": "2.34.0",
+      "last_updated": "2021-12-09T22:34:19Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "2e3fd2634dbabe5215d1aa59e16a1ad04693ea6a"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "2e3fd2634dbabe5215d1aa59e16a1ad04693ea6a"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "2e3fd2634dbabe5215d1aa59e16a1ad04693ea6a"
+        }
+      ]
+    },
+    {
+      "version": "2.33.1",
+      "last_updated": "2021-11-29T12:42:14Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "f366af7a1b3891d9370091ab03150d3a6ee138fa"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "f366af7a1b3891d9370091ab03150d3a6ee138fa"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "f366af7a1b3891d9370091ab03150d3a6ee138fa"
+        }
+      ]
+    },
+    {
+      "version": "2.33.0",
+      "last_updated": "2021-10-22T02:15:45Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "718895c14907b60069520b6394b4dbb6e3aa9c33"
+        }
+      ]
+    },
+    {
+      "version": "2.32.0",
+      "last_updated": "2021-09-09T23:12:09Z",
+      "platforms_summary": "Linux and macOS",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "9fe2e640cc8540bacc4764892317f908d3562bc3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "9fe2e640cc8540bacc4764892317f908d3562bc3"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "9fe2e640cc8540bacc4764892317f908d3562bc3"
+        }
+      ]
+    },
+    {
+      "version": "2.31.1",
+      "last_updated": "2021-06-21T09:39:32Z",
+      "platforms_summary": "Linux and macOS (Intel only)",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "fdb42a72ec4298fb204b885105c6823b33897f09"
+        },
+        {
+          "attribute_path": "git",
+          "commit_hash": "fdb42a72ec4298fb204b885105c6823b33897f09"
+        }
+      ]
+    },
+    {
+      "version": "2.31.0",
+      "last_updated": "2021-04-02T00:58:33Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "54c1e44240d8a527a8f4892608c4bce5440c3ecb"
+        }
+      ]
+    },
+    {
+      "version": "2.30.1",
+      "last_updated": "2021-03-19T17:37:14Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "733b33a07eac62a01f738f4bf15aa46b4c84168b"
+        }
+      ]
+    },
+    {
+      "version": "2.30.0",
+      "last_updated": "2021-02-19T05:56:21Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "b4e193a23a1c5d8794794e65cabf1f1135d07fd9"
+        }
+      ]
+    },
+    {
+      "version": "2.29.2",
+      "last_updated": "2021-01-04T12:51:49Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "f6e519f39e4d6ee694c2a3d5de8f3f263c57980b"
+        }
+      ]
+    },
+    {
+      "version": "2.29.0",
+      "last_updated": "2020-11-10T05:52:12Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "dd1b7e377f6d77ddee4ab84be11173d3566d6a18"
+        }
+      ]
+    },
+    {
+      "version": "2.28.0",
+      "last_updated": "2020-10-25T07:12:25Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "7ad5e816faba3f808e2a8815b14d0f023a4e2160"
+        }
+      ]
+    },
+    {
+      "version": "2.27.0",
+      "last_updated": "2020-07-25T14:18:40Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "2b7c0dcdaab946153b0eaba5f2420f15ea27b0d6"
+        }
+      ]
+    },
+    {
+      "version": "2.26.2",
+      "last_updated": "2020-06-13T22:15:40Z",
+      "platforms_summary": "Linux",
+      "outputs_summary": "",
+      "platforms": [
+        {
+          "attribute_path": "git",
+          "commit_hash": "d6d07f262b171bb1e415e1a06c52288af056a98d"
+        }
       ]
     }
   ]

@@ -24,8 +24,9 @@ export type NixhubSearchResponse = z.infer<typeof NixhubSearchResponseSchema>;
 
 export const NixhubPlatformSchema = z
   .object({
-    system: z.string().regex(SAFE_SYSTEM),
+    system: z.string().regex(SAFE_SYSTEM).optional(),
     attribute_path: z.string().min(1).optional(),
+    commit_hash: z.string().regex(HEX_7_TO_40).optional(),
   })
   .strict();
 

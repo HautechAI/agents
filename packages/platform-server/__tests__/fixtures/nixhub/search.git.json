@@ -1,16 +1,256 @@
 {
   "query": "git",
-  "total_results": 2,
+  "total_results": 50,
   "results": [
     {
       "name": "git",
       "summary": "Distributed version control system",
-      "last_updated": "2024-08-13T10:24:35Z"
+      "last_updated": "2025-11-08T12:28:21Z"
     },
     {
-      "name": "gitFull",
-      "summary": "Git with documentation",
-      "last_updated": "2024-08-11T08:00:00Z"
+      "name": "git-absorb",
+      "summary": "git commit --fixup, but automatic",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-agecrypt",
+      "summary": "Alternative to git-crypt using age instead of GPG",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-aggregator",
+      "summary": "Manage the aggregation of git branches from different remotes to build a consolidated one",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-annex",
+      "summary": "manage files with git, without checking their contents into git",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-appraise",
+      "summary": "Distributed code review system for Git repos",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-autofixup",
+      "summary": "Create fixup commits for topic branches",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-autoshare",
+      "summary": "Git clone wrapper that automatically uses --reference to save disk space and download time",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-backdate",
+      "summary": "Backdate a commit or range of commit to a date or range of dates",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-backup",
+      "summary": "Tool to help you backup your git repositories from services like GitHub",
+      "last_updated": "2024-07-07T07:43:47Z"
+    },
+    {
+      "name": "git-bars",
+      "summary": "Utility for visualising git commit activity as bars on the terminal",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-branchless",
+      "summary": "Suite of tools to help you visualize, navigate, manipulate, and repair your commit history",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-branchstack",
+      "summary": "Efficiently manage Git branches without leaving your local branch",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-brunch",
+      "summary": "git checkout command-line tool",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-bug",
+      "summary": "Distributed bug tracker embedded in Git",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-buildpackage",
+      "summary": "Suite to help with maintaining Debian packages in Git repositories",
+      "last_updated": "2025-11-12T10:38:40Z"
+    },
+    {
+      "name": "git-bz",
+      "summary": "Bugzilla integration for git",
+      "last_updated": "2022-01-01T05:55:45Z"
+    },
+    {
+      "name": "git-cache",
+      "summary": "Program to add and manage a system-wide or user-wide cache for remote git repositories",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-chain",
+      "summary": "Tool for rebasing a chain of local git branches",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-chglog",
+      "summary": "CHANGELOG generator implemented in Go (Golang)",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-cinnabar",
+      "summary": "Git remote helper to interact with mercurial repositories",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-cliff",
+      "summary": "Highly customizable Changelog Generator that follows Conventional Commit specifications",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-codeowners",
+      "summary": "Git extension to work with CODEOWNERS files",
+      "last_updated": "2025-01-19T08:16:51Z"
+    },
+    {
+      "name": "git-codereview",
+      "summary": "Manage the code review process for Git changes using a Gerrit server",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-cola",
+      "summary": "Sleek and powerful Git GUI",
+      "last_updated": "2025-11-02T15:04:35Z"
+    },
+    {
+      "name": "git-crecord",
+      "summary": "Git subcommand to interactively select changes to commit or stage",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-crypt",
+      "summary": "Transparent file encryption in git",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-dive",
+      "summary": "Dive into a file's history to find root cause",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-doc",
+      "summary": "Additional documentation for Git",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-dumper",
+      "summary": "Tool to dump a git repository from a website",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-extras",
+      "summary": "GIT utilities -- repo summary, repl, changelog population, author commit percentages and more",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-fame",
+      "summary": "Command-line tool that helps you summarize and pretty-print collaborators based on contributions",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-fire",
+      "summary": "Push ALL changes in a git repository",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-fixup",
+      "summary": "Fighting the copy-paste element of your rebase workflow",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-fork",
+      "summary": "Git client",
+      "last_updated": "2025-10-27T19:50:41Z"
+    },
+    {
+      "name": "git-ftp",
+      "summary": "Git powered FTP client written as shell script",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-gamble",
+      "summary": "Tool that blends TDD (Test Driven Development) + TCR (`test && commit || revert`)",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-get",
+      "summary": "Better way to clone, organize and manage multiple git repositories",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-gone",
+      "summary": "Cleanup stale Git branches of merge requests",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-gr",
+      "summary": "Gerrit CLI client",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-graph",
+      "summary": "Command line tool to show clear git graphs arranged for your branching model",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-hound",
+      "summary": "Reconnaissance tool for GitHub code search",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-hub",
+      "summary": "Git command line interface to GitHub",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-identity",
+      "summary": "Manage your identity in Git",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-igitt",
+      "summary": "Interactive, cross-platform Git terminal application with clear git graphs arranged for your branching model",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-ignore",
+      "summary": "Quickly and easily fetch .gitignore templates from gitignore.io",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-imerge",
+      "summary": "Perform a merge between two branches incrementally",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-instafix",
+      "summary": "Quickly fix up an old commit using your currently-staged changes",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-jump",
+      "summary": "Improved navigation between Git branches",
+      "last_updated": "2025-10-22T20:59:19Z"
+    },
+    {
+      "name": "git-latexdiff",
+      "summary": "View diff on LaTeX source files on the generated PDF files",
+      "last_updated": "2025-10-22T20:59:19Z"
     }
   ]
 }
