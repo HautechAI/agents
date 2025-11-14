@@ -1,0 +1,16 @@
+{
+  "query": "git",
+  "total_results": 2,
+  "results": [
+    {
+      "name": "git",
+      "summary": "Distributed version control system",
+      "last_updated": "2024-08-13T10:24:35Z"
+    },
+    {
+      "name": "gitFull",
+      "summary": "Git with documentation",
+      "last_updated": "2024-08-11T08:00:00Z"
+    }
+  ]
+}

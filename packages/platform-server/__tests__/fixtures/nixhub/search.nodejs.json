@@ -1,0 +1,21 @@
+{
+  "query": "nodejs",
+  "total_results": 3,
+  "results": [
+    {
+      "name": "nodejs",
+      "summary": "Evented I/O for V8 JavaScript",
+      "last_updated": "2024-08-14T14:03:12Z"
+    },
+    {
+      "name": "nodejs_22",
+      "summary": "Node.js 22 runtime",
+      "last_updated": "2024-08-10T09:45:00Z"
+    },
+    {
+      "name": "nodePackages.nodejs",
+      "summary": "Node.js available via nodePackages",
+      "last_updated": "2024-08-09T06:30:00Z"
+    }
+  ]
+}
