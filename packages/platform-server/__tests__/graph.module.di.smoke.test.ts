@@ -63,6 +63,21 @@ describe('GraphModule DI smoke test', () => {
         upsert: vi.fn(),
       },
       $queryRaw: vi.fn().mockResolvedValue([]),
+      $transaction: vi.fn(async (fn: (tx: PrismaClient) => Promise<unknown>) => {
+        const txStub = {
+          container: {
+            updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+            findMany: vi.fn().mockResolvedValue([]),
+          },
+          reminder: {
+            findMany: vi.fn().mockResolvedValue([]),
+            updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          },
+          $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
+        } satisfies Partial<PrismaClient>;
+
+        return fn(txStub as PrismaClient);
+      }),
     } satisfies Partial<PrismaClient>;
 
     const prismaServiceStub = {

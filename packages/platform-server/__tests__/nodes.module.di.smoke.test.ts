@@ -5,6 +5,7 @@ import { LoggerService } from '../src/core/services/logger.service';
 import { VaultService } from '../src/vault/vault.service';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { PrismaService } from '../src/core/services/prisma.service';
+import type { PrismaClient } from '@prisma/client';
 import { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
@@ -93,12 +94,26 @@ const prismaClientStub = makeStub({
     upsert: vi.fn().mockResolvedValue(undefined),
   }),
   $queryRaw: vi.fn().mockResolvedValue([]),
+  $transaction: vi.fn(async (fn: (tx: PrismaClient) => Promise<unknown>) => {
+    const txStub = makeStub({
+      run: makeStub({
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      }),
+      reminder: makeStub({
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      }),
+      $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
+    });
+
+    return fn(txStub as unknown as PrismaClient);
+  }),
 });
 
 const prismaStub = makeStub({
   $on: vi.fn(),
   $use: vi.fn(),
-  $transaction: vi.fn(),
   $connect: vi.fn(),
   $disconnect: vi.fn(),
   getClient: vi.fn().mockReturnValue(prismaClientStub),
