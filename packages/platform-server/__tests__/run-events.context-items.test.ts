@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { PrismaClient, ContextItemRole } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../src/core/services/prisma.service';
@@ -26,12 +26,20 @@ async function createThreadAndRun() {
   return { thread, run };
 }
 
+async function cleanup(threadId: string, runId: string, contextItemIds: string[] = []) {
+  await prisma.run.delete({ where: { id: runId } });
+  await prisma.thread.delete({ where: { id: threadId } });
+  if (contextItemIds.length > 0) {
+    await prisma.contextItem.deleteMany({ where: { id: { in: contextItemIds } } });
+  }
+}
+
 describe.sequential('RunEventsService context item persistence', () => {
   afterAll(async () => {
     await prisma.$disconnect();
   });
 
-  it('stores normalized context items and preserves order with deduplication', async () => {
+  it('creates a new context item row for every provided input and preserves order', async () => {
     const { thread, run } = await createThreadAndRun();
     const contextItems = [
       { role: ContextItemRole.system, contentText: 'system priming' },
@@ -44,99 +52,80 @@ describe.sequential('RunEventsService context item persistence', () => {
       threadId: thread.id,
       provider: 'openai',
       model: 'gpt-test',
-      prompt: 'inline prompt should be truncated',
       contextItems,
     });
 
     const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
     expect(callRecord.contextItemIds).toHaveLength(3);
-    // Duplicate entries reuse the same persisted record
-    expect(new Set(callRecord.contextItemIds).size).toBe(2);
+    expect(new Set(callRecord.contextItemIds).size).toBe(3);
 
-    const storedItems = await prisma.contextItem.findMany({ where: { id: { in: callRecord.contextItemIds } } });
-    expect(storedItems).toHaveLength(2);
-    const byRole = Object.fromEntries(storedItems.map((item) => [item.role, item]));
-    expect(byRole[ContextItemRole.system]?.contentText).toBe('system priming');
-    expect(byRole[ContextItemRole.user]?.contentText).toBe('hello assistant');
+    const stored = await prisma.contextItem.findMany({ where: { id: { in: callRecord.contextItemIds } } });
+    const orderedTexts = callRecord.contextItemIds.map((id) => stored.find((item) => item.id === id)?.contentText ?? null);
+    expect(orderedTexts).toEqual(['system priming', 'hello assistant', 'hello assistant']);
 
-    await prisma.run.delete({ where: { id: run.id } });
-    await prisma.thread.delete({ where: { id: thread.id } });
-    await prisma.contextItem.deleteMany({ where: { id: { in: Array.from(new Set(callRecord.contextItemIds)) } } });
+    await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
   });
 
-  it('derives context items from legacy JSON prompt when none provided explicitly', async () => {
+  it('never reuses context items across LLM call events', async () => {
     const { thread, run } = await createThreadAndRun();
-    const promptPayload = JSON.stringify([
-      { role: 'system', content: [{ type: 'input_text', text: 'system seed' }] },
-      { role: 'user', content: [{ type: 'input_text', text: 'question text' }] },
-    ]);
+    const contextItems = [
+      { role: ContextItemRole.system, contentText: 'system priming' },
+      { role: ContextItemRole.user, contentText: 'follow up question' },
+    ];
 
-    const event = await runEvents.startLLMCall({
-      runId: run.id,
-      threadId: thread.id,
-      prompt: promptPayload,
-    });
+    const firstEvent = await runEvents.startLLMCall({ runId: run.id, threadId: thread.id, contextItems });
+    const secondEvent = await runEvents.startLLMCall({ runId: run.id, threadId: thread.id, contextItems });
 
-    const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
-    expect(callRecord.contextItemIds).toHaveLength(2);
+    const first = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: firstEvent.id } });
+    const second = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: secondEvent.id } });
 
-    const storedItems = await prisma.contextItem.findMany({ where: { id: { in: callRecord.contextItemIds } } });
-    const roles = storedItems.map((item) => item.role).sort();
-    expect(roles).toEqual([ContextItemRole.system, ContextItemRole.user]);
+    expect(first.contextItemIds).toHaveLength(2);
+    expect(second.contextItemIds).toHaveLength(2);
+    expect(new Set(first.contextItemIds).size).toBe(2);
+    expect(new Set(second.contextItemIds).size).toBe(2);
+    const overlap = first.contextItemIds.filter((id) => second.contextItemIds.includes(id));
+    expect(overlap).toHaveLength(0);
 
-    await prisma.run.delete({ where: { id: run.id } });
-    await prisma.thread.delete({ where: { id: thread.id } });
-    await prisma.contextItem.deleteMany({ where: { id: { in: callRecord.contextItemIds } } });
+    const allIds = [...first.contextItemIds, ...second.contextItemIds];
+    expect(new Set(allIds).size).toBe(allIds.length);
+
+    await cleanup(thread.id, run.id, Array.from(new Set(allIds)));
   });
 
-  it('falls back to single text context item when prompt is opaque', async () => {
-    const { thread, run } = await createThreadAndRun();
-    const rawPrompt = '  plain text prompt that cannot be parsed  ';
-
-    const event = await runEvents.startLLMCall({ runId: run.id, threadId: thread.id, prompt: rawPrompt });
-
-    const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
-    expect(callRecord.contextItemIds).toHaveLength(1);
-
-    const [item] = await prisma.contextItem.findMany({ where: { id: { in: callRecord.contextItemIds } } });
-    expect(item.role).toBe(ContextItemRole.other);
-    expect(item.contentText).toBe('plain text prompt that cannot be parsed');
-
-    await prisma.run.delete({ where: { id: run.id } });
-    await prisma.thread.delete({ where: { id: thread.id } });
-    await prisma.contextItem.deleteMany({ where: { id: { in: callRecord.contextItemIds } } });
-  });
-
-  it('returns context items when expandContext=true and prompt preview from items', async () => {
+  it('provides context items inline on demand without prompt preview', async () => {
     const { thread, run } = await createThreadAndRun();
     const contextItems = [
       { role: ContextItemRole.system, contentText: 'system overview' },
       { role: ContextItemRole.user, contentText: 'user asks a follow-up question' },
     ];
+
     const event = await runEvents.startLLMCall({
       runId: run.id,
       threadId: thread.id,
-      prompt: 'legacy prompt text should be ignored when expandContext used',
       contextItems,
     });
 
+    const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
+
     const firstPage = await runEvents.listRunEvents({ runId: run.id, limit: 10, order: 'asc' });
     expect(firstPage.items).toHaveLength(1);
-    const eventWithoutContext = firstPage.items[0]!;
-    expect(eventWithoutContext.llmCall?.contextItemIds).toHaveLength(2);
-    expect(eventWithoutContext.llmCall?.contextItems).toBeUndefined();
-    expect(eventWithoutContext.llmCall?.promptPreview).toBe('legacy prompt text should be ignored when expandContext used');
+    const summaryEvent = firstPage.items[0]!;
+    expect(summaryEvent.llmCall?.contextItemIds).toEqual(callRecord.contextItemIds);
+    expect(summaryEvent.llmCall?.contextItems).toBeUndefined();
+    expect(summaryEvent.llmCall).not.toHaveProperty('prompt');
+    expect(summaryEvent.llmCall).not.toHaveProperty('promptPreview');
 
     const expanded = await runEvents.listRunEvents({ runId: run.id, limit: 10, order: 'asc', expandContext: true });
-    const eventWithContext = expanded.items[0]!;
-    expect(eventWithContext.llmCall?.contextItems).toHaveLength(2);
-    expect(eventWithContext.llmCall?.contextItems?.[0]?.contentText).toBe('system overview');
-    expect(eventWithContext.llmCall?.contextItems?.[1]?.contentText).toBe('user asks a follow-up question');
-    expect(eventWithContext.llmCall?.promptPreview).toBe('system overview\nuser asks a follow-up question');
+    expect(expanded.items).toHaveLength(1);
+    const expandedEvent = expanded.items[0]!;
+    expect(expandedEvent.llmCall?.contextItems).toHaveLength(2);
+    expect(expandedEvent.llmCall?.contextItems?.map((item) => item.contentText)).toEqual([
+      'system overview',
+      'user asks a follow-up question',
+    ]);
+    expect(expandedEvent.llmCall).not.toHaveProperty('prompt');
+    expect(expandedEvent.llmCall).not.toHaveProperty('promptPreview');
 
-    const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
-    await prisma.run.delete({ where: { id: run.id } });
-    await prisma.thread.delete({ where: { id: thread.id } });
-    await prisma.contextItem.deleteMany({ where: { id: { in: callRecord.contextItemIds } } });
+    await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
   });
 });

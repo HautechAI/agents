@@ -1,7 +1,5 @@
-import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { ContextItemRole, Prisma } from '@prisma/client';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { toPrismaJsonValue } from './messages.serialization';
 
 export type ContextItemInput = {
@@ -17,7 +15,6 @@ export type NormalizedContextItem = {
   contentJson: Prisma.InputJsonValue | typeof Prisma.JsonNull;
   metadata: Prisma.InputJsonValue | typeof Prisma.JsonNull;
   sizeBytes: number;
-  sha256: string;
 };
 
 export type LoggerLike = {
@@ -67,12 +64,6 @@ export function normalizeContextItem(input: ContextItemInput, logger?: LoggerLik
 
   const textBytes = text !== null ? Buffer.byteLength(text, 'utf8') : 0;
   const jsonBytes = canonicalJson !== null ? Buffer.byteLength(JSON.stringify(canonicalJson), 'utf8') : 0;
-  const payload = {
-    role,
-    contentText: text,
-    contentJson: canonicalJson,
-  } satisfies Record<string, unknown>;
-  const sha256 = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 
   return {
     role,
@@ -80,7 +71,6 @@ export function normalizeContextItem(input: ContextItemInput, logger?: LoggerLik
     contentJson: jsonValue,
     metadata,
     sizeBytes: textBytes + jsonBytes,
-    sha256,
   };
 }
 
@@ -98,7 +88,6 @@ type PrismaContextClient = PrismaClient | Prisma.TransactionClient;
 export type UpsertContextItemsResult = {
   ids: string[];
   created: number;
-  reused: number;
 };
 
 export async function upsertNormalizedContextItems(
@@ -107,30 +96,9 @@ export async function upsertNormalizedContextItems(
   logger?: LoggerLike,
 ): Promise<UpsertContextItemsResult> {
   const ids: string[] = [];
-  const cache = new Map<string, string>();
   let created = 0;
-  let reused = 0;
 
   for (const item of items) {
-    const key = `${item.role}:${item.sha256}`;
-    const cached = cache.get(key);
-    if (cached) {
-      ids.push(cached);
-      reused += 1;
-      continue;
-    }
-
-    const existing = await client.contextItem.findUnique({
-      where: { sha256_role: { sha256: item.sha256, role: item.role } },
-      select: { id: true },
-    });
-    if (existing) {
-      cache.set(key, existing.id);
-      ids.push(existing.id);
-      reused += 1;
-      continue;
-    }
-
     try {
       const createdRecord = await client.contextItem.create({
         data: {
@@ -139,68 +107,18 @@ export async function upsertNormalizedContextItems(
           contentJson: item.contentJson,
           metadata: item.metadata,
           sizeBytes: item.sizeBytes,
-          sha256: item.sha256,
         },
         select: { id: true },
       });
-      cache.set(key, createdRecord.id);
       ids.push(createdRecord.id);
       created += 1;
     } catch (err) {
-      const fallbackId = await resolveUniqueConstraintConflict(err, client, item);
-      if (fallbackId) {
-        cache.set(key, fallbackId);
-        ids.push(fallbackId);
-        reused += 1;
-        continue;
-      }
       logger?.warn?.('context_items.upsert_failed', { error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
   }
 
-  return { ids, created, reused };
-}
-
-async function resolveUniqueConstraintConflict(
-  err: unknown,
-  client: PrismaContextClient,
-  item: NormalizedContextItem,
-): Promise<string | null> {
-  if (!(err instanceof PrismaClientKnownRequestError) || err.code !== 'P2002') return null;
-  const fallback = await client.contextItem.findUnique({
-    where: { sha256_role: { sha256: item.sha256, role: item.role } },
-    select: { id: true },
-  });
-  return fallback?.id ?? null;
-}
-
-export function parseLegacyPrompt(prompt: string | null | undefined, logger?: LoggerLike): ContextItemInput[] | null {
-  if (!prompt) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(prompt);
-  } catch (err) {
-    logger?.debug?.('context_items.parse_legacy_failed', { error: err instanceof Error ? err.message : String(err) });
-    return null;
-  }
-  if (!Array.isArray(parsed)) return null;
-  const items: ContextItemInput[] = [];
-  for (const entry of parsed) {
-    const candidate = coerceLegacyEntry(entry);
-    if (candidate) items.push(candidate);
-  }
-  return items.length > 0 ? items : null;
-}
-
-export function buildFallbackContextItem(prompt: string | null | undefined): ContextItemInput | null {
-  if (!prompt) return null;
-  const trimmed = prompt.trim();
-  if (!trimmed) return null;
-  return {
-    role: ContextItemRole.other,
-    contentText: trimmed,
-  };
+  return { ids, created };
 }
 
 function normalizeJsonValue(value: unknown, logger?: LoggerLike): {
@@ -239,45 +157,4 @@ function toCanonicalJson(value: Prisma.InputJsonValue | typeof Prisma.JsonNull):
     return out;
   }
   return value;
-}
-
-function coerceLegacyEntry(entry: unknown): ContextItemInput | null {
-  if (typeof entry === 'string') {
-    return { role: ContextItemRole.other, contentText: entry };
-  }
-  if (!entry || typeof entry !== 'object') return null;
-  const obj = entry as Record<string, unknown>;
-  const role = coerceContextItemRole(obj.role);
-  const text = extractTextFromLegacy(obj);
-  const metadata = typeof obj.metadata === 'object' && obj.metadata !== null ? obj.metadata : undefined;
-  if (text !== null) {
-    return { role, contentText: text, metadata };
-  }
-  return { role, contentJson: obj, metadata };
-}
-
-function extractTextFromLegacy(obj: Record<string, unknown>): string | null {
-  if (typeof obj.text === 'string' && obj.text.length > 0) return obj.text;
-  const texts: string[] = [];
-  collectTexts(obj.content, texts);
-  if (texts.length > 0) return texts.join('\n');
-  if (typeof obj.output_text === 'string' && obj.output_text.length > 0) return obj.output_text;
-  return null;
-}
-
-function collectTexts(value: unknown, sink: string[]): void {
-  if (value === undefined || value === null) return;
-  if (typeof value === 'string') {
-    if (value.length > 0) sink.push(value);
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) collectTexts(entry, sink);
-    return;
-  }
-  if (typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
-    if (typeof obj.text === 'string' && obj.text.length > 0) sink.push(obj.text);
-    if (Array.isArray(obj.content)) collectTexts(obj.content, sink);
-  }
 }

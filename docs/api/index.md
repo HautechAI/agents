@@ -69,13 +69,13 @@ Agent runs timeline
     - `expandContext=true` to inline normalized context items for each LLM call
   - 200 `{ items: RunTimelineEvent[], nextCursor: { ordinal, id } | null }`
   - Notes:
-    - Each LLM call item includes `contextItemIds` (ordered) and `promptPreview` alongside the legacy `prompt`.
+    - Each LLM call item includes `contextItemIds` (ordered).
     - When `expandContext=true`, the server embeds `llmCall.contextItems` using the same ordering as `contextItemIds`.
 
 Context items
 - GET `/api/agents/context-items?ids=<uuid>&ids=<uuid>`
   - Query: one or more `ids` params (comma-separated lists supported); invalid UUIDs are rejected with 400.
-  - 200 `{ items: Array<{ id, role, contentText, contentJson, metadata, sizeBytes, sha256, createdAt }> }`
+  - 200 `{ items: Array<{ id, role, contentText, contentJson, metadata, sizeBytes, createdAt }> }`
   - Empty `ids` returns `{ items: [] }`.
 
 Dynamic-config schema (read-only)

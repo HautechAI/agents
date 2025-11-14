@@ -68,7 +68,16 @@ export type RunTimelineEvent = {
     temperature: number | null;
     topP: number | null;
     stopReason: string | null;
-    prompt: string | null;
+    contextItemIds: string[];
+    contextItems?: Array<{
+      id: string;
+      role: string;
+      contentText: string | null;
+      contentJson: unknown;
+      metadata: unknown;
+      sizeBytes: number;
+      createdAt: string;
+    }>;
     responseText: string | null;
     rawResponse: unknown;
     toolCalls: Array<{ callId: string; name: string; arguments: unknown }>;

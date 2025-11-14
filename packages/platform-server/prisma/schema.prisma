@@ -66,11 +66,9 @@ model ContextItem {
   contentJson Json?            @map("content_json")
   metadata    Json?            @default("{}")
   sizeBytes   Int              @map("size_bytes") @default(0)
-  sha256      String           @db.VarChar(64)
   createdAt   DateTime         @default(now())
 
   @@map("context_items")
-  @@unique([sha256, role], map: "uniq_ctxitem_dedup")
   @@index([role], map: "idx_context_items_role")
 }
 
@@ -248,7 +246,6 @@ model LLMCall {
   temperature  Float?
   topP         Float?  @map("top_p")
   stopReason   String? @map("stop_reason")
-  prompt       String? @db.Text
   contextItemIds String[] @map("context_item_ids") @default([])
   responseText String? @map("response_text") @db.Text
   rawResponse  Json?   @map("raw_response")

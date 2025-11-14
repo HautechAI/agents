@@ -81,7 +81,6 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       threadId: _ctx.threadId,
       nodeId,
       model: this.model,
-      prompt: this.serializeMessages(input),
       contextItems: this.buildContextItems(input),
     });
     await this.runEvents.publishEvent(llmEvent.id, 'append');
@@ -202,28 +201,6 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       });
     }
     return items;
-  }
-
-  private serializeMessages(messages: Array<SystemMessage | LLMMessage>): string {
-    try {
-      const payload = messages.map((msg) => {
-        const candidate = msg as unknown as { toPlain?: () => unknown; toJSON?: () => unknown };
-        if (typeof candidate.toPlain === 'function') return candidate.toPlain();
-        if (typeof candidate.toJSON === 'function') return candidate.toJSON();
-        return msg;
-      });
-      return JSON.stringify(payload);
-    } catch (err) {
-      this.logger.warn('Failed to serialize LLM prompt for run event', err);
-      return messages
-        .map((m) => {
-          const candidate = m as { text?: unknown; toString?: () => string };
-          if (typeof candidate.text === 'string') return candidate.text;
-          if (typeof candidate.toString === 'function') return candidate.toString();
-          return m.constructor?.name ?? 'Message';
-        })
-        .join('\n---\n');
-    }
   }
 
   private serializeToolCalls(calls: ToolCallMessage[]): ToolCallRecord[] {
