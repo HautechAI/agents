@@ -2,7 +2,14 @@ import { ContainerOpts, ContainerService } from '../../infra/container/container
 import Node from '../base/Node';
 import { ContainerHandle } from '../../infra/container/container.handle';
 import { z } from 'zod';
-import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../../constants';
+import {
+  NODE_LABEL,
+  PLATFORM_LABEL,
+  ROLE_LABEL,
+  SUPPORTED_PLATFORMS,
+  THREAD_LABEL,
+  WORKSPACE_VOLUME_LABEL,
+} from '../../constants';
 import { ConfigService } from '../../core/services/config.service';
 import { NcpsKeyService } from '../../infra/ncps/ncpsKey.service';
 import { EnvService, type EnvItem } from '../../env/env.service';
@@ -68,7 +75,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     @Inject(EnvService) protected envService: EnvService,
   ) {
     super(logger);
-    this.idLabels = (id: string) => ({ 'hautech.ai/thread_id': id, 'hautech.ai/node_id': this.nodeId });
+    this.idLabels = (id: string) => ({ [THREAD_LABEL]: id, [NODE_LABEL]: this.nodeId });
   }
 
   init(params: { nodeId: string }): void {
@@ -81,8 +88,13 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
 
   async provide(threadId: string): Promise<ContainerHandle> {
     // Build base thread labels and workspace-specific labels
-    const labels = this.idLabels(threadId);
-    const workspaceLabels = { ...labels, 'hautech.ai/role': 'workspace' } as Record<string, string>;
+    const baseLabels = this.idLabels(threadId);
+    const workspaceLabels = { ...baseLabels, [ROLE_LABEL]: 'workspace' } as Record<string, string>;
+    const { workspaceVolumeEnabled, workspaceVolumePrefix } = this.configService;
+    const volumeName = workspaceVolumeEnabled ? `${workspaceVolumePrefix}${threadId}` : undefined;
+    if (volumeName) {
+      workspaceLabels[WORKSPACE_VOLUME_LABEL] = volumeName;
+    }
     // Primary lookup: thread-scoped workspace container only
     // Debug note: ContainerService logs the exact filters as well.
     // Optional local debug:
@@ -100,12 +112,12 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     if (!container) {
       if (typeof console !== 'undefined' && typeof console.debug === 'function') {
         try {
-          console.debug('[ContainerProviderEntity] fallback lookup by thread_id only', labels);
+          console.debug('[ContainerProviderEntity] fallback lookup by thread_id only', baseLabels);
         } catch {
           // ignore console debug errors in non-tty envs
         }
       }
-      const candidates = await this.containerService.findContainersByLabels(labels);
+      const candidates = await this.containerService.findContainersByLabels(baseLabels);
       if (Array.isArray(candidates) && candidates.length) {
         const results = await Promise.all(
           candidates.map(async (c) => {
@@ -124,23 +136,35 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
 
     // Enforce non-reuse on platform mismatch if a platform is requested now
     const requestedPlatform = this.config?.platform ?? DEFAULTS.platform;
-    if (container && requestedPlatform) {
+    if (container) {
       let existingPlatform: string | undefined;
+      let existingVolumeLabel: string | undefined;
       try {
         const containerLabels = await this.containerService.getContainerLabels(container.id);
         existingPlatform = containerLabels?.[PLATFORM_LABEL];
+        existingVolumeLabel = containerLabels?.[WORKSPACE_VOLUME_LABEL];
       } catch {
-        existingPlatform = undefined; // treat as mismatch
+        existingPlatform = undefined;
+        existingVolumeLabel = undefined;
       }
-      const mismatched = !existingPlatform || existingPlatform !== requestedPlatform;
-      if (mismatched) {
-        if (enableDinD) await this.cleanupDinDSidecars(labels, container.id).catch(() => {});
+      const platformMismatch = requestedPlatform ? !existingPlatform || existingPlatform !== requestedPlatform : false;
+      const volumeMismatch = volumeName ? existingVolumeLabel !== volumeName : false;
+      if (platformMismatch || volumeMismatch) {
+        if (enableDinD) await this.cleanupDinDSidecars(baseLabels, container.id).catch(() => {});
         await this.stopAndRemoveContainer(container);
         container = undefined;
       }
     }
 
     if (!container) {
+      if (volumeName) {
+        const volumeLabels = {
+          [ROLE_LABEL]: 'workspace_volume',
+          [THREAD_LABEL]: threadId,
+          [NODE_LABEL]: this.nodeId,
+        } as Record<string, string>;
+        await this.containerService.createOrEnsureVolume(volumeName, volumeLabels);
+      }
       const DOCKER_HOST_ENV = 'tcp://localhost:2375';
       const DOCKER_MIRROR_URL =
         this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
@@ -181,8 +205,21 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
         labels: { ...workspaceLabels },
         platform: requestedPlatform,
         ttlSeconds: this.config?.ttlSeconds ?? 86400,
+        createExtras: volumeName
+          ? {
+              HostConfig: {
+                Mounts: [
+                  {
+                    Type: 'volume',
+                    Source: volumeName,
+                    Target: '/workspace',
+                  },
+                ],
+              },
+            }
+          : undefined,
       });
-      if (enableDinD) await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
+      if (enableDinD) await this.ensureDinD(container, baseLabels, DOCKER_MIRROR_URL);
 
       if (this.config?.initialScript) {
         const script = this.config.initialScript;
@@ -214,7 +251,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     } else {
       const DOCKER_MIRROR_URL =
         this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
-      if (this.config?.enableDinD && container) await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
+      if (this.config?.enableDinD && container) await this.ensureDinD(container, baseLabels, DOCKER_MIRROR_URL);
       // Also attempt install on reuse (idempotent)
       try {
         const nixUnknown = this.config?.nix as unknown;
@@ -242,13 +279,13 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     // Check existing
     let dind = await this.containerService.findContainerByLabels({
       ...baseLabels,
-      'hautech.ai/role': 'dind',
+      [ROLE_LABEL]: 'dind',
       'hautech.ai/parent_cid': workspace.id,
     });
 
     if (!dind) {
       // Start DinD with shared network namespace
-      const dindLabels = { ...baseLabels, 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': workspace.id };
+      const dindLabels = { ...baseLabels, [ROLE_LABEL]: 'dind', 'hautech.ai/parent_cid': workspace.id };
       dind = await this.containerService.start({
         image: 'docker:27-dind',
         env: { DOCKER_TLS_CERTDIR: '' },
@@ -291,7 +328,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     results: Array<{ c: ContainerHandle; cl?: Record<string, string> | undefined }>,
   ): ContainerHandle | undefined {
     for (const { c, cl } of results) {
-      if (cl?.['hautech.ai/role'] === 'dind') continue;
+      if (cl?.[ROLE_LABEL] === 'dind') continue;
       return c;
     }
     return undefined;
@@ -301,7 +338,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     try {
       const dinds = await this.containerService.findContainersByLabels({
         ...labels,
-        'hautech.ai/role': 'dind',
+        [ROLE_LABEL]: 'dind',
         'hautech.ai/parent_cid': parentId,
       });
       await Promise.all(

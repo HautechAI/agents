@@ -667,6 +667,53 @@ export class ContainerService {
     return details.Config?.Labels ?? undefined;
   }
 
+  async createOrEnsureVolume(name: string, labels: Record<string, string>): Promise<void> {
+    this.logger.info(`Ensuring volume name=${name}`);
+    try {
+      await this.docker.createVolume({ Name: name, Labels: labels });
+      this.logger.info(`Created volume name=${name}`);
+    } catch (e: unknown) {
+      const sc = typeof e === 'object' && e && 'statusCode' in e ? (e as { statusCode?: number }).statusCode : undefined;
+      if (sc === 409) {
+        this.logger.debug(`Volume already exists name=${name}`);
+        return;
+      }
+      throw e;
+    }
+  }
+
+  async removeVolume(name: string, force = true): Promise<void> {
+    this.logger.info(`Removing volume name=${name} force=${force}`);
+    const volume = this.docker.getVolume(name);
+    try {
+      await volume.remove({ force });
+      this.logger.info(`Removed volume name=${name}`);
+    } catch (e: unknown) {
+      const sc = typeof e === 'object' && e && 'statusCode' in e ? (e as { statusCode?: number }).statusCode : undefined;
+      if (sc === 404) {
+        this.logger.debug(`Volume already removed name=${name}`);
+        return;
+      }
+      throw e;
+    }
+  }
+
+  async findVolumesByLabels(labels: Record<string, string>): Promise<Array<{ Name: string; Labels?: Record<string, string> }>> {
+    const labelFilters = Object.entries(labels).map(([k, v]) => `${k}=${v}`);
+    this.logger.info(`Listing volumes filters=${labelFilters.join(',')}`);
+    const result = await this.docker.listVolumes({ filters: { label: labelFilters } });
+    const volumes = Array.isArray(result?.Volumes) ? result.Volumes : [];
+    return volumes.map((vol) => ({ Name: vol.Name, Labels: vol.Labels ?? undefined }));
+  }
+
+  async listContainersUsingVolume(name: string): Promise<string[]> {
+    const containers = await this.docker.listContainers({
+      all: true,
+      filters: { volume: [name] },
+    });
+    return containers.map((c) => c.Id);
+  }
+
   /**
    * Find running (default) or all containers that match ALL provided labels.
    * Returns an array of ContainerEntity instances (may be empty).

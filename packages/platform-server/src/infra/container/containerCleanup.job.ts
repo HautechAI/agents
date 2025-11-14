@@ -4,6 +4,8 @@ import { ContainerService } from './container.service';
 import { Inject, Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
 import pLimit from 'p-limit';
+import { ConfigService } from '../../core/services/config.service';
+import { NODE_LABEL, ROLE_LABEL, THREAD_LABEL, WORKSPACE_VOLUME_LABEL } from '../../constants';
 
 @Injectable()
 export class ContainerCleanupService {
@@ -14,6 +16,7 @@ export class ContainerCleanupService {
     @Inject(ContainerRegistryService) private registry: ContainerRegistryService,
     @Inject(ContainerService) private containers: ContainerService,
     @Inject(LoggerService) private logger: LoggerService,
+    @Inject(ConfigService) private configService: ConfigService,
   ) {
     const env = process.env.CONTAINERS_CLEANUP_ENABLED;
     this.enabled = env == null ? true : String(env).toLowerCase() === 'true';
@@ -45,60 +48,164 @@ export class ContainerCleanupService {
 
   async sweep(now: Date = new Date()): Promise<void> {
     const expired = await this.registry.getExpired(now);
-    if (!expired.length) return;
-    this.logger.info(`ContainerCleanup: found ${expired.length} expired containers`);
+    if (expired.length) {
+      this.logger.info(`ContainerCleanup: found ${expired.length} expired containers`);
 
-    // Controlled concurrency to avoid long sequential sweeps
-    const limit = pLimit(5);
+      // Controlled concurrency to avoid long sequential sweeps
+      const limit = pLimit(5);
 
-    await Promise.allSettled(
-      expired.map((doc) =>
-        limit(async () => {
-          // Use camelCase Prisma field names (containerId)
-          const id = doc.containerId;
-          const claimId = randomUUID();
-          // Only CAS-claim when transitioning from running; terminating should be retried idempotently
-          if (doc.status === 'running') {
-            const ok = await this.registry.claimForTermination(id, claimId);
-            if (!ok) return; // claimed by another worker
-          }
-
-          try {
-            await this.cleanDinDSidecars(id).catch((e: unknown) =>
-              this.logger.error('ContainerCleanup: error cleaning DinD sidecars', { id, error: e }),
-            );
-            // Try graceful stop then remove (handle benign errors)
-            try {
-              await this.containers.stopContainer(id, 10);
-            } catch (e: unknown) {
-              const sc = (e as { statusCode?: number } | undefined)?.statusCode;
-              // Treat 304 (already stopped), 404 (gone), and 409 (removal in progress) as benign
-              if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
-              this.logger.debug(`ContainerCleanup: benign stop error status=${sc} id=${id}`);
+      await Promise.allSettled(
+        expired.map((doc) =>
+          limit(async () => {
+            // Use camelCase Prisma field names (containerId)
+            const id = doc.containerId;
+            const claimId = randomUUID();
+            // Only CAS-claim when transitioning from running; terminating should be retried idempotently
+            if (doc.status === 'running') {
+              const ok = await this.registry.claimForTermination(id, claimId);
+              if (!ok) return; // claimed by another worker
             }
+
+            const registryLabels = this.extractLabels((doc as { metadata?: unknown })?.metadata);
+            let inspectedLabels: Record<string, string> | undefined;
             try {
-              await this.containers.removeContainer(id, true);
-            } catch (e: unknown) {
-              const sc = (e as { statusCode?: number } | undefined)?.statusCode;
-              // Treat 404 (already removed) and 409 (removal in progress) as benign
-              if (sc !== 404 && sc !== 409) throw e;
-              this.logger.debug(`ContainerCleanup: benign remove error status=${sc} id=${id}`);
+              inspectedLabels = await this.containers.getContainerLabels(id);
+            } catch (e) {
+              this.logger.debug(
+                `ContainerCleanup: unable to inspect labels for ${id.substring(0, 12)} ${(e as Error)?.message ?? e}`,
+              );
             }
-            await this.registry.markStopped(id, 'ttl_expired');
-          } catch (e: unknown) {
-            this.logger.error('ContainerCleanup: error stopping/removing', { id, error: e });
-            // Schedule retry with backoff metadata; leave as terminating
-            await this.registry.recordTerminationFailure(id, e instanceof Error ? e.message : String(e));
-          }
-        }),
-      ),
-    );
+            const effectiveLabels =
+              inspectedLabels && Object.keys(inspectedLabels).length > 0 ? inspectedLabels : registryLabels;
+            const threadId =
+              typeof (doc as { threadId?: unknown }).threadId === 'string'
+                ? ((doc as { threadId?: unknown }).threadId as string)
+                : undefined;
+            const nodeIdFromDoc =
+              typeof (doc as { nodeId?: unknown }).nodeId === 'string'
+                ? ((doc as { nodeId?: unknown }).nodeId as string)
+                : undefined;
+            const nodeId = effectiveLabels?.[NODE_LABEL] ?? registryLabels?.[NODE_LABEL] ?? nodeIdFromDoc;
+            const isWorkspaceContainer =
+              (effectiveLabels?.[ROLE_LABEL] ?? registryLabels?.[ROLE_LABEL]) === 'workspace';
+            const volumeLabelName = effectiveLabels?.[WORKSPACE_VOLUME_LABEL];
+            const derivedVolumeName =
+              !volumeLabelName && threadId ? `${this.configService.workspaceVolumePrefix}${threadId}` : undefined;
+            const volumeContext = {
+              isWorkspace: isWorkspaceContainer,
+              volumeName: volumeLabelName ?? derivedVolumeName,
+              threadId,
+              nodeId,
+            };
+
+            try {
+              await this.cleanDinDSidecars(id).catch((e: unknown) =>
+                this.logger.error('ContainerCleanup: error cleaning DinD sidecars', { id, error: e }),
+              );
+              // Try graceful stop then remove (handle benign errors)
+              try {
+                await this.containers.stopContainer(id, 10);
+              } catch (e: unknown) {
+                const sc = (e as { statusCode?: number } | undefined)?.statusCode;
+                // Treat 304 (already stopped), 404 (gone), and 409 (removal in progress) as benign
+                if (sc !== 304 && sc !== 404 && sc !== 409) throw e;
+                this.logger.debug(`ContainerCleanup: benign stop error status=${sc} id=${id}`);
+              }
+              try {
+                await this.containers.removeContainer(id, true);
+              } catch (e: unknown) {
+                const sc = (e as { statusCode?: number } | undefined)?.statusCode;
+                // Treat 404 (already removed) and 409 (removal in progress) as benign
+                if (sc !== 404 && sc !== 409) throw e;
+                this.logger.debug(`ContainerCleanup: benign remove error status=${sc} id=${id}`);
+              }
+              if (volumeContext.isWorkspace && volumeContext.volumeName) {
+                await this.deleteWorkspaceVolumeIfSafe({
+                  volumeName: volumeContext.volumeName,
+                  threadId: volumeContext.threadId,
+                  nodeId: volumeContext.nodeId,
+                });
+              }
+              await this.registry.markStopped(id, 'ttl_expired');
+            } catch (e: unknown) {
+              this.logger.error('ContainerCleanup: error stopping/removing', { id, error: e });
+              // Schedule retry with backoff metadata; leave as terminating
+              await this.registry.recordTerminationFailure(id, e instanceof Error ? e.message : String(e));
+            }
+          }),
+        ),
+      );
+    }
+    await this.sweepOrphanWorkspaceVolumes();
+  }
+
+  private extractLabels(meta: unknown): Record<string, string> {
+    if (!meta || typeof meta !== 'object') return {};
+    const obj = meta as Record<string, unknown>;
+    const raw = obj.labels;
+    if (!raw || typeof raw !== 'object') return {};
+    const labels: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof value === 'string') labels[key] = value;
+    }
+    return labels;
+  }
+
+  private async deleteWorkspaceVolumeIfSafe(context: {
+    volumeName: string;
+    threadId?: string;
+    nodeId?: string;
+  }): Promise<void> {
+    const { volumeName, threadId, nodeId } = context;
+    try {
+      const containersUsing = await this.containers.listContainersUsingVolume(volumeName);
+      if (containersUsing.length > 0) {
+        this.logger.info(
+          `ContainerCleanup: volume ${volumeName} still in use by ${containersUsing.length} container(s); skipping removal`,
+        );
+        return;
+      }
+      const filters: Record<string, string> = { [ROLE_LABEL]: 'workspace_volume' };
+      if (threadId) filters[THREAD_LABEL] = threadId;
+      if (nodeId) filters[NODE_LABEL] = nodeId;
+      const volumes = await this.containers.findVolumesByLabels(filters);
+      const target = volumes.find((v) => v.Name === volumeName);
+      if (!target) {
+        this.logger.debug(`ContainerCleanup: volume ${volumeName} missing managed labels; skipping removal`);
+        return;
+      }
+      await this.containers.removeVolume(volumeName, true);
+      this.logger.info(`ContainerCleanup: removed workspace volume name=${volumeName}`);
+    } catch (e) {
+      this.logger.error('ContainerCleanup: failed to remove workspace volume', { volumeName, error: e });
+    }
+  }
+
+  private async sweepOrphanWorkspaceVolumes(): Promise<void> {
+    try {
+      const volumes = await this.containers.findVolumesByLabels({ [ROLE_LABEL]: 'workspace_volume' });
+      if (!Array.isArray(volumes) || volumes.length === 0) return;
+      let removed = 0;
+      for (const vol of volumes) {
+        const name = vol?.Name;
+        if (!name) continue;
+        const inUse = await this.containers.listContainersUsingVolume(name);
+        if (inUse.length > 0) continue;
+        await this.containers.removeVolume(name, true);
+        removed += 1;
+      }
+      if (removed > 0) {
+        this.logger.info(`ContainerCleanup: removed ${removed} orphan workspace volume(s)`);
+      }
+    } catch (e) {
+      this.logger.error('ContainerCleanup: orphan volume sweep failed', e);
+    }
   }
 
   /** Stop and remove any DinD sidecars associated with a workspace container. */
   private async cleanDinDSidecars(parentId: string): Promise<void> {
     const sidecars = await this.containers.findContainersByLabels(
-      { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': parentId },
+      { [ROLE_LABEL]: 'dind', 'hautech.ai/parent_cid': parentId },
       { all: true },
     );
     if (!Array.isArray(sidecars) || sidecars.length === 0) return;
