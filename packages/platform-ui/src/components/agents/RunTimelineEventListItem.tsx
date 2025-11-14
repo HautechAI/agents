@@ -19,11 +19,11 @@ export const RunTimelineEventListItem = forwardRef<HTMLDivElement, Props>(({ eve
       aria-selected={selected}
       tabIndex={-1}
       data-event-id={event.id}
-      className={`cursor-pointer rounded-md border px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${selected ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
+      className={`cursor-pointer border px-3 py-2 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 ${selected ? 'border-blue-600 bg-blue-50' : 'border-transparent hover:border-gray-200 hover:bg-gray-100'}`}
       onClick={() => onSelect(event.id)}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-gray-900">{getEventTypeLabel(event)}</span>
+        <span className="text-sm font-medium text-gray-900 break-words">{getEventTypeLabel(event)}</span>
         <span className={`text-white text-[10px] px-2 py-0.5 rounded ${STATUS_COLORS[event.status] ?? 'bg-gray-500'}`}>{event.status}</span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
