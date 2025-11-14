@@ -14,7 +14,7 @@ const loadFixture = <T>(file: string): T =>
 type SearchFixture = {
   query: string;
   total_results: number;
-  results: { name: string; summary: string; last_updated: string }[];
+  results: { name: string; summary: string | null; last_updated: string }[];
 };
 
 type PackageFixture = {
@@ -63,6 +63,19 @@ describe('nix controller', () => {
     const body = await controller.packages({ query: 'git' }, reply);
     expect(Array.isArray(body.packages)).toBe(true);
     expect(body.packages[0].name).toBe('git');
+    scope.done();
+  });
+
+  it('packages: allows null summary values', async () => {
+    const searchGit = loadFixture<SearchFixture>('search.git.json');
+    const withNullSummary = JSON.parse(JSON.stringify(searchGit)) as SearchFixture;
+    withNullSummary.results[0].summary = null;
+    const scope = nock(BASE)
+      .get('/search')
+      .query((q) => q.q === 'git' && q._data === 'routes/_nixhub.search')
+      .reply(200, withNullSummary);
+    const body = await controller.packages({ query: 'git' }, reply);
+    expect(body.packages[0]).toEqual({ name: 'git', description: null });
     scope.done();
   });
 

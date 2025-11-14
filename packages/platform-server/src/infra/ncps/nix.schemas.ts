@@ -7,7 +7,7 @@ const SAFE_SYSTEM = /^[A-Za-z0-9_.+-]+$/;
 export const NixhubSearchResultSchema = z
   .object({
     name: z.string(),
-    summary: z.string(),
+    summary: z.string().nullish(),
     last_updated: ISO_DATETIME,
   })
   .strict();
