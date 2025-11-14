@@ -1,0 +1,31 @@
+{
+  "name": "nodejs",
+  "summary": "Evented I/O for V8 JavaScript",
+  "releases": [
+    {
+      "version": "22.2.0",
+      "last_updated": "2024-08-14T14:03:12Z",
+      "outputs_summary": "bin, lib",
+      "platforms_summary": "linux, darwin",
+      "commit_hash": "1a2b3c4d5e6f7890",
+      "platforms": [
+        { "system": "x86_64-linux", "attribute_path": "nodejs" },
+        { "system": "aarch64-linux", "attribute_path": "nodejs-aarch64" }
+      ]
+    },
+    {
+      "version": "21.9.0",
+      "commit_hash": "abcdef1234567",
+      "platforms": [
+        { "system": "x86_64-linux", "attribute_path": "nodejs-21" }
+      ]
+    },
+    {
+      "version": "20.15.1",
+      "commit_hash": "0fedcba987654321",
+      "platforms": [
+        { "system": "x86_64-darwin", "attribute_path": "nodejs-darwin" }
+      ]
+    }
+  ]
+}

@@ -44,7 +44,13 @@ describe('NixController E2E (Fastify)', () => {
     const scope = nock(BASE)
       .get('/search')
       .query((q) => q.q === 'git' && q._data === 'routes/_nixhub.search')
-      .reply(200, { query: 'git', total_results: 1, results: [{ name: 'git', summary: 'the fast version control system' }] });
+      .reply(200, {
+        query: 'git',
+        total_results: 1,
+        results: [
+          { name: 'git', summary: 'the fast version control system', last_updated: '2024-08-13T10:24:35Z' },
+        ],
+      });
 
     const res = await app.getHttpAdapter().getInstance().inject({ method: 'GET', url: '/api/nix/packages?query=git' });
     expect(res.statusCode).toBe(200);
@@ -71,4 +77,3 @@ describe('NixController E2E (Fastify)', () => {
     expect(res.statusCode).toBe(400);
   });
 });
-

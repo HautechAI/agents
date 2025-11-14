@@ -1,0 +1,16 @@
+{
+  "query": "python",
+  "total_results": 2,
+  "results": [
+    {
+      "name": "python",
+      "summary": "High-level programming language",
+      "last_updated": "2024-08-12T12:00:00Z"
+    },
+    {
+      "name": "python311",
+      "summary": "Python 3.11 interpreter",
+      "last_updated": "2024-08-08T07:15:42Z"
+    }
+  ]
+}

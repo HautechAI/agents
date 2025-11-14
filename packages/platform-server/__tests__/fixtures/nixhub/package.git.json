@@ -1,0 +1,21 @@
+{
+  "name": "git",
+  "summary": "Distributed version control system",
+  "releases": [
+    {
+      "version": "2.45.0",
+      "commit_hash": "1234567abcdef",
+      "platforms": [
+        { "system": "x86_64-linux", "attribute_path": "git" },
+        { "system": "aarch64-linux", "attribute_path": "git-aarch64" }
+      ]
+    },
+    {
+      "version": 24402,
+      "commit_hash": "deadbeefcafebabe",
+      "platforms": [
+        { "system": "x86_64-linux", "attribute_path": "git-legacy" }
+      ]
+    }
+  ]
+}

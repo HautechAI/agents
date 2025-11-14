@@ -1,8 +1,9 @@
 import { Controller, Get, Inject, Query, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 import semver from 'semver';
 import { ConfigService } from '../../core/services/config.service';
+import { NixhubSearchResponseSchema, NixhubPackageResponseSchema, type NixhubPackageResponse, type NixhubRelease } from './nix.schemas';
 
 // Upstream base for NixHub
 const NIXHUB_BASE = 'https://www.nixhub.io';
@@ -44,46 +45,6 @@ const PackagesResponseSchema = z.object({
   packages: z.array(z.object({ name: z.string(), description: z.string().nullable().optional() })),
 });
 const VersionsResponseSchema = z.object({ versions: z.array(z.string()) });
-
-// Minimal upstream shapes for type-safe parsing
-const NixhubSearchSchema = z.object({
-  query: z.string().optional(),
-  total_results: z.number().optional(),
-  results: z
-    .array(
-      z.object({
-        name: z.string().optional(),
-        summary: z.string().optional(),
-      }),
-    )
-    .optional(),
-});
-type NixhubSearchJSON = z.infer<typeof NixhubSearchSchema>;
-
-const NixhubPackageSchema = z.object({
-  name: z.string(),
-  summary: z.string().optional(),
-  releases: z
-    .array(
-      z.object({
-        version: z.union([z.string(), z.number()]).optional(),
-        last_updated: z.string().optional(),
-        platforms_summary: z.string().optional(),
-        outputs_summary: z.string().optional(),
-        commit_hash: z.string().optional(),
-        platforms: z
-          .array(
-            z.object({
-              system: z.string().optional(),
-              attribute_path: z.string().optional(),
-            }),
-          )
-          .optional(),
-      }),
-    )
-    .optional(),
-});
-type NixhubPackageJSON = z.infer<typeof NixhubPackageSchema>;
 
 @Controller('api/nix')
 export class NixController {
@@ -134,17 +95,11 @@ export class NixController {
     throw lastErr;
   }
 
-  private extractResolvedRelease(
-    json: unknown,
-    name: string,
-    version: string,
-  ): { commitHash: string; attributePath: string } {
-    const parsed = NixhubPackageSchema.safeParse(json);
-    if (!parsed.success || !parsed.data || !Array.isArray(parsed.data.releases))
-      throw Object.assign(new Error(`bad_upstream_json ${JSON.stringify(parsed.error)}`), {
-        code: 'bad_upstream_json',
-      });
-    const rel = parsed.data.releases.find((r) => String(r.version ?? '') === version);
+  private extractResolvedRelease(pkg: NixhubPackageResponse, version: string): {
+    commitHash: string;
+    attributePath: string;
+  } {
+    const rel = pkg.releases.find((r) => String(r.version) === version);
     if (!rel) throw Object.assign(new Error('release_not_found'), { code: 'release_not_found' });
     // Prefer x86_64-linux, then aarch64-linux, then first
     const plats = Array.isArray(rel.platforms) ? rel.platforms : [];
@@ -179,12 +134,10 @@ export class NixController {
       const tid = setTimeout(() => ac.abort(), this.timeoutMs);
       try {
         const json = (await this.fetchJson(url, ac.signal)) as unknown;
-        const upstream = NixhubSearchSchema.safeParse(json);
-        const items: NonNullable<NixhubSearchJSON['results']> =
-          upstream.success && Array.isArray(upstream.data.results) ? upstream.data.results : [];
-        const mapped = items
-          .map((it) => ({ name: it?.name ?? '', description: it?.summary ?? null }))
-          .filter((x) => typeof x.name === 'string' && x.name.length > 0);
+        const upstream = NixhubSearchResponseSchema.parse(json);
+        const mapped = upstream.results
+          .map((it) => ({ name: it.name, description: it.summary ?? null }))
+          .filter((x) => x.name.length > 0);
         const body = PackagesResponseSchema.parse({ packages: mapped });
         reply.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
         return body;
@@ -197,6 +150,10 @@ export class NixController {
       if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };
+      }
+      if (err instanceof ZodError) {
+        reply.code(502);
+        return { error: 'bad_upstream_json', details: err.issues };
       }
       if (typeof err.status === 'number') {
         reply.code(502);
@@ -222,10 +179,8 @@ export class NixController {
       const tid = setTimeout(() => ac.abort(), this.timeoutMs);
       try {
         const json = (await this.fetchJson(url, ac.signal)) as unknown;
-        const upstream = NixhubPackageSchema.safeParse(json);
-        const rels: NonNullable<NixhubPackageJSON['releases']> =
-          upstream.success && Array.isArray(upstream.data.releases) ? upstream.data.releases : [];
-        const { withValid, withInvalid } = this.collectVersions(rels);
+        const upstream = NixhubPackageResponseSchema.parse(json);
+        const { withValid, withInvalid } = this.collectVersions(upstream.releases);
         withValid.sort((a, b) => semver.rcompare(semver.coerce(a) || a, semver.coerce(b) || b));
         const versions = [...withValid, ...withInvalid];
         const body = VersionsResponseSchema.parse({ versions });
@@ -240,6 +195,10 @@ export class NixController {
       if (isAbort(err) && err.name === 'AbortError') {
         reply.code(504);
         return { error: 'timeout' };
+      }
+      if (err instanceof ZodError) {
+        reply.code(502);
+        return { error: 'bad_upstream_json', details: err.issues };
       }
       if (typeof err.status === 'number') {
         reply.code(err.status === 404 ? 404 : 502);
@@ -265,7 +224,8 @@ export class NixController {
       const tid = setTimeout(() => ac.abort(), this.timeoutMs);
       try {
         const json = (await this.fetchJson(url, ac.signal)) as unknown;
-        const { commitHash, attributePath } = this.extractResolvedRelease(json, name, version);
+        const upstream = NixhubPackageResponseSchema.parse(json);
+        const { commitHash, attributePath } = this.extractResolvedRelease(upstream, version);
         reply.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
         return { name, version, commitHash, attributePath };
       } finally {
@@ -282,6 +242,10 @@ export class NixController {
         reply.code(err.status === 404 ? 404 : 502);
         return { error: err.status === 404 ? 'not_found' : 'upstream_error', status: err.status };
       }
+      if (err instanceof ZodError) {
+        reply.code(502);
+        return { error: 'bad_upstream_json', details: err.issues };
+      }
       // Map known extraction errors to 502/404
       if (err.code && ['bad_upstream_json', 'missing_commit_hash', 'missing_attribute_path'].includes(err.code)) {
         reply.code(502);
@@ -295,12 +259,12 @@ export class NixController {
       return { error: 'server_error' };
     }
   }
-  private collectVersions(rels: NonNullable<NixhubPackageJSON['releases']>): { withValid: string[]; withInvalid: string[] } {
+  private collectVersions(rels: NixhubRelease[]): { withValid: string[]; withInvalid: string[] } {
     const seen = new Set<string>();
     const withValid: string[] = [];
     const withInvalid: string[] = [];
     for (const r of rels) {
-      const v = String(r?.version ?? '');
+      const v = String(r.version ?? '');
       if (!v || seen.has(v)) continue;
       seen.add(v);
       if (semver.valid(v) || semver.valid(semver.coerce(v) || '')) withValid.push(v);
