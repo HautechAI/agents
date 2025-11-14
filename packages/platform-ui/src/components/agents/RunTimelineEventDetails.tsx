@@ -56,6 +56,8 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
   const toolInputAttachments = event.attachments.filter((att) => att.kind === 'tool_input');
   const toolOutputAttachments = event.attachments.filter((att) => att.kind === 'tool_output');
   const providerRawAttachments = event.attachments.filter((att) => att.kind === 'provider_raw');
+  const providerRawAttachmentsForOutput = event.llmCall ? providerRawAttachments : [];
+  const providerRawAttachmentsForAttachments = event.llmCall ? [] : providerRawAttachments;
   const remainingAttachments = event.attachments.filter(
     (att) => !['prompt', 'response', 'tool_input', 'tool_output', 'provider_raw'].includes(att.kind),
   );
@@ -170,7 +172,7 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
                   {renderAttachmentContent(att)}
                 </div>
               ))}
-              {providerRawAttachments.map((att) => (
+              {providerRawAttachmentsForOutput.map((att) => (
                 <div key={att.id} className="space-y-1">
                   <div className="text-[11px] font-medium text-gray-800">Provider payload ({att.id.slice(0, 8)})</div>
                   {renderAttachmentContent(att, 'muted')}
@@ -281,14 +283,14 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
         </section>
       )}
 
-      {(remainingAttachments.length > 0 || providerRawAttachments.length > 0) && (
+      {(remainingAttachments.length > 0 || providerRawAttachmentsForAttachments.length > 0) && (
         <section className="space-y-2">
           <h4 className="text-sm font-semibold text-gray-800">Attachments</h4>
           <div className="space-y-3">
-            {providerRawAttachments.length > 0 && (
+            {providerRawAttachmentsForAttachments.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">Provider payloads ({providerRawAttachments.length})</div>
-                {providerRawAttachments.map((att) => (
+                <div className="text-[11px] font-medium text-gray-800">Provider payloads ({providerRawAttachmentsForAttachments.length})</div>
+                {providerRawAttachmentsForAttachments.map((att) => (
                   <div key={`provider-${att.id}`}>{renderAttachmentContent(att, 'muted')}</div>
                 ))}
               </div>
