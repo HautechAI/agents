@@ -343,10 +343,10 @@ export function AgentsRunTimeline() {
         {eventsQuery.isFetching && <div className="mt-2 text-xs text-gray-500">Loading events…</div>}
       </div>
 
-      <div className="flex-1 min-h-0 px-4 py-4 md:px-6 md:py-6">
-        <div className="flex h-full min-h-0 flex-col gap-4 md:grid md:grid-cols-[360px_minmax(0,1fr)] md:gap-6">
+      <div className="flex-1 min-h-0">
+        <div className="flex h-full min-h-0 flex-col gap-4 md:grid md:grid-cols-[360px_minmax(0,1fr)] md:gap-0">
           <section
-            className="flex min-h-0 w-full flex-col overflow-hidden rounded border border-gray-200 bg-white"
+            className="flex min-h-0 w-full flex-col overflow-hidden md:border-r md:border-gray-200"
             role="region"
             aria-labelledby="run-timeline-events-heading"
           >
@@ -387,16 +387,10 @@ export function AgentsRunTimeline() {
             </div>
           </section>
           <section
-            className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded border border-gray-200 bg-white md:flex"
+            className="hidden min-h-0 flex-1 flex-col overflow-hidden md:flex"
             role="region"
-            aria-labelledby="run-timeline-details-heading"
+            aria-label="Run event details"
           >
-            <header
-              id="run-timeline-details-heading"
-              className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
-            >
-              Details
-            </header>
             <div className="flex-1 min-h-0 overflow-hidden">
               {selectedEvent ? (
                 <RunTimelineEventDetails event={selectedEvent} />
