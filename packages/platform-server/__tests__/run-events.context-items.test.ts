@@ -1,10 +1,11 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeEach } from 'vitest';
 import { PrismaClient, ContextItemRole } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../src/core/services/prisma.service';
 import type { LoggerService } from '../src/core/services/logger.service';
 import { RunEventsService } from '../src/events/run-events.service';
 import { NoopGraphEventsPublisher } from '../src/gateway/graph.events.publisher';
+import type { ContextItemInput } from '../src/llm/services/context-items.utils';
 
 const databaseUrl = process.env.AGENTS_DATABASE_URL;
 if (!databaseUrl) throw new Error('AGENTS_DATABASE_URL must be set for run-events.context-items.test.ts');
@@ -34,62 +35,92 @@ async function cleanup(threadId: string, runId: string, contextItemIds: string[]
   }
 }
 
+async function createContextItems(entries: ContextItemInput[]): Promise<string[]> {
+  return runEvents.createContextItems(entries);
+}
+
 describe.sequential('RunEventsService context item persistence', () => {
+  beforeEach(async () => {
+    await prisma.contextItem.deleteMany({});
+  });
+
   afterAll(async () => {
     await prisma.$disconnect();
   });
 
-  it('creates a new context item row for every provided input and preserves order', async () => {
+  it('uses provided context item ids without creating additional rows', async () => {
     const { thread, run } = await createThreadAndRun();
-    const contextItems = [
+    const [systemId, userId] = await createContextItems([
       { role: ContextItemRole.system, contentText: 'system priming' },
       { role: ContextItemRole.user, contentText: 'hello assistant' },
-      { role: ContextItemRole.user, contentText: 'hello assistant' },
-    ];
+    ]);
+    const beforeCount = await prisma.contextItem.count();
 
     const event = await runEvents.startLLMCall({
       runId: run.id,
       threadId: thread.id,
       provider: 'openai',
       model: 'gpt-test',
-      contextItems,
+      contextItemIds: [systemId, userId],
     });
 
     const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
-    expect(callRecord.contextItemIds).toHaveLength(3);
-    expect(new Set(callRecord.contextItemIds).size).toBe(3);
+    expect(callRecord.contextItemIds).toEqual([systemId, userId]);
 
-    const stored = await prisma.contextItem.findMany({ where: { id: { in: callRecord.contextItemIds } } });
-    const orderedTexts = callRecord.contextItemIds.map((id) => stored.find((item) => item.id === id)?.contentText ?? null);
-    expect(orderedTexts).toEqual(['system priming', 'hello assistant', 'hello assistant']);
+    const afterCount = await prisma.contextItem.count();
+    expect(afterCount).toBe(beforeCount);
 
-    await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
+    await cleanup(thread.id, run.id, [systemId, userId]);
   });
 
-  it('never reuses context items across LLM call events', async () => {
+  it('appends new context item ids after reusing an existing prefix', async () => {
     const { thread, run } = await createThreadAndRun();
-    const contextItems = [
-      { role: ContextItemRole.system, contentText: 'system priming' },
-      { role: ContextItemRole.user, contentText: 'follow up question' },
-    ];
+    const initialIds = await createContextItems([
+      { role: ContextItemRole.system, contentText: 'system overview' },
+      { role: ContextItemRole.user, contentText: 'initial question' },
+    ]);
 
-    const firstEvent = await runEvents.startLLMCall({ runId: run.id, threadId: thread.id, contextItems });
-    const secondEvent = await runEvents.startLLMCall({ runId: run.id, threadId: thread.id, contextItems });
-
+    const firstEvent = await runEvents.startLLMCall({
+      runId: run.id,
+      threadId: thread.id,
+      contextItemIds: initialIds,
+    });
     const first = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: firstEvent.id } });
+    expect(first.contextItemIds).toEqual(initialIds);
+
+    const appendedIds = await createContextItems([
+      { role: ContextItemRole.assistant, contentText: 'assistant reply' },
+      { role: ContextItemRole.user, contentText: 'follow up question' },
+    ]);
+
+    const combined = [...initialIds, ...appendedIds];
+    const secondEvent = await runEvents.startLLMCall({
+      runId: run.id,
+      threadId: thread.id,
+      contextItemIds: combined,
+    });
+
     const second = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: secondEvent.id } });
+    expect(second.contextItemIds).toEqual(combined);
 
-    expect(first.contextItemIds).toHaveLength(2);
-    expect(second.contextItemIds).toHaveLength(2);
-    expect(new Set(first.contextItemIds).size).toBe(2);
-    expect(new Set(second.contextItemIds).size).toBe(2);
-    const overlap = first.contextItemIds.filter((id) => second.contextItemIds.includes(id));
-    expect(overlap).toHaveLength(0);
+    await cleanup(thread.id, run.id, combined);
+  });
 
-    const allIds = [...first.contextItemIds, ...second.contextItemIds];
-    expect(new Set(allIds).size).toBe(allIds.length);
+  it('preserves ordering and distinct ids for duplicates within a single call', async () => {
+    const { thread, run } = await createThreadAndRun();
+    const duplicateInputs = [
+      { role: ContextItemRole.user, contentText: 'repeat me' },
+      { role: ContextItemRole.user, contentText: 'repeat me' },
+    ];
+    const ids = await Promise.all(duplicateInputs.map((item) => createContextItems([item]))).then((chunks) => chunks.flat());
 
-    await cleanup(thread.id, run.id, Array.from(new Set(allIds)));
+    const event = await runEvents.startLLMCall({ runId: run.id, threadId: thread.id, contextItemIds: ids });
+    const record = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
+
+    expect(record.contextItemIds).toEqual(ids);
+    expect(new Set(record.contextItemIds).size).toBe(ids.length);
+
+    await cleanup(thread.id, run.id, ids);
   });
 
   it('returns context item ids and resolves payloads via batch endpoint', async () => {
@@ -99,10 +130,12 @@ describe.sequential('RunEventsService context item persistence', () => {
       { role: ContextItemRole.user, contentText: 'user asks a follow-up question' },
     ];
 
+    const ids = await createContextItems(contextItems);
+
     const event = await runEvents.startLLMCall({
       runId: run.id,
       threadId: thread.id,
-      contextItems,
+      contextItemIds: ids,
     });
 
     const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
@@ -124,5 +157,29 @@ describe.sequential('RunEventsService context item persistence', () => {
     ]);
 
     await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
+  });
+
+  it('creates new context items via legacy contextItems input when ids are absent', async () => {
+    const { thread, run } = await createThreadAndRun();
+    const beforeCount = await prisma.contextItem.count();
+
+    const contextItems = [
+      { role: ContextItemRole.system, contentText: 'legacy system' },
+      { role: ContextItemRole.user, contentText: 'legacy user' },
+    ];
+
+    const event = await runEvents.startLLMCall({
+      runId: run.id,
+      threadId: thread.id,
+      contextItems,
+    });
+
+    const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
+    expect(callRecord.contextItemIds).toHaveLength(2);
+
+    const afterCount = await prisma.contextItem.count();
+    expect(afterCount).toBe(beforeCount + 2);
+
+    await cleanup(thread.id, run.id, callRecord.contextItemIds);
   });
 });

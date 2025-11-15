@@ -203,6 +203,7 @@ export interface LLMCallStartArgs {
   provider?: string | null;
   temperature?: number | null;
   topP?: number | null;
+  contextItemIds?: string[];
   contextItems?: ContextItemInput[];
   metadata?: RunEventMetadata;
   sourceKind?: EventSourceKind;
@@ -341,8 +342,13 @@ export class RunEventsService {
 
   private async resolveContextItemIds(
     tx: Tx,
-    opts: { provided?: ContextItemInput[]; runId: string },
+    opts: { providedIds?: string[]; provided?: ContextItemInput[] },
   ): Promise<string[]> {
+    const providedIds = Array.isArray(opts.providedIds)
+      ? opts.providedIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    if (providedIds.length > 0) return [...providedIds];
+
     const provided = Array.isArray(opts.provided) ? opts.provided.filter(Boolean) : [];
     if (provided.length === 0) return [];
     const normalized = normalizeContextItems(provided, this.logger);
@@ -352,7 +358,6 @@ export class RunEventsService {
       return await this.persistNormalizedContextItems(tx, normalized);
     } catch (err) {
       this.logger.warn('Failed to persist context items for LLM call', {
-        runId: opts.runId,
         error: err instanceof Error ? err.message : String(err),
       });
       return [];
@@ -362,6 +367,22 @@ export class RunEventsService {
   private async persistNormalizedContextItems(tx: Tx, items: NormalizedContextItem[]): Promise<string[]> {
     const result = await upsertNormalizedContextItems(tx, items, this.logger);
     return result.ids;
+  }
+
+  async createContextItems(items: ContextItemInput[], opts?: { tx?: Tx }): Promise<string[]> {
+    const tx = opts?.tx ?? this.prisma;
+    const provided = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (provided.length === 0) return [];
+    const normalized = normalizeContextItems(provided, this.logger);
+    if (normalized.length === 0) return [];
+    try {
+      return await this.persistNormalizedContextItems(tx, normalized);
+    } catch (err) {
+      this.logger.warn('Failed to create context items', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   private serializeEvent(event: RunEventWithRelations): RunTimelineEvent {
@@ -731,8 +752,8 @@ export class RunEventsService {
       metadata,
     });
     const contextItemIds = await this.resolveContextItemIds(tx, {
+      providedIds: args.contextItemIds,
       provided: args.contextItems,
-      runId: args.runId,
     });
     await tx.lLMCall.create({
       data: {
