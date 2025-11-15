@@ -52,6 +52,9 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
 
   const remindersQ = useThreadReminders(threadId, remindersOpen);
   const reminders = remindersQ.data?.items ?? [];
+  const handleRemindersRetry = () => {
+    remindersQ.refetch().catch(() => {});
+  };
 
   const summary = useMemo(() => {
     if (!thread) return '(none selected)';
@@ -75,7 +78,7 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
 
   return (
     <header className="border-b px-3 py-3 text-sm" data-testid="thread-header">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-base font-semibold text-gray-900" title={summary} data-testid="thread-header-summary">
@@ -98,41 +101,52 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
             <span aria-hidden="true">•</span>
             <span>Status: {statusLabel}</span>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="rounded border px-3 py-1 text-gray-700" aria-label={`Runs total: ${effectiveRunsCount}`}>
-            Runs {effectiveRunsCount}
+          <div
+            className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600"
+            data-testid="thread-header-stats"
+          >
+            <div className="rounded border px-3 py-1 text-gray-700" aria-label={`Runs total: ${effectiveRunsCount}`}>
+              Runs {effectiveRunsCount}
+            </div>
+            <Popover.Root open={remindersOpen} onOpenChange={setRemindersOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  disabled={!threadId}
+                  className="rounded border px-3 py-1 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
+                  aria-label={`Active reminders: ${metrics.remindersCount}`}
+                  data-testid="thread-reminders-trigger"
+                >
+                  Reminders {metrics.remindersCount}
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  side="bottom"
+                  align="start"
+                  sideOffset={8}
+                  className="z-50 w-72 rounded-md border bg-white p-3 shadow-lg focus:outline-none"
+                  data-testid="thread-reminders-popover"
+                >
+                  <div className="mb-2 text-sm font-semibold text-gray-900">Active Reminders</div>
+                  {remindersQ.isLoading && <div className="text-xs text-gray-500">Loading…</div>}
+                  {remindersQ.error && (
+                    <div className="space-y-2" role="alert">
+                      <div className="text-xs text-red-600">Unable to load reminders.</div>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                        onClick={handleRemindersRetry}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  {!remindersQ.isLoading && !remindersQ.error && <ReminderList reminders={reminders} />}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
           </div>
-          <Popover.Root open={remindersOpen} onOpenChange={setRemindersOpen}>
-            <Popover.Trigger asChild>
-              <button
-                type="button"
-                disabled={!threadId}
-                className="rounded border px-3 py-1 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
-                aria-label={`Active reminders: ${metrics.remindersCount}`}
-                data-testid="thread-reminders-trigger"
-              >
-                Reminders {metrics.remindersCount}
-              </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content
-                side="bottom"
-                align="end"
-                sideOffset={8}
-                className="z-50 w-72 rounded-md border bg-white p-3 shadow-lg focus:outline-none"
-                data-testid="thread-reminders-popover"
-              >
-                <div className="mb-2 text-sm font-semibold text-gray-900">Active Reminders</div>
-                {remindersQ.isLoading && <div className="text-xs text-gray-500">Loading…</div>}
-                {remindersQ.error && (
-                  <div className="text-xs text-red-600" role="alert">{(remindersQ.error as Error).message}</div>
-                )}
-                {!remindersQ.isLoading && !remindersQ.error && <ReminderList reminders={reminders} />}
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
         </div>
       </div>
     </header>

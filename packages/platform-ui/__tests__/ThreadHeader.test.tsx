@@ -11,7 +11,7 @@ const mockReminders: ThreadReminder[] = [
 ];
 
 const useThreadMetrics = vi.fn(() => ({ data: mockMetrics, isLoading: false, error: null }));
-const useThreadReminders = vi.fn(() => ({ data: { items: mockReminders }, isLoading: false, error: null }));
+const useThreadReminders = vi.fn(() => ({ data: { items: mockReminders }, isLoading: false, error: null, refetch: vi.fn(), isFetching: false }));
 
 vi.mock('@/api/hooks/threads', () => ({
   useThreadMetrics: (...args: unknown[]) => useThreadMetrics(...args),
@@ -21,7 +21,8 @@ vi.mock('@/api/hooks/threads', () => ({
 describe('ThreadHeader', () => {
   beforeEach(() => {
     useThreadMetrics.mockClear();
-    useThreadReminders.mockClear();
+    useThreadReminders.mockReset();
+    useThreadReminders.mockImplementation(() => ({ data: { items: mockReminders }, isLoading: false, error: null, refetch: vi.fn(), isFetching: false }));
   });
 
   it('renders selected thread details with metrics and run counts', () => {
@@ -41,6 +42,8 @@ describe('ThreadHeader', () => {
     expect(screen.getByTestId('thread-header-summary')).toHaveTextContent('Investigate alerts');
     expect(screen.getByText('Incident Agent')).toBeInTheDocument();
     expect(screen.getByText(/Status: Open/i)).toBeInTheDocument();
+    const stats = screen.getByTestId('thread-header-stats');
+    expect(stats).toHaveTextContent('Runs 5');
     expect(screen.getByRole('button', { name: /Active reminders: 3/ })).toBeInTheDocument();
     // Run count prefers live runs length (5) over metrics (2)
     expect(screen.getByLabelText('Runs total: 5')).toHaveTextContent('Runs 5');
@@ -70,6 +73,30 @@ describe('ThreadHeader', () => {
     expect(screen.getByText('Active Reminders')).toBeInTheDocument();
     expect(screen.getByText('Follow up soon')).toBeInTheDocument();
     expect(screen.getByTestId('thread-reminders-list').children).toHaveLength(1);
+  });
+
+  it('shows friendly error with retry when reminders fail to load', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    useThreadReminders.mockImplementation(() => ({ data: undefined, isLoading: false, error: new Error('boom'), refetch, isFetching: false }));
+    const thread: ThreadNode = {
+      id: 't1',
+      alias: 'root',
+      summary: 'Investigate alerts',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+      agentTitle: 'Incident Agent',
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    await user.click(screen.getByTestId('thread-reminders-trigger'));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Unable to load reminders.');
+    await user.click(screen.getByRole('button', { name: /retry/i }));
+    expect(refetch).toHaveBeenCalled();
   });
 
   it('renders placeholder when no thread is selected', () => {

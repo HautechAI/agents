@@ -4,6 +4,8 @@ import { threads } from '@/api/modules/threads';
 import { graphSocket } from '@/lib/graph/socket';
 import type { ThreadMetrics, ThreadReminder } from '@/api/types/agents';
 
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export function useThreadRoots(status: 'open' | 'closed' | 'all') {
   return useQuery({
     queryKey: ['agents', 'threads', 'roots', status],
@@ -70,15 +72,16 @@ export function useThreadMetrics(threadId: string | undefined) {
 export function useThreadReminders(threadId: string | undefined, enabled: boolean = true) {
   const qc = useQueryClient();
   const queryKey = useMemo(() => ['agents', 'threads', threadId, 'reminders'] as const, [threadId]);
+  const isValidThread = !!threadId && UUID_REGEX.test(threadId);
   const q = useQuery<{ items: ThreadReminder[] }>({
-    enabled: !!threadId && enabled,
+    enabled: enabled && isValidThread,
     queryKey,
     queryFn: () => threads.reminders(threadId as string),
     staleTime: 1500,
   });
 
   useEffect(() => {
-    if (!threadId || !enabled) return;
+    if (!threadId || !enabled || !isValidThread) return;
     const offReminders = graphSocket.onThreadRemindersCount((payload) => {
       if (payload.threadId !== threadId) return;
       qc.invalidateQueries({ queryKey }).catch(() => {});
@@ -90,7 +93,7 @@ export function useThreadReminders(threadId: string | undefined, enabled: boolea
       offReminders();
       offReconnect();
     };
-  }, [threadId, enabled, qc, queryKey]);
+  }, [threadId, enabled, isValidThread, qc, queryKey]);
 
   return q;
 }
