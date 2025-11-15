@@ -24,7 +24,7 @@ export function MessageBubble({ id, role, timestamp, text, source, side, showJso
           <span className="font-medium">{role}</span>
           <time dateTime={timestamp}>{new Date(timestamp).toLocaleTimeString()}</time>
         </div>
-        <div className="mt-2 text-sm whitespace-pre-wrap leading-relaxed">
+        <div className="mt-2 text-sm content-wrap leading-relaxed">
           {text ? text : <span className="text-gray-500">(no text)</span>}
         </div>
         <div className="mt-2">
@@ -40,7 +40,7 @@ export function MessageBubble({ id, role, timestamp, text, source, side, showJso
           {showJson && (
             <pre
               id={`raw-${id}`}
-              className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-x-auto"
+              className="mt-2 rounded bg-gray-100 p-2 text-xs font-mono content-pre"
               data-testid="raw-json"
               tabIndex={0}
             >

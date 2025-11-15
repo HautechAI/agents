@@ -2,8 +2,34 @@ import React from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RunTimelineEventDetails } from '../RunTimelineEventDetails';
 import type { RunTimelineEvent } from '@/api/types/agents';
+
+function renderDetails(event: RunTimelineEvent) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: Number.POSITIVE_INFINITY, staleTime: Number.POSITIVE_INFINITY },
+    },
+  });
+
+  const result = render(
+    <QueryClientProvider client={client}>
+      <RunTimelineEventDetails event={event} />
+    </QueryClientProvider>,
+  );
+
+  return {
+    ...result,
+    rerender(nextEvent: RunTimelineEvent) {
+      result.rerender(
+        <QueryClientProvider client={client}>
+          <RunTimelineEventDetails event={nextEvent} />
+        </QueryClientProvider>,
+      );
+    },
+  };
+}
 
 function buildEvent(overrides: Partial<RunTimelineEvent> = {}): RunTimelineEvent {
   const base: RunTimelineEvent = {
@@ -63,7 +89,7 @@ beforeEach(() => {
 describe('RunTimelineEventDetails', () => {
   it('defaults output viewer to json for objects and allows switching', async () => {
     const user = userEvent.setup();
-    render(<RunTimelineEventDetails event={buildEvent()} />);
+    renderDetails(buildEvent());
 
     const select = screen.getByLabelText('Select output view');
     expect(select).toHaveValue('json');
@@ -75,27 +101,23 @@ describe('RunTimelineEventDetails', () => {
 
   it('detects terminal output via ansi escape sequences', () => {
     const ansiOutput = '\u001b[31mFailure\u001b[0m';
-    render(
-      <RunTimelineEventDetails
-        event={buildEvent({ toolExecution: { output: ansiOutput, raw: null } })}
-      />,
-    );
+    renderDetails(buildEvent({ toolExecution: { output: ansiOutput, raw: null } }));
 
     expect(screen.getByLabelText('Select output view')).toHaveValue('terminal');
   });
 
   it('persists selected visualization per event id', async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<RunTimelineEventDetails event={buildEvent({ id: 'evt-a' })} />);
+    const { rerender } = renderDetails(buildEvent({ id: 'evt-a' }));
     const select = screen.getByLabelText('Select output view');
 
     await user.selectOptions(select, 'markdown');
     expect(select).toHaveValue('markdown');
 
-    rerender(<RunTimelineEventDetails event={buildEvent({ id: 'evt-a' })} />);
+    rerender(buildEvent({ id: 'evt-a' }));
     expect(screen.getByLabelText('Select output view')).toHaveValue('markdown');
 
-    rerender(<RunTimelineEventDetails event={buildEvent({ id: 'evt-b' })} />);
+    rerender(buildEvent({ id: 'evt-b' }));
     expect(screen.getByLabelText('Select output view')).toHaveValue('json');
   });
 
@@ -108,7 +130,7 @@ describe('RunTimelineEventDetails', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItemIds: ['ctx-1'],
+        contextItemIds: [],
         responseText: null,
         rawResponse: { foo: 'bar' },
         toolCalls: [],
@@ -116,10 +138,11 @@ describe('RunTimelineEventDetails', () => {
       toolExecution: undefined,
     });
 
-    render(<RunTimelineEventDetails event={llmOnlyRaw} />);
+    renderDetails(llmOnlyRaw);
     expect(screen.queryByText('Response')).toBeNull();
-    expect(screen.queryByText(/Tool calls/)).toBeNull();
+    expect(screen.queryByText(/Tool Calls/i)).toBeNull();
     expect(screen.queryByText('Raw response')).toBeNull();
+    expect(screen.queryByText('Output')).toBeNull();
   });
 
   it('renders response and tool calls when provided', () => {
@@ -139,7 +162,7 @@ describe('RunTimelineEventDetails', () => {
       toolExecution: undefined,
     });
 
-    render(<RunTimelineEventDetails event={event} />);
+    renderDetails(event);
     const responseLabel = screen.getByText('Response');
     const responseContainer = responseLabel.parentElement;
     expect(responseContainer).toBeTruthy();
@@ -147,10 +170,33 @@ describe('RunTimelineEventDetails', () => {
       expect(within(responseContainer).getByText('All good')).toBeInTheDocument();
     }
 
-    const toolCallsLabel = screen.getByText(/Tool calls/);
+    const toolCallsLabel = screen.getByText(/Tool Calls/i);
     expect(toolCallsLabel).toBeInTheDocument();
     expect(screen.getByText(/search/)).toBeInTheDocument();
     expect(screen.queryByText('Raw response')).toBeNull();
+  });
+
+  it('wraps long response text using content-wrap', () => {
+    const longText = 'A'.repeat(120);
+    const event = buildEvent({
+      type: 'llm_call',
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-test',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [],
+        responseText: longText,
+        rawResponse: { content: longText },
+        toolCalls: [],
+      },
+      toolExecution: undefined,
+    });
+
+    renderDetails(event);
+    const responseText = screen.getByText(longText);
+    expect(responseText).toHaveClass('content-wrap');
   });
 
   it('omits raw message source in invocation message details', () => {
@@ -167,8 +213,19 @@ describe('RunTimelineEventDetails', () => {
       toolExecution: undefined,
     });
 
-    render(<RunTimelineEventDetails event={event} />);
+    renderDetails(event);
     expect(screen.queryByText(/"foo": "secret"/)).toBeNull();
+  });
+
+  it('applies content-pre class when switching output to terminal mode', async () => {
+    const user = userEvent.setup();
+    renderDetails(buildEvent({ toolExecution: { output: 'command output', raw: null } }));
+
+    const select = screen.getByLabelText('Select output view');
+    await user.selectOptions(select, 'terminal');
+
+    const terminalPre = screen.getByText('command output', { selector: 'pre' });
+    expect(terminalPre).toHaveClass('content-pre');
   });
 
   it('does not crash when sessionStorage access is blocked', () => {
@@ -180,7 +237,7 @@ describe('RunTimelineEventDetails', () => {
       },
     });
 
-    expect(() => render(<RunTimelineEventDetails event={buildEvent()} />)).not.toThrow();
+    expect(() => renderDetails(buildEvent())).not.toThrow();
 
     if (originalDescriptor) {
       Object.defineProperty(window, 'sessionStorage', originalDescriptor);
@@ -190,7 +247,7 @@ describe('RunTimelineEventDetails', () => {
   });
 
   it('renders output selector in header and omits inline raw payload text', () => {
-    render(<RunTimelineEventDetails event={buildEvent()} />);
+    renderDetails(buildEvent());
 
     const outputHeader = screen.getByText('Output').closest('header');
     expect(outputHeader).toBeTruthy();
@@ -202,7 +259,7 @@ describe('RunTimelineEventDetails', () => {
   });
 
   it('omits metadata and source detail rows from overview', () => {
-    render(<RunTimelineEventDetails event={buildEvent()} />);
+    renderDetails(buildEvent());
 
     expect(screen.queryByText('Metadata')).toBeNull();
     expect(screen.queryByText(/Source:/)).toBeNull();
@@ -247,7 +304,7 @@ describe('RunTimelineEventDetails', () => {
       },
     });
 
-    render(<RunTimelineEventDetails event={event} />);
+    renderDetails(event);
 
     expect(screen.getByText('Attachments')).toBeInTheDocument();
     expect(screen.getByText('Prompt attachments (1)')).toBeInTheDocument();
@@ -256,7 +313,7 @@ describe('RunTimelineEventDetails', () => {
   });
 
   it('hides tool call metadata when no identifier is present', () => {
-    render(<RunTimelineEventDetails event={buildEvent({ toolExecution: { toolCallId: null } })} />);
+    renderDetails(buildEvent({ toolExecution: { toolCallId: null } }));
 
     expect(screen.queryByText(/Tool call:/)).toBeNull();
   });
@@ -273,7 +330,7 @@ describe('RunTimelineEventDetails', () => {
       },
     });
 
-    render(<RunTimelineEventDetails event={event} />);
+    renderDetails(event);
 
     expect(screen.getByRole('heading', { name: 'Summarization' })).toBeInTheDocument();
     expect(screen.queryByText(/Raw payload/)).toBeNull();
@@ -289,7 +346,7 @@ describe('RunTimelineEventDetails', () => {
       },
     });
 
-    render(<RunTimelineEventDetails event={event} />);
+    renderDetails(event);
 
     expect(screen.getByText(/Messages:/)).toBeInTheDocument();
     expect(screen.queryByText(/Reason:/)).toBeNull();
