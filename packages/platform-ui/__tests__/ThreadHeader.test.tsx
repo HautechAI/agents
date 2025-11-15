@@ -44,8 +44,8 @@ describe('ThreadHeader', () => {
     expect(screen.getByRole('button', { name: /Active reminders: 3/ })).toBeInTheDocument();
     // Run count prefers live runs length (5) over metrics (2)
     expect(screen.getByLabelText('Runs total: 5')).toHaveTextContent('Runs 5');
-    // Activity reflects socket-driven metrics mock
-    expect(screen.getByLabelText('Activity: waiting')).toBeInTheDocument();
+    // Activity indicator should not render in header
+    expect(screen.queryByLabelText(/Activity:/)).toBeNull();
   });
 
   it('shows reminders in popover when opened', async () => {

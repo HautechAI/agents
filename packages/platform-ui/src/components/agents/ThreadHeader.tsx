@@ -43,7 +43,6 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
 
   const metricsQ = useThreadMetrics(threadId);
   const metrics = metricsQ.data ?? thread?.metrics ?? defaultMetrics;
-  const activityClass = metrics.activity === 'working' ? 'bg-green-500' : metrics.activity === 'waiting' ? 'bg-yellow-500' : 'bg-blue-500';
 
   const effectiveRunsCount = useMemo(() => {
     if (!threadId) return 0;
@@ -102,10 +101,6 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex items-center gap-2 rounded border px-3 py-1" aria-label={`Activity: ${metrics.activity}`}>
-            <span className={`inline-block h-2 w-2 rounded-full ${activityClass}`} aria-hidden="true" />
-            <span className="capitalize text-gray-700">{metrics.activity}</span>
-          </div>
           <div className="rounded border px-3 py-1 text-gray-700" aria-label={`Runs total: ${effectiveRunsCount}`}>
             Runs {effectiveRunsCount}
           </div>
