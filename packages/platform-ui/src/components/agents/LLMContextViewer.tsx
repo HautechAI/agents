@@ -94,7 +94,7 @@ export function LLMContextViewer({ ids }: LLMContextViewerProps) {
       })}
 
       {isInitialLoading && <div className="text-[11px] text-gray-500">Loading context…</div>}
-      {error && !isInitialLoading && <div className="text-[11px] text-red-600">Failed to load context items</div>}
+      {!!error && !isInitialLoading && <div className="text-[11px] text-red-600">Failed to load context items</div>}
       {hasMore && (
         <button
           type="button"
