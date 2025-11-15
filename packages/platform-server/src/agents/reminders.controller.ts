@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, Query } from '@nestjs/common';
-import { IsIn, IsInt, Min, Max, IsOptional } from 'class-validator';
+import { IsIn, IsInt, Min, Max, IsOptional, IsUUID } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
 
 export class ListRemindersQueryDto {
@@ -12,6 +12,10 @@ export class ListRemindersQueryDto {
   @Min(1)
   @Max(1000)
   take?: number;
+
+  @IsOptional()
+  @IsUUID()
+  threadId?: string;
 }
 
 @Controller('api/agents')
@@ -24,8 +28,7 @@ export class AgentsRemindersController {
   async listReminders(@Query() query: ListRemindersQueryDto) {
     const filter = query.filter ?? 'active';
     const take = query.take ?? 100;
-    const items = await this.persistence.listReminders(filter, take);
+    const items = await this.persistence.listReminders(filter, take, query.threadId);
     return { items };
   }
 }
-

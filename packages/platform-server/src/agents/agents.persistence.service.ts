@@ -308,16 +308,22 @@ export class AgentsPersistenceService {
   async listReminders(
     filter: 'active' | 'completed' | 'all' = 'active',
     take: number = 100,
+    threadId?: string,
   ): Promise<Array<{ id: string; threadId: string; note: string; at: Date; createdAt: Date; completedAt: Date | null }>> {
-    const where =
+    const filterWhere =
       filter === 'active'
         ? { completedAt: null }
         : filter === 'completed'
         ? { NOT: { completedAt: null } }
         : undefined;
+    const whereConditions: Prisma.ReminderWhereInput = {
+      ...(threadId ? { threadId } : {}),
+      ...(filterWhere ?? {}),
+    };
+    const where = Object.keys(whereConditions).length > 0 ? whereConditions : undefined;
     return this.prisma.reminder.findMany({
       where,
-      orderBy: { at: 'desc' },
+      orderBy: { at: 'asc' },
       select: { id: true, threadId: true, note: true, at: true, createdAt: true, completedAt: true },
       take,
     });
