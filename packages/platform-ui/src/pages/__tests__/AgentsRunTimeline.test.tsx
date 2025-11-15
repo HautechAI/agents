@@ -253,6 +253,7 @@ describe('AgentsRunTimeline layout and selection', () => {
     expect(socketMocks.subscribe).toHaveBeenCalledWith(['run:run-1']);
 
     const listbox = getByRole('listbox');
+    expect(listbox).toHaveAttribute('aria-labelledby', 'run-timeline-events-heading');
     await waitFor(() => expect(listbox).toHaveAttribute('aria-activedescendant', 'run-event-option-event-2'));
 
     const detailsBefore = getByTestId('timeline-event-details');
@@ -268,6 +269,7 @@ describe('AgentsRunTimeline layout and selection', () => {
 
     expect(getByText('Events')).toBeInTheDocument();
     expect(getByText('Details')).toBeInTheDocument();
+    expect(getByRole('region', { name: 'Details' })).toBeInTheDocument();
   });
 
   it('opens details in an accessible modal on mobile and clears selection on close', () => {
