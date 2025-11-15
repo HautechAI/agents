@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { StaticConfigViewProps } from './types';
 // Use shared UI lib components; do not import from app alias paths.
-import { Label } from '@agyn/ui';
+import { Button, Label, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agyn/ui';
+import { Maximize2 } from 'lucide-react';
+import { PromptEditorModal } from './shared/PromptEditorModal';
 
 export default function SimpleAgentConfigView({
   templateName: _tpl,
@@ -30,6 +32,7 @@ export default function SimpleAgentConfigView({
   const [restrictionMaxInjections, setRestrictionMaxInjections] = useState<number>(
     typeof init.restrictionMaxInjections === 'number' ? (init.restrictionMaxInjections as number) : 0,
   );
+  const [isPromptModalOpen, setPromptModalOpen] = useState(false);
 
   useEffect(() => {
     const errors: string[] = [];
@@ -67,6 +70,18 @@ export default function SimpleAgentConfigView({
 
   const isDisabled = !!readOnly || !!disabled;
 
+  useEffect(() => {
+    if (isDisabled) return;
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && (event.key === 'E' || event.key === 'e')) {
+        event.preventDefault();
+        setPromptModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [isDisabled]);
+
   return (
     <div className="space-y-2 text-sm">
       <div>
@@ -95,7 +110,29 @@ export default function SimpleAgentConfigView({
       </div>
 
       <div>
-        <Label>System prompt</Label>
+        <div className="flex items-center justify-between gap-3">
+          <Label>System prompt</Label>
+          <TooltipProvider delayDuration={200} disableHoverableContent>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Expand system prompt editor"
+                  onClick={() => setPromptModalOpen(true)}
+                  disabled={isDisabled}
+                  data-testid="prompt-expand-button"
+                >
+                  <Maximize2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left" align="end" className="text-xs">
+                Expand editor (Cmd/Ctrl+Shift+E)
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         <textarea
           className="w-full border rounded px-2 py-1 bg-background"
           rows={5}
@@ -195,6 +232,16 @@ export default function SimpleAgentConfigView({
           data-testid="simple-agent-maxinj"
         />
       </div>
+      <PromptEditorModal
+        open={isPromptModalOpen}
+        value={systemPrompt}
+        onClose={() => setPromptModalOpen(false)}
+        onSave={(next) => {
+          setSystemPrompt(next);
+          setPromptModalOpen(false);
+        }}
+        readOnly={isDisabled}
+      />
     </div>
   );
 }
