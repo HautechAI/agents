@@ -4,24 +4,57 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThreadHeader } from '../src/components/agents/ThreadHeader';
 import type { ThreadNode, ThreadReminder, ThreadMetrics } from '../src/api/types/agents';
+import type { ContainerItem } from '../src/api/modules/containers';
 
-const mockMetrics: ThreadMetrics = { remindersCount: 3, activity: 'waiting', runsCount: 2 };
+const mockMetrics: ThreadMetrics = { remindersCount: 3, containersCount: 2, activity: 'waiting', runsCount: 2 };
 const mockReminders: ThreadReminder[] = [
   { id: 'r1', threadId: 't1', note: 'Follow up soon', at: '2025-11-14T12:00:00.000Z', createdAt: '2025-11-13T12:00:00.000Z', completedAt: null },
 ];
+const mockContainers: ContainerItem[] = [
+  {
+    containerId: 'abc1234567890',
+    threadId: 't1',
+    image: 'hautech/thread:latest',
+    status: 'running',
+    startedAt: '2025-11-14T09:00:00.000Z',
+    lastUsedAt: '2025-11-14T10:00:00.000Z',
+    killAfterAt: null,
+    role: 'workspace',
+  },
+];
 
 const useThreadMetrics = vi.fn(() => ({ data: mockMetrics, isLoading: false, error: null }));
-const useThreadReminders = vi.fn(() => ({ data: { items: mockReminders }, isLoading: false, error: null }));
+const defaultRemindersResult = () => ({
+  data: { items: mockReminders },
+  isLoading: false,
+  isFetching: false,
+  error: null,
+  refetch: vi.fn(),
+});
+const defaultContainersResult = () => ({
+  data: { items: mockContainers },
+  isLoading: false,
+  isFetching: false,
+  error: null,
+  refetch: vi.fn(),
+});
+
+const useThreadReminders = vi.fn(defaultRemindersResult);
+const useThreadContainers = vi.fn(defaultContainersResult);
 
 vi.mock('@/api/hooks/threads', () => ({
   useThreadMetrics: (...args: unknown[]) => useThreadMetrics(...args),
   useThreadReminders: (...args: unknown[]) => useThreadReminders(...args),
+  useThreadContainers: (...args: unknown[]) => useThreadContainers(...args),
 }));
 
 describe('ThreadHeader', () => {
   beforeEach(() => {
     useThreadMetrics.mockClear();
-    useThreadReminders.mockClear();
+    useThreadReminders.mockReset();
+    useThreadReminders.mockImplementation(defaultRemindersResult);
+    useThreadContainers.mockReset();
+    useThreadContainers.mockImplementation(defaultContainersResult);
   });
 
   it('renders selected thread details with metrics and run counts', () => {
@@ -32,7 +65,7 @@ describe('ThreadHeader', () => {
       status: 'open',
       parentId: null,
       createdAt: '2025-11-14T10:00:00.000Z',
-      metrics: { remindersCount: 1, activity: 'idle', runsCount: 1 },
+      metrics: { remindersCount: 1, containersCount: 1, activity: 'idle', runsCount: 1 },
       agentTitle: 'Incident Agent',
     };
 
@@ -41,6 +74,7 @@ describe('ThreadHeader', () => {
     expect(screen.getByTestId('thread-header-summary')).toHaveTextContent('Investigate alerts');
     expect(screen.getByText('Incident Agent')).toBeInTheDocument();
     expect(screen.getByText(/Status: Open/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Running containers: 1/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Active reminders: 3/ })).toBeInTheDocument();
     // Run count prefers live runs length (5) over metrics (2)
     expect(screen.getByLabelText('Runs total: 5')).toHaveTextContent('Runs 5');
@@ -70,6 +104,90 @@ describe('ThreadHeader', () => {
     expect(screen.getByText('Active Reminders')).toBeInTheDocument();
     expect(screen.getByText('Follow up soon')).toBeInTheDocument();
     expect(screen.getByTestId('thread-reminders-list').children).toHaveLength(1);
+  });
+
+  it('renders containers popover with list when opened', async () => {
+    const user = userEvent.setup();
+    const thread: ThreadNode = {
+      id: 't1',
+      alias: 'root',
+      summary: 'Investigate alerts',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+      agentTitle: 'Incident Agent',
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    await user.click(screen.getByTestId('thread-containers-trigger'));
+
+    const popover = await screen.findByTestId('thread-containers-popover');
+    expect(popover).toBeInTheDocument();
+    expect(screen.getByText('Running Containers')).toBeInTheDocument();
+    expect(screen.getByTestId('thread-containers-list').children).toHaveLength(1);
+    expect(screen.getByTestId('thread-containers-item')).toHaveTextContent('workspace');
+  });
+
+  it('shows friendly error with retry when reminders fail to load', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    useThreadReminders.mockImplementation((id: unknown, enabled?: boolean) => {
+      if (enabled) {
+        return { data: undefined, isLoading: false, isFetching: false, error: new Error('nope'), refetch };
+      }
+      return defaultRemindersResult();
+    });
+    const thread: ThreadNode = {
+      id: 't1',
+      alias: 'root',
+      summary: 'Investigate alerts',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+      agentTitle: 'Incident Agent',
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    await user.click(screen.getByTestId('thread-reminders-trigger'));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Unable to load reminders.');
+    await user.click(screen.getByRole('button', { name: /retry/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows error state and retry when containers fail to load', async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    useThreadContainers.mockImplementation((id: unknown, enabled?: boolean) => {
+      if (enabled) {
+        return { data: undefined, isLoading: false, isFetching: false, error: new Error('boom'), refetch };
+      }
+      return defaultContainersResult();
+    });
+    const thread: ThreadNode = {
+      id: 't1',
+      alias: 'root',
+      summary: 'Investigate alerts',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+      agentTitle: 'Incident Agent',
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    await user.click(screen.getByTestId('thread-containers-trigger'));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Unable to load containers.');
+    await user.click(screen.getByRole('button', { name: /retry/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('renders placeholder when no thread is selected', () => {

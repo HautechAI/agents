@@ -1,8 +1,10 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { threads } from '@/api/modules/threads';
+import { listContainers } from '@/api/modules/containers';
 import { graphSocket } from '@/lib/graph/socket';
 import type { ThreadMetrics, ThreadReminder } from '@/api/types/agents';
+import type { ContainerItem } from '@/api/modules/containers';
 
 export function useThreadRoots(status: 'open' | 'closed' | 'all') {
   return useQuery({
@@ -32,7 +34,7 @@ export function useToggleThreadStatus(id: string, current: 'open' | 'closed') {
   });
 }
 
-const defaultMetrics: ThreadMetrics = { remindersCount: 0, activity: 'idle', runsCount: 0 };
+const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
 
 export function useThreadMetrics(threadId: string | undefined) {
   const qc = useQueryClient();
@@ -88,6 +90,29 @@ export function useThreadReminders(threadId: string | undefined, enabled: boolea
     });
     return () => {
       offReminders();
+      offReconnect();
+    };
+  }, [threadId, enabled, qc, queryKey]);
+
+  return q;
+}
+
+export function useThreadContainers(threadId: string | undefined, enabled: boolean = true) {
+  const qc = useQueryClient();
+  const queryKey = useMemo(() => ['agents', 'threads', threadId, 'containers'] as const, [threadId]);
+  const q = useQuery<{ items: ContainerItem[] }>({
+    enabled: !!threadId && enabled,
+    queryKey,
+    queryFn: () => listContainers({ status: 'running', sortBy: 'lastUsedAt', sortDir: 'desc', threadId: threadId as string }),
+    staleTime: 5000,
+  });
+
+  useEffect(() => {
+    if (!threadId || !enabled) return;
+    const offReconnect = graphSocket.onReconnected(() => {
+      qc.invalidateQueries({ queryKey }).catch(() => {});
+    });
+    return () => {
       offReconnect();
     };
   }, [threadId, enabled, qc, queryKey]);

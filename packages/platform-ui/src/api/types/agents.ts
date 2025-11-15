@@ -2,6 +2,7 @@ export type ThreadStatus = 'open' | 'closed';
 
 export type ThreadMetrics = {
   remindersCount: number;
+  containersCount: number;
   activity: 'working' | 'waiting' | 'idle';
   runsCount: number;
 };

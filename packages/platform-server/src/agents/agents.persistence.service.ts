@@ -267,7 +267,7 @@ export class AgentsPersistenceService {
     const [metrics, runs] = await Promise.all([this.metrics.getThreadsMetrics(ids), this.getRunsCount(ids)]);
     const out: Record<string, ThreadMetrics> = {};
     for (const id of ids) {
-      const base = metrics[id] ?? { remindersCount: 0, activity: 'idle' as const };
+      const base = metrics[id] ?? { remindersCount: 0, containersCount: 0, activity: 'idle' as const };
       out[id] = { ...base, runsCount: runs[id] ?? 0 };
     }
     return out;

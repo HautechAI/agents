@@ -24,7 +24,7 @@ export function ThreadTree({
   // Subscribe to threads room and update react-query cache on events
   useEffect(() => {
     graphSocket.subscribe(['threads']);
-    const defaultMetrics: ThreadMetrics = { remindersCount: 0, activity: 'idle', runsCount: 0 };
+    const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
     const offAct = graphSocket.onThreadActivityChanged((payload) => {
       qc.setQueryData<{ items: ThreadNode[] }>(['agents', 'threads', 'roots', status], (prev) => {
         if (!prev) return prev;
@@ -59,7 +59,7 @@ export function ThreadTree({
           status: thread.status,
           parentId: thread.parentId,
           createdAt: thread.createdAt,
-          metrics: { remindersCount: 0, activity: 'idle', runsCount: 0 },
+          metrics: { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 },
           agentTitle: '(unknown agent)',
         };
         const existing = prev?.items?.some((t) => t.id === node.id);
