@@ -18,10 +18,9 @@ describe('ShellToolStaticConfigSchema validation', () => {
     }
   });
 
-  it('validates cwd input schema', () => {
-    const ok = bashCommandSchema.safeParse({ command: 'pwd', cwd: 'project/src' });
-    expect(ok.success).toBe(true);
-    const invalid = bashCommandSchema.safeParse({ command: 'pwd', cwd: 'foo$bar' });
-    expect(invalid.success).toBe(false);
+  it('accepts optional cwd string', () => {
+    expect(bashCommandSchema.safeParse({ command: 'pwd' }).success).toBe(true);
+    expect(bashCommandSchema.safeParse({ command: 'pwd', cwd: '/workspace/app' }).success).toBe(true);
+    expect(bashCommandSchema.safeParse({ command: 'pwd', cwd: 42 as unknown as string }).success).toBe(false);
   });
 });

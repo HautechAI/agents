@@ -6,8 +6,6 @@ import { isExecTimeoutError, ExecIdleTimeoutError } from '../../src/utils/execTi
 import { ContainerHandle } from '../../src/infra/container/container.handle';
 import type { Mock } from 'vitest';
 
-const envStub = { resolveProviderEnv: async () => undefined } as any;
-
 describe('ShellTool timeout error message', () => {
   it('throws clear timeout error with tail header on exec timeout', async () => {
     const logger = new LoggerService();
@@ -20,16 +18,12 @@ describe('ShellTool timeout error message', () => {
     } as const;
 
     class FakeContainer extends ContainerHandle { override async exec(_cmd: string | string[], _opts?: unknown): Promise<never> { throw timeoutErr; } }
-    class FakeProvider {
-      constructor(private logger: LoggerService) {}
-      async provide(_t: string): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); }
-      getWorkspaceRoot(): string { return '/workspace'; }
-    }
+    class FakeProvider { constructor(private logger: LoggerService) {} async provide(_t: string): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); } }
     const provider = new FakeProvider(logger);
 
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
     const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
-    const node = new ShellCommandNode(envStub, logger as any, moduleRefStub as any, archiveStub as any);
+    const node = new ShellCommandNode(undefined as any, logger as any, moduleRefStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();
@@ -48,15 +42,11 @@ describe('ShellTool timeout error message', () => {
     const idleErr = new ExecIdleTimeoutError(60000, 'out', 'err');
     const fakeContainer = { exec: vi.fn(async () => { throw idleErr; }) } as const;
     class FakeContainer extends ContainerHandle { override async exec(): Promise<never> { throw idleErr; } }
-    class FakeProvider {
-      constructor(private logger: LoggerService) {}
-      async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); }
-      getWorkspaceRoot(): string { return '/workspace'; }
-    }
+    class FakeProvider { constructor(private logger: LoggerService) {} async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); } }
     const provider = new FakeProvider(logger);
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
     const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
-    const node = new ShellCommandNode(envStub, logger as any, moduleRefStub as any, archiveStub as any);
+    const node = new ShellCommandNode(undefined as any, logger as any, moduleRefStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();
@@ -71,15 +61,11 @@ describe('ShellTool timeout error message', () => {
     const idleErr = new (class extends ExecIdleTimeoutError { constructor() { super(12345, 'out', 'err'); } })();
     const fakeContainer = { exec: vi.fn(async () => { throw idleErr; }) } as const;
     class FakeContainer extends ContainerHandle { override async exec(): Promise<never> { throw idleErr; } }
-    class FakeProvider {
-      constructor(private logger: LoggerService) {}
-      async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); }
-      getWorkspaceRoot(): string { return '/workspace'; }
-    }
+    class FakeProvider { constructor(private logger: LoggerService) {} async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); } }
     const provider = new FakeProvider(logger);
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
     const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
-    const node = new ShellCommandNode(envStub, logger as any, moduleRefStub as any, archiveStub as any);
+    const node = new ShellCommandNode(undefined as any, logger as any, moduleRefStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({ idleTimeoutMs: 60000 });
     const t = node.getTool();
@@ -211,16 +197,12 @@ describe('ShellTool non-timeout error propagation', () => {
     class FakeContainer extends ContainerHandle {
       override async exec(): Promise<never> { throw new Error('Permission denied'); }
     }
-    class FakeProvider {
-      constructor(private logger: LoggerService) {}
-      async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); }
-      getWorkspaceRoot(): string { return '/workspace'; }
-    }
+    class FakeProvider { constructor(private logger: LoggerService) {} async provide(): Promise<ContainerHandle> { return new FakeContainer(new ContainerService(this.logger), 'fake'); } }
     const provider = new FakeProvider(logger);
 
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
     const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
-    const node = new ShellCommandNode(envStub, logger as any, moduleRefStub as any, archiveStub as any);
+    const node = new ShellCommandNode(undefined as any, logger as any, moduleRefStub as any);
     node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();
