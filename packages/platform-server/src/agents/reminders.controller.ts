@@ -1,4 +1,5 @@
 import { Controller, Get, Inject, Query } from '@nestjs/common';
+import { Type } from 'class-transformer';
 import { IsIn, IsInt, Min, Max, IsOptional, IsUUID } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
 
@@ -9,6 +10,7 @@ export class ListRemindersQueryDto {
 
   @IsOptional()
   @IsInt()
+  @Type(() => Number)
   @Min(1)
   @Max(1000)
   take?: number;

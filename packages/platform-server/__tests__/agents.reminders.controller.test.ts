@@ -32,21 +32,9 @@ describe('AgentsRemindersController', () => {
     }).compile();
 
     const ctrl = await module.resolve(AgentsRemindersController);
-    await ctrl.listReminders({ filter: 'completed', take: 10 });
-    expect(svc.listReminders).toHaveBeenCalledWith('completed', 10, undefined);
-  });
-
-  it('passes threadId when provided', async () => {
-    const svc = { listReminders: vi.fn(async () => []) } as unknown as AgentsPersistenceService;
-    const module = await Test.createTestingModule({
-      controllers: [AgentsRemindersController],
-      providers: [{ provide: AgentsPersistenceService, useValue: svc }],
-    }).compile();
-
-    const ctrl = await module.resolve(AgentsRemindersController);
-    const threadId = '92d3782c-7811-4aa0-b86b-5f594896d4fa';
-    await ctrl.listReminders({ threadId });
-    expect(svc.listReminders).toHaveBeenCalledWith('active', 100, threadId);
+    const threadId = '11111111-1111-1111-1111-111111111111';
+    await ctrl.listReminders({ filter: 'completed', take: 10, threadId });
+    expect(svc.listReminders).toHaveBeenCalledWith('completed', 10, threadId);
   });
 });
 
@@ -80,11 +68,41 @@ describe('AgentsPersistenceService.listReminders', () => {
     await svc.listReminders('active', 50);
     await svc.listReminders('completed', 25);
     await svc.listReminders('all', 100);
-    await svc.listReminders('active', 10, 'thread-123');
+    await svc.listReminders('active', 20, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 
     expect(captured[0]).toMatchObject({ where: { completedAt: null }, orderBy: { at: 'asc' }, take: 50 });
     expect(captured[1]).toMatchObject({ where: { NOT: { completedAt: null } }, orderBy: { at: 'asc' }, take: 25 });
     expect(captured[2]).toMatchObject({ where: undefined, orderBy: { at: 'asc' }, take: 100 });
-    expect(captured[3]).toMatchObject({ where: { threadId: 'thread-123', completedAt: null }, orderBy: { at: 'asc' }, take: 10 });
+    expect(captured[3]).toMatchObject({ where: { completedAt: null, threadId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }, orderBy: { at: 'asc' }, take: 20 });
+  });
+
+  it('logs and rethrows prisma errors', async () => {
+    const prismaStub = {
+      getClient() {
+        return {
+          reminder: {
+            findMany: async () => {
+              throw new Error('db down');
+            },
+          },
+        } as any;
+      },
+    };
+    const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() } as any;
+    const { NoopGraphEventsPublisher } = await import('../src/gateway/graph.events.publisher');
+    const svc = new AgentsPersistenceService(
+      prismaStub as any,
+      logger,
+      { getThreadsMetrics: async () => ({}) } as any,
+      new NoopGraphEventsPublisher(),
+      templateRegistryStub,
+      graphRepoStub,
+      createRunEventsStub() as any,
+    );
+
+    await expect(svc.listReminders('active', 5, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')).rejects.toThrow('db down');
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    const payload = logger.error.mock.calls[0][1];
+    expect(payload).toMatchObject({ filter: 'active', take: 5, threadId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' });
   });
 });

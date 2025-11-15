@@ -2,11 +2,12 @@ export type ThreadStatus = 'open' | 'closed';
 
 export type ThreadMetrics = {
   remindersCount: number;
+  containersCount: number;
   activity: 'working' | 'waiting' | 'idle';
   runsCount: number;
 };
 
-export type ReminderItem = {
+export type ThreadReminder = {
   id: string;
   threadId: string;
   note: string;
@@ -14,6 +15,8 @@ export type ReminderItem = {
   createdAt: string;
   completedAt: string | null;
 };
+
+export type ReminderItem = ThreadReminder;
 
 export type ThreadNode = {
   id: string;
