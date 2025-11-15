@@ -55,6 +55,36 @@ function tryParseJson(value: string) {
   }
 }
 
+function getSessionStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function readStoredMode(key: string): OutputMode | null {
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(key);
+    return isOutputMode(raw) ? raw : null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function writeStoredMode(key: string, mode: OutputMode) {
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(key, mode);
+  } catch (_err) {
+    // Ignore blocked storage writes
+  }
+}
+
 function looksLikeJsonString(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
@@ -153,23 +183,17 @@ function renderOutputByMode(mode: OutputMode, value: unknown) {
 function ToolOutputVisualization({ eventId, value }: { eventId: string; value: unknown }) {
   const storageKey = useMemo(() => `timeline-output-mode:${eventId}`, [eventId]);
   const [mode, setMode] = useState<OutputMode>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = window.sessionStorage.getItem(storageKey);
-      if (isOutputMode(stored)) return stored;
-    }
-    return determineDefaultMode(value);
+    return readStoredMode(storageKey) ?? determineDefaultMode(value);
   });
 
   useEffect(() => {
-    const stored = typeof window !== 'undefined' ? window.sessionStorage.getItem(storageKey) : null;
-    const nextMode = isOutputMode(stored) ? stored : determineDefaultMode(value);
+    const stored = readStoredMode(storageKey);
+    const nextMode = stored ?? determineDefaultMode(value);
     setMode((prev) => (prev === nextMode ? prev : nextMode));
   }, [storageKey, value]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(storageKey, mode);
-    }
+    writeStoredMode(storageKey, mode);
   }, [mode, storageKey]);
 
   const rendered = useMemo(() => renderOutputByMode(mode, value), [mode, value]);

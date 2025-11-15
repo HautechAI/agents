@@ -53,7 +53,11 @@ function buildEvent(overrides: Partial<RunTimelineEvent> = {}): RunTimelineEvent
 }
 
 beforeEach(() => {
-  window.sessionStorage.clear();
+  try {
+    window.sessionStorage.clear();
+  } catch (_err) {
+    // Ignored – storage may be unavailable in some environments
+  }
 });
 
 describe('RunTimelineEventDetails', () => {
@@ -157,5 +161,23 @@ describe('RunTimelineEventDetails', () => {
 
     render(<RunTimelineEventDetails event={event} />);
     expect(screen.queryByText(/"foo": "secret"/)).toBeNull();
+  });
+
+  it('does not crash when sessionStorage access is blocked', () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new Error('blocked');
+      },
+    });
+
+    expect(() => render(<RunTimelineEventDetails event={buildEvent()} />)).not.toThrow();
+
+    if (originalDescriptor) {
+      Object.defineProperty(window, 'sessionStorage', originalDescriptor);
+    } else {
+      delete (window as { sessionStorage?: Storage }).sessionStorage;
+    }
   });
 });
