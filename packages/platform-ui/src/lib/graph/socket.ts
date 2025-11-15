@@ -1,6 +1,6 @@
 // CI trigger: no-op comment to touch UI file
 import { io, type Socket } from 'socket.io-client';
-import { config } from '@/config';
+import { getSocketBaseUrl } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 import type { RunTimelineEvent, RunTimelineEventsCursor } from '@/api/types/agents';
 
@@ -55,6 +55,7 @@ class GraphSocket {
   private reconnectCallbacks = new Set<() => void>();
   private disconnectCallbacks = new Set<() => void>();
   private runCursors = new Map<string, RunTimelineEventsCursor>();
+  private loggedSocketBase = false;
 
   private compareCursors(a: RunTimelineEventsCursor, b: RunTimelineEventsCursor): number {
     const parsedA = Date.parse(a.ts);
@@ -93,8 +94,11 @@ class GraphSocket {
 
   connect(): Socket<ServerToClientEvents, ClientToServerEvents> {
     if (this.socket) return this.socket;
-    // Use centralized config for API base
-    const host = config.apiBaseUrl;
+    const host = getSocketBaseUrl();
+    if (import.meta.env?.DEV && !this.loggedSocketBase) {
+      this.loggedSocketBase = true;
+      console.info('[graphSocket] connecting to', host);
+    }
     // Cast to typed Socket to enable event payload typing
     this.socket = io(host, {
       path: '/socket.io',
