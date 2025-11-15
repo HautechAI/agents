@@ -3,23 +3,55 @@ import { Input } from '@agyn/ui';
 import type { StaticConfigViewProps } from './types';
 import ReferenceEnvField, { type EnvItem } from './shared/ReferenceEnvField';
 
+type VolumesFormState = {
+  enabled: boolean;
+  mountPath: string;
+};
+
+const DEFAULT_VOLUMES: VolumesFormState = { enabled: false, mountPath: '/workspace' };
+
+const parseVolumesConfig = (raw: unknown): VolumesFormState => {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_VOLUMES };
+  const candidate = raw as { enabled?: unknown; mountPath?: unknown };
+  const enabled = typeof candidate.enabled === 'boolean' ? candidate.enabled : DEFAULT_VOLUMES.enabled;
+  const mountPathCandidate =
+    typeof candidate.mountPath === 'string' && candidate.mountPath.trim().length > 0
+      ? candidate.mountPath
+      : DEFAULT_VOLUMES.mountPath;
+  return { enabled, mountPath: mountPathCandidate };
+};
+
 export default function WorkspaceConfigView({ value, onChange, readOnly, disabled, onValidate }: StaticConfigViewProps) {
-  const init = useMemo(() => ({ ...(value || {}) }), [value]);
+  const init = useMemo<Record<string, unknown>>(() => ({ ...(value || {}) }), [value]);
   const [image, setImage] = useState<string>((init.image as string) || '');
   const [env, setEnv] = useState<EnvItem[]>((init.env as EnvItem[]) || []);
   const [initialScript, setInitialScript] = useState<string>((init.initialScript as string) || '');
   const [platform, setPlatform] = useState<string>((init.platform as string) || '');
   const [enableDinD, setEnableDinD] = useState<boolean>(!!init.enableDinD);
   const [ttlSeconds, setTtlSeconds] = useState<number>(typeof init.ttlSeconds === 'number' ? (init.ttlSeconds as number) : 86400);
+  const initialVolumes = parseVolumesConfig(init.volumes);
+  const [volumesEnabled, setVolumesEnabled] = useState<boolean>(initialVolumes.enabled);
+  const [mountPath, setMountPath] = useState<string>(initialVolumes.mountPath);
+
+  const mountPathError = useMemo(() => {
+    if (!volumesEnabled) return '';
+    const trimmed = mountPath.trim();
+    if (!trimmed) return 'Mount path is required when volumes are enabled.';
+    if (!trimmed.startsWith('/')) return 'Mount path must be absolute.';
+    return '';
+  }, [volumesEnabled, mountPath]);
 
   const isDisabled = !!readOnly || !!disabled;
 
   useEffect(() => {
     const errors: string[] = [];
+    if (mountPathError) errors.push(mountPathError);
     onValidate?.(errors);
-  }, [image, onValidate]);
+  }, [image, mountPathError, onValidate]);
 
   useEffect(() => {
+    const normalizedMountPath = mountPath.trim() || '/workspace';
+    const nextVolumes = { enabled: volumesEnabled, mountPath: normalizedMountPath };
     const next = {
       ...value,
       image: image || undefined,
@@ -28,10 +60,11 @@ export default function WorkspaceConfigView({ value, onChange, readOnly, disable
       platform: platform || undefined,
       enableDinD,
       ttlSeconds,
+      volumes: nextVolumes,
     };
     if (JSON.stringify(value || {}) !== JSON.stringify(next)) onChange(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [image, JSON.stringify(env), initialScript, platform, enableDinD, ttlSeconds]);
+  }, [image, JSON.stringify(env), initialScript, platform, enableDinD, ttlSeconds, volumesEnabled, mountPath]);
 
   return (
     <div className="space-y-3 text-sm">
@@ -58,6 +91,33 @@ export default function WorkspaceConfigView({ value, onChange, readOnly, disable
       <div className="flex items-center gap-2">
         <input id="enableDinD" type="checkbox" className="h-4 w-4" checked={enableDinD} onChange={(e) => setEnableDinD(e.target.checked)} disabled={isDisabled} />
         <label htmlFor="enableDinD" className="text-xs">Enable Docker-in-Docker sidecar</label>
+      </div>
+      <div className="space-y-2 rounded border px-3 py-2">
+        <div className="flex items-center gap-2">
+          <input
+            id="enableVolumes"
+            type="checkbox"
+            className="h-4 w-4"
+            checked={volumesEnabled}
+            onChange={(e) => setVolumesEnabled(e.target.checked)}
+            disabled={isDisabled}
+          />
+          <label htmlFor="enableVolumes" className="text-xs">Enable persistent workspace volume</label>
+        </div>
+        <div>
+          <label htmlFor="mountPath" className="block text-xs mb-1">Mount path</label>
+          <Input
+            id="mountPath"
+            value={mountPath}
+            onChange={(e) => setMountPath(e.target.value)}
+            disabled={isDisabled || !volumesEnabled}
+            aria-invalid={volumesEnabled && !!mountPathError}
+            placeholder="/workspace"
+          />
+          {volumesEnabled && mountPathError && (
+            <p className="text-xs text-red-600 mt-1" role="alert">{mountPathError}</p>
+          )}
+        </div>
       </div>
       <div>
         <label htmlFor="ttlSeconds" className="block text-xs mb-1">Workspace TTL (seconds)</label>

@@ -21,6 +21,18 @@ const EnvItemSchema = z
   .strict()
   .describe('Environment variable entry. When source=vault, value is "<MOUNT>/<PATH>/<KEY>".');
 
+const VolumeConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false).describe('Enable persistent named volume mount for the workspace.'),
+    mountPath: z
+      .string()
+      .min(1)
+      .regex(/^\//, 'Mount path must be absolute')
+      .default('/workspace')
+      .describe('Absolute container path to mount the workspace volume.'),
+  })
+  .strict();
+
 export const ContainerProviderStaticConfigSchema = z
   .object({
     image: z.string().min(1).optional().describe('Optional container image override.'),
@@ -46,10 +58,12 @@ export const ContainerProviderStaticConfigSchema = z
       .describe('Idle TTL (seconds) before workspace cleanup; <=0 disables cleanup.'),
     // Optional Nix metadata (opaque to server; UI manages shape)
     nix: z.unknown().optional(),
+    volumes: VolumeConfigSchema.optional(),
   })
   .strict();
 
 export type ContainerProviderStaticConfig = z.infer<typeof ContainerProviderStaticConfigSchema>;
+type VolumeConfig = z.infer<typeof VolumeConfigSchema>;
 
 const DEFAULTS: ContainerOpts = {
   platform: 'linux/arm64',
@@ -145,6 +159,11 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       const DOCKER_MIRROR_URL =
         this.configService?.dockerMirrorUrl || process.env.DOCKER_MIRROR_URL || 'http://registry-mirror:5000';
       const enableDinD = this.config?.enableDinD ?? false;
+      const volumeConfig: VolumeConfig | undefined = this.config?.volumes;
+      const volumesEnabled = volumeConfig?.enabled ?? false;
+      const normalizedMountPath = volumesEnabled ? volumeConfig?.mountPath ?? DEFAULTS.workingDir : DEFAULTS.workingDir;
+      const volumeName = `ha_ws_${threadId}`;
+      const binds = volumesEnabled ? [`${volumeName}:${normalizedMountPath}`] : undefined;
       let envMerged: Record<string, string> | undefined = await (async () => {
         const base: Record<string, string> = Array.isArray(this.config.env)
           ? Object.fromEntries(
@@ -175,6 +194,8 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       const normalizedEnv: Record<string, string> | undefined = envMerged;
       container = await this.containerService.start({
         ...DEFAULTS,
+        workingDir: normalizedMountPath,
+        binds,
         image: this.config?.image ?? DEFAULTS.image,
         // Ensure env is in a format ContainerService understands (Record or string[]). envService returns Record.
         env: enableDinD ? { ...(normalizedEnv || {}), DOCKER_HOST: DOCKER_HOST_ENV } : normalizedEnv,

@@ -11,6 +11,7 @@ import {
   isExecIdleTimeoutError,
 } from '../../utils/execTimeout';
 import { ContainerRegistry } from './container.registry';
+import { mapInspectMounts } from './container.mounts';
 import { createUtf8Collector, demuxDockerMultiplex } from './containerStream.util';
 
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
@@ -187,6 +188,7 @@ export class ContainerService {
         const labels = inspect.Config?.Labels || {};
         const nodeId = labels['hautech.ai/node_id'] || 'unknown';
         const threadId = labels['hautech.ai/thread_id'] || '';
+        const mounts = mapInspectMounts(inspect.Mounts);
         await this.registry.registerStart({
           containerId: inspect.Id,
           nodeId,
@@ -196,6 +198,7 @@ export class ContainerService {
           labels,
           platform: optsWithDefaults.platform,
           ttlSeconds: optsWithDefaults.ttlSeconds,
+          mounts: mounts.length ? mounts : undefined,
         });
       } catch (e) {
         this.logger.error('Failed to register container start', e);

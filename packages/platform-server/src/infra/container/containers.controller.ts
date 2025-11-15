@@ -3,6 +3,7 @@ import { PrismaService } from '../../core/services/prisma.service';
 import { Prisma, type PrismaClient, type ContainerStatus } from '@prisma/client';
 import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import { sanitizeContainerMounts, type ContainerMount } from './container.mounts';
 
 // Allowed sort columns for containers list
 enum SortBy {
@@ -71,6 +72,7 @@ export class ContainersController {
     killAfterAt: string | null;
     role: 'workspace' | 'dind' | string;
     sidecars?: Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus }>;
+    mounts?: Array<{ source: string; destination: string }>;
   }> }> {
     try {
     const {
@@ -134,24 +136,19 @@ export class ContainersController {
     });
 
     // Narrow type guard for metadata.labels
-    type MetaWithLabels = { labels?: Record<string, unknown> };
-    const isMetaWithLabels = (v: unknown): v is MetaWithLabels => {
-      if (typeof v !== 'object' || v === null) return false;
-      const obj = v as Record<string, unknown>;
-      if (!('labels' in obj)) return false;
-      const lbl = (obj as { labels?: unknown }).labels;
-      return typeof lbl === 'object' && lbl !== null;
-    };
-    const metaLabelsOf = (m: unknown): Record<string, string> => {
-      if (!isMetaWithLabels(m)) return {};
-      const raw = (m.labels ?? {}) as Record<string, unknown>;
-      const out: Record<string, string> = {};
-      for (const [k, v] of Object.entries(raw)) if (typeof v === 'string') out[k] = v;
-      return out;
+    type MetadataShape = { labels?: Record<string, unknown>; mounts?: unknown };
+    const toMetadata = (value: unknown): { labels: Record<string, string>; mounts: ContainerMount[] } => {
+      if (!value || typeof value !== 'object') return { labels: {}, mounts: [] };
+      const meta = value as MetadataShape;
+      const rawLabels = meta.labels && typeof meta.labels === 'object' && meta.labels !== null ? meta.labels : {};
+      const labels: Record<string, string> = {};
+      for (const [key, val] of Object.entries(rawLabels)) if (typeof val === 'string') labels[key] = val;
+      const mounts = sanitizeContainerMounts(meta.mounts);
+      return { labels, mounts };
     };
     // Exclude DinD from top-level list (only attach as sidecars)
     const filteredRows = rows.filter((row) => {
-      const labels = metaLabelsOf(row.metadata);
+      const { labels } = toMetadata(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
       return role !== 'dind';
     });
@@ -181,7 +178,7 @@ export class ContainersController {
     const isStatus = (s: unknown): s is ContainerStatus =>
       typeof s === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(s);
     for (const sc of sidecarSource) {
-      const labels = metaLabelsOf(sc.metadata);
+      const { labels } = toMetadata(sc.metadata);
       const role = labels['hautech.ai/role'];
       const parent = labels['hautech.ai/parent_cid'];
       if (role !== 'dind') continue;
@@ -215,7 +212,7 @@ export class ContainersController {
         return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
       };
     const items = filteredRows.map((row) => {
-      const labels = metaLabelsOf(row.metadata);
+      const { labels, mounts } = toMetadata(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
       return {
         containerId: row.containerId,
@@ -227,6 +224,7 @@ export class ContainersController {
         killAfterAt: row.killAfterAt ? toIso(row.killAfterAt) : null,
         role,
         sidecars: byParent[row.containerId] || [],
+        mounts,
       };
     });
 

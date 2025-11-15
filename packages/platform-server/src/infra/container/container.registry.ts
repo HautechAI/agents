@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LoggerService } from '../../core/services/logger.service';
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { sanitizeContainerMounts, type ContainerMount } from './container.mounts';
 
 export type ContainerStatus = 'running' | 'stopped' | 'terminating' | 'failed';
 
@@ -13,6 +14,7 @@ export interface ContainerMetadata {
   retryAfter?: string; // ISO timestamp
   terminationAttempts?: number;
   claimId?: string;
+  mounts?: ContainerMount[];
 }
 
 @Injectable()
@@ -42,13 +44,16 @@ export class ContainerRegistry {
     labels?: Record<string, string>;
     platform?: string;
     ttlSeconds?: number;
+    mounts?: ContainerMount[];
   }): Promise<void> {
     const nowIso = new Date().toISOString();
     const killAfter = this.computeKillAfter(nowIso, args.ttlSeconds);
+    const mounts = sanitizeContainerMounts(args.mounts);
     const metadata: ContainerMetadata = {
       labels: args.labels ?? {},
       platform: args.platform,
       ttlSeconds: typeof args.ttlSeconds === 'number' ? args.ttlSeconds : 86400,
+      mounts: mounts.length > 0 ? mounts : undefined,
     };
     await this.prisma.container.upsert({
       where: { containerId: args.containerId },
@@ -148,7 +153,8 @@ export class ContainerRegistry {
     const retryAfter = typeof m.retryAfter === 'string' ? m.retryAfter : undefined;
     const terminationAttempts = typeof m.terminationAttempts === 'number' ? m.terminationAttempts : undefined;
     const claimId = typeof m.claimId === 'string' ? m.claimId : undefined;
-    return { labels, platform, ttlSeconds, lastError, retryAfter, terminationAttempts, claimId };
+    const mounts = sanitizeContainerMounts(m.mounts);
+    return { labels, platform, ttlSeconds, lastError, retryAfter, terminationAttempts, claimId, mounts: mounts.length ? mounts : undefined };
   }
 
   async getExpired(now: Date = new Date()) {
