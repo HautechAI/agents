@@ -1,13 +1,8 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { stringify as stringifyYaml } from 'yaml';
 import type { RunTimelineEvent } from '@/api/types/agents';
 import { STATUS_COLORS, formatDuration, getEventTypeLabel } from './runTimelineFormatting';
-
-const wrapStyle = {
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-  overflowWrap: 'anywhere',
-} satisfies CSSProperties;
+import { LLMContextViewer } from './LLMContextViewer';
 
 type Attachment = RunTimelineEvent['attachments'][number];
 
@@ -21,18 +16,18 @@ function formatJson(value: unknown): string {
 }
 
 function textBlock(value: string, tone: 'default' | 'muted' = 'default', className = '') {
-  const base = tone === 'muted' ? 'border bg-gray-50' : 'border bg-white';
+  const base = tone === 'muted' ? 'border border-gray-200 bg-gray-50' : 'border border-gray-200 bg-white';
   return (
-    <div className={`${base} px-3 py-2 text-[11px] text-gray-800 ${className}`} style={wrapStyle}>
+    <div className={`${base} content-wrap px-3 py-2 text-[11px] text-gray-800 ${className}`}>
       {value}
     </div>
   );
 }
 
 function jsonBlock(value: unknown, tone: 'default' | 'muted' = 'muted', className = '') {
-  const base = tone === 'muted' ? 'border bg-gray-50' : 'border bg-white';
+  const base = tone === 'muted' ? 'border border-gray-200 bg-gray-50' : 'border border-gray-200 bg-white';
   return (
-    <pre className={`${base} px-3 py-2 text-[11px] text-gray-800 ${className}`} style={wrapStyle}>
+    <pre className={`${base} content-wrap px-3 py-2 text-[11px] text-gray-800 ${className}`}>
       {formatJson(value)}
     </pre>
   );
@@ -150,7 +145,7 @@ function renderOutputByMode(mode: OutputMode, value: unknown) {
   }
   if (mode === 'yaml') {
     return (
-      <pre className="border bg-white px-3 py-2 text-[11px] text-gray-800" style={wrapStyle}>
+      <pre className="border border-gray-200 bg-white content-wrap px-3 py-2 text-[11px] text-gray-800">
         {formatYaml(value)}
       </pre>
     );
@@ -158,8 +153,7 @@ function renderOutputByMode(mode: OutputMode, value: unknown) {
   if (mode === 'terminal') {
     return (
       <pre
-        className="border border-gray-800 bg-gray-900 px-3 py-2 text-[11px] font-mono text-emerald-100"
-        style={{ ...wrapStyle, whiteSpace: 'pre' }}
+        className="content-pre border border-gray-800 bg-gray-900 px-3 py-2 text-[11px] font-mono text-emerald-100"
       >
         {typeof value === 'string' ? value : formatJson(value)}
       </pre>
@@ -168,13 +162,13 @@ function renderOutputByMode(mode: OutputMode, value: unknown) {
   const displayText = toText(value);
   if (mode === 'markdown') {
     return (
-      <pre className="px-3 py-2 text-[11px] text-gray-800" style={wrapStyle}>
+      <pre className="content-wrap px-3 py-2 text-[11px] text-gray-800">
         {displayText}
       </pre>
     );
   }
   return (
-    <pre className="px-3 py-2 text-[11px] text-gray-800" style={wrapStyle}>
+    <pre className="content-wrap px-3 py-2 text-[11px] text-gray-800">
       {displayText}
     </pre>
   );
@@ -215,8 +209,8 @@ function ToolOutputSection({
   const { mode, setMode, rendered } = useToolOutputMode(eventId, value);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col border">
-      <header className="flex items-center justify-between border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <div className="flex min-h-0 flex-1 flex-col rounded border border-gray-200 bg-white">
+      <header className="flex items-center justify-between border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
         <span>Output</span>
         <select
           aria-label="Select output view"
@@ -231,12 +225,14 @@ function ToolOutputSection({
           <option value="yaml">yaml</option>
         </select>
       </header>
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
-        <div className="overflow-auto">{rendered}</div>
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 py-2">
+        {rendered}
         {errorMessage && <div className="text-[11px] text-red-600">Error: {errorMessage}</div>}
         {attachments.map((att) => (
           <div key={att.id} className="space-y-1">
-            <div className="text-[11px] font-medium text-gray-800">Attachment ({att.id.slice(0, 8)})</div>
+            <div className="text-[10px] uppercase tracking-wide text-gray-500">
+              Attachment • {att.id.slice(0, 8)}{att.isGzip ? ' • gzipped' : ''}
+            </div>
             {renderAttachmentContent(att)}
           </div>
         ))}
@@ -308,30 +304,31 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
             </span>
           </div>
           <div className="flex min-h-[260px] flex-col gap-4 md:min-h-[320px] md:flex-row md:gap-6">
-            <div className="flex min-h-0 flex-1 flex-col border">
-              <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Context</header>
+            <div className="flex min-h-0 flex-1 flex-col rounded border border-gray-200 bg-white">
+              <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Context</header>
               <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-                {event.llmCall.contextItemIds.length > 0 ? textBlock(event.llmCall.contextItemIds.join('\n')) : null}
+                <LLMContextViewer ids={event.llmCall.contextItemIds} />
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col border">
-              <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Output</header>
-              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
-                {event.llmCall.responseText && (
-                  <div className="space-y-1">
-                    <div className="text-[11px] font-medium text-gray-800">Response</div>
-                    {textBlock(event.llmCall.responseText)}
-                  </div>
-                )}
-                {event.llmCall.toolCalls.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-medium text-gray-800">Tool calls ({event.llmCall.toolCalls.length})</div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4">
+              {event.llmCall.responseText && (
+                <div className="flex min-h-0 flex-col rounded border border-gray-200 bg-white">
+                  <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Response</header>
+                  <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">{textBlock(event.llmCall.responseText)}</div>
+                </div>
+              )}
+              {event.llmCall.toolCalls.length > 0 && (
+                <div className="flex min-h-0 flex-col rounded border border-gray-200 bg-white">
+                  <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Tool Calls ({event.llmCall.toolCalls.length})
+                  </header>
+                  <div className="flex-1 min-h-0 space-y-2 overflow-y-auto px-3 py-2">
                     {event.llmCall.toolCalls.map((tc) => (
                       <div key={tc.callId}>{jsonBlock({ callId: tc.callId, name: tc.name, arguments: tc.arguments })}</div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -353,16 +350,15 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
             )}
           </div>
           <div className="flex min-h-[220px] flex-col gap-4 md:min-h-[280px] md:flex-row md:gap-6">
-            <div className="flex min-h-0 flex-1 flex-col border">
-              <header className="border-b px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Input</header>
-              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
-                <div className="space-y-1">
-                  <div className="text-[11px] font-medium text-gray-800">Input payload</div>
-                  {jsonBlock(event.toolExecution.input)}
-                </div>
+            <div className="flex min-h-0 flex-1 flex-col rounded border border-gray-200 bg-white">
+              <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Input</header>
+              <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 py-2">
+                {jsonBlock(event.toolExecution.input, 'default')}
                 {toolInputAttachments.map((att) => (
                   <div key={att.id} className="space-y-1">
-                    <div className="text-[11px] font-medium text-gray-800">Attachment ({att.id.slice(0, 8)})</div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                      Attachment • {att.id.slice(0, 8)}{att.isGzip ? ' • gzipped' : ''}
+                    </div>
                     {renderAttachmentContent(att)}
                   </div>
                 ))}
@@ -426,7 +422,9 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
           <div className="space-y-3">
             {providerRawAttachments.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">Provider payloads ({providerRawAttachments.length})</div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                  Provider payloads ({providerRawAttachments.length})
+                </div>
                 {providerRawAttachments.map((att) => (
                   <div key={`provider-${att.id}`}>{renderAttachmentContent(att, 'muted')}</div>
                 ))}
@@ -434,7 +432,9 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
             )}
             {promptAttachments.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">Prompt attachments ({promptAttachments.length})</div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                  Prompt attachments ({promptAttachments.length})
+                </div>
                 {promptAttachments.map((att) => (
                   <div key={`prompt-${att.id}`}>{renderAttachmentContent(att)}</div>
                 ))}
@@ -442,7 +442,9 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
             )}
             {responseAttachments.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">Response attachments ({responseAttachments.length})</div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                  Response attachments ({responseAttachments.length})
+                </div>
                 {responseAttachments.map((att) => (
                   <div key={`response-${att.id}`}>{renderAttachmentContent(att)}</div>
                 ))}
@@ -450,8 +452,8 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
             )}
             {remainingAttachments.map((att) => (
               <div key={att.id} className="space-y-1">
-                <div className="text-[11px] font-medium text-gray-800">
-                  {att.kind} ({att.id.slice(0, 8)}) • {att.sizeBytes} bytes {att.isGzip ? '(gzipped)' : ''}
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                  {att.kind} • {att.id.slice(0, 8)} • {att.sizeBytes} bytes {att.isGzip ? '• gzipped' : ''}
                 </div>
                 {renderAttachmentContent(att)}
               </div>

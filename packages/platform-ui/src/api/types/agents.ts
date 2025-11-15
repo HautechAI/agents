@@ -36,6 +36,18 @@ export type RunMeta = {
 
 export type RunMessageItem = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text?: string | null; source: unknown; createdAt: string };
 
+export type ContextItemRole = 'system' | 'user' | 'assistant' | 'tool' | 'memory' | 'summary' | 'other';
+
+export type ContextItem = {
+  id: string;
+  role: ContextItemRole;
+  contentText: string | null;
+  contentJson: unknown;
+  metadata: unknown;
+  sizeBytes: number;
+  createdAt: string;
+};
+
 export type RunEventType = 'invocation_message' | 'injection' | 'llm_call' | 'tool_execution' | 'summarization';
 export type RunEventStatus = 'pending' | 'running' | 'success' | 'error' | 'cancelled';
 export type EventSourceKind = 'internal' | 'tracing';
