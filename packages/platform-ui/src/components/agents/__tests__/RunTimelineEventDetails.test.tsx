@@ -1,11 +1,22 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RunTimelineEventDetails } from '../RunTimelineEventDetails';
 import * as contextItemsModule from '@/api/hooks/contextItems';
+import type { UseContextItemsResult } from '@/api/hooks/contextItems';
 import type { ContextItem, RunTimelineEvent } from '@/api/types/agents';
+
+const waitForStableScrollResolvers: Array<() => void> = [];
+const waitForStableScrollHeightMock = vi.fn(() => new Promise<void>((resolve) => {
+  waitForStableScrollResolvers.push(resolve);
+}));
+
+vi.mock('../waitForStableScrollHeight', () => ({
+  waitForStableScrollHeight: (...args: unknown[]) => waitForStableScrollHeightMock(...args),
+  waitForStableScrollDefaults: { stableFrames: 3, timeoutMs: 1500 },
+}));
 
 function renderDetails(event: RunTimelineEvent) {
   const client = new QueryClient({
@@ -112,6 +123,8 @@ beforeEach(() => {
   } catch (_err) {
     // Ignored – storage may be unavailable in some environments
   }
+  waitForStableScrollHeightMock.mockClear();
+  waitForStableScrollResolvers.length = 0;
 });
 
 describe('RunTimelineEventDetails', () => {
@@ -522,5 +535,146 @@ describe('RunTimelineEventDetails', () => {
     } finally {
       useContextItemsSpy.mockRestore();
     }
+  });
+
+  it('preserves context scroll position when loading older items', async () => {
+    const user = userEvent.setup();
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    const older: ContextItem = {
+      id: 'ctx-older',
+      role: 'system',
+      contentText: 'System',
+      contentJson: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      sizeBytes: 12,
+      metadata: {},
+    };
+    const mid: ContextItem = {
+      id: 'ctx-mid',
+      role: 'user',
+      contentText: 'User',
+      contentJson: null,
+      createdAt: '2024-01-01T00:01:00.000Z',
+      sizeBytes: 18,
+      metadata: {},
+    };
+    const latest: ContextItem = {
+      id: 'ctx-new',
+      role: 'assistant',
+      contentText: 'Assistant',
+      contentJson: null,
+      createdAt: '2024-01-01T00:02:00.000Z',
+      sizeBytes: 24,
+      metadata: {},
+    };
+
+    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockImplementation((): UseContextItemsResult => {
+      const [stage, setStage] = React.useState<'initial' | 'loaded'>('initial');
+      const items = stage === 'initial' ? [mid, latest] : [older, mid, latest];
+      const hasMore = stage === 'initial';
+      const loadMore = () => setStage('loaded');
+
+      return {
+        items,
+        total: 3,
+        loadedCount: items.length,
+        targetCount: stage === 'initial' ? 2 : 3,
+        hasMore,
+        isInitialLoading: false,
+        isFetching: false,
+        error: null,
+        loadMore,
+      };
+    });
+
+    const event = buildEvent({
+      type: 'llm_call',
+      toolExecution: undefined,
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-test',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [older.id, mid.id, latest.id],
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [],
+      },
+    });
+
+    renderDetails(event);
+
+    const scroll = await screen.findByTestId('llm-context-scroll');
+
+    let scrollHeightValue = 1000;
+    let scrollTopValue = 1000;
+    const clientHeightValue = 200;
+
+    Object.defineProperty(scroll, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeightValue,
+    });
+    Object.defineProperty(scroll, 'clientHeight', {
+      configurable: true,
+      get: () => clientHeightValue,
+    });
+    Object.defineProperty(scroll, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTopValue,
+      set: (value) => {
+        scrollTopValue = value;
+      },
+    });
+
+    const scrollToMock = vi.fn((options: ScrollToOptions | number, maybeY?: number) => {
+      if (typeof options === 'number') {
+        scrollTopValue = options;
+        return;
+      }
+      if (typeof maybeY === 'number') {
+        scrollTopValue = maybeY;
+        return;
+      }
+      if (typeof options === 'object' && options && typeof options.top === 'number') {
+        scrollTopValue = options.top;
+      }
+    });
+    Object.defineProperty(scroll, 'scrollTo', {
+      configurable: true,
+      value: scrollToMock,
+      writable: true,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    scrollToMock.mockClear();
+    scrollTopValue = 800;
+
+    const loadButton = screen.getByRole('button', { name: /Load older context/i });
+    await act(async () => {
+      await user.click(loadButton);
+    });
+
+    scrollHeightValue = 1200;
+
+    expect(waitForStableScrollResolvers.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      waitForStableScrollResolvers.splice(0).forEach((resolve) => resolve());
+    });
+
+    await waitFor(() => {
+      expect(scrollTopValue).toBe(1000);
+    });
+    expect(waitForStableScrollHeightMock).toHaveBeenCalled();
+
+    useContextItemsSpy.mockRestore();
+    raf.mockRestore();
   });
 });

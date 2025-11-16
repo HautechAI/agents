@@ -6,6 +6,7 @@ import type { ContextItem } from '@/api/types/agents';
 type LLMContextViewerProps = {
   ids: readonly string[];
   onItemsRendered?: (items: ContextItem[]) => void;
+  onBeforeLoadMore?: () => void;
 };
 
 function formatBytes(value: number): string {
@@ -40,7 +41,7 @@ const ROLE_COLORS: Record<ContextItem['role'], string> = {
   other: 'bg-gray-500 text-white',
 };
 
-export function LLMContextViewer({ ids, onItemsRendered }: LLMContextViewerProps) {
+export function LLMContextViewer({ ids, onItemsRendered, onBeforeLoadMore }: LLMContextViewerProps) {
   const { items, hasMore, isInitialLoading, isFetching, error, loadMore, total, targetCount } = useContextItems(ids, {
     initialCount: 10,
   });
@@ -65,7 +66,10 @@ export function LLMContextViewer({ ids, onItemsRendered }: LLMContextViewerProps
         <button
           type="button"
           className="self-start rounded border border-gray-300 bg-white px-3 py-1 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-          onClick={loadMore}
+          onClick={() => {
+            onBeforeLoadMore?.();
+            loadMore();
+          }}
           disabled={isFetching}
         >
           Load older context ({displayedCount} of {total})

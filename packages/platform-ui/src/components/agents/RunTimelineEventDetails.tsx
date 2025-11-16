@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { stringify as stringifyYaml } from 'yaml';
-import type { RunTimelineEvent } from '@/api/types/agents';
+import type { ContextItem, RunTimelineEvent } from '@/api/types/agents';
 import { STATUS_COLORS, formatDuration, getEventTypeLabel } from './runTimelineFormatting';
 import { LLMContextViewer } from './LLMContextViewer';
+import { waitForStableScrollHeight } from './waitForStableScrollHeight';
 
 type Attachment = RunTimelineEvent['attachments'][number];
 
@@ -374,6 +375,10 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
   const hasLlmToolCalls = (llmCall?.toolCalls.length ?? 0) > 0;
   const toolExecution = event.toolExecution;
   const contextScrollRef = useRef<HTMLDivElement | null>(null);
+  const contextPrependSnapshotRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
+  const contextPendingPrependRef = useRef(false);
+  const contextPrevItemIdsRef = useRef<string[]>([]);
+  const contextAdjustTokenRef = useRef(0);
   const hasLlmCall = Boolean(llmCall);
   const contextItemsKey = llmCall ? `${event.id}:${llmCall.contextItemIds.join('|')}` : '';
 
@@ -399,12 +404,62 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
     }
   }, []);
 
-  const handleContextItemsRendered = useCallback((_: unknown) => {
-    scrollContextToBottom();
+  const handleContextItemsRendered = useCallback((items: ContextItem[]) => {
+    const prevIds = contextPrevItemIdsRef.current;
+    contextPrevItemIdsRef.current = items.map((item) => item.id);
+
+    if (contextPendingPrependRef.current) {
+      contextPendingPrependRef.current = false;
+      const snapshot = contextPrependSnapshotRef.current;
+      contextPrependSnapshotRef.current = null;
+      const container = contextScrollRef.current;
+
+      if (!container || !snapshot) return;
+
+      const token = ++contextAdjustTokenRef.current;
+
+      void (async () => {
+        await waitForStableScrollHeight(container);
+        if (contextAdjustTokenRef.current !== token) return;
+        const newScrollHeight = container.scrollHeight;
+        const delta = newScrollHeight - snapshot.prevScrollHeight;
+        const nextTop = Math.max(snapshot.prevScrollTop + delta, 0);
+        try {
+          container.scrollTop = nextTop;
+        } catch (_err) {
+          void _err;
+        }
+      })();
+
+      return;
+    }
+
+    const initialLoad = prevIds.length === 0 && items.length > 0;
+    const prevLastId = prevIds[prevIds.length - 1];
+    const currentLastId = items.length > 0 ? items[items.length - 1]?.id : undefined;
+    const appended = prevIds.length > 0 && currentLastId !== undefined && prevLastId !== currentLastId;
+
+    if (initialLoad || appended) {
+      scrollContextToBottom();
+    }
   }, [scrollContextToBottom]);
+
+  const handleBeforeLoadMore = useCallback(() => {
+    const container = contextScrollRef.current;
+    if (!container) return;
+    contextPrependSnapshotRef.current = {
+      prevScrollHeight: container.scrollHeight,
+      prevScrollTop: container.scrollTop,
+    };
+    contextPendingPrependRef.current = true;
+  }, []);
 
   useEffect(() => {
     if (!hasLlmCall) return;
+    contextPrevItemIdsRef.current = [];
+    contextPrependSnapshotRef.current = null;
+    contextPendingPrependRef.current = false;
+    contextAdjustTokenRef.current += 1;
     scrollContextToBottom();
   }, [hasLlmCall, contextItemsKey, scrollContextToBottom]);
 
@@ -447,7 +502,11 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-gray-200 bg-white">
                 <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Context</header>
                 <div ref={contextScrollRef} data-testid="llm-context-scroll" className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-                  <LLMContextViewer ids={llmCall.contextItemIds} onItemsRendered={handleContextItemsRendered} />
+                  <LLMContextViewer
+                    ids={llmCall.contextItemIds}
+                    onItemsRendered={handleContextItemsRendered}
+                    onBeforeLoadMore={handleBeforeLoadMore}
+                  />
                 </div>
               </div>
               {(hasLlmResponse || hasLlmToolCalls) && (
