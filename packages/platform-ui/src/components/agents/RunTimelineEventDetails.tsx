@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { stringify as stringifyYaml } from 'yaml';
 import type { RunTimelineEvent } from '@/api/types/agents';
 import { STATUS_COLORS, formatDuration, getEventTypeLabel } from './runTimelineFormatting';
@@ -376,6 +376,40 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
   const hasLlmResponse = Boolean(llmCall?.responseText);
   const hasLlmToolCalls = (llmCall?.toolCalls.length ?? 0) > 0;
   const toolExecution = event.toolExecution;
+  const contextScrollRef = useRef<HTMLDivElement | null>(null);
+  const hasLlmCall = Boolean(llmCall);
+  const contextItemsKey = llmCall ? `${event.id}:${llmCall.contextItemIds.join('|')}` : '';
+
+  const scrollContextToBottom = useCallback(() => {
+    const apply = () => {
+      const el = contextScrollRef.current;
+      if (!el) return;
+      try {
+        if (typeof el.scrollTo === 'function') {
+          el.scrollTo({ top: el.scrollHeight });
+        } else {
+          el.scrollTop = el.scrollHeight;
+        }
+      } catch (_err) {
+        el.scrollTop = el.scrollHeight;
+      }
+    };
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(apply);
+    } else {
+      apply();
+    }
+  }, []);
+
+  const handleContextItemsRendered = useCallback(() => {
+    scrollContextToBottom();
+  }, [scrollContextToBottom]);
+
+  useEffect(() => {
+    if (!hasLlmCall) return;
+    scrollContextToBottom();
+  }, [hasLlmCall, contextItemsKey, scrollContextToBottom]);
 
   return (
     <div
@@ -415,8 +449,8 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
             <div className="flex min-h-[260px] flex-1 flex-col gap-4 md:min-h-[320px] md:flex-row md:gap-6">
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-gray-200 bg-white">
                 <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Context</header>
-                <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-                  <LLMContextViewer ids={llmCall.contextItemIds} />
+                <div ref={contextScrollRef} data-testid="llm-context-scroll" className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
+                  <LLMContextViewer ids={llmCall.contextItemIds} onItemsRendered={handleContextItemsRendered} />
                 </div>
               </div>
               {(hasLlmResponse || hasLlmToolCalls) && (
