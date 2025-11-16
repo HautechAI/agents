@@ -46,7 +46,7 @@ export function LLMContextViewer({ ids, onItemsRendered }: LLMContextViewerProps
   });
 
   const emptyState = ids.length === 0;
-  const renderedCallbackRef = useRef<((items: ContextItem[]) => void) | undefined>();
+  const renderedCallbackRef = useRef<((items: ContextItem[]) => void) | undefined>(undefined);
   const displayedCount = useMemo(() => Math.min(targetCount, total), [targetCount, total]);
 
   renderedCallbackRef.current = onItemsRendered;
