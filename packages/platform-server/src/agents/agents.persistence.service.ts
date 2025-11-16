@@ -16,15 +16,23 @@ export type RunStartResult = { runId: string };
 
 @Injectable()
 export class AgentsPersistenceService {
+  private events: GraphEventsPublisher;
+
   constructor(
     @Inject(PrismaService) private prismaService: PrismaService,
     @Inject(LoggerService) private readonly logger: LoggerService,
     @Inject(ThreadsMetricsService) private readonly metrics: ThreadsMetricsService,
-    @Inject(GraphEventsPublisher) private readonly events: GraphEventsPublisher,
+    @Inject(GraphEventsPublisher) events: GraphEventsPublisher,
     @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
     @Inject(GraphRepository) private readonly graphs: GraphRepository,
     @Inject(RunEventsService) private readonly runEvents: RunEventsService,
-  ) {}
+  ) {
+    this.events = events;
+  }
+
+  setEventsPublisher(publisher: GraphEventsPublisher): void {
+    this.events = publisher;
+  }
 
   private get prisma(): PrismaClient {
     return this.prismaService.getClient();

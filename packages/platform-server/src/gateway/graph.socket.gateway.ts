@@ -1,4 +1,4 @@
-import { Inject, Injectable, Scope } from '@nestjs/common';
+import { Inject, Injectable, Optional, Scope } from '@nestjs/common';
 import type { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import type { ThreadStatus, MessageKind, RunStatus } from '@prisma/client';
 import type { GraphEventsPublisher, RunEventBroadcast } from './graph.events.publisher';
 import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 import { PrismaService } from '../core/services/prisma.service';
+import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 
 // Strict outbound event payloads
 export const NodeStatusEventSchema = z
@@ -66,7 +67,12 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
     @Inject(ThreadsMetricsService) private readonly metrics: ThreadsMetricsService,
     @Inject(PrismaService) private readonly prismaService: PrismaService,
-  ) {}
+    @Optional() @Inject(AgentsPersistenceService) persistence?: AgentsPersistenceService,
+  ) {
+    if (persistence && typeof persistence.setEventsPublisher === 'function') {
+      persistence.setEventsPublisher(this);
+    }
+  }
 
   /** Attach Socket.IO to the provided HTTP server. */
   init(params: { server: HTTPServer }): this {
