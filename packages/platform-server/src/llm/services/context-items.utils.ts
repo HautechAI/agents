@@ -5,6 +5,7 @@ import {
   HumanMessage,
   ResponseMessage,
   SystemMessage,
+  ToolCallMessage,
   ToolCallOutputMessage,
 } from '@agyn/llm';
 import { toPrismaJsonValue } from './messages.serialization';
@@ -155,7 +156,7 @@ export function contextItemInputFromMemory(message: SystemMessage, place: Memory
 }
 
 export function contextItemInputFromMessage(
-  message: SystemMessage | HumanMessage | AIMessage | ResponseMessage | ToolCallOutputMessage,
+  message: SystemMessage | HumanMessage | AIMessage | ResponseMessage | ToolCallMessage | ToolCallOutputMessage,
 ): ContextItemInput {
   if (message instanceof SystemMessage) return contextItemInputFromSystem(message);
   if (message instanceof HumanMessage) {
@@ -170,6 +171,20 @@ export function contextItemInputFromMessage(
       role: ContextItemRole.assistant,
       contentText: message.text,
       metadata: { type: message.type },
+    };
+  }
+  if (message instanceof ToolCallMessage) {
+    let args: unknown = null;
+    try {
+      args = message.args ? JSON.parse(message.args) : null;
+    } catch {
+      args = message.args;
+    }
+    return {
+      role: ContextItemRole.tool,
+      contentText: `Request: ${message.name} (id=${message.callId})`,
+      contentJson: args,
+      metadata: { type: message.type, callId: message.callId, name: message.name, phase: 'request' },
     };
   }
   if (message instanceof ToolCallOutputMessage) {

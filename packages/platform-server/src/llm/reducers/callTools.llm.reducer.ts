@@ -75,6 +75,13 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
     const toolsMap = this.createToolsMap();
     const nodeId = ctx?.callerAgent?.getAgentNodeId?.() ?? null;
     const llmEventId = state.meta?.lastLLMEventId ?? null;
+    const context = this.cloneContext(state.context);
+
+    if (toolsToCall.length > 0) {
+      const requestInputs = toolsToCall.map((msg) => contextItemInputFromMessage(msg));
+      const requestIds = await this.runEvents.createContextItems(requestInputs);
+      context.messageIds = [...context.messageIds, ...requestIds];
+    }
 
     const results = await Promise.all(
       toolsToCall.map(async (t) => {
@@ -273,8 +280,6 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
       restrictionInjectionCount: 0,
       restrictionInjected: false,
     };
-
-    const context = this.cloneContext(state.context);
     if (results.length > 0) {
       const inputs = results.map((msg) => contextItemInputFromMessage(msg));
       const created = await this.runEvents.createContextItems(inputs);
