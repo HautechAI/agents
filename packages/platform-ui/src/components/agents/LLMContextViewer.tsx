@@ -42,14 +42,14 @@ function renderMetadata(meta: ContextItem['metadata']) {
   }
 }
 
-const ROLE_COLORS: Record<ContextItem['role'], string> = {
-  system: 'bg-gray-900 text-white',
-  user: 'bg-emerald-600 text-white',
-  assistant: 'bg-sky-600 text-white',
-  tool: 'bg-amber-600 text-white',
-  memory: 'bg-purple-600 text-white',
-  summary: 'bg-indigo-600 text-white',
-  other: 'bg-gray-500 text-white',
+const ROLE_TEXT_COLORS: Record<ContextItem['role'], string> = {
+  system: 'text-gray-900',
+  user: 'text-emerald-600',
+  assistant: 'text-sky-600',
+  tool: 'text-amber-600',
+  memory: 'text-purple-600',
+  summary: 'text-indigo-600',
+  other: 'text-gray-600',
 };
 
 export function LLMContextViewer({ ids }: LLMContextViewerProps) {
@@ -69,32 +69,6 @@ export function LLMContextViewer({ ids }: LLMContextViewerProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      {items.map((item) => {
-        const metadataText = metadataById.get(item.id);
-        const textContent = toPlainText(item.contentText, item.contentJson);
-        const roleColor = ROLE_COLORS[item.role] ?? 'bg-gray-900 text-white';
-        return (
-          <article key={item.id} className="rounded border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-800 shadow-sm">
-            <header className="flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold normal-case ${roleColor}`}>
-                {item.role}
-              </span>
-              <span className="normal-case text-gray-600">{new Date(item.createdAt).toLocaleString()}</span>
-              <span className="normal-case text-gray-500">{formatBytes(item.sizeBytes)}</span>
-            </header>
-            {textContent ? <div className="mt-2 content-wrap text-gray-800">{textContent}</div> : null}
-            {metadataText ? (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-[10px] uppercase tracking-wide text-gray-500">Metadata</summary>
-                <pre className="mt-1 content-wrap text-gray-700">{metadataText}</pre>
-              </details>
-            ) : null}
-          </article>
-        );
-      })}
-
-      {isInitialLoading && <div className="text-[11px] text-gray-500">Loading context…</div>}
-      {!!error && !isInitialLoading && <div className="text-[11px] text-red-600">Failed to load context items</div>}
       {hasMore && (
         <button
           type="button"
@@ -105,6 +79,31 @@ export function LLMContextViewer({ ids }: LLMContextViewerProps) {
           Load older context ({displayedCount} of {total})
         </button>
       )}
+
+      {items.map((item) => {
+        const metadataText = metadataById.get(item.id);
+        const textContent = toPlainText(item.contentText, item.contentJson);
+        const roleTextClass = ROLE_TEXT_COLORS[item.role] ?? 'text-gray-600';
+        return (
+          <article key={item.id} className="space-y-2 text-[11px] text-gray-800">
+            <header className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              <span className={`normal-case ${roleTextClass}`}>{item.role}</span>
+              <span className="normal-case text-gray-600">{new Date(item.createdAt).toLocaleString()}</span>
+              <span className="normal-case text-gray-500">{formatBytes(item.sizeBytes)}</span>
+            </header>
+            {textContent ? <div className="content-wrap text-gray-800">{textContent}</div> : null}
+            {metadataText ? (
+              <div className="space-y-1 text-[10px] text-gray-500">
+                <div className="uppercase tracking-wide">Metadata</div>
+                <pre className="content-wrap text-[11px] text-gray-700">{metadataText}</pre>
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
+
+      {isInitialLoading && <div className="text-[11px] text-gray-500">Loading context…</div>}
+      {!!error && !isInitialLoading && <div className="text-[11px] text-red-600">Failed to load context items</div>}
       {isFetching && !isInitialLoading && <div className="text-[11px] text-gray-500">Loading…</div>}
       {!error && !isFetching && !isInitialLoading && items.length === 0 && displayedCount > 0 && (
         <div className="text-[11px] text-gray-500">No context items available.</div>
