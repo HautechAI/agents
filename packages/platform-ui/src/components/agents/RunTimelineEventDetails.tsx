@@ -380,7 +380,11 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
     const frame = requestAnimationFrame(() => {
       const node = contextScrollRef.current;
       if (node) {
-        node.scrollTo({ top: node.scrollHeight });
+        if (typeof node.scrollTo === 'function') {
+          node.scrollTo({ top: node.scrollHeight, behavior: 'auto' });
+        } else {
+          node.scrollTop = node.scrollHeight;
+        }
       }
     });
     return () => cancelAnimationFrame(frame);
