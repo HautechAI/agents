@@ -69,6 +69,7 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
   }, [items, atBottom, scrollToBottom]);
 
   React.useEffect(() => {
+    if (!activeThreadId) return;
     prevCount.current = 0;
     setAtBottom(true);
     const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb: FrameRequestCallback) => window.setTimeout(cb, 0);

@@ -36,11 +36,59 @@ function makeScrollable(element: HTMLElement, { scrollHeight, clientHeight, scro
 }
 
 describe('RunMessageList', () => {
+  let rafSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let cafSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let originalRaf: typeof globalThis.requestAnimationFrame | undefined;
+  let originalCancelRaf: typeof globalThis.cancelAnimationFrame | undefined;
+
   beforeEach(() => {
     vi.useFakeTimers();
+    originalRaf = globalThis.requestAnimationFrame;
+    originalCancelRaf = globalThis.cancelAnimationFrame;
+
+    if (originalRaf) {
+      rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      });
+    } else {
+      // @ts-expect-error jsdom typings
+      globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      };
+    }
+    if (originalCancelRaf) {
+      cafSpy = vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(() => {});
+    } else {
+      // @ts-expect-error jsdom typings
+      globalThis.cancelAnimationFrame = () => {};
+    }
   });
 
   afterEach(() => {
+    cafSpy?.mockRestore();
+    rafSpy?.mockRestore();
+    if (!rafSpy) {
+      if (originalRaf) {
+        globalThis.requestAnimationFrame = originalRaf;
+      } else {
+        // @ts-expect-error jsdom typings
+        delete globalThis.requestAnimationFrame;
+      }
+    }
+    if (!cafSpy) {
+      if (originalCancelRaf) {
+        globalThis.cancelAnimationFrame = originalCancelRaf;
+      } else {
+        // @ts-expect-error jsdom typings
+        delete globalThis.cancelAnimationFrame;
+      }
+    }
+    originalRaf = undefined;
+    originalCancelRaf = undefined;
+    cafSpy = undefined;
+    rafSpy = undefined;
     vi.useRealTimers();
   });
 
@@ -74,9 +122,15 @@ describe('RunMessageList', () => {
     makeScrollable(list, { scrollHeight: 200, clientHeight: 100, scrollTop: 0 });
 
     act(() => {
+      vi.runAllTimers();
+    });
+
+    act(() => {
+      list.scrollTop = 0;
       fireEvent.scroll(list);
     });
 
+    expect(list.scrollTop).toBe(0);
     expect(screen.getByTestId('jump-to-latest').className).toMatch(/bottom-3/);
   });
 });
