@@ -55,7 +55,6 @@ class GraphSocket {
   private reconnectCallbacks = new Set<() => void>();
   private disconnectCallbacks = new Set<() => void>();
   private runCursors = new Map<string, RunTimelineEventsCursor>();
-  private loggedSocketBase = false;
 
   private compareCursors(a: RunTimelineEventsCursor, b: RunTimelineEventsCursor): number {
     const parsedA = Date.parse(a.ts);
@@ -95,10 +94,6 @@ class GraphSocket {
   connect(): Socket<ServerToClientEvents, ClientToServerEvents> {
     if (this.socket) return this.socket;
     const host = getSocketBaseUrl();
-    if (import.meta.env?.DEV && !this.loggedSocketBase) {
-      this.loggedSocketBase = true;
-      console.info('[graphSocket] connecting to', host);
-    }
     // Cast to typed Socket to enable event payload typing
     this.socket = io(host, {
       path: '/socket.io',
@@ -141,12 +136,24 @@ class GraphSocket {
       if (set) for (const fn of set) fn(payload);
     });
     // Threads events
-    this.socket.on('thread_created', (payload: ThreadCreatedPayload) => { for (const fn of this.threadCreatedListeners) fn(payload); });
-    this.socket.on('thread_updated', (payload: ThreadUpdatedPayload) => { for (const fn of this.threadUpdatedListeners) fn(payload); });
-    this.socket.on('thread_activity_changed', (payload: ThreadActivityPayload) => { for (const fn of this.threadActivityListeners) fn(payload); });
-    this.socket.on('thread_reminders_count', (payload: ThreadRemindersPayload) => { for (const fn of this.threadRemindersListeners) fn(payload); });
-    this.socket.on('message_created', (payload: MessageCreatedPayload) => { for (const fn of this.messageCreatedListeners) fn(payload); });
-    this.socket.on('run_status_changed', (payload: RunStatusChangedPayload) => { for (const fn of this.runStatusListeners) fn(payload); });
+    this.socket.on('thread_created', (payload: ThreadCreatedPayload) => {
+      for (const fn of this.threadCreatedListeners) fn(payload);
+    });
+    this.socket.on('thread_updated', (payload: ThreadUpdatedPayload) => {
+      for (const fn of this.threadUpdatedListeners) fn(payload);
+    });
+    this.socket.on('thread_activity_changed', (payload: ThreadActivityPayload) => {
+      for (const fn of this.threadActivityListeners) fn(payload);
+    });
+    this.socket.on('thread_reminders_count', (payload: ThreadRemindersPayload) => {
+      for (const fn of this.threadRemindersListeners) fn(payload);
+    });
+    this.socket.on('message_created', (payload: MessageCreatedPayload) => {
+      for (const fn of this.messageCreatedListeners) fn(payload);
+    });
+    this.socket.on('run_status_changed', (payload: RunStatusChangedPayload) => {
+      for (const fn of this.runStatusListeners) fn(payload);
+    });
     this.socket.on('run_event_appended', (payload: RunEventSocketPayload) => {
       this.bumpRunCursor(payload.runId, { ts: payload.event.ts, id: payload.event.id });
       for (const fn of this.runEventListeners) fn(payload);

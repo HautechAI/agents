@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { MessageKind, Prisma, PrismaClient, RunMessageType, RunStatus, ThreadStatus } from '@prisma/client';
 import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
-import { GraphEventsPublisher } from '../gateway/graph.events.publisher';
+import { GraphEventsPublisher, type GraphEventsPublisherAware } from '../gateway/graph.events.publisher';
 import { GraphRepository } from '../graph/graph.repository';
 import { TemplateRegistry } from '../graph/templateRegistry';
 import type { PersistedGraphNode } from '../graph/types';
@@ -15,16 +15,24 @@ import { ThreadsMetricsService, type ThreadMetrics } from './threads.metrics.ser
 export type RunStartResult = { runId: string };
 
 @Injectable()
-export class AgentsPersistenceService {
+export class AgentsPersistenceService implements GraphEventsPublisherAware {
+  private events: GraphEventsPublisher;
+
   constructor(
     @Inject(PrismaService) private prismaService: PrismaService,
     @Inject(LoggerService) private readonly logger: LoggerService,
     @Inject(ThreadsMetricsService) private readonly metrics: ThreadsMetricsService,
-    @Inject(GraphEventsPublisher) private readonly events: GraphEventsPublisher,
+    @Inject(GraphEventsPublisher) events: GraphEventsPublisher,
     @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
     @Inject(GraphRepository) private readonly graphs: GraphRepository,
     @Inject(RunEventsService) private readonly runEvents: RunEventsService,
-  ) {}
+  ) {
+    this.events = events;
+  }
+
+  setEventsPublisher(publisher: GraphEventsPublisher): void {
+    this.events = publisher;
+  }
 
   private get prisma(): PrismaClient {
     return this.prismaService.getClient();
