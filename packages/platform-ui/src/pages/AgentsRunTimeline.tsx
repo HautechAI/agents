@@ -35,28 +35,25 @@ function matchesFilters(event: RunTimelineEvent, types: RunEventType[], statuses
   return typeOk && statusOk;
 }
 
-function mergeEvents(
-  prev: RunTimelineEvent[],
-  incoming: RunTimelineEvent[],
+function mergeEvents(prev: RunTimelineEvent[], incoming: RunTimelineEvent[]): RunTimelineEvent[] {
+  if (incoming.length === 0) return prev;
+  const byId = new Map<string, RunTimelineEvent>();
+  for (const existing of prev) {
+    byId.set(existing.id, existing);
+  }
+  for (const event of incoming) {
+    byId.set(event.id, event);
+  }
+  return sortEvents(Array.from(byId.values()));
+}
+
+function filterVisibleEvents(
+  events: RunTimelineEvent[],
   types: RunEventType[],
   statuses: RunEventStatus[],
 ): RunTimelineEvent[] {
-  if (incoming.length === 0) return prev;
-  const next = [...prev];
-  for (const event of incoming) {
-    const idx = next.findIndex((existing) => existing.id === event.id);
-    const include = matchesFilters(event, types, statuses);
-    if (idx >= 0) {
-      if (include) {
-        next[idx] = event;
-      } else {
-        next.splice(idx, 1);
-      }
-    } else if (include) {
-      next.push(event);
-    }
-  }
-  return sortEvents(next);
+  if (events.length === 0) return [];
+  return events.filter((event) => matchesFilters(event, types, statuses));
 }
 
 function compareCursors(a: RunTimelineEventsCursor, b: RunTimelineEventsCursor): number {
@@ -113,7 +110,11 @@ export function AgentsRunTimeline() {
 
   const summaryQuery = useRunTimelineSummary(runId);
   const eventsQuery = useRunTimelineEvents(runId, { types: apiTypes, statuses: apiStatuses });
-  const [events, setEvents] = useState<RunTimelineEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<RunTimelineEvent[]>([]);
+  const visibleEvents = useMemo(
+    () => filterVisibleEvents(allEvents, selectedTypes, selectedStatuses),
+    [allEvents, selectedTypes, selectedStatuses],
+  );
   const cursorRef = useRef<RunTimelineEventsCursor | null>(null);
   const catchUpRef = useRef<Promise<unknown> | null>(null);
 
@@ -136,7 +137,7 @@ export function AgentsRunTimeline() {
 
   const updateEventsState = useCallback(
     (updater: (prev: RunTimelineEvent[]) => RunTimelineEvent[]) => {
-      setEvents((prev) => {
+      setAllEvents((prev) => {
         const next = updater(prev);
         const latest = next[next.length - 1];
         if (latest) setCursor(toCursor(latest));
@@ -147,7 +148,7 @@ export function AgentsRunTimeline() {
   );
 
   useEffect(() => {
-    setEvents([]);
+    setAllEvents([]);
     if (!runId) {
       cursorRef.current = null;
       return;
@@ -158,10 +159,14 @@ export function AgentsRunTimeline() {
 
   useEffect(() => {
     if (!eventsQuery.data) return;
-    const sorted = sortEvents(eventsQuery.data.items ?? []);
-    setEvents(sorted);
-    const latest = sorted[sorted.length - 1];
-    setCursor(latest ? toCursor(latest) : null, { force: true });
+    const items = eventsQuery.data.items ?? [];
+    const sorted = sortEvents(items);
+    setAllEvents((prev) => {
+      const merged = mergeEvents(prev, sorted);
+      const latest = merged[merged.length - 1] ?? null;
+      setCursor(latest ? toCursor(latest) : null, { force: true });
+      return merged;
+    });
   }, [eventsQuery.data, setCursor]);
 
   const fetchSinceCursor = useCallback(() => {
@@ -181,14 +186,15 @@ export function AgentsRunTimeline() {
       try {
         const response = await runs.timelineEvents(runId, {
           types: apiTypes.length > 0 ? apiTypes.join(',') : undefined,
+          statuses: apiStatuses.length > 0 ? apiStatuses.join(',') : undefined,
           cursorTs: cursor.ts,
           cursorId: cursor.id,
         });
         const items = response.items ?? [];
         if (items.length > 0) {
-          updateEventsState((prev) => mergeEvents(prev, items, selectedTypes, selectedStatuses));
-          const newest = items[items.length - 1];
-          if (newest) setCursor(toCursor(newest));
+          updateEventsState((prev) => mergeEvents(prev, items));
+        } else {
+          await eventsQuery.refetch();
         }
       } catch (_err) {
         await eventsQuery.refetch();
@@ -199,7 +205,7 @@ export function AgentsRunTimeline() {
       catchUpRef.current = null;
     });
     return catchUpRef.current;
-  }, [runId, apiTypes, selectedTypes, selectedStatuses, eventsQuery, updateEventsState, setCursor]);
+  }, [runId, apiTypes, apiStatuses, eventsQuery, updateEventsState]);
 
   useEffect(() => {
     if (!runId) return;
@@ -207,8 +213,7 @@ export function AgentsRunTimeline() {
     graphSocket.subscribe([room]);
     const off = graphSocket.onRunEvent(({ runId: incomingRunId, event }) => {
       if (incomingRunId !== runId) return;
-      updateEventsState((prev) => mergeEvents(prev, [event], selectedTypes, selectedStatuses));
-      setCursor(toCursor(event));
+      updateEventsState((prev) => mergeEvents(prev, [event]));
       summaryQuery.refetch();
     });
     const offStatus = graphSocket.onRunStatusChanged(({ run }) => {
@@ -224,7 +229,7 @@ export function AgentsRunTimeline() {
       offReconnect();
       graphSocket.unsubscribe([room]);
     };
-  }, [runId, selectedTypes, selectedStatuses, summaryQuery, updateEventsState, setCursor, fetchSinceCursor]);
+  }, [runId, summaryQuery, updateEventsState, fetchSinceCursor]);
 
   const isDefaultFilters = selectedTypes.length === EVENT_TYPES.length && selectedStatuses.length === 0;
 
@@ -304,7 +309,7 @@ export function AgentsRunTimeline() {
   );
 
   const selectedEventId = searchParams.get('eventId');
-  const selectedEvent = selectedEventId ? events.find((evt) => evt.id === selectedEventId) : undefined;
+  const selectedEvent = selectedEventId ? visibleEvents.find((evt) => evt.id === selectedEventId) : undefined;
   const isMdUp = useMediaQuery('(min-width: 768px)');
   const listRef = useRef<HTMLDivElement | null>(null);
   const selectedItemRef = useRef<HTMLDivElement | null>(null);
@@ -336,23 +341,23 @@ export function AgentsRunTimeline() {
 
   useEffect(() => {
     const itemsCount = eventsQuery.data?.items?.length ?? 0;
-    if (!events.length) {
+    if (!visibleEvents.length) {
       if (selectedEventId && !eventsQuery.isFetching && itemsCount === 0) {
         clearSelection();
       }
       return;
     }
     if (selectedEventId) {
-      const exists = events.some((evt) => evt.id === selectedEventId);
+      const exists = visibleEvents.some((evt) => evt.id === selectedEventId);
       if (!exists && isMdUp && !eventsQuery.isFetching) {
-        selectEvent(events[0].id, { focus: false });
+        selectEvent(visibleEvents[0].id, { focus: false });
       }
       return;
     }
     if (isMdUp && !eventsQuery.isFetching) {
-      selectEvent(events[0].id, { focus: false });
+      selectEvent(visibleEvents[0].id, { focus: false });
     }
-  }, [events, selectedEventId, selectEvent, clearSelection, isMdUp, eventsQuery.isFetching, eventsQuery.data]);
+  }, [visibleEvents, selectedEventId, selectEvent, clearSelection, isMdUp, eventsQuery.isFetching, eventsQuery.data]);
 
   useEffect(() => {
     const node = selectedItemRef.current;
@@ -363,29 +368,29 @@ export function AgentsRunTimeline() {
 
   const handleListKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (!events.length) return;
-      const currentIndex = selectedEventId ? events.findIndex((evt) => evt.id === selectedEventId) : -1;
+      if (!visibleEvents.length) return;
+      const currentIndex = selectedEventId ? visibleEvents.findIndex((evt) => evt.id === selectedEventId) : -1;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const nextIndex = currentIndex < 0 ? 0 : Math.min(events.length - 1, currentIndex + 1);
-        const nextEvent = events[nextIndex];
+        const nextIndex = currentIndex < 0 ? 0 : Math.min(visibleEvents.length - 1, currentIndex + 1);
+        const nextEvent = visibleEvents[nextIndex];
         if (nextEvent) selectEvent(nextEvent.id, { focus: false });
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         const nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
-        const nextEvent = events[nextIndex];
+        const nextEvent = visibleEvents[nextIndex];
         if (nextEvent) selectEvent(nextEvent.id, { focus: false });
       } else if (e.key === 'Home') {
         e.preventDefault();
-        const nextEvent = events[0];
+        const nextEvent = visibleEvents[0];
         if (nextEvent) selectEvent(nextEvent.id, { focus: false });
       } else if (e.key === 'End') {
         e.preventDefault();
-        const nextEvent = events[events.length - 1];
+        const nextEvent = visibleEvents[visibleEvents.length - 1];
         if (nextEvent) selectEvent(nextEvent.id, { focus: false });
       }
     },
-    [events, selectedEventId, selectEvent],
+    [visibleEvents, selectedEventId, selectEvent],
   );
 
   const handleSelect = useCallback(
@@ -483,7 +488,7 @@ export function AgentsRunTimeline() {
               Events
             </header>
             <div className="px-3 py-2 text-xs text-gray-500" aria-live="polite">
-              {events.length === 0 && !eventsQuery.isFetching ? 'No events for selected filters.' : null}
+              {visibleEvents.length === 0 && !eventsQuery.isFetching ? 'No events for selected filters.' : null}
             </div>
             <div
               ref={listRef}
@@ -495,7 +500,7 @@ export function AgentsRunTimeline() {
               onKeyDown={handleListKeyDown}
               className="flex-1 min-h-0 space-y-2 overflow-y-auto focus:outline-none"
             >
-              {events.map((event) => (
+              {visibleEvents.map((event) => (
                 <RunTimelineEventListItem
                   key={event.id}
                   event={event}

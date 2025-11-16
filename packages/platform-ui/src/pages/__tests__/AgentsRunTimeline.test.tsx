@@ -413,6 +413,7 @@ describe('AgentsRunTimeline socket reactions', () => {
     await waitFor(() => expect(runsModule.timelineEvents).toHaveBeenCalledTimes(1));
     expect(runsModule.timelineEvents).toHaveBeenCalledWith('run-1', expect.objectContaining({
       types: undefined,
+      statuses: undefined,
       cursorTs: appended.ts,
       cursorId: appended.id,
     }));
@@ -422,5 +423,114 @@ describe('AgentsRunTimeline socket reactions', () => {
 
     expect(getByTestId('timeline-event-details')).toBeInTheDocument();
     unmount();
+  });
+
+  it('falls back to full refetch when reconnect delta is empty', async () => {
+    renderPage(['/agents/threads/thread-1/runs/run-1?eventId=event-1']);
+
+    const appended = buildEvent({
+      id: 'event-3',
+      ts: '2024-01-01T00:00:03.000Z',
+      type: 'summarization',
+      toolExecution: undefined,
+      summarization: {
+        summaryText: 'cache me',
+        newContextCount: 0,
+        oldContextTokens: null,
+        raw: null,
+      },
+    });
+
+    await act(async () => {
+      socketMocks.runEvent?.({ runId: 'run-1', event: appended, mutation: 'append' });
+    });
+
+    runsModule.timelineEvents.mockResolvedValue({ items: [], nextCursor: null });
+
+    await act(async () => {
+      socketMocks.reconnect?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(runsModule.timelineEvents).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(eventsRefetch).toHaveBeenCalledTimes(1));
+  });
+
+  it('refetches when reconnect delta errors', async () => {
+    renderPage(['/agents/threads/thread-1/runs/run-1']);
+
+    const appended = buildEvent({ id: 'event-3', ts: '2024-01-01T00:00:03.000Z' });
+
+    await act(async () => {
+      socketMocks.runEvent?.({ runId: 'run-1', event: appended, mutation: 'append' });
+    });
+
+    runsModule.timelineEvents.mockRejectedValue(new Error('network boom'));
+
+    await act(async () => {
+      socketMocks.reconnect?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(runsModule.timelineEvents).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(eventsRefetch).toHaveBeenCalledTimes(1));
+  });
+
+  it('retains realtime events hidden by filters and reveals them when filters restore', async () => {
+    const baseEvents = [buildEvent(), buildEvent({
+      id: 'event-2',
+      ts: '2024-01-01T00:00:02.000Z',
+      type: 'llm_call',
+      toolExecution: undefined,
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-4',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [],
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [],
+      },
+    })];
+
+    eventsMock.mockImplementation(() => ({
+      data: { items: baseEvents, nextCursor: null },
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    }));
+
+    const { getByRole, queryByText, findByText } = renderPage([
+      '/agents/threads/thread-1/runs/run-1',
+    ]);
+
+    const summariesToggle = getByRole('button', { name: 'Summaries' });
+    fireEvent.click(summariesToggle);
+
+    const hidden = buildEvent({
+      id: 'event-3',
+      ts: '2024-01-01T00:00:03.000Z',
+      type: 'summarization',
+      toolExecution: undefined,
+      summarization: {
+        summaryText: 'runtime',
+        newContextCount: 1,
+        oldContextTokens: null,
+        raw: null,
+      },
+    });
+
+    await act(async () => {
+      socketMocks.runEvent?.({ runId: 'run-1', event: hidden, mutation: 'append' });
+    });
+
+    expect(queryByText('Summarization')).toBeNull();
+
+    fireEvent.click(summariesToggle);
+
+    await findByText('Summarization');
   });
 });
