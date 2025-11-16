@@ -539,6 +539,10 @@ describe('RunTimelineEventDetails', () => {
 
   it('preserves context scroll position when loading older items', async () => {
     const user = userEvent.setup();
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
     const older: ContextItem = {
       id: 'ctx-older',
       role: 'system',
@@ -671,5 +675,6 @@ describe('RunTimelineEventDetails', () => {
     expect(waitForStableScrollHeightMock).toHaveBeenCalled();
 
     useContextItemsSpy.mockRestore();
+    raf.mockRestore();
   });
 });
