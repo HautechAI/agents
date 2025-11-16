@@ -19,6 +19,6 @@ describe('ContextView head collapse', () => {
     render(<ContextView messages={msgs()} title="Ctx" />);
     // Should render the collapse button; rely on role button and partial accessible name only if necessary
     const btns = screen.getAllByRole('button');
-    expect(btns.some(b => /Show previous/.test(b.textContent || ''))).toBe(true);
+    expect(btns.some(b => /Load older context/.test(b.textContent || ''))).toBe(true);
   });
 });

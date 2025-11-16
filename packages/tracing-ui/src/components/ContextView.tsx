@@ -60,41 +60,43 @@ export function ContextView({ messages, title = 'Context', collapse = true, styl
   }, [historyCollapsed, collapseEnabled, pivotAiIndex, contextMessages]);
 
   return (
-    <div data-testid="obsui-context-view" style={{ display: 'flex', flexDirection: 'column', gap: 8, ...style }}>
+    <div
+      data-testid="obsui-context-view"
+      style={{ display: 'flex', flexDirection: 'column', gap: 12, ...style }}
+    >
       {title && <h3 style={{ margin: '0 0 4px 0', fontSize: 13 }}>{title}</h3>}
-      {contextMessages.length === 0 && <div style={{ fontSize: 12, color: '#666' }}>(empty)</div>}
       {collapseEnabled && historyCollapsed && (
-        <div style={{ textAlign: 'center' }}>
-          <button
-            data-testid="obsui-context-toggle-show"
-            onClick={() => setHistoryCollapsed(false)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#0366d6',
-              fontSize: 11,
-              textDecoration: 'underline',
-              padding: '4px 8px',
-            }}
-          >
-            {`Show previous (${pivotAiIndex + 1} hidden)`}
-          </button>
-        </div>
+        <button
+          data-testid="obsui-context-toggle-show"
+          onClick={() => setHistoryCollapsed(false)}
+          style={{
+            alignSelf: 'flex-start',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#0366d6',
+            fontSize: 11,
+            padding: 0,
+            textDecoration: 'underline',
+          }}
+        >
+          {`Load older context (${pivotAiIndex + 1} hidden)`}
+        </button>
       )}
+      {contextMessages.length === 0 && <div style={{ fontSize: 12, color: '#666' }}>(empty)</div>}
       {collapseEnabled &&
         historyCollapsed &&
         visibleMessageIndices.map((i) => {
           const m = contextMessages[i] as ContextMessageLike;
-          return <MessageCard key={i} index={i} message={m} />;
+          return <MessageCard key={i} message={m} />;
         })}
       {!collapseEnabled &&
-        contextMessages.map((m, i) => <MessageCard key={i} index={i} message={m as ContextMessageLike} />)}
+        contextMessages.map((m, i) => <MessageCard key={i} message={m as ContextMessageLike} />)}
       {collapseEnabled && !historyCollapsed && (
         <>
           {contextMessages.map((m, i) => (
             <React.Fragment key={i}>
-              <MessageCard index={i} message={m as ContextMessageLike} />
+              <MessageCard message={m as ContextMessageLike} />
               {i === pivotAiIndex && (
                 <div style={{ textAlign: 'center', margin: '4px 0' }}>
                   <button
@@ -122,34 +124,16 @@ export function ContextView({ messages, title = 'Context', collapse = true, styl
   );
 }
 
-function MessageCard({ message, index }: { message: ContextMessageLike; index: number }) {
+function MessageCard({ message }: { message: ContextMessageLike }) {
   return (
     <div
       style={{
-        background: '#f6f8fa',
-        border: '1px solid #e1e4e8',
-        borderRadius: 4,
-        padding: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
         fontSize: 12,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <RoleBadge role={message.role} />
-        <span style={{ fontSize: 10, color: '#555' }}>#{index + 1}</span>
-        {Array.isArray(message.toolCalls) && message.toolCalls.length > 0 && (
-          <span
-            style={{
-              fontSize: 10,
-              background: '#0366d6',
-              color: '#fff',
-              padding: '2px 6px',
-              borderRadius: 10,
-            }}
-          >
-            {message.toolCalls.length} tool calls
-          </span>
-        )}
-      </div>
       <div className="tracing-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -182,31 +166,6 @@ function MessageCard({ message, index }: { message: ContextMessageLike; index: n
         </ReactMarkdown>
       </div>
     </div>
-  );
-}
-
-function RoleBadge({ role }: { role: string }) {
-  const colors: Record<string, string> = {
-    system: '#6a737d',
-    human: '#22863a',
-    ai: '#0366d6',
-    tool: '#8250df',
-  };
-  return (
-    <span
-      style={{
-        background: colors[role] || '#444',
-        color: '#fff',
-        padding: '2px 6px',
-        borderRadius: 12,
-        fontSize: 10,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-      }}
-    >
-      {role}
-    </span>
   );
 }
 

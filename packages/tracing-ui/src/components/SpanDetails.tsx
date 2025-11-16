@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 
 import ReactMarkdown from 'react-markdown';
@@ -44,7 +44,6 @@ export function SpanDetails({
     makeStorageKey(['io', 'llm_content', normKind, normLabel]),
     'md'
   );
-  
 
   useEffect(() => {
     // Skip network/realtime during tests and SSR; avoids stray timers/updates post-teardown
@@ -134,31 +133,27 @@ export function SpanDetails({
     if (!Array.isArray(raw)) return [];
     return raw as ContextMsg[];
   }, [span.attributes]);
+  const contextSectionRef = useRef<HTMLElement | null>(null);
 
-  // Collapsing logic for LLM context messages: by default show only the tail AFTER the last AI message.
-  // The head (everything up to and including the last AI message) is hidden behind a "Show previous" button.
-  const lastAiIndex = useMemo(() => {
-    for (let i = contextMessages.length - 1; i >= 0; i--) {
-      if (contextMessages[i]?.role === 'ai') return i;
-    }
-    return -1;
-  }, [contextMessages]);
-  const collapseAvailable = lastAiIndex >= 0 && lastAiIndex < contextMessages.length - 1; // there is a tail after the last AI message
-  const [historyCollapsed, setHistoryCollapsed] = useState<boolean>(collapseAvailable);
-  // Reset collapse state when span changes or message structure changes significantly
   useEffect(() => {
-    setHistoryCollapsed(collapseAvailable);
-  }, [collapseAvailable, span.spanId]);
-  const visibleMessageIndices = useMemo(() => {
-    if (collapseAvailable && historyCollapsed) {
-      // Tail after last AI message
-      const indices: number[] = [];
-      for (let i = lastAiIndex + 1; i < contextMessages.length; i++) indices.push(i);
-      return indices;
+    if (!isBrowser || !isLLMSpan) return;
+    const container = contextSectionRef.current;
+    if (!container) return;
+    const hasRaf = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function';
+    const handle = hasRaf
+      ? window.requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight;
+        })
+      : null;
+    if (!hasRaf) {
+      container.scrollTop = container.scrollHeight;
     }
-    return contextMessages.map((_, i) => i);
-  }, [collapseAvailable, historyCollapsed, lastAiIndex, contextMessages]);
-
+    return () => {
+      if (handle !== null && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(handle);
+      }
+    };
+  }, [isBrowser, isLLMSpan, span.spanId, contextMessages.length]);
   // Extract output content + toolCalls (normalized to attributes.output.toolCalls or llm.toolCalls keys)
   const llmContent: string | undefined = useMemo(() => {
     const attrs = (span.attributes || {}) as Record<string, unknown>;
@@ -444,273 +439,14 @@ export function SpanDetails({
                   <section
                     role="region"
                     aria-labelledby={isToolSpan ? 'obsui-input-heading' : 'obsui-context-heading'}
-                    style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}
+                    ref={contextSectionRef}
+                    style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
                   >
-                    {isToolSpan && (
+                    {isToolSpan ? (
                       <ToolInputViewer span={span} language={inputMode} value={formatToolInput(span, inputMode)} />
+                    ) : (
+                      <ContextView messages={contextMessages} title={undefined} />
                     )}
-                    {!isToolSpan && contextMessages.length === 0 && (
-                      <div style={{ fontSize: 12, color: '#666' }}>No context messages</div>
-                    )}
-                    {/* Context messages (LLM) with inline cut toggle */}
-                    {!isToolSpan && collapseAvailable && historyCollapsed && (
-                      <div style={{ textAlign: 'center' }}>
-                        <button
-                          onClick={() => setHistoryCollapsed(false)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#0366d6',
-                            fontSize: 11,
-                            textDecoration: 'underline',
-                            padding: '4px 8px',
-                          }}
-                        >
-                          Show previous ({lastAiIndex + 1} hidden)
-                        </button>
-                      </div>
-                    )}
-                    {!isToolSpan &&
-                      collapseAvailable &&
-                      historyCollapsed &&
-                      // Tail only (after cut)
-                      visibleMessageIndices.map((i) => {
-                        const m = contextMessages[i];
-                        return (
-                          <div
-                            key={i}
-                            style={{
-                              background: '#f6f8fa',
-                              border: '1px solid #e1e4e8',
-                              borderRadius: 4,
-                              padding: 8,
-                              fontSize: 12,
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                              <RoleBadge role={m.role} />
-                              <span style={{ fontSize: 10, color: '#555' }}>#{i + 1}</span>
-                              {Array.isArray((m as ContextMsg).toolCalls) &&
-                                (m as ContextMsg).toolCalls!.length > 0 && (
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      background: '#0366d6',
-                                      color: '#fff',
-                                      padding: '2px 6px',
-                                      borderRadius: 10,
-                                    }}
-                                  >
-                                    {((m as ContextMsg).toolCalls || []).length} tool calls
-                                  </span>
-                                )}
-                            </div>
-                            <div className="tracing-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={{
-                                  code({ className, children, ...props }) {
-                                    const isBlock =
-                                      String(className || '').includes('language-') || String(children).includes('\n');
-                                    return (
-                                      <code
-                                        style={{
-                                          background: '#eaeef2',
-                                          padding: isBlock ? 8 : '2px 4px',
-                                          display: isBlock ? 'block' : 'inline',
-                                          borderRadius: 4,
-                                          fontSize: 11,
-                                          whiteSpace: 'pre-wrap',
-                                        }}
-                                        className={className}
-                                        {...props}
-                                      >
-                                        {children}
-                                      </code>
-                                    );
-                                  },
-                                  pre({ children }) {
-                                    return (
-                                      <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>
-                                        {children}
-                                      </pre>
-                                    );
-                                  },
-                                }}
-                              >
-                                {String(m.content ?? '')}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    {!isToolSpan && collapseAvailable && !historyCollapsed && (
-                      // Full history with inline hide button at the cut
-                      <>
-                        {contextMessages.map((m, i) => {
-                          const isCutPoint = i === lastAiIndex && collapseAvailable;
-                          return (
-                            <React.Fragment key={i}>
-                              <div
-                                style={{
-                                  background: '#f6f8fa',
-                                  border: '1px solid #e1e4e8',
-                                  borderRadius: 4,
-                                  padding: 8,
-                                  fontSize: 12,
-                                  marginBottom: 0,
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                  <RoleBadge role={m.role} />
-                                  <span style={{ fontSize: 10, color: '#555' }}>#{i + 1}</span>
-                                  {Array.isArray((m as ContextMsg).toolCalls) &&
-                                    (m as ContextMsg).toolCalls!.length > 0 && (
-                                      <span
-                                        style={{
-                                          fontSize: 10,
-                                          background: '#0366d6',
-                                          color: '#fff',
-                                          padding: '2px 6px',
-                                          borderRadius: 10,
-                                        }}
-                                      >
-                                        {((m as ContextMsg).toolCalls || []).length} tool calls
-                                      </span>
-                                    )}
-                                </div>
-                                <div className="tracing-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
-                                  <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    components={{
-                                      code({ className, children, ...props }) {
-                                        const isBlock =
-                                          String(className || '').includes('language-') ||
-                                          String(children).includes('\n');
-                                        return (
-                                          <code
-                                            style={{
-                                              background: '#eaeef2',
-                                              padding: isBlock ? 8 : '2px 4px',
-                                              display: isBlock ? 'block' : 'inline',
-                                              borderRadius: 4,
-                                              fontSize: 11,
-                                              whiteSpace: 'pre-wrap',
-                                            }}
-                                            className={className}
-                                            {...props}
-                                          >
-                                            {children}
-                                          </code>
-                                        );
-                                      },
-                                      pre({ children }) {
-                                        return (
-                                          <pre
-                                            style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}
-                                          >
-                                            {children}
-                                          </pre>
-                                        );
-                                      },
-                                    }}
-                                  >
-                                    {String(m.content ?? '')}
-                                  </ReactMarkdown>
-                                </div>
-                              </div>
-                              {isCutPoint && (
-                                <div style={{ textAlign: 'center', margin: '4px 0' }}>
-                                  <button
-                                    onClick={() => setHistoryCollapsed(true)}
-                                    style={{
-                                      background: 'none',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      color: '#555',
-                                      fontSize: 10,
-                                      textDecoration: 'underline',
-                                      padding: '2px 6px',
-                                    }}
-                                  >
-                                    Hide previous
-                                  </button>
-                                </div>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </>
-                    )}
-                    {!isToolSpan &&
-                      !collapseAvailable &&
-                      contextMessages.map((m, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            background: '#f6f8fa',
-                            border: '1px solid #e1e4e8',
-                            borderRadius: 4,
-                            padding: 8,
-                            fontSize: 12,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <RoleBadge role={m.role} />
-                            <span style={{ fontSize: 10, color: '#555' }}>#{i + 1}</span>
-                            {Array.isArray((m as ContextMsg).toolCalls) && (m as ContextMsg).toolCalls!.length > 0 && (
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  background: '#0366d6',
-                                  color: '#fff',
-                                  padding: '2px 6px',
-                                  borderRadius: 10,
-                                }}
-                              >
-                                {((m as ContextMsg).toolCalls || []).length} tool calls
-                              </span>
-                            )}
-                          </div>
-                          <div className="tracing-md" data-testid="obs-md" style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-word' }}>
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                code({ className, children, ...props }) {
-                                  const isBlock =
-                                    String(className || '').includes('language-') || String(children).includes('\n');
-                                  return (
-                                    <code
-                                      style={{
-                                        background: '#eaeef2',
-                                        padding: isBlock ? 8 : '2px 4px',
-                                        display: isBlock ? 'block' : 'inline',
-                                        borderRadius: 4,
-                                        fontSize: 11,
-                                        whiteSpace: 'pre-wrap',
-                                      }}
-                                      className={className}
-                                      {...props}
-                                    >
-                                      {children}
-                                    </code>
-                                  );
-                                },
-                                pre({ children }) {
-                                  return (
-                                    <pre style={{ background: '#eaeef2', padding: 0, margin: 0, overflow: 'auto' }}>
-                                      {children}
-                                    </pre>
-                                  );
-                                },
-                              }}
-                            >
-                              {String(m.content ?? '')}
-                            </ReactMarkdown>
-                          </div>
-                        </div>
-                      ))}
                   </section>
                 </div>
                 {/* Right Column: Output */}
@@ -806,18 +542,17 @@ function formatToolInput(span: SpanDoc, mode: 'json' | 'yaml'): string {
 }
 
 function renderOutputContent(content: string | undefined, mode: 'md' | 'json' | 'yaml' | 'terminal') {
-  const baseStyle: React.CSSProperties = {
-    background: '#f6f8fa',
-    border: '1px solid #e1e4e8',
-    borderRadius: 4,
-    padding: 8,
+  const textStyle: React.CSSProperties = {
     fontSize: 12,
     fontFamily: 'monospace',
+    wordBreak: 'break-word',
   };
-  if (!content) return <div style={baseStyle}><span style={{ color: '#666' }}>(no content)</span></div>;
+  if (!content) {
+    return <div style={{ ...textStyle, color: '#666' }}>(no content)</div>;
+  }
   if (mode === 'md') {
     return (
-      <div className="tracing-md" data-testid="obs-md" style={baseStyle}>
+      <div className="tracing-md" data-testid="obs-md" style={textStyle}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
@@ -847,14 +582,14 @@ function renderOutputContent(content: string | undefined, mode: 'md' | 'json' | 
             },
           }}
         >
-          {content || ''}
+          {content}
         </ReactMarkdown>
       </div>
     );
   }
   if (mode === 'terminal') {
     return (
-      <pre className="tracing-terminal" style={baseStyle}>
+      <pre className="tracing-terminal" style={{ ...textStyle, margin: 0 }}>
         {content}
       </pre>
     );
@@ -866,54 +601,63 @@ function renderOutputContent(content: string | undefined, mode: 'md' | 'json' | 
     } catch {
       v = content;
     }
-    return (
-      <div style={{ ...baseStyle, padding: 0 }}>
-        {typeof window !== 'undefined' ? (
-          <MonacoEditor
-            height="240px"
-            defaultLanguage="yaml"
-            value={toYAML(v)}
-            theme="vs-light"
-            options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, wordWrap: 'on', scrollBeyondLastLine: false }}
-          />
-        ) : (
-          <pre style={{ margin: 0, padding: 8 }}>{toYAML(v)}</pre>
-        )}
-      </div>
-    );
+    const yamlValue = toYAML(v);
+    if (typeof window !== 'undefined') {
+      return (
+        <MonacoEditor
+          height="240px"
+          defaultLanguage="yaml"
+          value={yamlValue}
+          theme="vs-light"
+          options={{
+            readOnly: true,
+            minimap: { enabled: false },
+            fontSize: 12,
+            wordWrap: 'on',
+            scrollBeyondLastLine: false,
+            lineNumbers: 'off',
+          }}
+        />
+      );
+    }
+    return <pre style={{ ...textStyle, margin: 0 }}>{yamlValue}</pre>;
   }
   // json with fallback warning if not parseable
   let jsonStr = '';
   let jsonParseFailed = false;
   try {
     jsonStr = toJSONStable(content);
-    // If content was non-JSON string, toJSONStable returns the same string; detect by a quick parse attempt
     JSON.parse(jsonStr);
   } catch {
     jsonParseFailed = true;
   }
   const editorLang = jsonParseFailed ? 'plaintext' : 'json';
   const editorValue = jsonParseFailed ? String(content) : jsonStr;
+  if (typeof window !== 'undefined') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {jsonParseFailed && <div style={{ color: '#8a6d3b', fontSize: 11 }}>Not valid JSON; showing raw string</div>}
+        <MonacoEditor
+          height="240px"
+          defaultLanguage={editorLang}
+          value={editorValue}
+          theme="vs-light"
+          options={{
+            readOnly: true,
+            minimap: { enabled: false },
+            fontSize: 12,
+            wordWrap: 'on',
+            scrollBeyondLastLine: false,
+            lineNumbers: 'off',
+          }}
+        />
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {jsonParseFailed && (
-        <div style={{ color: '#8a6d3b', background: '#fcf8e3', border: '1px solid #faebcc', borderRadius: 4, padding: '4px 6px', fontSize: 11 }}>
-          Not valid JSON; showing raw string
-        </div>
-      )}
-      <div style={{ ...baseStyle, padding: 0 }}>
-        {typeof window !== 'undefined' ? (
-          <MonacoEditor
-            height="240px"
-            defaultLanguage={editorLang}
-            value={editorValue}
-            theme="vs-light"
-            options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, wordWrap: 'on', scrollBeyondLastLine: false }}
-          />
-        ) : (
-          <pre style={{ margin: 0, padding: 8 }}>{editorValue}</pre>
-        )}
-      </div>
+      {jsonParseFailed && <div style={{ color: '#8a6d3b', fontSize: 11 }}>Not valid JSON; showing raw string</div>}
+      <pre style={{ ...textStyle, margin: 0 }}>{editorValue}</pre>
     </div>
   );
 }
@@ -1040,32 +784,6 @@ const thStyle: React.CSSProperties = {
 };
 const tdStyle: React.CSSProperties = { padding: '4px 6px', borderBottom: '1px solid #eee', verticalAlign: 'top' };
 
-// Role badge for context messages
-function RoleBadge({ role }: { role: string }) {
-  const colors: Record<string, string> = {
-    system: '#6a737d',
-    human: '#22863a',
-    ai: '#0366d6',
-    tool: '#8250df',
-  };
-  return (
-    <span
-      style={{
-        background: colors[role] || '#444',
-        color: '#fff',
-        padding: '2px 6px',
-        borderRadius: 12,
-        fontSize: 10,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-      }}
-    >
-      {role}
-    </span>
-  );
-}
-
 // Lightweight duplicate of ToolCall interface (component-level interface is inside SpanDetails closure)
 interface LocalToolCall {
   id?: string;
@@ -1091,16 +809,9 @@ function CollapsibleToolCall({ toolCall, index, spanKind }: { toolCall: LocalToo
     'json'
   );
   return (
-    <div style={{ border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden', fontSize: 12 }}>
+    <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#f6f8fa',
-          padding: '6px 8px',
-          cursor: 'pointer',
-        }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '4px 0' }}
         onClick={() => setOpen((o) => !o)}
       >
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1118,11 +829,7 @@ function CollapsibleToolCall({ toolCall, index, spanKind }: { toolCall: LocalToo
           <span style={{ fontSize: 10, color: '#0366d6', fontWeight: 600 }}>{open ? 'Hide' : 'Show'}</span>
         </div>
       </div>
-      {open && (
-        <div style={{ padding: 8 }}>
-          {renderOutputContent(argsStr, mode)}
-        </div>
-      )}
+      {open && <div>{renderOutputContent(argsStr, mode)}</div>}
     </div>
   );
 }
@@ -1137,7 +844,6 @@ function ToolInputViewer({ span, language, value }: { span: SpanDoc; language: '
 }
 
 function ToolInputContent({ language, value }: { language: 'json' | 'yaml'; value: string }) {
-  // For JSON mode, detect invalid JSON string to show warning and fallback to plaintext editor
   if (language === 'json') {
     let jsonParseFailed = false;
     try {
@@ -1147,45 +853,39 @@ function ToolInputContent({ language, value }: { language: 'json' | 'yaml'; valu
     }
     const editorLang = jsonParseFailed ? 'plaintext' : 'json';
     const editorValue = value;
+    if (typeof window !== 'undefined') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {jsonParseFailed && <div style={{ color: '#8a6d3b', fontSize: 11 }}>Not valid JSON; showing raw string</div>}
+          <MonacoEditor
+            height="240px"
+            defaultLanguage={editorLang}
+            value={editorValue}
+            theme="vs-light"
+            options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false, wordWrap: 'on', lineNumbers: 'off' }}
+          />
+        </div>
+      );
+    }
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {jsonParseFailed && (
-          <div style={{ color: '#8a6d3b', background: '#fcf8e3', border: '1px solid #faebcc', borderRadius: 4, padding: '4px 6px', fontSize: 11 }}>
-            Not valid JSON; showing raw string
-          </div>
-        )}
-        <div style={{ flex: 1, minHeight: 200, border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden' }}>
-          {typeof window !== 'undefined' ? (
-            <MonacoEditor
-              height="100%"
-              defaultLanguage={editorLang}
-              value={editorValue}
-              theme="vs-light"
-              options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false, wordWrap: 'on' }}
-            />
-          ) : (
-            <pre style={{ margin: 0, padding: 8 }}>{editorValue}</pre>
-          )}
-        </div>
+        {jsonParseFailed && <div style={{ color: '#8a6d3b', fontSize: 11 }}>Not valid JSON; showing raw string</div>}
+        <pre style={{ fontSize: 12, fontFamily: 'monospace', margin: 0 }}>{editorValue}</pre>
       </div>
     );
   }
-  // YAML mode
-  return (
-    <div style={{ flex: 1, minHeight: 200, border: '1px solid #e1e4e8', borderRadius: 4, overflow: 'hidden' }}>
-      {typeof window !== 'undefined' ? (
-        <MonacoEditor
-          height="100%"
-          defaultLanguage="yaml"
-          value={value}
-          theme="vs-light"
-          options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false, wordWrap: 'on' }}
-        />
-      ) : (
-        <pre style={{ margin: 0, padding: 8 }}>{value}</pre>
-      )}
-    </div>
-  );
+  if (typeof window !== 'undefined') {
+    return (
+      <MonacoEditor
+        height="240px"
+        defaultLanguage="yaml"
+        value={value}
+        theme="vs-light"
+        options={{ readOnly: true, minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false, wordWrap: 'on', lineNumbers: 'off' }}
+      />
+    );
+  }
+  return <pre style={{ fontSize: 12, fontFamily: 'monospace', margin: 0 }}>{value}</pre>;
 }
 // IO view modes (component-local types)
 type InputMode = 'json' | 'yaml';

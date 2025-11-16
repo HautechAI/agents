@@ -52,7 +52,7 @@ describe('SummarizeIO collapse', () => {
     render(<SpanDetails span={span} spans={[span]} onSelectSpan={() => {}} onClose={() => {}} />);
 
     // Two collapse buttons (one per context view)
-    const buttons = screen.getAllByText(/Show previous/);
+    const buttons = screen.getAllByText(/Load older context/);
     expect(buttons.length).toBe(2);
     await waitFor(async () => expect(flushPromises()).resolves.toBeUndefined());
     await act(async () => {});

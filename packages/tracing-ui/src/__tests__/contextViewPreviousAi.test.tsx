@@ -13,10 +13,10 @@ const messages = [
 ];
 
 describe('ContextView previous AI pivot', () => {
-  it('uses previous AI as pivot and shows Show previous button with correct hidden count', () => {
+  it('uses previous AI as pivot and shows Load older context button with correct hidden count', () => {
     render(<ContextView messages={messages} title="Ctx" />);
     // pivot should be the first ai (index 2), so hidden count = pivot+1 = 3
     const btns = screen.getAllByRole('button');
-    expect(btns.some(b => /Show previous \(3 hidden\)/.test(b.textContent || ''))).toBe(true);
+    expect(btns.some(b => /Load older context \(3 hidden\)/.test(b.textContent || ''))).toBe(true);
   });
 });
