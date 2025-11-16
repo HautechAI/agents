@@ -1,6 +1,7 @@
 import React from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ReminderCountdown } from './ReminderCountdown';
+import { waitForStableScrollHeight } from './waitForStableScrollHeight';
 
 export type RunMeta = { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string };
 export type UnifiedRunMessage = {
@@ -56,28 +57,45 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
   }, []);
   React.useEffect(() => {
     const c = containerRef.current;
-    if (!c) return;
     const justAppended = items.length > prevCount.current;
     const initialLoad = prevCount.current === 0 && items.length > 0;
-    if (initialLoad) {
-      scrollToBottom();
-      setAtBottom(true);
-    } else if (justAppended && atBottom) {
-      scrollToBottom();
-    }
     prevCount.current = items.length;
+
+    if (!c) return;
+    if (!initialLoad && !(justAppended && atBottom)) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      await waitForStableScrollHeight(c);
+      if (cancelled) return;
+      scrollToBottom();
+      if (initialLoad) setAtBottom(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [items, atBottom, scrollToBottom]);
 
   React.useEffect(() => {
     if (!activeThreadId) return;
     prevCount.current = 0;
     setAtBottom(true);
-    const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb: FrameRequestCallback) => window.setTimeout(cb, 0);
-    const cancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : (id: number) => window.clearTimeout(id);
-    const frame = schedule(() => {
+    const c = containerRef.current;
+    if (!c) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      await waitForStableScrollHeight(c);
+      if (cancelled) return;
       scrollToBottom();
-    });
-    return () => cancel(frame);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeThreadId, scrollToBottom]);
 
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -166,16 +184,12 @@ export function RunMessageList({ items, showJson, onToggleJson, isLoading, error
         <button
           type="button"
           className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-white/90 border rounded px-3 py-1 shadow"
-          onClick={() => {
+          onClick={async () => {
             const c = containerRef.current;
-            if (c) {
-              try {
-                c.scrollTop = c.scrollHeight;
-              } catch (_err) {
-                // ignore read-only scrollTop in test envs
-                void _err;
-              }
-            }
+            if (!c) return;
+            await waitForStableScrollHeight(c);
+            scrollToBottom();
+            setAtBottom(true);
           }}
           data-testid="jump-to-latest"
         >
