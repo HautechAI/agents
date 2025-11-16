@@ -32,6 +32,16 @@ type ToolCallErrorPayload = {
 };
 type ToolCallStructuredOutput = ToolCallRaw | ToolCallErrorPayload;
 
+type ToolExecutionPreparation = {
+  metadata?: unknown;
+  sourceSpanId?: string | null;
+  prepared?: unknown;
+};
+
+type FunctionToolWithPreparation = FunctionTool & {
+  prepareToolExecution?: (params: { input: unknown; ctx: LLMContext }) => Promise<ToolExecutionPreparation> | ToolExecutionPreparation;
+};
+
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(
@@ -166,6 +176,8 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
               }
               const input = validation.data;
 
+              let executionCtx: LLMContext = ctx;
+              let preparation: ToolExecutionPreparation | undefined;
               try {
                 let serializedInput: Prisma.InputJsonValue;
                 try {
@@ -173,6 +185,15 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
                 } catch (err) {
                   this.logger.warn('Failed to serialize tool input for run event', err);
                   serializedInput = toPrismaJsonValue(null);
+                }
+
+                const toolWithPreparation = tool as FunctionToolWithPreparation;
+                if (typeof toolWithPreparation.prepareToolExecution === 'function') {
+                  try {
+                    preparation = await toolWithPreparation.prepareToolExecution({ input, ctx });
+                  } catch (err) {
+                    this.logger.warn('Failed to prepare tool execution metadata', { tool: tool.name, err });
+                  }
                 }
 
                 const started = await this.runEvents.startToolExecution({
@@ -183,15 +204,22 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
                   toolCallId: t.callId,
                   llmCallEventId: llmEventId ?? undefined,
                   input: serializedInput,
+                  metadata: preparation?.metadata,
+                  sourceSpanId: preparation?.sourceSpanId ?? undefined,
                 });
                 startedEventId = started.id;
                 await this.runEvents.publishEvent(started.id, 'append');
+                const toolExecutionContext = {
+                  eventId: started.id,
+                  ...(preparation?.prepared !== undefined ? { prepared: preparation.prepared } : {}),
+                };
+                executionCtx = { ...ctx, toolExecution: toolExecutionContext };
               } catch (err) {
                 this.logger.warn('Failed to record tool execution start', err);
               }
 
               try {
-                const raw = await tool.execute(input, ctx);
+                const raw = await tool.execute(input, executionCtx);
 
                 if (typeof raw === 'string' && raw.length > 50000) {
                   return storeResponse(

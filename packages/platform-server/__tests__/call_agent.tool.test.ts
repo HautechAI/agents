@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { CallAgentTool } from '../src/nodes/tools/call_agent/call_agent.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { ResponseMessage, AIMessage, HumanMessage } from '@agyn/llm';
@@ -127,6 +127,42 @@ describe('CallAgentTool unit', () => {
     );
     expect(typeof res).toBe('string');
     expect(JSON.parse(res).status).toBe('sent');
+  });
+
+  it('prepareToolExecution populates metadata and reuse prepared subthread', async () => {
+    const getSubthreadMock = vi.fn().mockResolvedValue('child-thread');
+    const persistence = { getOrCreateSubthreadByAlias: getSubthreadMock } as unknown as AgentsPersistenceService;
+    const tool = new CallAgentTool(new LoggerService(), persistence);
+    await tool.setConfig({ description: 'desc', response: 'sync' });
+    const agent = new FakeAgent(async (_thread, _msgs) => {
+      const ai = AIMessage.fromText('OK');
+      return new ResponseMessage({ output: [ai.toPlain()] });
+    });
+  // @ts-expect-error private for unit
+    tool['setAgent'](agent as any);
+    const dynamic = tool.getTool();
+    const ctx = { threadId: 'parent-thread', runId: 'run-1', finishSignal: new Signal(), callerAgent: {} } as any;
+    const args = { input: 'hello', threadAlias: 'alias', summary: 'summary' };
+
+    const prep = await (dynamic as any).prepareToolExecution({ input: args, ctx });
+    expect(getSubthreadMock).toHaveBeenCalledTimes(1);
+    expect(prep.sourceSpanId).toBe('child-thread');
+    expect(prep.metadata).toEqual({
+      tool: 'call_agent',
+      parentThreadId: 'parent-thread',
+      childThreadId: 'child-thread',
+      childRunId: null,
+      childMessageId: null,
+      childRunLinkEnabled: false,
+      childRunStatus: 'queued',
+    });
+    expect(prep.prepared).toEqual({ targetThreadId: 'child-thread' });
+
+    getSubthreadMock.mockClear();
+
+    const res = await dynamic.execute(args, { ...ctx, toolExecution: { eventId: 'evt-1', prepared: prep.prepared } });
+    expect(res).toBe('OK');
+    expect(getSubthreadMock).not.toHaveBeenCalled();
   });
 });
 

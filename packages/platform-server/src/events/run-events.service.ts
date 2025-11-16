@@ -243,6 +243,7 @@ export interface ToolExecutionStartArgs {
   input: Prisma.InputJsonValue;
   metadata?: RunEventMetadata;
   startedAt?: Date;
+  sourceSpanId?: string | null;
 }
 
 export interface ToolExecutionCompleteArgs {
@@ -823,6 +824,7 @@ export class RunEventsService {
       status: RunEventStatus.running,
       startedAt: args.startedAt ?? new Date(),
       nodeId: args.nodeId ?? null,
+      sourceSpanId: args.sourceSpanId ?? null,
       metadata,
     });
     await tx.toolExecution.create({
@@ -839,6 +841,23 @@ export class RunEventsService {
       },
     });
     return event;
+  }
+
+  async patchEventMetadata(args: { tx?: Tx; eventId: string; patch: Record<string, unknown> }): Promise<void> {
+    const { eventId, patch } = args;
+    if (!patch || Object.keys(patch).length === 0) return;
+    const tx = args.tx ?? this.prisma;
+    const existing = await tx.runEvent.findUnique({ where: { id: eventId }, select: { metadata: true } });
+    if (!existing) return;
+    const current = this.toPlainJson(existing.metadata);
+    const base = current && typeof current === 'object' && !Array.isArray(current) ? (current as Record<string, unknown>) : {};
+    const merged: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) continue;
+      merged[key] = value;
+    }
+    const serialized = this.ensureJson(merged) ?? Prisma.JsonNull;
+    await tx.runEvent.update({ where: { id: eventId }, data: { metadata: serialized } });
   }
 
   async completeToolExecution(args: ToolExecutionCompleteArgs): Promise<void> {

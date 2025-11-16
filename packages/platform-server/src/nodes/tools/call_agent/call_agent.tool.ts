@@ -13,6 +13,10 @@ export const callAgentInvocationSchema = z.object({
   summary: z.string().min(1).describe('Initial summary for the child thread.'),
 });
 
+type CallAgentPreparedContext = {
+  targetThreadId: string;
+};
+
 // Interface removed (unused)
 
 export class CallAgentFunctionTool extends FunctionTool<typeof callAgentInvocationSchema> {
@@ -33,18 +37,43 @@ export class CallAgentFunctionTool extends FunctionTool<typeof callAgentInvocati
     return this.node.config.description ?? 'Call agent';
   }
 
+  async prepareToolExecution(params: { input: z.infer<typeof callAgentInvocationSchema>; ctx: LLMContext }): Promise<{ metadata: Record<string, unknown>; sourceSpanId: string; prepared: CallAgentPreparedContext }> {
+    const { input, ctx } = params;
+    const parentThreadId = ctx.threadId;
+    const targetThreadId = await this.persistence.getOrCreateSubthreadByAlias('call_agent', input.threadAlias, parentThreadId, input.summary);
+    const toolName = this.name;
+    const canonicalTool = toolName === 'call_engineer' ? 'call_engineer' : 'call_agent';
+    return {
+      metadata: {
+        tool: canonicalTool,
+        parentThreadId,
+        childThreadId: targetThreadId,
+        childRunId: null,
+        childMessageId: null,
+        childRunLinkEnabled: false,
+        childRunStatus: 'queued',
+      },
+      sourceSpanId: targetThreadId,
+      prepared: { targetThreadId },
+    };
+  }
+
   async execute(args: z.infer<typeof callAgentInvocationSchema>, ctx: LLMContext): Promise<string> {
     const { threadAlias } = args;
     const targetAgent = this.node.agent;
     const responseMode = this.node.config.response;
 
     const parentThreadId = ctx.threadId;
+    const prepared = ctx.toolExecution?.prepared as CallAgentPreparedContext | undefined;
+    let targetThreadId = prepared?.targetThreadId;
+    if (!targetThreadId) {
+      targetThreadId = await this.persistence.getOrCreateSubthreadByAlias('call_agent', threadAlias, parentThreadId, args.summary);
+    }
 
     this.logger.info('call_agent invoked', { targetAttached: !!targetAgent, responseMode });
     if (!targetAgent) return 'Target agent is not connected';
 
     // Resolve subthread UUID by alias under parent UUID
-    const targetThreadId = await this.persistence.getOrCreateSubthreadByAlias('call_agent', threadAlias, parentThreadId, args.summary);
 
     const message = HumanMessage.fromText(args.input);
     try {
