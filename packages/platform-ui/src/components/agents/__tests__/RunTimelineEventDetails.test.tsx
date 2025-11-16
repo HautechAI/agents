@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { RunTimelineEventDetails } from '../RunTimelineEventDetails';
 import * as contextItemsModule from '@/api/hooks/contextItems';
 import type { ContextItem, RunTimelineEvent } from '@/api/types/agents';
@@ -15,18 +16,22 @@ function renderDetails(event: RunTimelineEvent) {
   });
 
   const result = render(
-    <QueryClientProvider client={client}>
-      <RunTimelineEventDetails event={event} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <RunTimelineEventDetails event={event} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 
   return {
     ...result,
     rerender(nextEvent: RunTimelineEvent) {
       result.rerender(
-        <QueryClientProvider client={client}>
-          <RunTimelineEventDetails event={nextEvent} />
-        </QueryClientProvider>,
+        <MemoryRouter>
+          <QueryClientProvider client={client}>
+            <RunTimelineEventDetails event={nextEvent} />
+          </QueryClientProvider>
+        </MemoryRouter>,
       );
     },
   };
@@ -522,5 +527,66 @@ describe('RunTimelineEventDetails', () => {
     } finally {
       useContextItemsSpy.mockRestore();
     }
+  });
+
+  it('renders call_agent links and queued status when run not started', () => {
+    const event = buildEvent({
+      metadata: {
+        childThreadId: 'child-123',
+        childRunStatus: 'queued',
+        childRunLinkEnabled: false,
+      },
+      toolExecution: {
+        toolName: 'call_agent',
+        execStatus: 'running',
+      },
+    });
+
+    renderDetails(event);
+
+    const group = screen.getByTestId('call-agent-link-group');
+    const subthreadLink = within(group).getByRole('link', { name: 'Subthread' });
+    expect(subthreadLink).toHaveAttribute('href', '/tracing/thread/child-123');
+    expect(within(group).queryByRole('link', { name: /Run timeline/i })).toBeNull();
+    expect(within(group).getByText('Run (not started)')).toBeInTheDocument();
+    const statusBadge = within(group).getByText('Queued');
+    expect(statusBadge).toHaveClass('bg-amber-500');
+  });
+
+  it('enables call_agent run link and updates status on metadata change', () => {
+    const baseEvent = buildEvent({
+      metadata: {
+        childThreadId: 'child-123',
+        childRunStatus: 'queued',
+        childRunLinkEnabled: false,
+      },
+      toolExecution: {
+        toolName: 'call_agent',
+        execStatus: 'running',
+      },
+    });
+
+    const { rerender } = renderDetails(baseEvent);
+
+    const updatedEvent = buildEvent({
+      metadata: {
+        childThreadId: 'child-123',
+        childRunStatus: 'running',
+        childRunLinkEnabled: true,
+        childRunId: 'run-xyz',
+      },
+      toolExecution: {
+        toolName: 'call_agent',
+        execStatus: 'running',
+      },
+    });
+
+    rerender(updatedEvent);
+
+    const group = screen.getByTestId('call-agent-link-group');
+    const runLink = within(group).getByRole('link', { name: 'Run timeline' });
+    expect(runLink).toHaveAttribute('href', '/agents/threads/child-123/runs/run-xyz/timeline');
+    const statusBadge = within(group).getByText('Running');
+    expect(statusBadge).toHaveClass('bg-sky-500');
   });
 });

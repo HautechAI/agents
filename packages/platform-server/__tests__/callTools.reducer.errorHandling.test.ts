@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ResponseMessage, ToolCallMessage } from '@agyn/llm';
+import { ResponseMessage, ToolCallMessage, AIMessage } from '@agyn/llm';
 import { CallToolsLLMReducer } from '../src/llm/reducers/callTools.llm.reducer';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { z } from 'zod';
 import { createRunEventsStub } from './helpers/runEvents.stub';
+import { CallAgentTool } from '../src/nodes/tools/call_agent/call_agent.node';
+import type { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
+import { Signal } from '../src/signal';
 
 type Captured = {
   attrs: { toolCallId: string; name: string; input: unknown };
@@ -150,5 +153,51 @@ describe('CallToolsLLMReducer error isolation', () => {
     const captured = await getCaptured();
     expect(last?.text).toContain('produced output longer');
     expect((captured[0].response.output as any).error_code).toBe('TOOL_OUTPUT_TOO_LARGE');
+  });
+});
+
+describe('CallToolsLLMReducer call_agent metadata', () => {
+  it('records child thread metadata and source span for call_agent tool executions', async () => {
+    const persistence = {
+      getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-id'),
+    } as unknown as AgentsPersistenceService;
+
+    const callAgentNode = new CallAgentTool(new LoggerService(), persistence);
+    await callAgentNode.setConfig({ description: 'desc', response: 'sync' });
+
+    const agent = {
+      async invoke(_threadId: string) {
+        return new ResponseMessage({ output: [AIMessage.fromText('ok').toPlain()] });
+      },
+    };
+
+    // @ts-expect-error private method access for tests
+    callAgentNode['setAgent'](agent);
+    const dynamicTool = callAgentNode.getTool();
+
+    const runEvents = createRunEventsStub();
+    const reducer = new CallToolsLLMReducer(new LoggerService(), runEvents as any).init({ tools: [dynamicTool] });
+
+    const state = buildState(dynamicTool.name, 'call-agent-1', JSON.stringify({ input: 'hello', threadAlias: 'child', summary: 'Child summary' }));
+    const ctx = {
+      threadId: 'parent-thread',
+      runId: 'parent-run',
+      finishSignal: new Signal(),
+      callerAgent: { getAgentNodeId: () => 'agent-node' },
+    } as any;
+
+    await reducer.invoke(state, ctx);
+
+    expect(persistence.getOrCreateSubthreadByAlias).toHaveBeenCalledTimes(1);
+    const startArgs = runEvents.startToolExecution.mock.calls[0]?.[0];
+    expect(startArgs?.sourceSpanId).toBe('child-thread-id');
+    expect(startArgs?.metadata).toMatchObject({
+      parentThreadId: 'parent-thread',
+      childThreadId: 'child-thread-id',
+      childRunStatus: 'queued',
+      childRunLinkEnabled: false,
+      childRunId: null,
+      childMessageId: null,
+    });
   });
 });
