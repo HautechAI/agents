@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { ThreadTree } from '../src/components/agents/ThreadTree';
 import { server, TestProviders, abs } from './integration/testUtils';
@@ -48,18 +48,19 @@ describe('ThreadTree realtime summary updates', () => {
     const listeners = (socketModule.graphSocket as any).threadUpdatedListeners as Set<
       (payload: { thread: { id: string; summary: string; status: 'open' | 'closed'; createdAt: string; parentId: string | null; alias: string } }) => void
     >;
-    for (const fn of listeners) {
-      fn({
-        thread: {
-          id: 'th1',
-          alias: 'thread-one',
-          summary: 'Updated summary',
-          status: 'open',
-          parentId: null,
-          createdAt: t(1),
-        },
-      });
-    }
+    act(() => {
+      for (const fn of listeners)
+        fn({
+          thread: {
+            id: 'th1',
+            alias: 'thread-one',
+            summary: 'Updated summary',
+            status: 'open',
+            parentId: null,
+            createdAt: t(1),
+          },
+        });
+    });
 
     await waitFor(() => expect(screen.getByText('Updated summary')).toBeInTheDocument());
   });

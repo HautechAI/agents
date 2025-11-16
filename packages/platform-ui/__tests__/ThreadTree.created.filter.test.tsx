@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders } from './integration/testUtils';
 import { ThreadTree } from '../src/components/agents/ThreadTree';
@@ -26,7 +26,10 @@ describe('ThreadTree conditional insertion on thread_created', () => {
     // Emit thread_created with closed status
     const anySock: any = socketModule.graphSocket as any;
     const createdListeners = anySock.threadCreatedListeners as Set<(p: any) => void>;
-    for (const fn of createdListeners) fn({ thread: { id: 't1', alias: 'a1', summary: null, status: 'closed', parentId: null, createdAt: new Date().toISOString() } });
+    act(() => {
+      for (const fn of createdListeners)
+        fn({ thread: { id: 't1', alias: 'a1', summary: null, status: 'closed', parentId: null, createdAt: new Date().toISOString() } });
+    });
     // Should still show 'No threads'
     expect(await screen.findByText('No threads')).toBeInTheDocument();
   });
@@ -45,17 +48,19 @@ describe('ThreadTree conditional insertion on thread_created', () => {
 
     const anySock: any = socketModule.graphSocket as any;
     const createdListeners = anySock.threadCreatedListeners as Set<(p: any) => void>;
-    for (const fn of createdListeners)
-      fn({
-        thread: {
-          id: 't2',
-          alias: 'a2',
-          summary: 'Fresh root thread',
-          status: 'open',
-          parentId: null,
-          createdAt: new Date().toISOString(),
-        },
-      });
+    act(() => {
+      for (const fn of createdListeners)
+        fn({
+          thread: {
+            id: 't2',
+            alias: 'a2',
+            summary: 'Fresh root thread',
+            status: 'open',
+            parentId: null,
+            createdAt: new Date().toISOString(),
+          },
+        });
+    });
 
     await waitFor(() => expect(screen.getByText('Fresh root thread')).toBeInTheDocument());
   });

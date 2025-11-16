@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { TestProviders, server, abs } from './integration/testUtils';
@@ -62,7 +62,9 @@ describe('AgentsThreads realtime updates', () => {
     const runListeners = (socketModule.graphSocket as any).runStatusListeners as Set<
       (payload: { run: { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string } }) => void
     >;
-    for (const fn of runListeners) fn({ run: { id: 'run-new-1', status: 'running', createdAt: t(1), updatedAt: t(1) } });
+    act(() => {
+      for (const fn of runListeners) fn({ run: { id: 'run-new-1', status: 'running', createdAt: t(1), updatedAt: t(1) } });
+    });
 
     await expectRunHeaderVisible('run-new-1');
   });
@@ -102,7 +104,9 @@ describe('AgentsThreads realtime updates', () => {
     const runListeners = (socketModule.graphSocket as any).runStatusListeners as Set<
       (payload: { run: { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string } }) => void
     >;
-    for (const fn of runListeners) fn({ run: { id: 'run-st-1', status: 'finished', createdAt: t(1), updatedAt: t(2) } });
+    act(() => {
+      for (const fn of runListeners) fn({ run: { id: 'run-st-1', status: 'finished', createdAt: t(1), updatedAt: t(2) } });
+    });
 
     await waitFor(() => expect(within(header).getByText('finished')).toBeInTheDocument());
   });
@@ -153,10 +157,14 @@ describe('AgentsThreads realtime updates', () => {
       (payload: { message: { id: string; kind: 'assistant' | 'user' | 'system' | 'tool'; text: string | null; source: unknown; createdAt: string; runId?: string } }) => void
     >;
     const payload = { message: { id: 'msg-stream', kind: 'assistant', text: 'Streamed', source: {}, createdAt: t(6), runId: 'run-msg-1' } };
-    for (const fn of messageListeners) fn(payload);
+    act(() => {
+      for (const fn of messageListeners) fn(payload);
+    });
     await waitFor(async () => expect((await within(list).findAllByTestId('message-bubble')).length).toBe(2));
 
-    for (const fn of messageListeners) fn(payload);
+    act(() => {
+      for (const fn of messageListeners) fn(payload);
+    });
     await waitFor(async () => expect((await within(list).findAllByTestId('message-bubble')).length).toBe(2));
   });
 
@@ -188,15 +196,19 @@ describe('AgentsThreads realtime updates', () => {
     const messageListeners = (socketModule.graphSocket as any).messageCreatedListeners as Set<
       (payload: { message: { id: string; kind: 'assistant' | 'user' | 'system' | 'tool'; text: string | null; source: unknown; createdAt: string; runId?: string } }) => void
     >;
-    for (const fn of messageListeners)
-      fn({ message: { id: 'msg-buffer', kind: 'assistant', text: 'Buffered', source: {}, createdAt: t(2), runId: 'run-late' } });
+    act(() => {
+      for (const fn of messageListeners)
+        fn({ message: { id: 'msg-buffer', kind: 'assistant', text: 'Buffered', source: {}, createdAt: t(2), runId: 'run-late' } });
+    });
 
     expect(screen.queryByText('Buffered')).toBeNull();
 
     const runListeners = (socketModule.graphSocket as any).runStatusListeners as Set<
       (payload: { run: { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string } }) => void
     >;
-    for (const fn of runListeners) fn({ run: { id: 'run-late', status: 'running', createdAt: t(1), updatedAt: t(1) } });
+    act(() => {
+      for (const fn of runListeners) fn({ run: { id: 'run-late', status: 'running', createdAt: t(1), updatedAt: t(1) } });
+    });
 
     await expectRunHeaderVisible('run-late');
     const list = await screen.findByTestId('message-list');
@@ -270,7 +282,9 @@ describe('AgentsThreads realtime updates', () => {
     );
 
     const reconnectListeners = (socketModule.graphSocket as any).reconnectCallbacks as Set<() => void>;
-    for (const fn of reconnectListeners) fn();
+    act(() => {
+      for (const fn of reconnectListeners) fn();
+    });
 
     await expectRunHeaderVisible('run-new');
     const list = await screen.findByTestId('message-list');
@@ -415,7 +429,9 @@ describe('AgentsThreads realtime updates', () => {
     const reminderListeners = (socketModule.graphSocket as any).threadRemindersListeners as Set<
       (payload: { threadId: string; remindersCount: number }) => void
     >;
-    for (const fn of reminderListeners) fn({ threadId: 'th1', remindersCount: 0 });
+    act(() => {
+      for (const fn of reminderListeners) fn({ threadId: 'th1', remindersCount: 0 });
+    });
 
     await waitFor(() => {
       expect(screen.queryByTestId('reminder-countdown-row')).toBeNull();
@@ -471,7 +487,9 @@ describe('AgentsThreads realtime updates', () => {
     const runListeners = (socketModule.graphSocket as any).runStatusListeners as Set<
       (payload: { run: { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string } }) => void
     >;
-    for (const fn of runListeners) fn({ run: { id: 'run-finished', status: 'finished', createdAt: t(1), updatedAt: t(4) } });
+    act(() => {
+      for (const fn of runListeners) fn({ run: { id: 'run-finished', status: 'finished', createdAt: t(1), updatedAt: t(4) } });
+    });
 
     await waitFor(() => {
       expect(screen.queryByTestId('reminder-countdown-row')).toBeNull();

@@ -37,6 +37,8 @@ const API_BASE = process.env.VITE_API_BASE_URL;
 export const abs = (p: string) => (API_BASE ? `${API_BASE}${p}` : p);
 
 const relativeHandlers = [
+  _http.get('/socket.io/:rest*', () => new _HttpResponse('ok', { status: 200 })),
+  _http.post('/socket.io/:rest*', () => new _HttpResponse('ok', { status: 200 })),
   _http.get('/api/graph/templates', () => _HttpResponse.json(mockTemplates)),
   _http.get('/api/graph/nodes/:nodeId/status', ({ params }) => {
     const nodeId = params.nodeId as string;
@@ -137,6 +139,8 @@ const relativeHandlers = [
 ];
 
 const absoluteHandlers = [
+  _http.get(abs('/socket.io/:rest*'), () => new _HttpResponse('ok', { status: 200 })),
+  _http.post(abs('/socket.io/:rest*'), () => new _HttpResponse('ok', { status: 200 })),
   _http.get(abs('/api/graph/templates'), () => _HttpResponse.json(mockTemplates)),
   _http.get(abs('/api/graph/nodes/:nodeId/status'), ({ params }) => {
     const nodeId = params.nodeId as string;

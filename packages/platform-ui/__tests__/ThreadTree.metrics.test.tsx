@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server, TestProviders, abs } from './integration/testUtils';
 import { ThreadTree } from '../src/components/agents/ThreadTree';
@@ -60,8 +60,10 @@ describe('ThreadTree metrics badges and socket updates', () => {
     const anySock: any = socketModule.graphSocket as any;
     const actListeners = anySock.threadActivityListeners as Set<(p: any) => void>;
     const remListeners = anySock.threadRemindersListeners as Set<(p: any) => void>;
-    for (const fn of actListeners) fn({ threadId: 'th1', activity: 'working' });
-    for (const fn of remListeners) fn({ threadId: 'th1', remindersCount: 2 });
+    act(() => {
+      for (const fn of actListeners) fn({ threadId: 'th1', activity: 'working' });
+      for (const fn of remListeners) fn({ threadId: 'th1', remindersCount: 2 });
+    });
 
     const dotWorking = await screen.findByLabelText('Activity: working');
     expect(dotWorking).toBeInTheDocument();

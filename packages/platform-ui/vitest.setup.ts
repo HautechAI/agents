@@ -1,6 +1,6 @@
 // Use Vitest-specific matchers setup
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 // Global test harness configuration for platform-ui
 // - Polyfill ResizeObserver for Radix UI components
 // - Normalize window.location to a stable origin (for MSW absolute handlers)
@@ -72,6 +72,171 @@ if (typeof document !== 'undefined' && !document.createRange) {
 // Avoid mutating config.apiBaseUrl globally to not affect unit tests that
 // validate env resolution. Individual pages pass base '' explicitly where needed.
 
+// Socket.io mock to keep tests isolated from real network and expose listener sets
+const socketHarness = vi.hoisted(() => {
+  type Listener = (...args: unknown[]) => void;
+
+  const schedule = (fn: () => void) => {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(fn);
+    } else {
+      Promise.resolve().then(fn);
+    }
+  };
+
+  class MockSocketManager {
+    listeners = new Map<string, Set<Listener>>();
+
+    on(event: string, handler: Listener) {
+      let set = this.listeners.get(event);
+      if (!set) {
+        set = new Set();
+        this.listeners.set(event, set);
+      }
+      set.add(handler);
+      return this;
+    }
+
+    off(event: string, handler: Listener) {
+      const set = this.listeners.get(event);
+      if (!set) return this;
+      set.delete(handler);
+      if (set.size === 0) this.listeners.delete(event);
+      return this;
+    }
+
+    emit(event: string, ...args: unknown[]) {
+      const set = this.listeners.get(event);
+      if (!set) return this;
+      for (const fn of Array.from(set)) fn(...args);
+      return this;
+    }
+
+    reset() {
+      this.listeners.clear();
+    }
+  }
+
+  class MockSocket {
+    listeners = new Map<string, Set<Listener>>();
+    emittedEvents: Array<{ event: string; args: unknown[] }> = [];
+    connected = true;
+    manager = new MockSocketManager();
+    io = this.manager;
+
+    on(event: string, handler: Listener) {
+      let set = this.listeners.get(event);
+      if (!set) {
+        set = new Set();
+        this.listeners.set(event, set);
+      }
+      set.add(handler);
+      if (event === 'connect' && this.connected) {
+        schedule(() => handler());
+      }
+      return this;
+    }
+
+    once(event: string, handler: Listener) {
+      const wrapper: Listener = (...args) => {
+        this.off(event, wrapper);
+        handler(...args);
+      };
+      return this.on(event, wrapper);
+    }
+
+    off(event: string, handler: Listener) {
+      const set = this.listeners.get(event);
+      if (!set) return this;
+      set.delete(handler);
+      if (set.size === 0) this.listeners.delete(event);
+      return this;
+    }
+
+    emit(event: string, ...args: unknown[]) {
+      if (event === 'connect') this.connected = true;
+      if (event === 'disconnect') this.connected = false;
+      this.emittedEvents.push({ event, args });
+      return this;
+    }
+
+    trigger(event: string, ...args: unknown[]) {
+      const set = this.listeners.get(event);
+      if (!set) return this;
+      for (const fn of Array.from(set)) fn(...args);
+      return this;
+    }
+
+    connect() {
+      this.connected = true;
+      this.trigger('connect');
+      return this;
+    }
+
+    open() {
+      return this.connect();
+    }
+
+    close() {
+      this.connected = false;
+      this.trigger('disconnect');
+      return this;
+    }
+
+    disconnect() {
+      return this.close();
+    }
+
+    removeAllListeners(event?: string) {
+      if (event) {
+        this.listeners.delete(event);
+      } else {
+        this.listeners.clear();
+      }
+      return this;
+    }
+
+    reset() {
+      this.listeners.clear();
+      this.emittedEvents = [];
+      this.connected = true;
+      this.manager.reset();
+    }
+  }
+
+  let active: MockSocket | null = null;
+
+  return {
+    create() {
+      active = new MockSocket();
+      return active;
+    },
+    get() {
+      return active;
+    },
+    clear() {
+      active = null;
+    },
+  };
+});
+
+vi.mock('socket.io-client', () => {
+  return {
+    io: () => {
+      const socket = socketHarness.create();
+      if (typeof globalThis !== 'undefined') {
+        (globalThis as Record<string, unknown>).__socketIoMock = {
+          socket,
+          listeners: socket.listeners,
+          managerListeners: socket.manager.listeners,
+          emittedEvents: socket.emittedEvents,
+        };
+      }
+      return socket;
+    },
+  };
+});
+
 // Stub tracing span fetches to avoid external network in CI.
 // Tests that need specific spans should mock '@/api/modules/tracing' themselves.
 vi.mock('@/api/modules/tracing', async () => {
@@ -79,4 +244,44 @@ vi.mock('@/api/modules/tracing', async () => {
     fetchSpansInRange: async () => [],
     fetchRunningSpansFromTo: async () => [],
   };
+});
+
+const { graphSocket } = await import('./src/lib/graph/socket');
+const graphSocketRef = graphSocket as unknown as Record<string, unknown>;
+
+const clearMaybe = (value: unknown) => {
+  if (!value || typeof value !== 'object') return;
+  if ('clear' in value) {
+    const candidate = (value as { clear?: unknown }).clear;
+    if (typeof candidate === 'function') {
+      candidate.call(value);
+    }
+  }
+};
+
+if (typeof globalThis !== 'undefined') {
+  (globalThis as Record<string, unknown>).__graphSocketTestAPI = graphSocketRef;
+}
+
+afterEach(() => {
+  const active = socketHarness.get();
+  active?.reset();
+  socketHarness.clear();
+
+  clearMaybe(graphSocketRef.listeners);
+  clearMaybe(graphSocketRef.stateListeners);
+  clearMaybe(graphSocketRef.reminderListeners);
+  clearMaybe(graphSocketRef.threadCreatedListeners);
+  clearMaybe(graphSocketRef.threadUpdatedListeners);
+  clearMaybe(graphSocketRef.threadActivityListeners);
+  clearMaybe(graphSocketRef.threadRemindersListeners);
+  clearMaybe(graphSocketRef.messageCreatedListeners);
+  clearMaybe(graphSocketRef.runStatusListeners);
+  clearMaybe(graphSocketRef.runEventListeners);
+  clearMaybe(graphSocketRef.subscribedRooms);
+  clearMaybe(graphSocketRef.connectCallbacks);
+  clearMaybe(graphSocketRef.reconnectCallbacks);
+  clearMaybe(graphSocketRef.disconnectCallbacks);
+  clearMaybe(graphSocketRef.runCursors);
+  graphSocketRef.socket = null;
 });
