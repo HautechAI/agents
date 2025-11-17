@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 import { createServer, type Server as HTTPServer } from 'http';
 import type { AddressInfo } from 'net';
 import { io as createClient, type Socket } from 'socket.io-client';
@@ -9,7 +9,7 @@ import type { ThreadsMetricsService } from '../src/agents/threads.metrics.servic
 import type { PrismaService } from '../src/core/services/prisma.service';
 import type { LoggerService } from '../src/core/services/logger.service';
 import { PrismaClient, ToolExecStatus } from '@prisma/client';
-import { RunEventsService } from '../src/events/run-events.service';
+import { RunEventsService, type RunTimelineEvent } from '../src/events/run-events.service';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import type { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { GraphRepository } from '../src/graph/graph.repository';
@@ -198,6 +198,91 @@ describe.sequential('GraphSocketGateway realtime integration', () => {
     await prisma.thread.delete({ where: { id: thread.id } });
 
     await Promise.all([closeClient(runClient), closeClient(threadClient)]);
+    (gateway as unknown as { io?: { close(): void } }).io?.close();
+    await closeServer(server);
+  });
+
+  it('delivers run timeline events to combined thread and run subscribers with expected payloads', async () => {
+    const info = vi.fn();
+    const debug = vi.fn();
+    const warn = vi.fn();
+    const error = vi.fn();
+    const logger = { info, debug, warn, error } as unknown as LoggerService;
+    const runtime = createRuntimeStub();
+    const metricsDouble = createMetricsDouble();
+    const prismaService = ({ getClient: () => prisma }) as PrismaService;
+    const gateway = new GraphSocketGateway(logger, runtime, metricsDouble.service, prismaService);
+
+    const server = createServer();
+    await new Promise((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as AddressInfo;
+    gateway.init({ server });
+
+    const runEvents = new RunEventsService(prismaService, logger, gateway);
+    const templateRegistryStub = ({ getMeta: () => undefined }) as unknown as TemplateRegistry;
+    const graphRepositoryStub = ({ get: async () => ({ nodes: [] }) }) as unknown as GraphRepository;
+    const agents = new AgentsPersistenceService(prismaService, logger, metricsDouble.service, gateway, templateRegistryStub, graphRepositoryStub, runEvents);
+
+    const thread = await prisma.thread.create({ data: { alias: `thread-${randomUUID()}`, summary: 'combined' } });
+    const startResult = await agents.beginRunThread(thread.id, [HumanMessage.fromText('go')]);
+    const runId = startResult.runId;
+
+    const client = createClient(`http://127.0.0.1:${port}`, { path: '/socket.io', transports: ['websocket'] });
+    await new Promise<void>((resolve, reject) => {
+      client.once('connect', resolve);
+      client.once('connect_error', reject);
+    });
+    await subscribeRooms(client, [`run:${runId}`, `thread:${thread.id}`]);
+
+    expect(warn).not.toHaveBeenCalled();
+
+    const toolExecution = await runEvents.startToolExecution({
+      runId,
+      threadId: thread.id,
+      toolName: 'search',
+      toolCallId: 'call-1',
+      input: { query: 'combined' },
+    });
+
+    const appendLegacyPromise = waitForEvent<{ runId: string; mutation: 'append' | 'update'; event: RunTimelineEvent }>(client, 'run_event_appended');
+    const appendCreatedPromise = waitForEvent<{ runId: string; mutation: 'append' | 'update'; event: RunTimelineEvent }>(client, 'run_timeline_event_created');
+    const appended = await runEvents.publishEvent(toolExecution.id, 'append');
+    expect(appended).not.toBeNull();
+    const [appendLegacyPayload, appendCreatedPayload] = await Promise.all([appendLegacyPromise, appendCreatedPromise]);
+    expect(appendLegacyPayload.mutation).toBe('append');
+    expect(appendLegacyPayload.runId).toBe(runId);
+    expect(appendCreatedPayload.mutation).toBe('append');
+    const createdEvent = appendCreatedPayload.event;
+    expect(createdEvent.id).toBe(toolExecution.id);
+    expect(createdEvent.runId).toBe(runId);
+    expect(new Date(createdEvent.ts).toString()).not.toBe('Invalid Date');
+    expect(createdEvent.toolExecution?.input).toEqual({ query: 'combined' });
+
+    await runEvents.completeToolExecution({
+      eventId: toolExecution.id,
+      status: ToolExecStatus.success,
+      output: { answer: 7 },
+      raw: { latencyMs: 321 },
+    });
+
+    const updateLegacyPromise = waitForEvent<{ runId: string; mutation: 'append' | 'update'; event: RunTimelineEvent }>(client, 'run_event_appended');
+    const updateUpdatedPromise = waitForEvent<{ runId: string; mutation: 'append' | 'update'; event: RunTimelineEvent }>(client, 'run_timeline_event_updated');
+    await runEvents.publishEvent(toolExecution.id, 'update');
+    const [updateLegacyPayload, updateUpdatedPayload] = await Promise.all([updateLegacyPromise, updateUpdatedPromise]);
+    expect(updateLegacyPayload.mutation).toBe('update');
+    expect(updateLegacyPayload.runId).toBe(runId);
+    expect(updateUpdatedPayload.mutation).toBe('update');
+    const updatedEvent = updateUpdatedPayload.event;
+    expect(updatedEvent.id).toBe(toolExecution.id);
+    expect(updatedEvent.runId).toBe(runId);
+    expect(updatedEvent.toolExecution?.output).toEqual({ answer: 7 });
+    expect(new Date(updatedEvent.ts).getTime()).toBeGreaterThanOrEqual(new Date(createdEvent.ts).getTime());
+
+    expect(warn).not.toHaveBeenCalled();
+
+    await prisma.thread.delete({ where: { id: thread.id } });
+
+    await closeClient(client);
     (gateway as unknown as { io?: { close(): void } }).io?.close();
     await closeServer(server);
   });
