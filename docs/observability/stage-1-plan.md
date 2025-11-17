@@ -1,5 +1,7 @@
 # Observability Stage 1 — Plan (SDK + Server + PoC)
 
+> **Archived:** The tracing SDK/server/UI described below were removed in issue #760. The plan is retained only for historical reference until a new observability stack is defined.
+
 Authoritative scope for Issue #82. Dev/local only, no auth or rate limiting. Minimal filters.
 
 Changes (update):

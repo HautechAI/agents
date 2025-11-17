@@ -1,27 +1,41 @@
 import { Injectable } from '@nestjs/common';
-import { logger as tracingLogger } from '@agyn/tracing';
 
 @Injectable()
 export class LoggerService {
   info(message: string, ...optionalParams: unknown[]) {
-    console.info(`[INFO] ${message}`, ...optionalParams);
-    tracingLogger().info(`${message}\n${this.serialize(optionalParams)}`);
+    this.log('INFO', message, optionalParams);
   }
 
   debug(message: string, ...optionalParams: unknown[]) {
-    console.debug(`[DEBUG] ${message}`, ...optionalParams);
-    tracingLogger().debug(`${message}\n${this.serialize(optionalParams)}`);
+    this.log('DEBUG', message, optionalParams);
   }
 
   warn(message: string, ...optionalParams: unknown[]) {
-    console.warn(`[WARN] ${message}`, ...optionalParams);
-    // tracing logger lacks warn(); map to info to avoid runtime errors
-    tracingLogger().info(`${message}\n${this.serialize(optionalParams)}`);
+    this.log('WARN', message, optionalParams);
   }
 
   error(message: string, ...optionalParams: unknown[]) {
-    console.error(`[ERROR] ${message}`, ...optionalParams);
-    tracingLogger().error(`${message}\n${this.serialize(optionalParams)}`);
+    this.log('ERROR', message, optionalParams);
+  }
+
+  private log(level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR', message: string, optionalParams: unknown[]) {
+    const details = optionalParams.length > 0 ? this.serialize(optionalParams) : null;
+    const suffix = details && details !== '[]' ? `\n${details}` : '';
+    const formatted = `[${level}] ${message}${suffix}`;
+
+    switch (level) {
+      case 'DEBUG':
+        console.debug(formatted);
+        break;
+      case 'WARN':
+        console.warn(formatted);
+        break;
+      case 'ERROR':
+        console.error(formatted);
+        break;
+      default:
+        console.info(formatted);
+    }
   }
 
   private serialize(params: unknown[]) {

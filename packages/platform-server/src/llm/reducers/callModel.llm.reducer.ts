@@ -7,7 +7,6 @@ import {
   SystemMessage,
   ToolCallMessage,
 } from '@agyn/llm';
-import { LLMResponse, withLLM } from '@agyn/tracing';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMContext, LLMContextState, LLMMessage, LLMState } from '../types';
 import { LoggerService } from '../../core/services/logger.service';
@@ -97,41 +96,13 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     });
     await this.runEvents.publishEvent(llmEvent.id, 'append');
 
-    let wrapped: LLMResponse<ResponseMessage> | null = null;
     try {
-      const rawMessage = await withLLM({ context: input.slice(-10) }, async () => {
-        try {
-          const raw = await this.llm!.call({
-            model: this.model,
-            input,
-            tools: this.tools,
-          });
+      const rawMessage = await this.callModel(input);
 
-          const toolCallMessages = raw.output.filter((m) => m instanceof ToolCallMessage) as ToolCallMessage[];
-          const result = new LLMResponse({
-            raw,
-            content: raw.text,
-            toolCalls: toolCallMessages,
-          });
-          wrapped = result;
-          return result;
-        } catch (error) {
-          this.logger.error('Error occurred while calling LLM', error);
-          if (error instanceof Error) throw error;
-          throw new Error(String(error));
-        }
-      });
-
-      const llmResult =
-        wrapped ??
-        new LLMResponse({
-          raw: rawMessage,
-          content: rawMessage.text,
-          toolCalls: rawMessage.output.filter((m) => m instanceof ToolCallMessage) as ToolCallMessage[],
-        });
-
-      const toolCalls = this.serializeToolCalls(llmResult.toolCalls ?? []);
-      const rawResponse = this.trySerialize(llmResult.raw);
+      const toolCalls = this.serializeToolCalls(
+        rawMessage.output.filter((m) => m instanceof ToolCallMessage) as ToolCallMessage[],
+      );
+      const rawResponse = this.trySerialize(rawMessage);
 
       const assistantContextItems = await this.runEvents.createContextItems([
         contextItemInputFromMessage(rawMessage),
@@ -149,8 +120,8 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       await this.runEvents.completeLLMCall({
         eventId: llmEvent.id,
         status: RunEventStatus.success,
-        responseText: llmResult.content ?? null,
-        stopReason: this.extractStopReason(llmResult.raw),
+        responseText: rawMessage.text ?? null,
+        stopReason: this.extractStopReason(rawMessage),
         rawResponse,
         toolCalls,
       });
@@ -171,6 +142,20 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
         rawResponse: this.trySerialize(error),
       });
       await this.runEvents.publishEvent(llmEvent.id, 'update');
+      if (error instanceof Error) throw error;
+      throw new Error(String(error));
+    }
+  }
+
+  private async callModel(input: LLMMessage[]): Promise<ResponseMessage> {
+    try {
+      return await this.llm!.call({
+        model: this.model,
+        input,
+        tools: this.tools,
+      });
+    } catch (error) {
+      this.logger.error('Error occurred while calling LLM', error);
       if (error instanceof Error) throw error;
       throw new Error(String(error));
     }

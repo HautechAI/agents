@@ -1,5 +1,7 @@
 Observability: Heartbeats and Sweeper
 
+> **Archived:** Heartbeat and sweeper behavior applied to the deprecated tracing stack. These mechanics were removed alongside tracing in issue #760.
+
 Overview
 - SDK sends periodic heartbeats for running spans.
 - Server reconciles and cancels spans that miss heartbeats.
