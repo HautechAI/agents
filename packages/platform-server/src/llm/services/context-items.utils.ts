@@ -1,12 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { ContextItemRole, Prisma } from '@prisma/client';
-import {
-  AIMessage,
-  HumanMessage,
-  ResponseMessage,
-  SystemMessage,
-  ToolCallOutputMessage,
-} from '@agyn/llm';
+import { AIMessage, HumanMessage, ResponseMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { toPrismaJsonValue } from './messages.serialization';
 
 export type ContextItemInput = {
@@ -155,7 +149,7 @@ export function contextItemInputFromMemory(message: SystemMessage, place: Memory
 }
 
 export function contextItemInputFromMessage(
-  message: SystemMessage | HumanMessage | AIMessage | ResponseMessage | ToolCallOutputMessage,
+  message: SystemMessage | HumanMessage | AIMessage | ResponseMessage | ToolCallMessage | ToolCallOutputMessage,
 ): ContextItemInput {
   if (message instanceof SystemMessage) return contextItemInputFromSystem(message);
   if (message instanceof HumanMessage) {
@@ -172,6 +166,12 @@ export function contextItemInputFromMessage(
       metadata: { type: message.type },
     };
   }
+  if (message instanceof ToolCallMessage) {
+    return {
+      role: ContextItemRole.tool,
+      metadata: { type: message.type, callId: message.callId, name: message.name, phase: 'request' },
+    };
+  }
   if (message instanceof ToolCallOutputMessage) {
     return {
       role: ContextItemRole.tool,
@@ -181,9 +181,11 @@ export function contextItemInputFromMessage(
     };
   }
   if (message instanceof ResponseMessage) {
+    const text = message.text;
+    const hasContent = text.trim().length > 0;
     return {
       role: ContextItemRole.assistant,
-      contentText: message.text,
+      contentText: hasContent ? text : null,
       contentJson: safeToPlain(message),
       metadata: { type: message.type },
     };
