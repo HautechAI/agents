@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import websocketPlugin from '@fastify/websocket';
+import type { WebsocketHandler } from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
 import { z } from 'zod';
@@ -18,6 +19,84 @@ const IncomingMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('close') }),
 ]);
 
+type SocketStream = Parameters<WebsocketHandler>[0] & { socket?: WebSocket };
+
+type WsLike = {
+  readyState: number;
+  send: (data: string) => void;
+  on: (event: string, listener: (...args: unknown[]) => void) => unknown;
+  close?: (code?: number, reason?: string) => void;
+  terminate?: () => void;
+  end?: () => void;
+  removeListener?: (event: string, listener: (...args: unknown[]) => void) => unknown;
+  off?: (event: string, listener: (...args: unknown[]) => void) => unknown;
+  removeAllListeners?: (event?: string) => unknown;
+};
+
+const isWsLike = (value: unknown): value is WsLike => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<WsLike>;
+  return typeof candidate.readyState === 'number' && typeof candidate.send === 'function' && typeof candidate.on === 'function';
+};
+
+const safeSend = (ws: WsLike, payload: Record<string, unknown>, logger: LoggerService): void => {
+  if (ws.readyState !== WebSocket.OPEN) {
+    logger.debug('terminal socket send skipped: socket not open', { payloadType: payload.type });
+    return;
+  }
+  try {
+    logger.debug('terminal socket send', { payload });
+    ws.send(JSON.stringify(payload));
+  } catch (err) {
+    logger.warn('terminal socket send failed', { error: err instanceof Error ? err.message : String(err) });
+  }
+};
+
+const safeClose = (ws: WsLike, code: number | undefined, reason: string | undefined, logger: LoggerService): void => {
+  const details = { code, reason };
+  if (typeof ws.close === 'function') {
+    try {
+      logger.debug('terminal socket close via close()', details);
+      ws.close(code, reason);
+      return;
+    } catch (err) {
+      logger.warn('terminal socket close via close() failed', {
+        ...details,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (typeof ws.terminate === 'function') {
+    try {
+      logger.debug('terminal socket close via terminate()', details);
+      ws.terminate();
+      return;
+    } catch (err) {
+      logger.warn('terminal socket close via terminate() failed', {
+        ...details,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const end = (ws as { end?: () => void }).end;
+  if (typeof end === 'function') {
+    try {
+      logger.debug('terminal socket close via end()', details);
+      end.call(ws);
+      return;
+    } catch (err) {
+      logger.warn('terminal socket close via end() failed', {
+        ...details,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  logger.debug('terminal socket close fallback exhausted', details);
+};
+
 @Injectable()
 export class ContainerTerminalGateway {
   private registered = false;
@@ -31,21 +110,70 @@ export class ContainerTerminalGateway {
   registerRoutes(fastify: FastifyInstance): void {
     if (this.registered) return;
     fastify.register(websocketPlugin);
-    fastify.get('/api/containers/:containerId/terminal/ws', { websocket: true }, (socket, request) => {
-      void this.handleConnection({ socket }, request);
+    fastify.after(() => {
+      fastify.get('/api/containers/:containerId/terminal/ws', { websocket: true }, (connection, request) => {
+        void this.handleConnection(connection as SocketStream, request);
+      });
     });
     this.registered = true;
     this.logger.info('Container terminal WebSocket registered');
   }
 
-  private async handleConnection(connection: { socket: WebSocket }, request: FastifyRequest): Promise<void> {
-    const isOpen = () => connection.socket.readyState === WebSocket.OPEN;
-    const send = (payload: Record<string, unknown>) => {
-      if (!isOpen()) return;
+  private async handleConnection(connection: SocketStream, request: FastifyRequest): Promise<void> {
+    const rawSocket = (connection as { socket?: unknown }).socket;
+    if (process.env.NODE_ENV === 'test') {
+      this.logger.debug('terminal connection shape', {
+        connectionType: typeof connection,
+        connectionKeys: typeof connection === 'object' ? Object.keys(connection as Record<string, unknown>) : undefined,
+        socketType: typeof rawSocket,
+        socketKeys:
+          rawSocket && typeof rawSocket === 'object' ? Object.keys(rawSocket as Record<string, unknown>) : undefined,
+      });
+    }
+    const candidate = (rawSocket ?? connection) as unknown;
+    this.logger.debug('terminal connection received', {
+      requestWs: (request as FastifyRequest & { ws?: boolean }).ws,
+      connectionType: typeof connection,
+    });
+    if (!isWsLike(candidate)) {
+      this.logger.error('terminal websocket connection lacks ws-like interface', {
+        connectionType: typeof connection,
+        connectionKeys: typeof connection === 'object' ? Object.keys(connection as Record<string, unknown>) : undefined,
+      });
       try {
-        connection.socket.send(JSON.stringify(payload));
-      } catch (err) {
-        this.logger.warn('terminal socket send failed', { error: err instanceof Error ? err.message : String(err) });
+        (connection as { end?: () => void }).end?.();
+      } catch {
+        // ignore
+      }
+      try {
+        (connection as { destroy?: () => void }).destroy?.();
+      } catch {
+        // ignore
+      }
+      try {
+        (connection as { terminate?: () => void }).terminate?.();
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    const ws: WsLike = candidate;
+    const isOpen = () => ws.readyState === WebSocket.OPEN;
+    const send = (payload: Record<string, unknown>) => safeSend(ws, payload, this.logger);
+    const close = (code: number, reason: string) => safeClose(ws, code, reason, this.logger);
+    const detach = (event: string, handler: (...args: unknown[]) => void) => {
+      const off = (ws as { off?: (event: string, handler: (...args: unknown[]) => void) => void }).off;
+      if (typeof off === 'function') {
+        off.call(ws, event, handler);
+        return;
+      }
+      if (typeof ws.removeListener === 'function') {
+        ws.removeListener(event, handler);
+        return;
+      }
+      if (typeof ws.removeAllListeners === 'function') {
+        ws.removeAllListeners(event);
       }
     };
 
@@ -53,14 +181,14 @@ export class ContainerTerminalGateway {
     const containerIdParam = params?.containerId;
     if (!containerIdParam) {
       send({ type: 'error', code: 'container_id_required', message: 'Container id missing in route' });
-      connection.socket.close(1008, 'container_id_required');
+      close(1008, 'container_id_required');
       return;
     }
 
     const parsedQuery = QuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {
       send({ type: 'error', code: 'invalid_query', message: 'Invalid session parameters' });
-      connection.socket.close(1008, 'invalid_query');
+      close(1008, 'invalid_query');
       return;
     }
     const { sessionId, token } = parsedQuery.data;
@@ -71,14 +199,14 @@ export class ContainerTerminalGateway {
     } catch (err) {
       const code = err instanceof Error ? err.message : 'session_error';
       send({ type: 'error', code, message: 'Terminal session validation failed' });
-      connection.socket.close(1008, code);
+      close(1008, code);
       return;
     }
 
     const containerId = session.containerId;
     if (containerIdParam && containerIdParam !== containerId) {
       send({ type: 'error', code: 'container_mismatch', message: 'Terminal session belongs to different container' });
-      connection.socket.close(1008, 'container_mismatch');
+      close(1008, 'container_mismatch');
       return;
     }
 
@@ -88,7 +216,7 @@ export class ContainerTerminalGateway {
     } catch (err) {
       const code = err instanceof Error ? err.message : 'session_error';
       send({ type: 'error', code, message: 'Terminal session already connected' });
-      connection.socket.close(1008, code);
+      close(1008, code);
       return;
     }
 
@@ -128,6 +256,9 @@ export class ContainerTerminalGateway {
     let stderr: NodeJS.ReadableStream | null = null;
     let closeExec: (() => Promise<{ exitCode: number }>) | null = null;
     let closed = false;
+    let onMessage: ((raw: RawData) => void) | null = null;
+    let onClose: (() => void) | null = null;
+    let onError: ((err: Error) => void) | null = null;
 
     const cleanup = async (reason: string) => {
       if (closed) return;
@@ -159,9 +290,18 @@ export class ContainerTerminalGateway {
       stderr?.removeAllListeners?.('close');
       stdout = null;
       stderr = null;
-      connection.socket.removeAllListeners?.('message');
-      connection.socket.removeAllListeners?.('close');
-      connection.socket.removeAllListeners?.('error');
+      if (onMessage) {
+        detach('message', onMessage);
+        onMessage = null;
+      }
+      if (onClose) {
+        detach('close', onClose);
+        onClose = null;
+      }
+      if (onError) {
+        detach('error', onError);
+        onError = null;
+      }
       try {
         if (closeExec) {
           const { exitCode } = await closeExec();
@@ -172,7 +312,7 @@ export class ContainerTerminalGateway {
       } finally {
         this.sessions.close(sessionId);
         try {
-          if (isOpen()) connection.socket.close(1000, reason);
+          if (isOpen()) close(1000, reason);
         } catch {
           // ignore close errors
         }
@@ -317,7 +457,7 @@ export class ContainerTerminalGateway {
       return;
     }
 
-    connection.socket.on('message', (raw: RawData) => {
+    onMessage = (raw: RawData) => {
       if (closed) return;
       const text = typeof raw === 'string' ? raw : raw.toString('utf8');
       let parsed: unknown;
@@ -447,20 +587,24 @@ export class ContainerTerminalGateway {
         default:
           break;
       }
-    });
+    };
 
-    connection.socket.on('close', () => {
+    onClose = () => {
       this.logger.debug('terminal socket close received', { execId, sessionId });
       void cleanup('socket_closed');
-    });
+    };
 
-    connection.socket.on('error', (err) => {
+    onError = (err) => {
       this.logger.warn('terminal socket error', {
         containerId: containerId.substring(0, 12),
         sessionId,
         error: err instanceof Error ? err.message : String(err),
       });
       void cleanup('socket_error');
-    });
+    };
+
+    ws.on('message', onMessage);
+    ws.on('close', onClose);
+    ws.on('error', onError);
   }
 }
