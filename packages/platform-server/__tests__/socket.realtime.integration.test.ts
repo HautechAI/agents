@@ -245,13 +245,23 @@ describe.sequential('GraphSocketGateway realtime integration', () => {
       input: { query: 'status' },
     });
 
-    const appendThreadEvent = waitForEvent<{ mutation: string; event: { id: string } }>(threadClient, 'run_event_appended');
-    const appendRunEvent = waitForEvent<{ mutation: string; event: { id: string } }>(runClient, 'run_event_appended');
+    const appendThreadLegacy = waitForEvent<{ mutation: string; event: { id: string } }>(threadClient, 'run_event_appended');
+    const appendThreadCreated = waitForEvent<{ mutation: string; event: { id: string } }>(threadClient, 'run_timeline_event_created');
+    const appendRunLegacy = waitForEvent<{ mutation: string; event: { id: string } }>(runClient, 'run_event_appended');
+    const appendRunCreated = waitForEvent<{ mutation: string; event: { id: string } }>(runClient, 'run_timeline_event_created');
     const appendPayload = await runEvents.publishEvent(toolExecution.id, 'append');
     expect(appendPayload?.toolExecution?.input).toEqual({ query: 'status' });
-    const [appendThread, appendRun] = await Promise.all([appendThreadEvent, appendRunEvent]);
-    expect(appendThread.mutation).toBe('append');
-    expect(appendRun.event.id).toBe(toolExecution.id);
+    const [appendThreadLegacyPayload, appendRunLegacyPayload, appendThreadCreatedPayload, appendRunCreatedPayload] = await Promise.all([
+      appendThreadLegacy,
+      appendRunLegacy,
+      appendThreadCreated,
+      appendRunCreated,
+    ]);
+    expect(appendThreadLegacyPayload.mutation).toBe('append');
+    expect(appendRunLegacyPayload.event.id).toBe(toolExecution.id);
+    expect(appendThreadCreatedPayload.mutation).toBe('append');
+    expect(appendThreadCreatedPayload.event.id).toBe(toolExecution.id);
+    expect(appendRunCreatedPayload.event.id).toBe(toolExecution.id);
 
     await runEvents.completeToolExecution({
       eventId: toolExecution.id,
@@ -260,12 +270,21 @@ describe.sequential('GraphSocketGateway realtime integration', () => {
       raw: { latencyMs: 1200 },
     });
 
-    const updateThreadEvent = waitForEvent<{ mutation: string; event: { toolExecution?: { output?: unknown } } }>(threadClient, 'run_event_appended');
-    const updateRunEvent = waitForEvent<{ mutation: string; event: { toolExecution?: { output?: unknown } } }>(runClient, 'run_event_appended');
+    const updateThreadLegacy = waitForEvent<{ mutation: string; event: { toolExecution?: { output?: unknown } } }>(threadClient, 'run_event_appended');
+    const updateThreadUpdated = waitForEvent<{ mutation: string; event: { toolExecution?: { output?: unknown } } }>(threadClient, 'run_timeline_event_updated');
+    const updateRunLegacy = waitForEvent<{ mutation: string; event: { toolExecution?: { output?: unknown } } }>(runClient, 'run_event_appended');
+    const updateRunUpdated = waitForEvent<{ mutation: string; event: { toolExecution?: { output?: unknown } } }>(runClient, 'run_timeline_event_updated');
     await runEvents.publishEvent(toolExecution.id, 'update');
-    const [updateThread, updateRun] = await Promise.all([updateThreadEvent, updateRunEvent]);
-    expect(updateThread.mutation).toBe('update');
-    expect(updateRun.event.toolExecution?.output).toEqual({ answer: 42 });
+    const [updateThreadLegacyPayload, updateThreadUpdatedPayload, updateRunLegacyPayload, updateRunUpdatedPayload] = await Promise.all([
+      updateThreadLegacy,
+      updateThreadUpdated,
+      updateRunLegacy,
+      updateRunUpdated,
+    ]);
+    expect(updateThreadLegacyPayload.mutation).toBe('update');
+    expect(updateThreadUpdatedPayload.mutation).toBe('update');
+    expect(updateRunLegacyPayload.event.toolExecution?.output).toEqual({ answer: 42 });
+    expect(updateRunUpdatedPayload.event.toolExecution?.output).toEqual({ answer: 42 });
 
     await new Promise((resolve) => setTimeout(resolve, 150));
 

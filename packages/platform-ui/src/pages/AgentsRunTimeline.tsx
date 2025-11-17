@@ -203,8 +203,8 @@ export function AgentsRunTimeline() {
 
   useEffect(() => {
     if (!runId) return;
-    const room = `run:${runId}`;
-    graphSocket.subscribe([room]);
+    const rooms = threadId ? [`run:${runId}`, `thread:${threadId}`] : [`run:${runId}`];
+    graphSocket.subscribe(rooms);
     const off = graphSocket.onRunEvent(({ runId: incomingRunId, event }) => {
       if (incomingRunId !== runId) return;
       updateEventsState((prev) => mergeEvents(prev, [event], selectedTypes, selectedStatuses));
@@ -222,9 +222,9 @@ export function AgentsRunTimeline() {
       off();
       offStatus();
       offReconnect();
-      graphSocket.unsubscribe([room]);
+      graphSocket.unsubscribe(rooms);
     };
-  }, [runId, selectedTypes, selectedStatuses, summaryQuery, updateEventsState, setCursor, fetchSinceCursor]);
+  }, [runId, threadId, selectedTypes, selectedStatuses, summaryQuery, updateEventsState, setCursor, fetchSinceCursor]);
 
   const isDefaultFilters = selectedTypes.length === EVENT_TYPES.length && selectedStatuses.length === 0;
 

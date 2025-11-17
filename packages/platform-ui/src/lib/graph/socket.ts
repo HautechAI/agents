@@ -21,6 +21,8 @@ interface ServerToClientEvents {
   message_created: (payload: { message: MessageSummary }) => void;
   run_status_changed: (payload: { run: RunSummary }) => void;
   run_event_appended: (payload: RunEventSocketPayload) => void;
+  run_timeline_event_created: (payload: RunEventSocketPayload) => void;
+  run_timeline_event_updated: (payload: RunEventSocketPayload) => void;
 }
 // Client-to-server emits: subscribe to rooms
 type SubscribePayload = { room?: string; rooms?: string[] };
@@ -55,6 +57,7 @@ class GraphSocket {
   private reconnectCallbacks = new Set<() => void>();
   private disconnectCallbacks = new Set<() => void>();
   private runCursors = new Map<string, RunTimelineEventsCursor>();
+  private runEventSignatures = new Map<string, Map<string, { ts: string | null; signature: string }>>();
 
   private compareCursors(a: RunTimelineEventsCursor, b: RunTimelineEventsCursor): number {
     const parsedA = Date.parse(a.ts);
@@ -154,10 +157,16 @@ class GraphSocket {
     this.socket.on('run_status_changed', (payload: RunStatusChangedPayload) => {
       for (const fn of this.runStatusListeners) fn(payload);
     });
-    this.socket.on('run_event_appended', (payload: RunEventSocketPayload) => {
-      this.bumpRunCursor(payload.runId, { ts: payload.event.ts, id: payload.event.id });
+    const handleRunTimeline = (payload: RunEventSocketPayload) => {
+      const eventId = payload.event?.id;
+      if (!payload.runId || !eventId) return;
+      if (!this.registerRunEvent(payload.runId, eventId, payload)) return;
+      this.bumpRunCursor(payload.runId, { ts: payload.event.ts, id: eventId });
       for (const fn of this.runEventListeners) fn(payload);
-    });
+    };
+    this.socket.on('run_event_appended', handleRunTimeline);
+    this.socket.on('run_timeline_event_created', handleRunTimeline);
+    this.socket.on('run_timeline_event_updated', handleRunTimeline);
     return this.socket;
   }
 
@@ -219,6 +228,7 @@ class GraphSocket {
       if (room.startsWith('run:')) {
         const runId = room.slice(4);
         this.runCursors.delete(runId);
+        this.runEventSignatures.delete(runId);
       }
     }
   }
@@ -295,10 +305,25 @@ class GraphSocket {
   setRunCursor(runId: string, cursor: RunTimelineEventsCursor | null, opts?: { force?: boolean }) {
     if (!runId) return;
     this.bumpRunCursor(runId, cursor, opts);
+    if (!cursor) this.runEventSignatures.delete(runId);
   }
 
   getRunCursor(runId: string): RunTimelineEventsCursor | null {
     return this.runCursors.get(runId) ?? null;
+  }
+
+  private registerRunEvent(runId: string, eventId: string, payload: RunEventSocketPayload): boolean {
+    let known = this.runEventSignatures.get(runId);
+    if (!known) {
+      known = new Map();
+      this.runEventSignatures.set(runId, known);
+    }
+    const signature = JSON.stringify(payload);
+    const ts = payload.event?.ts ?? null;
+    const prev = known.get(eventId);
+    if (prev && prev.ts === ts && prev.signature === signature) return false;
+    known.set(eventId, { ts, signature });
+    return true;
   }
 }
 

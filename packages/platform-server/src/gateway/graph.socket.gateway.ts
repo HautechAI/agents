@@ -11,6 +11,25 @@ import { PrismaService } from '../core/services/prisma.service';
 import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import type { GraphEventsPublisherAware } from './graph.events.publisher';
 
+const MAX_ROOM_LOG_LENGTH = 128;
+
+function extractSubscribeRooms(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  const maybeRecord = value as { room?: unknown; rooms?: unknown };
+  const rooms: string[] = [];
+  if (typeof maybeRecord.room === 'string') rooms.push(maybeRecord.room);
+  if (Array.isArray(maybeRecord.rooms)) {
+    for (const entry of maybeRecord.rooms) if (typeof entry === 'string') rooms.push(entry);
+  }
+  return rooms;
+}
+
+function sanitizeRoom(room: string): string {
+  const normalized = room.trim();
+  if (normalized.length <= MAX_ROOM_LOG_LENGTH) return normalized;
+  return `${normalized.slice(0, MAX_ROOM_LOG_LENGTH)}…`;
+}
+
 // Strict outbound event payloads
 export const NodeStatusEventSchema = z
   .object({
@@ -93,7 +112,8 @@ export class GraphSocketGateway implements GraphEventsPublisher {
       socket.on('subscribe', (payload: unknown) => {
         const parsed = SubscribeSchema.safeParse(payload);
         if (!parsed.success) {
-          this.logger.error('Socket subscribe payload invalid', parsed.error.issues);
+          const rooms = extractSubscribeRooms(payload).map(sanitizeRoom);
+          this.logger.warn('Socket subscribe payload invalid', { rooms, issues: parsed.error.issues });
           return;
         }
         const p = parsed.data;
@@ -186,6 +206,13 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     if (!this.io) return;
     this.io.to(`run:${runId}`).emit('run_event_appended', payload);
     this.io.to(`thread:${threadId}`).emit('run_event_appended', payload);
+    if (payload.mutation === 'append') {
+      this.io.to(`run:${runId}`).emit('run_timeline_event_created', payload);
+      this.io.to(`thread:${threadId}`).emit('run_timeline_event_created', payload);
+    } else if (payload.mutation === 'update') {
+      this.io.to(`run:${runId}`).emit('run_timeline_event_updated', payload);
+      this.io.to(`thread:${threadId}`).emit('run_timeline_event_updated', payload);
+    }
   }
   private flushMetricsQueue = async () => {
     // De-duplicate pending thread IDs per flush (preserve insertion order)
