@@ -12,6 +12,7 @@ import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import type { GraphEventsPublisherAware } from './graph.events.publisher';
 
 const MAX_ROOM_LOG_LENGTH = 128;
+type TimelineEventName = 'run_timeline_event_created' | 'run_timeline_event_updated';
 
 function extractSubscribeRooms(value: unknown): string[] {
   if (!value || typeof value !== 'object') return [];
@@ -204,15 +205,34 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   }
   emitRunEvent(runId: string, threadId: string, payload: RunEventBroadcast) {
     if (!this.io) return;
-    this.io.to(`run:${runId}`).emit('run_event_appended', payload);
-    this.io.to(`thread:${threadId}`).emit('run_event_appended', payload);
+    const runRoom = `run:${runId}`;
+    const threadRoom = `thread:${threadId}`;
+    const rooms = [runRoom, threadRoom];
+    this.io.to(runRoom).emit('run_event_appended', payload);
+    this.io.to(threadRoom).emit('run_event_appended', payload);
     if (payload.mutation === 'append') {
-      this.io.to(`run:${runId}`).emit('run_timeline_event_created', payload);
-      this.io.to(`thread:${threadId}`).emit('run_timeline_event_created', payload);
+      this.logTimelineEmission('run_timeline_event_created', runId, threadId, rooms, payload);
+      this.io.to(runRoom).emit('run_timeline_event_created', payload);
+      this.io.to(threadRoom).emit('run_timeline_event_created', payload);
     } else if (payload.mutation === 'update') {
-      this.io.to(`run:${runId}`).emit('run_timeline_event_updated', payload);
-      this.io.to(`thread:${threadId}`).emit('run_timeline_event_updated', payload);
+      this.logTimelineEmission('run_timeline_event_updated', runId, threadId, rooms, payload);
+      this.io.to(runRoom).emit('run_timeline_event_updated', payload);
+      this.io.to(threadRoom).emit('run_timeline_event_updated', payload);
     }
+  }
+  private logTimelineEmission(event: TimelineEventName, runId: string, threadId: string, rooms: string[], payload: RunEventBroadcast) {
+    if (typeof process === 'undefined' || process.env?.NODE_ENV !== 'development') return;
+    const record = isRecord(payload.event) ? payload.event : null;
+    const eventId = record && 'id' in record ? String(record.id) : undefined;
+    const eventTs = record && 'ts' in record ? String(record.ts) : undefined;
+    this.logger.debug('GraphSocketGateway timeline emission', {
+      event,
+      runId,
+      threadId,
+      rooms,
+      eventId: eventId ?? null,
+      eventTs: eventTs ?? null,
+    });
   }
   private flushMetricsQueue = async () => {
     // De-duplicate pending thread IDs per flush (preserve insertion order)
@@ -255,4 +275,8 @@ export class GraphSocketGateway implements GraphEventsPublisher {
       this.scheduleThreadMetrics(threadId);
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
 }
