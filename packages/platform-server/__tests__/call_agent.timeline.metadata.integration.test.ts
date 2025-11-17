@@ -25,7 +25,7 @@ const graphRepoStub = { get: async () => ({ nodes: [], edges: [] }) } as unknown
 
 const eventsPublisher = new NoopGraphEventsPublisher();
 const runEvents = new RunEventsService(prismaService, logger, eventsPublisher);
-const callAgentLinking = new CallAgentLinkingService(logger, runEvents, prismaService);
+const callAgentLinking = new CallAgentLinkingService(prismaService, runEvents, logger);
 const agents = new AgentsPersistenceService(prismaService, logger, metricsStub, eventsPublisher, templateRegistryStub, graphRepoStub, runEvents, callAgentLinking);
 
 async function createCallAgentParentEvent(parentThreadId: string, childThreadId: string, runId: string) {
@@ -36,7 +36,6 @@ async function createCallAgentParentEvent(parentThreadId: string, childThreadId:
       type: 'tool_execution',
       status: 'running',
       startedAt: new Date(),
-      sourceSpanId: childThreadId,
       metadata: {
         tool: 'call_agent',
         parentThreadId,

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma, PrismaClient, RunStatus } from '@prisma/client';
+import { Prisma as PrismaNamespace } from '@prisma/client';
 
 import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
@@ -67,6 +68,39 @@ export class CallAgentLinkingService {
     };
   }
 
+  async registerParentToolExecution(params: {
+    runId: string;
+    parentThreadId: string;
+    childThreadId: string;
+    toolName: string;
+  }): Promise<string | null> {
+    const canonical: CallAgentToolName = params.toolName === 'call_engineer' ? 'call_engineer' : 'call_agent';
+    try {
+      const eventId = await this.prisma.$transaction(async (tx) => {
+        const event = await this.findLatestToolEvent(tx, params.runId, canonical);
+        if (!event) return null;
+
+        const metadata = this.buildInitialMetadata({
+          toolName: canonical,
+          parentThreadId: params.parentThreadId,
+          childThreadId: params.childThreadId,
+        });
+
+        await this.saveMetadata(tx, event.id, metadata);
+        return event.id;
+      });
+      if (eventId) await this.runEvents.publishEvent(eventId, 'update');
+      return eventId;
+    } catch (err) {
+      this.logger.warn('call_agent_linking: failed to register parent tool execution', {
+        err,
+        runId: params.runId,
+        childThreadId: params.childThreadId,
+      });
+      return null;
+    }
+  }
+
   async onChildRunStarted(params: {
     tx?: Tx;
     childThreadId: string;
@@ -96,7 +130,7 @@ export class CallAgentLinkingService {
       childMessageId: childRun.latestMessageId,
     };
 
-    await this.patchMetadata(tx, event.id, metadata);
+    await this.saveMetadata(tx, event.id, metadata);
     return event.id;
   }
 
@@ -124,7 +158,7 @@ export class CallAgentLinkingService {
       childMessageId: childRun.latestMessageId,
     };
 
-    await this.patchMetadata(tx, event.id, metadata);
+    await this.saveMetadata(tx, event.id, metadata);
     return event.id;
   }
 
@@ -152,28 +186,33 @@ export class CallAgentLinkingService {
       childMessageId: childRun.latestMessageId,
     };
 
-    await this.patchMetadata(tx, event.id, metadata);
+    await this.saveMetadata(tx, event.id, metadata);
     return event.id;
   }
 
-  private async patchMetadata(tx: Tx, eventId: string, metadata: CallAgentLinkMetadata): Promise<void> {
+  private serializeMetadata(metadata: CallAgentLinkMetadata): PrismaNamespace.JsonObject {
+    return {
+      tool: metadata.tool,
+      parentThreadId: metadata.parentThreadId,
+      childThreadId: metadata.childThreadId,
+      childRun: {
+        id: metadata.childRun.id,
+        status: metadata.childRun.status,
+        linkEnabled: metadata.childRun.linkEnabled,
+        latestMessageId: metadata.childRun.latestMessageId,
+      },
+      childRunId: metadata.childRunId ?? metadata.childRun.id ?? null,
+      childRunStatus: metadata.childRunStatus ?? metadata.childRun.status,
+      childRunLinkEnabled: metadata.childRunLinkEnabled ?? metadata.childRun.linkEnabled,
+      childMessageId: metadata.childMessageId ?? metadata.childRun.latestMessageId ?? null,
+    } satisfies PrismaNamespace.JsonObject;
+  }
+
+  private async saveMetadata(tx: Tx, eventId: string, metadata: CallAgentLinkMetadata): Promise<void> {
     try {
-      await this.runEvents.patchEventMetadata({
-        tx,
-        eventId,
-        patch: {
-          tool: metadata.tool,
-          parentThreadId: metadata.parentThreadId,
-          childThreadId: metadata.childThreadId,
-          childRun: metadata.childRun,
-          childRunId: metadata.childRunId ?? null,
-          childRunStatus: metadata.childRunStatus ?? null,
-          childRunLinkEnabled: metadata.childRunLinkEnabled ?? false,
-          childMessageId: metadata.childMessageId ?? null,
-        },
-      });
+      await tx.runEvent.update({ where: { id: eventId }, data: { metadata: this.serializeMetadata(metadata) } });
     } catch (err) {
-      this.logger.warn('call_agent_linking: failed to patch metadata', { eventId, err });
+      this.logger.warn('call_agent_linking: failed to save metadata', { eventId, err });
     }
   }
 
@@ -220,8 +259,8 @@ export class CallAgentLinkingService {
     return tx.runEvent.findFirst({
       where: {
         type: 'tool_execution',
-        sourceSpanId: childThreadId,
         toolExecution: { toolName: { in: CALL_AGENT_TOOL_NAMES } },
+        metadata: { path: ['childThreadId'], equals: childThreadId },
       },
       orderBy: { ts: 'desc' },
       select: { id: true, metadata: true },
@@ -236,6 +275,22 @@ export class CallAgentLinkingService {
         metadata: { path: ['childRunId'], equals: runId },
       },
       orderBy: { ts: 'desc' },
+      select: { id: true, metadata: true },
+    });
+  }
+
+  private async findLatestToolEvent(tx: Tx, runId: string, tool: CallAgentToolName) {
+    return tx.runEvent.findFirst({
+      where: {
+        runId,
+        type: 'tool_execution',
+        toolExecution: {
+          is: {
+            toolName: tool,
+          },
+        },
+      },
+      orderBy: { startedAt: 'desc' },
       select: { id: true, metadata: true },
     });
   }

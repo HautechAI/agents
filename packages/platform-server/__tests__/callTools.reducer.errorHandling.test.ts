@@ -163,7 +163,7 @@ describe('CallToolsLLMReducer call_agent metadata', () => {
       getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-id'),
     } as unknown as AgentsPersistenceService;
 
-    const linking = {
+    const linkingMock = {
       buildInitialMetadata: vi.fn((params: { toolName: string; parentThreadId: string; childThreadId: string }) => ({
         tool: params.toolName === 'call_engineer' ? 'call_engineer' : 'call_agent',
         parentThreadId: params.parentThreadId,
@@ -174,10 +174,13 @@ describe('CallToolsLLMReducer call_agent metadata', () => {
         childRunLinkEnabled: false,
         childMessageId: null,
       })),
+      registerParentToolExecution: vi.fn().mockResolvedValue('evt-123'),
       onChildRunStarted: vi.fn().mockResolvedValue(null),
       onChildRunMessage: vi.fn().mockResolvedValue(null),
       onChildRunCompleted: vi.fn().mockResolvedValue(null),
-    } as unknown as CallAgentLinkingService;
+    };
+
+    const linking = linkingMock as unknown as CallAgentLinkingService;
 
     const callAgentNode = new CallAgentTool(new LoggerService(), persistence, linking);
     await callAgentNode.setConfig({ description: 'desc', response: 'sync' });
@@ -207,11 +210,13 @@ describe('CallToolsLLMReducer call_agent metadata', () => {
 
     expect(persistence.getOrCreateSubthreadByAlias).toHaveBeenCalledTimes(1);
     const startArgs = runEvents.startToolExecution.mock.calls[0]?.[0];
-    expect(startArgs?.sourceSpanId).toBe('child-thread-id');
-    expect(startArgs?.metadata).toMatchObject({
+    expect(startArgs?.sourceSpanId).toBeUndefined();
+    expect(startArgs?.metadata).toBeUndefined();
+    expect(linkingMock.registerParentToolExecution).toHaveBeenCalledWith({
+      runId: 'parent-run',
       parentThreadId: 'parent-thread',
       childThreadId: 'child-thread-id',
-      childRun: { id: null, status: 'queued', linkEnabled: false, latestMessageId: null },
+      toolName: dynamicTool.name,
     });
   });
 });

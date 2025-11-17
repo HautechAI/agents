@@ -42,7 +42,6 @@ export function createRunEventsStub() {
     completeToolExecution: vi.fn(async () => {}),
     recordSummarization: vi.fn(async () => makeEvent()),
     publishEvent: vi.fn(async () => null),
-    patchEventMetadata: vi.fn(async () => {}),
     createContextItems,
   } as const;
 }
