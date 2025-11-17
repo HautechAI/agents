@@ -18,6 +18,12 @@ type TimelineDefinition = {
   summary?: RunTimelineSummary;
 };
 
+type TimelineRequest = {
+  runId: string;
+  url: string;
+  params: Record<string, string>;
+};
+
 const cursorKey = (cursor: RunTimelineEventsCursor | null | undefined): CursorKey => {
   if (!cursor || (!cursor.ts && !cursor.id)) return '__root__';
   return `${cursor.ts ?? ''}::${cursor.id ?? ''}`;
@@ -31,6 +37,7 @@ const clone = <T,>(value: T): T => {
 };
 
 const timelineStore = new Map<string, TimelineDefinition>();
+const timelineRequests: TimelineRequest[] = [];
 
 const timestamp = () => new Date().toISOString();
 
@@ -104,7 +111,13 @@ const setTimeline = (runId: string, definition: TimelineDefinition) => {
   });
 };
 
-const resetTimeline = () => timelineStore.clear();
+const resetTimeline = () => {
+  timelineStore.clear();
+  resetTimelineRequests();
+};
+const resetTimelineRequests = () => {
+  timelineRequests.length = 0;
+};
 
 const findPage = (runId: string, cursor: RunTimelineEventsCursor | null): TimelinePage => {
   const def = ensureTimeline(runId);
@@ -128,8 +141,14 @@ type TimelineControls = {
   snapshot(runId: string): TimelineDefinition | undefined;
 };
 
+type TimelineRequestControls = {
+  reset(): void;
+  snapshot(): TimelineRequest[];
+};
+
 declare global {
   var __timeline: TimelineControls;
+  var __timelineRequests: TimelineRequestControls;
 }
 
 Object.defineProperty(globalThis, '__timeline', {
@@ -157,6 +176,21 @@ Object.defineProperty(globalThis, '__timeline', {
   configurable: false,
 });
 
+Object.defineProperty(globalThis, '__timelineRequests', {
+  value: {
+    reset: () => {
+      resetTimelineRequests();
+    },
+    snapshot: () => timelineRequests.map((entry) => ({
+      runId: entry.runId,
+      url: entry.url,
+      params: { ...entry.params },
+    })),
+  } satisfies TimelineRequestControls,
+  writable: false,
+  configurable: false,
+});
+
 const API_BASE = process.env.VITE_API_BASE_URL ?? 'http://localhost:3010';
 
 const clearMock = (fn: unknown) => {
@@ -174,11 +208,16 @@ const resolveEvents: HttpResponseResolver<PathParams<'runId'>, unknown> = ({ par
     throw new Error('cursor[ts] and cursor[id] must be provided together');
   }
   const cursor = cursorTs || cursorId ? { ts: cursorTs ?? undefined, id: cursorId ?? undefined } : null;
-  const page = findPage(runId, cursor);
-  return HttpResponse.json({
-    items: page.items,
-    nextCursor: page.nextCursor,
+  timelineRequests.push({
+    runId,
+    url: request.url,
+    params: Object.fromEntries(url.searchParams.entries()),
   });
+  const page = findPage(runId, cursor);
+  const payload = cursor
+    ? { events: page.items, nextCursor: page.nextCursor }
+    : { items: page.items, nextCursor: page.nextCursor };
+  return HttpResponse.json(payload);
 };
 
 const resolveSummary: HttpResponseResolver<PathParams<'runId'>, unknown> = ({ params }) => {
