@@ -196,8 +196,7 @@ export function AgentsRunTimeline() {
         const response = await runs.timelineEvents(runId, {
           types: typeParam,
           statuses: statusParam,
-          cursorTs: cursor.ts,
-          cursorId: cursor.id,
+          cursor,
         });
         const items = response.items ?? [];
         if (items.length > 0) {
@@ -440,8 +439,7 @@ export function AgentsRunTimeline() {
         statuses: statusParam,
         limit: PAGE_SIZE,
         order: 'desc',
-        cursorTs: nextCursor.ts,
-        cursorId: nextCursor.id,
+        cursor: nextCursor,
       });
 
       if (lastSignatureRef.current !== signatureAtCall) return;

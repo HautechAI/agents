@@ -1,10 +1,11 @@
 import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AgentsRunTimeline } from '../AgentsRunTimeline';
 import type { RunTimelineEvent } from '@/api/types/agents';
+import { runs } from '@/api/modules/runs';
 
 type TimelineControls = {
   reset(): void;
@@ -27,6 +28,8 @@ const INITIAL_COUNT = 100;
 const OLDER_COUNT = 20;
 
 const baseTimestamp = new Date('2024-01-01T09:00:00.000Z').getTime();
+
+const timelineEventsSpy = vi.spyOn(runs, 'timelineEvents');
 
 const buildEvent = (id: string, secondsAgo: number): RunTimelineEvent => {
   const ts = new Date(baseTimestamp - secondsAgo * 1000).toISOString();
@@ -126,6 +129,11 @@ const primeTimeline = () => {
 describe('AgentsRunTimeline behavior', () => {
   beforeEach(() => {
     setMatchMedia(true);
+    timelineEventsSpy.mockClear();
+  });
+
+  afterAll(() => {
+    timelineEventsSpy.mockRestore();
   });
 
   it('anchors to the bottom after the newest page loads', async () => {
@@ -154,11 +162,17 @@ describe('AgentsRunTimeline behavior', () => {
 
     await waitFor(() => expect(document.querySelectorAll('[data-event-id]').length).toBe(INITIAL_COUNT));
 
+    const initialRequest = timelineEventsSpy.mock.calls.find(([, params]) => params?.limit === 100 && params?.order === 'desc');
+    expect(initialRequest).toBeDefined();
+    expect(initialRequest?.[0]).toBe(runId);
+    expect(initialRequest?.[1]?.cursor).toBeUndefined();
+
     await waitFor(() => expect(metrics.top).toBe(metrics.height));
   });
 
   it('prepends older events when the user scrolls to the top while preserving scroll offset', async () => {
     const { current, older } = primeTimeline();
+    const oldestCurrent = current.at(-1)!;
 
     renderPage();
 
@@ -185,6 +199,7 @@ describe('AgentsRunTimeline behavior', () => {
     await waitFor(() => expect(metrics.top).toBe(metrics.height));
 
     const loadOlderButton = await screen.findByTestId('timeline-load-older');
+    expect(loadOlderButton).not.toBeDisabled();
 
     const previousHeight = metrics.height;
     const previousTop = 20;
@@ -197,10 +212,20 @@ describe('AgentsRunTimeline behavior', () => {
       metrics.height = nextHeight;
     });
 
+    await waitFor(() => expect(timelineEventsSpy.mock.calls.some(([, params]) => params?.cursor)).toBe(true));
+
     await waitFor(() => expect(document.querySelectorAll('[data-event-id]').length).toBe(INITIAL_COUNT + OLDER_COUNT));
 
     const expectedTop = previousTop + (nextHeight - previousHeight);
     await waitFor(() => expect(metrics.top).toBe(expectedTop));
+
+    await waitFor(() => expect(loadOlderButton).toBeDisabled());
+
+    const loadOlderCall = timelineEventsSpy.mock.calls.find(([, params]) => params?.cursor);
+    expect(loadOlderCall).toBeDefined();
+    expect(loadOlderCall?.[1]?.order).toBe('desc');
+    expect(loadOlderCall?.[1]?.limit).toBe(100);
+    expect(loadOlderCall?.[1]?.cursor).toEqual({ ts: oldestCurrent.ts, id: oldestCurrent.id });
 
     const orderedIds = Array.from(document.querySelectorAll('[data-event-id]')).map((node) => node.getAttribute('data-event-id') as string);
     const expectedIds = [...older, ...current].sort((a, b) => a.ts.localeCompare(b.ts)).map((event) => event.id);

@@ -170,6 +170,9 @@ const resolveEvents: HttpResponseResolver<PathParams<'runId'>, unknown> = ({ par
   const url = new URL(request.url);
   const cursorTs = url.searchParams.get('cursor[ts]');
   const cursorId = url.searchParams.get('cursor[id]');
+  if ((cursorTs && !cursorId) || (cursorId && !cursorTs)) {
+    throw new Error('cursor[ts] and cursor[id] must be provided together');
+  }
   const cursor = cursorTs || cursorId ? { ts: cursorTs ?? undefined, id: cursorId ?? undefined } : null;
   const page = findPage(runId, cursor);
   return HttpResponse.json({

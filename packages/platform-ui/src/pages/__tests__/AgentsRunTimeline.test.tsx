@@ -411,11 +411,13 @@ describe('AgentsRunTimeline socket reactions', () => {
     });
 
     await waitFor(() => expect(runsModule.timelineEvents).toHaveBeenCalledTimes(1));
-    expect(runsModule.timelineEvents).toHaveBeenCalledWith('run-1', expect.objectContaining({
-      types: undefined,
-      cursorTs: appended.ts,
-      cursorId: appended.id,
-    }));
+    expect(runsModule.timelineEvents).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({
+        types: undefined,
+        cursor: expect.objectContaining({ ts: appended.ts, id: appended.id }),
+      }),
+    );
     expect(summaryRefetch).toHaveBeenCalledTimes(3);
     expect(eventsRefetch).not.toHaveBeenCalled();
     await findByText('Tool Execution — Weather');

@@ -1,5 +1,11 @@
 import { http, asData } from '@/api/http';
-import type { RunMessageItem, RunMeta, RunTimelineEventsResponse, RunTimelineSummary } from '@/api/types/agents';
+import type {
+  RunMessageItem,
+  RunMeta,
+  RunTimelineEventsCursor,
+  RunTimelineEventsResponse,
+  RunTimelineSummary,
+} from '@/api/types/agents';
 
 export const runs = {
   listByThread: (threadId: string) => asData<{ items: RunMeta[] }>(
@@ -11,7 +17,16 @@ export const runs = {
     ),
   timelineSummary: (runId: string) =>
     asData<RunTimelineSummary>(http.get<RunTimelineSummary>(`/api/agents/runs/${encodeURIComponent(runId)}/summary`)),
-  timelineEvents: (runId: string, params: { types?: string; statuses?: string; limit?: number; order?: 'asc' | 'desc'; cursorTs?: string; cursorId?: string }) =>
+  timelineEvents: (
+    runId: string,
+    params: {
+      types?: string;
+      statuses?: string;
+      limit?: number;
+      order?: 'asc' | 'desc';
+      cursor?: RunTimelineEventsCursor | null;
+    },
+  ) =>
     asData<RunTimelineEventsResponse>(
       http.get<RunTimelineEventsResponse>(`/api/agents/runs/${encodeURIComponent(runId)}/events`, {
         params: {
@@ -19,8 +34,7 @@ export const runs = {
           statuses: params.statuses,
           limit: params.limit,
           order: params.order,
-          ...(params.cursorTs ? { 'cursor[ts]': params.cursorTs } : {}),
-          ...(params.cursorId ? { 'cursor[id]': params.cursorId } : {}),
+          ...(params.cursor ? { 'cursor[ts]': params.cursor.ts, 'cursor[id]': params.cursor.id } : {}),
         },
       }),
     ),
