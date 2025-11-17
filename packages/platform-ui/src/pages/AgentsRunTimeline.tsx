@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { RunTimelineEventListItem } from '@/components/agents/RunTimelineEventListItem';
 import { RunTimelineEventDetails } from '@/components/agents/RunTimelineEventDetails';
@@ -115,10 +115,20 @@ export function AgentsRunTimeline() {
 
   const summaryQuery = useRunTimelineSummary(runId);
   const { data: summaryData, refetch: refetchSummary } = summaryQuery;
-  const eventsQuery = useRunTimelineEvents(runId, { types: apiTypes, statuses: apiStatuses });
+  const eventsQuery = useRunTimelineEvents(runId, { types: apiTypes, statuses: apiStatuses, limit: 100, order: 'desc' });
   const [events, setEvents] = useState<RunTimelineEvent[]>([]);
+  const [nextCursor, setNextCursor] = useState<RunTimelineEventsCursor | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [loadOlderError, setLoadOlderError] = useState<string | null>(null);
   const cursorRef = useRef<RunTimelineEventsCursor | null>(null);
   const catchUpRef = useRef<Promise<unknown> | null>(null);
+  const hasAutoScrolledRef = useRef(false);
+  const pendingScrollAdjustmentRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
+  const loadingOlderRef = useRef(false);
+  const replaceEventsRef = useRef(false);
+  const lastRunIdRef = useRef<string | undefined>(undefined);
+  const lastFilterKeyRef = useRef<string>('');
+  const reachedHistoryEndRef = useRef(false);
   const canTerminate = summaryData?.status === 'running';
 
   const setCursor = useCallback(
@@ -151,22 +161,73 @@ export function AgentsRunTimeline() {
   );
 
   useEffect(() => {
-    setEvents([]);
+    const currentFilterKey = JSON.stringify([selectedTypes, selectedStatuses]);
+    const previousRunId = lastRunIdRef.current;
+    const previousFilterKey = lastFilterKeyRef.current;
+
+    lastRunIdRef.current = runId;
+    lastFilterKeyRef.current = currentFilterKey;
+
     if (!runId) {
+      setEvents([]);
       cursorRef.current = null;
       return;
     }
-    cursorRef.current = null;
-    graphSocket.setRunCursor(runId, null, { force: true });
-  }, [runId]);
+
+    if (previousRunId !== runId) {
+      setIsTerminating(false);
+      replaceEventsRef.current = true;
+      hasAutoScrolledRef.current = false;
+      pendingScrollAdjustmentRef.current = null;
+      setNextCursor(null);
+      reachedHistoryEndRef.current = false;
+      setLoadOlderError(null);
+      setLoadingOlder(false);
+      loadingOlderRef.current = false;
+      catchUpRef.current = null;
+      setEvents([]);
+      cursorRef.current = null;
+      setCursor(null, { force: true });
+      return;
+    }
+
+    if (previousFilterKey !== currentFilterKey) {
+      setNextCursor(null);
+      reachedHistoryEndRef.current = false;
+      setLoadOlderError(null);
+      setLoadingOlder(false);
+      loadingOlderRef.current = false;
+      catchUpRef.current = null;
+      setCursor(null, { force: true });
+      updateEventsState((prev) => {
+        if (!prev.length) return prev;
+        return prev.filter((evt) => matchesFilters(evt, selectedTypes, selectedStatuses));
+      });
+    }
+  }, [runId, selectedTypes, selectedStatuses, setCursor, updateEventsState]);
 
   useEffect(() => {
     if (!eventsQuery.data) return;
-    const sorted = sortEvents(eventsQuery.data.items ?? []);
-    setEvents(sorted);
-    const latest = sorted[sorted.length - 1];
-    setCursor(latest ? toCursor(latest) : null, { force: true });
-  }, [eventsQuery.data, setCursor]);
+
+    const queryCursor = eventsQuery.data.nextCursor ?? null;
+    setLoadOlderError(null);
+    updateEventsState((prev) => {
+      const base = replaceEventsRef.current ? [] : prev;
+      const merged = mergeEvents(base, eventsQuery.data?.items ?? [], selectedTypes, selectedStatuses);
+      return merged;
+    });
+    replaceEventsRef.current = false;
+    if (!queryCursor) {
+      reachedHistoryEndRef.current = true;
+      setNextCursor(null);
+    } else if (!reachedHistoryEndRef.current) {
+      reachedHistoryEndRef.current = false;
+      setNextCursor((prev) => {
+        if (!prev) return queryCursor;
+        return compareCursors(queryCursor, prev) < 0 ? queryCursor : prev;
+      });
+    }
+  }, [eventsQuery.data, selectedTypes, selectedStatuses, updateEventsState]);
 
   const fetchSinceCursor = useCallback(() => {
     if (!runId) return Promise.resolve();
@@ -297,6 +358,7 @@ export function AgentsRunTimeline() {
     () => STATUS_TYPES.map((status) => ({ status, active: selectedStatuses.includes(status) })),
     [selectedStatuses],
   );
+
   const summary = summaryData;
   const summaryItems = useMemo(
     () => {
@@ -359,6 +421,77 @@ export function AgentsRunTimeline() {
     }, { replace: true });
   }, [setSearchParams]);
 
+  const loadOlderEvents = useCallback(async () => {
+    if (!runId || !nextCursor || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    setLoadOlderError(null);
+    const listNode = listRef.current;
+    if (listNode) {
+      pendingScrollAdjustmentRef.current = {
+        prevScrollHeight: listNode.scrollHeight,
+        prevScrollTop: listNode.scrollTop,
+      };
+    } else {
+      pendingScrollAdjustmentRef.current = null;
+    }
+    try {
+      const response = await runs.timelineEvents(runId, {
+        types: apiTypes.length > 0 ? apiTypes.join(',') : undefined,
+        statuses: apiStatuses.length > 0 ? apiStatuses.join(',') : undefined,
+        limit: 100,
+        order: 'desc',
+        cursorTs: nextCursor.ts,
+        cursorId: nextCursor.id,
+      });
+      const items = response.items ?? [];
+      if (response.nextCursor) {
+        reachedHistoryEndRef.current = false;
+        setNextCursor(response.nextCursor);
+      } else {
+        reachedHistoryEndRef.current = true;
+        setNextCursor(null);
+      }
+      if (items.length > 0) {
+        updateEventsState((prev) => mergeEvents(prev, items, selectedTypes, selectedStatuses));
+      } else {
+        pendingScrollAdjustmentRef.current = null;
+      }
+    } catch (error) {
+      pendingScrollAdjustmentRef.current = null;
+      setLoadOlderError((error as Error)?.message ?? 'Failed to load older events');
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [runId, nextCursor, apiTypes, apiStatuses, updateEventsState, selectedTypes, selectedStatuses]);
+
+  useEffect(() => {
+    if (hasAutoScrolledRef.current) return;
+    if (!events.length) return;
+    if (eventsQuery.isFetching) return;
+    hasAutoScrolledRef.current = true;
+    requestAnimationFrame(() => {
+      const listNode = listRef.current;
+      if (listNode) {
+        listNode.scrollTop = listNode.scrollHeight;
+      }
+    });
+  }, [events, eventsQuery.isFetching]);
+
+  useLayoutEffect(() => {
+    const adjustment = pendingScrollAdjustmentRef.current;
+    if (!adjustment) return;
+    const listNode = listRef.current;
+    if (!listNode) {
+      pendingScrollAdjustmentRef.current = null;
+      return;
+    }
+    const delta = listNode.scrollHeight - adjustment.prevScrollHeight;
+    listNode.scrollTop = adjustment.prevScrollTop + delta;
+    pendingScrollAdjustmentRef.current = null;
+  }, [events]);
+
   useEffect(() => {
     const itemsCount = eventsQuery.data?.items?.length ?? 0;
     if (!events.length) {
@@ -367,15 +500,16 @@ export function AgentsRunTimeline() {
       }
       return;
     }
+    const latestEvent = events[events.length - 1];
     if (selectedEventId) {
       const exists = events.some((evt) => evt.id === selectedEventId);
       if (!exists && isMdUp && !eventsQuery.isFetching) {
-        selectEvent(events[0].id, { focus: false });
+        if (latestEvent) selectEvent(latestEvent.id, { focus: false });
       }
       return;
     }
-    if (isMdUp && !eventsQuery.isFetching) {
-      selectEvent(events[0].id, { focus: false });
+    if (isMdUp && !eventsQuery.isFetching && latestEvent) {
+      selectEvent(latestEvent.id, { focus: false });
     }
   }, [events, selectedEventId, selectEvent, clearSelection, isMdUp, eventsQuery.isFetching, eventsQuery.data]);
 
@@ -530,6 +664,27 @@ export function AgentsRunTimeline() {
               onKeyDown={handleListKeyDown}
               className="flex-1 min-h-0 space-y-2 overflow-y-auto focus:outline-none"
             >
+              {(nextCursor || events.length > 0 || loadOlderError) && (
+                <div className="py-2">
+                  {nextCursor ? (
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => void loadOlderEvents()}
+                        className="rounded border px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={loadingOlder}
+                      >
+                        {loadingOlder ? 'Loading…' : 'Load older events'}
+                      </button>
+                    </div>
+                  ) : events.length > 0 ? (
+                    <div className="text-center text-xs uppercase tracking-wide text-gray-400">Beginning of timeline</div>
+                  ) : null}
+                  {loadOlderError && (
+                    <div className="mt-2 text-center text-xs text-red-600">{loadOlderError}</div>
+                  )}
+                </div>
+              )}
               {events.map((event) => (
                 <RunTimelineEventListItem
                   key={event.id}

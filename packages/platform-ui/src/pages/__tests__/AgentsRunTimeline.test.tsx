@@ -26,7 +26,12 @@ const summaryRefetch = vi.fn();
 const eventsRefetch = vi.fn();
 
 const summaryMock = vi.fn<MockedSummaryResult, [string | undefined]>();
-const eventsMock = vi.fn<MockedEventsResult, [string | undefined, { types: string[]; statuses: string[] }]>();
+const eventsMock = vi.fn<MockedEventsResult, [
+  string | undefined,
+  { types: string[]; statuses: string[]; limit?: number; order?: 'asc' | 'desc'; cursor?: RunTimelineEventsCursor | null },
+]>();
+
+let eventsQueryState: MockedEventsResult;
 
 const runsModule = vi.hoisted(() => ({
   timelineEvents: vi.fn(),
@@ -274,13 +279,15 @@ beforeEach(() => {
     refetch: summaryRefetch,
   });
 
-  eventsMock.mockReturnValue({
+  eventsQueryState = {
     data: { items: events, nextCursor: null },
     isFetching: false,
     isError: false,
     error: null,
     refetch: eventsRefetch,
-  });
+  };
+
+  eventsMock.mockImplementation(() => eventsQueryState);
 });
 
 afterEach(() => {
@@ -477,14 +484,14 @@ describe('AgentsRunTimeline terminate control', () => {
       refetch: summaryRefetch,
     });
 
-    eventsMock.mockReset();
-    eventsMock.mockReturnValue({
+    eventsQueryState = {
       data: { items: events, nextCursor: null },
       isFetching: false,
       isError: false,
       error: null,
       refetch: eventsRefetch,
-    });
+    };
+    eventsMock.mockImplementation(() => eventsQueryState);
 
     const { queryByRole } = renderPage([
       '/agents/threads/thread-1/runs/run-1',
@@ -492,5 +499,450 @@ describe('AgentsRunTimeline terminate control', () => {
 
     expect(queryByRole('button', { name: 'Terminate' })).toBeNull();
     expect(runsModule.terminate).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentsRunTimeline pagination and scrolling', () => {
+  it('auto-scrolls to bottom on initial load', async () => {
+    const rafCallbacks: FrameRequestCallback[] = [];
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+
+    const { getByRole } = renderPage([
+      '/agents/threads/thread-1/runs/run-1',
+    ]);
+
+    expect(eventsMock).toHaveBeenCalledWith('run-1', expect.objectContaining({ limit: 100, order: 'desc' }));
+
+    const listbox = getByRole('listbox');
+    let scrollTop = 0;
+    const scrollHeight = 480;
+    Object.defineProperty(listbox, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+    Object.defineProperty(listbox, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+
+    while (rafCallbacks.length) {
+      const cb = rafCallbacks.shift();
+      cb?.(0);
+    }
+
+    await waitFor(() => expect(scrollTop).toBe(scrollHeight));
+
+    rafSpy.mockRestore();
+  });
+
+  it('loads older events while preserving viewport, order, and history marker', async () => {
+    const olderCursor: RunTimelineEventsCursor = {
+      id: 'cursor-1',
+      ts: '2023-12-31T23:59:59.000Z',
+    };
+
+    const initialEvents = [
+      buildEvent({
+        id: 'event-1',
+        ts: '2024-01-01T00:00:00.000Z',
+      }),
+      buildEvent({
+        id: 'event-2',
+        ts: '2024-01-01T00:00:02.000Z',
+        type: 'llm_call',
+        toolExecution: undefined,
+        llmCall: {
+          provider: 'openai',
+          model: 'gpt-4',
+          temperature: null,
+          topP: null,
+          stopReason: null,
+          contextItemIds: [],
+          responseText: null,
+          rawResponse: null,
+          toolCalls: [],
+        },
+      }),
+    ];
+
+    eventsQueryState = {
+      data: { items: initialEvents, nextCursor: olderCursor },
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    };
+
+    const rafCallbacks: FrameRequestCallback[] = [];
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+
+    const { getByRole, queryByRole, getByText } = renderPage([
+      '/agents/threads/thread-1/runs/run-1',
+    ]);
+
+    const listbox = getByRole('listbox');
+    const perItem = 100;
+    const baseHeight = 200;
+    let scrollTop = 0;
+    Object.defineProperty(listbox, 'scrollHeight', {
+      configurable: true,
+      get: () => baseHeight + listbox.querySelectorAll('[role="option"]').length * perItem,
+    });
+    Object.defineProperty(listbox, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+
+    while (rafCallbacks.length) {
+      const cb = rafCallbacks.shift();
+      cb?.(0);
+    }
+
+    await waitFor(() => expect(scrollTop).toBe(baseHeight + initialEvents.length * perItem));
+
+    const button = getByRole('button', { name: 'Load older events' });
+    expect(button).toBeInTheDocument();
+
+    const previousScrollTop = 140;
+    scrollTop = previousScrollTop;
+
+    const olderEvent = buildEvent({
+      id: 'event-0',
+      ts: '2023-12-31T23:59:58.000Z',
+      type: 'injection',
+      toolExecution: undefined,
+      injection: { messageIds: [], reason: 'test' },
+    });
+
+    runsModule.timelineEvents.mockResolvedValueOnce({
+      items: [olderEvent],
+      nextCursor: null,
+    });
+
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+
+    expect(runsModule.timelineEvents).toHaveBeenCalledWith('run-1', expect.objectContaining({
+      types: undefined,
+      statuses: undefined,
+      order: 'desc',
+      limit: 100,
+      cursorTs: olderCursor.ts,
+      cursorId: olderCursor.id,
+    }));
+
+    await waitFor(() => {
+      const expected = previousScrollTop + perItem;
+      expect(Math.round(scrollTop)).toBe(expected);
+    });
+
+    const options = within(listbox).getAllByRole('option');
+    expect(options[0]).toHaveAttribute('id', 'run-event-option-event-0');
+    expect(options[1]).toHaveAttribute('id', 'run-event-option-event-1');
+    expect(options[2]).toHaveAttribute('id', 'run-event-option-event-2');
+    expect(getByText('Beginning of timeline')).toBeInTheDocument();
+    expect(queryByRole('button', { name: 'Load older events' })).toBeNull();
+
+    rafSpy.mockRestore();
+  });
+
+  it('shows an error message when loading older events fails', async () => {
+    const olderCursor: RunTimelineEventsCursor = {
+      id: 'cursor-1',
+      ts: '2023-12-31T23:59:59.000Z',
+    };
+
+    eventsQueryState = {
+      data: { items: [buildEvent()], nextCursor: olderCursor },
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    };
+
+    const rafCallbacks: FrameRequestCallback[] = [];
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+
+    const { getByRole, findByText } = renderPage([
+      '/agents/threads/thread-1/runs/run-1',
+    ]);
+
+    const listbox = getByRole('listbox');
+    let scrollTop = 0;
+    Object.defineProperty(listbox, 'scrollHeight', {
+      configurable: true,
+      get: () => 400,
+    });
+    Object.defineProperty(listbox, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+
+    while (rafCallbacks.length) {
+      const cb = rafCallbacks.shift();
+      cb?.(0);
+    }
+
+    const button = getByRole('button', { name: 'Load older events' });
+
+    runsModule.timelineEvents.mockRejectedValueOnce(new Error('load failed'));
+
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+
+    await findByText('load failed');
+    expect(button).not.toBeDisabled();
+
+    rafSpy.mockRestore();
+  });
+});
+
+describe('AgentsRunTimeline filter refetch reconciliation', () => {
+  it('preserves realtime events received during filter refresh', async () => {
+    const initialEvents = [
+      buildEvent({
+        id: 'event-1',
+        ts: '2024-01-01T00:00:00.000Z',
+        status: 'success',
+        type: 'tool_execution',
+        toolExecution: {
+          toolName: 'Search Tool',
+          toolCallId: 'call-1',
+          execStatus: 'success',
+          input: {},
+          output: {},
+          errorMessage: null,
+          raw: null,
+        },
+      }),
+      buildEvent({
+        id: 'event-2',
+        ts: '2024-01-01T00:00:02.000Z',
+        status: 'success',
+        type: 'llm_call',
+        toolExecution: undefined,
+        llmCall: {
+          provider: 'openai',
+          model: 'gpt-4',
+          temperature: null,
+          topP: null,
+          stopReason: null,
+          contextItemIds: [],
+          responseText: null,
+          rawResponse: null,
+          toolCalls: [],
+        },
+      }),
+    ];
+
+    eventsQueryState = {
+      data: { items: initialEvents, nextCursor: null },
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    };
+
+    summaryMock.mockReturnValue({
+      data: buildSummary(initialEvents),
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: summaryRefetch,
+    });
+
+    const { getByRole, findByText } = renderPage([
+      '/agents/threads/thread-1/runs/run-1',
+    ]);
+
+    const listbox = getByRole('listbox');
+    await findByText('Tool Execution — Search Tool');
+
+    const successFilter = getByRole('button', { name: 'success' });
+
+    eventsQueryState = {
+      data: { items: [], nextCursor: null },
+      isFetching: true,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    };
+
+    await act(async () => {
+      fireEvent.click(successFilter);
+    });
+
+    const realtimeEvent = buildEvent({
+      id: 'event-3',
+      ts: '2024-01-01T00:00:03.000Z',
+      status: 'success',
+      type: 'tool_execution',
+      toolExecution: {
+        toolName: 'Realtime Tool',
+        toolCallId: 'call-rt',
+        execStatus: 'success',
+        input: { query: 'status' },
+        output: { result: 'ok' },
+        errorMessage: null,
+        raw: null,
+      },
+    });
+
+    await act(async () => {
+      socketMocks.runEvent?.({ runId: 'run-1', event: realtimeEvent, mutation: 'append' });
+    });
+
+    await findByText('Tool Execution — Realtime Tool');
+
+    eventsQueryState = {
+      data: { items: initialEvents, nextCursor: null },
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    };
+
+    const updatedEvent = buildEvent({
+      id: 'event-1',
+      ts: '2024-01-01T00:00:00.000Z',
+      status: 'success',
+      type: 'tool_execution',
+      toolExecution: {
+        toolName: 'Search Tool',
+        toolCallId: 'call-1',
+        execStatus: 'success',
+        input: { query: 'update' },
+        output: { result: 'ok' },
+        errorMessage: null,
+        raw: null,
+      },
+    });
+
+    await act(async () => {
+      socketMocks.runEvent?.({ runId: 'run-1', event: updatedEvent, mutation: 'update' });
+    });
+
+    const options = within(listbox).getAllByRole('option');
+    const optionIds = options.map((node) => node.getAttribute('id'));
+    expect(optionIds).toContain('run-event-option-event-3');
+    expect(within(listbox).getByText('Tool Execution — Realtime Tool')).toBeInTheDocument();
+  });
+});
+
+describe('AgentsRunTimeline load older resilience', () => {
+  it('retains prepended history when base query emits the latest cursor again', async () => {
+    const olderCursor: RunTimelineEventsCursor = {
+      id: 'cursor-1',
+      ts: '2023-12-31T23:59:59.000Z',
+    };
+
+    const initialEvents = [
+      buildEvent({
+        id: 'event-1',
+        ts: '2024-01-01T00:00:00.000Z',
+      }),
+      buildEvent({
+        id: 'event-2',
+        ts: '2024-01-01T00:00:02.000Z',
+        type: 'llm_call',
+        toolExecution: undefined,
+        llmCall: {
+          provider: 'openai',
+          model: 'gpt-4',
+          temperature: null,
+          topP: null,
+          stopReason: null,
+          contextItemIds: [],
+          responseText: null,
+          rawResponse: null,
+          toolCalls: [],
+        },
+      }),
+    ];
+
+    eventsQueryState = {
+      data: { items: initialEvents, nextCursor: olderCursor },
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    };
+
+    const { getByRole, findByText, queryByRole } = renderPage([
+      '/agents/threads/thread-1/runs/run-1',
+    ]);
+
+    const listbox = getByRole('listbox');
+    await findByText('Tool Execution — Search Tool');
+
+    const button = getByRole('button', { name: 'Load older events' });
+
+    const olderEvent = buildEvent({
+      id: 'event-0',
+      ts: '2023-12-31T23:59:58.000Z',
+      type: 'summarization',
+      summarization: {
+        summaryText: 'legacy',
+        newContextCount: 0,
+        oldContextTokens: null,
+        raw: null,
+      },
+    });
+
+    runsModule.timelineEvents.mockResolvedValueOnce({
+      items: [olderEvent],
+      nextCursor: null,
+    });
+
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+
+    await findByText('Summarization');
+    expect(queryByRole('button', { name: 'Load older events' })).toBeNull();
+
+    eventsQueryState = {
+      data: { items: initialEvents, nextCursor: olderCursor },
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: eventsRefetch,
+    };
+
+    await act(async () => {
+      socketMocks.runEvent?.({
+        runId: 'run-1',
+        event: buildEvent({ id: 'event-1', status: 'success' }),
+        mutation: 'update',
+      });
+    });
+
+    expect(queryByRole('button', { name: 'Load older events' })).toBeNull();
+    const options = within(listbox).getAllByRole('option');
+    expect(options[0]).toHaveAttribute('id', 'run-event-option-event-0');
+    expect(options[options.length - 1]).toHaveAttribute('id', 'run-event-option-event-2');
   });
 });
