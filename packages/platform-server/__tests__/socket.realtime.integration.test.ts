@@ -239,7 +239,16 @@ describe.sequential('GraphSocketGateway realtime integration', () => {
     const runEvents = new RunEventsService(prismaService, logger, gateway);
     const templateRegistryStub = ({ getMeta: () => undefined }) as unknown as TemplateRegistry;
     const graphRepositoryStub = ({ get: async () => ({ nodes: [] }) }) as unknown as GraphRepository;
-    const agents = new AgentsPersistenceService(prismaService, logger, metricsDouble.service, gateway, templateRegistryStub, graphRepositoryStub, runEvents);
+    const agents = new AgentsPersistenceService(
+      prismaService,
+      logger,
+      metricsDouble.service,
+      gateway,
+      templateRegistryStub,
+      graphRepositoryStub,
+      runEvents,
+      createLinkingStub(),
+    );
 
     const thread = await prisma.thread.create({ data: { alias: `thread-${randomUUID()}`, summary: 'combined' } });
     const startResult = await agents.beginRunThread(thread.id, [HumanMessage.fromText('go')]);

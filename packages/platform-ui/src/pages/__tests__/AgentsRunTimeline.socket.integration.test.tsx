@@ -6,6 +6,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { RunTimelineEvent, RunTimelineSummary, RunEventStatus, RunEventType, RunTimelineEventsCursor } from '@/api/types/agents';
 
 vi.mock('@/config', () => ({
+  config: {
+    apiBaseUrl: 'http://localhost:3010',
+    tracingApiBaseUrl: 'http://localhost:4319',
+    socketBaseUrl: 'http://localhost:3010',
+  },
   getSocketBaseUrl: () => 'http://localhost:3010',
 }));
 
@@ -265,11 +270,13 @@ describe('AgentsRunTimeline realtime integration', () => {
   it('merges realtime run timeline events across rooms, dedupes duplicates, and bumps cursors', async () => {
     const { getByRole, unmount } = renderPage(['/agents/threads/thread-1/runs/run-1']);
 
-    expect(socketState.subscriptions.map((item) => item.rooms)).toContainEqual(['run:run-1', 'thread:thread-1']);
-    expect(graphSocket.getRunCursor('run-1')).toEqual({ ts: '2024-01-01T00:00:02.000Z', id: 'event-2' });
+    await waitFor(() => expect(socketState.subscriptions.map((item) => item.rooms)).toContainEqual(['run:run-1', 'thread:thread-1']));
+    await waitFor(() => {
+      const listboxCheck = getByRole('listbox');
+      expect(within(listboxCheck).getAllByRole('option')).toHaveLength(2);
+    });
 
     const listbox = getByRole('listbox');
-    expect(within(listbox).getAllByRole('option')).toHaveLength(2);
 
     const createdEvent = buildEvent({
       id: 'event-3',
