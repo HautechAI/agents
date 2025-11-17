@@ -8,8 +8,8 @@ import { RunEventsService } from '../events/run-events.service';
 
 type Tx = PrismaClient | Prisma.TransactionClient;
 
-const CALL_AGENT_TOOL_NAMES = ['call_agent', 'call_engineer'] as const;
-type CallAgentToolName = (typeof CALL_AGENT_TOOL_NAMES)[number];
+type CallAgentToolName = 'call_agent' | 'call_engineer';
+const CALL_AGENT_TOOL_NAMES: CallAgentToolName[] = ['call_agent', 'call_engineer'];
 
 export type CallAgentChildRunStatus = 'queued' | RunStatus;
 

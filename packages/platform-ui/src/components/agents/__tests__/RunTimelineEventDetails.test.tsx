@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { RunTimelineEventDetails } from '../RunTimelineEventDetails';
 import * as contextItemsModule from '@/api/hooks/contextItems';
 import type { UseContextItemsResult } from '@/api/hooks/contextItems';
@@ -25,20 +26,18 @@ function renderDetails(event: RunTimelineEvent) {
     },
   });
 
-  const result = render(
-    <QueryClientProvider client={client}>
-      <RunTimelineEventDetails event={event} />
-    </QueryClientProvider>,
+  const Providers: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <MemoryRouter>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </MemoryRouter>
   );
+
+  const result = render(<RunTimelineEventDetails event={event} />, { wrapper: Providers });
 
   return {
     ...result,
     rerender(nextEvent: RunTimelineEvent) {
-      result.rerender(
-        <QueryClientProvider client={client}>
-          <RunTimelineEventDetails event={nextEvent} />
-        </QueryClientProvider>,
-      );
+      result.rerender(<RunTimelineEventDetails event={nextEvent} />);
     },
   };
 }
