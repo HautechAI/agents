@@ -203,7 +203,8 @@ export function AgentsRunTimeline() {
 
   useEffect(() => {
     if (!runId) return;
-    const rooms = threadId ? [`run:${runId}`, `thread:${threadId}`] : [`run:${runId}`];
+    const rooms = [`run:${runId}`];
+    if (threadId) rooms.push(`thread:${threadId}`);
     graphSocket.subscribe(rooms);
     const off = graphSocket.onRunEvent(({ runId: incomingRunId, event }) => {
       if (incomingRunId !== runId) return;

@@ -4,6 +4,9 @@ import { getSocketBaseUrl } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 import type { RunTimelineEvent, RunTimelineEventsCursor } from '@/api/types/agents';
 
+const SOCKET_PATH = '/socket.io';
+const DEV_MODE = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+
 // Strictly typed server-to-client socket events (listener signatures)
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
 type ThreadSummary = { id: string; alias: string; summary: string | null; status: 'open' | 'closed'; createdAt: string; parentId?: string | null };
@@ -99,7 +102,7 @@ class GraphSocket {
     const host = getSocketBaseUrl();
     // Cast to typed Socket to enable event payload typing
     this.socket = io(host, {
-      path: '/socket.io',
+      path: SOCKET_PATH,
       transports: ['websocket'],
       forceNew: false,
       autoConnect: true,
@@ -111,6 +114,7 @@ class GraphSocket {
       withCredentials: true,
     }) as unknown as Socket<ServerToClientEvents, ClientToServerEvents>;
     const handleConnect = () => {
+      if (DEV_MODE) console.debug('[graphSocket] connected', { host, path: SOCKET_PATH });
       this.resubscribeAll();
       for (const fn of this.connectCallbacks) fn();
     };
@@ -157,16 +161,18 @@ class GraphSocket {
     this.socket.on('run_status_changed', (payload: RunStatusChangedPayload) => {
       for (const fn of this.runStatusListeners) fn(payload);
     });
-    const handleRunTimeline = (payload: RunEventSocketPayload) => {
-      const eventId = payload.event?.id;
-      if (!payload.runId || !eventId) return;
-      if (!this.registerRunEvent(payload.runId, eventId, payload)) return;
-      this.bumpRunCursor(payload.runId, { ts: payload.event.ts, id: eventId });
-      for (const fn of this.runEventListeners) fn(payload);
-    };
-    this.socket.on('run_event_appended', handleRunTimeline);
-    this.socket.on('run_timeline_event_created', handleRunTimeline);
-    this.socket.on('run_timeline_event_updated', handleRunTimeline);
+    const handleRunTimeline = (eventName: 'run_event_appended' | 'run_timeline_event_created' | 'run_timeline_event_updated') =>
+      (payload: RunEventSocketPayload) => {
+        const eventId = payload.event?.id;
+        if (!payload.runId || !eventId) return;
+        if (DEV_MODE) console.debug('[graphSocket] timeline event', { event: eventName, runId: payload.runId, mutation: payload.mutation });
+        if (!this.registerRunEvent(payload.runId, eventId, payload)) return;
+        this.bumpRunCursor(payload.runId, { ts: payload.event.ts, id: eventId });
+        for (const fn of this.runEventListeners) fn(payload);
+      };
+    this.socket.on('run_event_appended', handleRunTimeline('run_event_appended'));
+    this.socket.on('run_timeline_event_created', handleRunTimeline('run_timeline_event_created'));
+    this.socket.on('run_timeline_event_updated', handleRunTimeline('run_timeline_event_updated'));
     return this.socket;
   }
 
