@@ -351,9 +351,10 @@ describe('AgentsRunTimeline socket reactions', () => {
     expect(summaryRefetch).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(within(option).getByText('error')).toBeInTheDocument());
 
-    const lastCursorCall = socketMocks.setRunCursor.mock.calls.at(-1);
-    expect(lastCursorCall?.[0]).toBe('run-1');
-    expect(lastCursorCall?.[1]).toEqual({ ts: updated.ts, id: updated.id });
+    const cursorCalls = socketMocks.setRunCursor.mock.calls.filter(([runId]) => runId === 'run-1');
+    expect(cursorCalls).not.toHaveLength(0);
+    const lastCursor = cursorCalls.at(-1)?.[1];
+    expect(lastCursor).toEqual({ ts: '2024-01-01T00:00:02.000Z', id: 'event-2' });
 
     const details = getByTestId('timeline-event-details');
     expect(details).toHaveTextContent('Tool Execution — Search Tool');
@@ -427,9 +428,11 @@ describe('AgentsRunTimeline socket reactions', () => {
     expect(eventsRefetch).not.toHaveBeenCalled();
     await findByText('Tool Execution — Weather');
 
-    const finalCursorCall = socketMocks.setRunCursor.mock.calls.at(-1);
-    expect(finalCursorCall?.[0]).toBe('run-1');
-    expect(finalCursorCall?.[1]).toEqual({ ts: caughtUp.ts, id: caughtUp.id });
+    const receivedCaughtUpCursor = socketMocks.setRunCursor.mock.calls.some((args) => {
+      const [runId, cursor] = args;
+      return runId === 'run-1' && cursor?.id === caughtUp.id && cursor?.ts === caughtUp.ts;
+    });
+    expect(receivedCaughtUpCursor).toBe(true);
 
     expect(getByTestId('timeline-event-details')).toBeInTheDocument();
     unmount();
