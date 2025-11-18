@@ -65,7 +65,6 @@ async function bootstrap() {
   //     const cleanup = app.get(ContainerCleanupService);
   //     cleanup?.stop();
 
-  //     await app.get(MongoService).close();
   //     await fastifyInstance.close();
 
   //     process.exit(0);

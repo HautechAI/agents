@@ -1,10 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { GraphModule } from '../src/graph/graph.module';
-import { MongoService } from '../src/core/services/mongo.service';
 import { PrismaService } from '../src/core/services/prisma.service';
 import type { PrismaClient } from '@prisma/client';
-import type { Db } from 'mongodb';
 import { ContainerService } from '../src/infra/container/container.service';
 import { ContainerRegistry } from '../src/infra/container/container.registry';
 import { ContainerCleanupService } from '../src/infra/container/containerCleanup.job';
@@ -28,7 +26,6 @@ import { GraphRepository } from '../src/graph/graph.repository';
 import { ModuleRef } from '@nestjs/core';
 
 process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
-process.env.MONGODB_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/test';
 process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'postgres://localhost:5432/test';
 process.env.NCPS_ENABLED = process.env.NCPS_ENABLED || 'false';
 process.env.CONTAINERS_CLEANUP_ENABLED = process.env.CONTAINERS_CLEANUP_ENABLED || 'false';
@@ -81,27 +78,6 @@ describe('GraphModule DI smoke test', () => {
     const prismaServiceStub = {
       getClient: vi.fn(() => prismaClientStub as PrismaClient),
     } satisfies Pick<PrismaService, 'getClient'>;
-
-    const mongoCollectionStub = {
-      findOne: vi.fn().mockResolvedValue(null),
-      insertOne: vi.fn().mockResolvedValue({}),
-      replaceOne: vi.fn().mockResolvedValue({}),
-      updateOne: vi.fn().mockResolvedValue({}),
-      updateMany: vi.fn().mockResolvedValue({}),
-      find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }),
-      deleteOne: vi.fn().mockResolvedValue({}),
-    };
-
-    const mongoDbInstance = { collection: vi.fn(() => mongoCollectionStub) } as unknown as Db;
-
-    const mongoClientStub = makeStub({});
-
-    const mongoServiceStub = {
-      connect: vi.fn().mockResolvedValue(undefined),
-      close: vi.fn().mockResolvedValue(undefined),
-      getDb: vi.fn(() => mongoDbInstance),
-      getClient: vi.fn(() => mongoClientStub),
-    } satisfies Partial<MongoService>;
 
     const containerRegistryStub = {
       registerStart: vi.fn(),
@@ -176,7 +152,6 @@ describe('GraphModule DI smoke test', () => {
     const configServiceStub = new ConfigService().init(
       configSchema.parse({
         llmProvider: 'openai',
-        mongodbUrl: 'mongodb://localhost:27017/test',
         agentsDatabaseUrl: 'postgres://localhost:5432/test',
       }),
     );
@@ -199,13 +174,9 @@ describe('GraphModule DI smoke test', () => {
       imports: [GraphModule],
     });
 
-    vi.spyOn(MongoService.prototype, 'connect').mockResolvedValue(undefined);
-    vi.spyOn(MongoService.prototype, 'getDb').mockReturnValue(mongoDbInstance as Db);
-    vi.spyOn(MongoService.prototype, 'getClient').mockReturnValue(mongoClientStub as unknown as ReturnType<MongoService['getClient']>);
     vi.spyOn(PrismaService.prototype, 'getClient').mockReturnValue(prismaClientStub as PrismaClient);
     vi.spyOn(ContainerRegistry.prototype, 'ensureIndexes').mockResolvedValue(undefined);
 
-    builder.overrideProvider(MongoService).useFactory(() => mongoServiceStub as MongoService);
     builder.overrideProvider(PrismaService).useFactory(() => prismaServiceStub as PrismaService);
     builder.overrideProvider(ContainerRegistry).useFactory(() => containerRegistryStub as ContainerRegistry);
     builder.overrideProvider(ContainerService).useFactory(() => containerServiceStub as ContainerService);

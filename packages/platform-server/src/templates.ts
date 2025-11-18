@@ -15,7 +15,6 @@ import { MemoryToolNode } from './nodes/tools/memory/memory.node';
 
 import { ConfigService } from './core/services/config.service';
 import { LoggerService } from './core/services/logger.service';
-import { MongoService } from './core/services/mongo.service';
 
 import { ContainerService } from './infra/container/container.service';
 import { NcpsKeyService } from './infra/ncps/ncpsKey.service';
@@ -29,7 +28,6 @@ export interface TemplateRegistryDeps {
   logger: LoggerService;
   containerService: ContainerService;
   configService: ConfigService;
-  mongoService: MongoService; // required for memory nodes
   ncpsKeyService?: NcpsKeyService;
   moduleRef: ModuleRef;
 }
