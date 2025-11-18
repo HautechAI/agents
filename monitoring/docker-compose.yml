@@ -10,8 +10,11 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=7d"
     volumes:
+      - type: bind
+        source: ./prometheus
+        target: /etc/prometheus
+        read_only: true
       - prometheus-data:/prometheus
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
@@ -40,7 +43,10 @@ services:
       GF_SECURITY_ADMIN_USER: admin
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - type: bind
+        source: ./grafana/provisioning
+        target: /etc/grafana/provisioning
+        read_only: true
 
 volumes:
   prometheus-data:
