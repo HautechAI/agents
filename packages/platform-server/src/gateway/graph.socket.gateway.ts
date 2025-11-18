@@ -80,7 +80,15 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   init(params: { server: HTTPServer }): this {
     if (this.initialized) return this;
     const server = params.server;
-    this.io = new SocketIOServer(server, { path: '/socket.io', transports: ['websocket'], cors: { origin: '*' } });
+    this.io = new SocketIOServer(server, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      cors: {
+        origin: '*',
+        methods: ['GET', 'POST'],
+        credentials: false,
+      },
+    });
     this.io.on('connection', (socket: Socket) => {
       // Room subscription
       const RoomSchema = z.union([
@@ -110,7 +118,7 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     this.initialized = true;
     // Wire runtime status events to socket broadcast
     this.attachRuntimeSubscriptions();
-    this.logger.info('GraphSocketGateway initialized and attached at /socket.io');
+    this.logger.info('GraphSocketGateway initialized at /socket.io (transports websocket,polling)');
     return this;
   }
 

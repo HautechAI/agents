@@ -97,7 +97,7 @@ class GraphSocket {
     // Cast to typed Socket to enable event payload typing
     this.socket = io(host, {
       path: '/socket.io',
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       forceNew: false,
       autoConnect: true,
       timeout: 10000,
@@ -105,7 +105,7 @@ class GraphSocket {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      withCredentials: true,
+      withCredentials: false,
     }) as unknown as Socket<ServerToClientEvents, ClientToServerEvents>;
     const handleConnect = () => {
       this.resubscribeAll();
