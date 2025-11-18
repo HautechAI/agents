@@ -503,24 +503,7 @@ export function AgentsRunTimeline() {
       if (items.length > 0) {
         const latestSelectedTypes = selectedTypesRef.current;
         const latestSelectedStatuses = selectedStatusesRef.current;
-        updateEventsState((prev) => {
-          const merged = mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses);
-          if (process.env.NODE_ENV !== 'production') {
-            const beforeCount = prev.length;
-            const afterCount = merged.length;
-            const addedIds = items.map((item) => item.id);
-            const firstId = merged[0]?.id ?? null;
-            const lastId = merged[merged.length - 1]?.id ?? null;
-            console.debug('[AgentsRunTimeline] loadOlder merge', {
-              beforeCount,
-              afterCount,
-              addedIds,
-              firstId,
-              lastId,
-            });
-          }
-          return merged;
-        });
+        updateEventsState((prev) => mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses));
       } else {
         pendingScrollAdjustmentRef.current = null;
       }

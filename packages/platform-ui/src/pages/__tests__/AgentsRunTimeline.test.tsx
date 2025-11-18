@@ -463,7 +463,7 @@ describe('AgentsRunTimeline terminate control', () => {
   it('renders terminate button for running runs and triggers termination flow', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { getByRole } = renderPage([
-      '/agents/threads/thread-1/runs/run-1',
+      '/agents/threads/thread-1/runs/run-1?eventId=event-10',
     ]);
 
     const terminateButton = getByRole('button', { name: 'Terminate' });
@@ -521,7 +521,7 @@ describe('AgentsRunTimeline pagination and scrolling', () => {
     });
 
     const { getByRole } = renderPage([
-      '/agents/threads/thread-1/runs/run-1',
+      '/agents/threads/thread-1/runs/run-1?eventId=event-2',
     ]);
 
     expect(eventsMock).toHaveBeenCalledWith('run-1', expect.objectContaining({ limit: 100, order: 'desc' }));
@@ -993,7 +993,7 @@ describe('AgentsRunTimeline load older regressions', () => {
     };
 
     const { getByRole } = renderPage([
-      '/agents/threads/thread-1/runs/run-1',
+      '/agents/threads/thread-1/runs/run-1?eventId=event-3',
     ]);
 
     const listbox = getByRole('listbox');
