@@ -2,6 +2,7 @@ import { createServer, type Server as HTTPServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Server as SocketIOServer } from 'socket.io';
 import type { RunTimelineEvent } from '../src/api/types/agents';
+import { graphSocket } from '../src/lib/graph/socket';
 
 type ThreadSummaryPayload = {
   id: string;
@@ -63,9 +64,13 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 function isAllowedRoom(room: string): boolean {
   if (room === 'threads' || room === 'graph') return true;
-  if (room.startsWith('thread:') || room.startsWith('run:') || room.startsWith('node:')) {
+  if (room.startsWith('thread:') || room.startsWith('run:')) {
     const [, id] = room.split(':');
-    return typeof id === 'string' && uuidPattern.test(id);
+    return typeof id === 'string' && (id.length === 0 ? false : uuidPattern.test(id));
+  }
+  if (room.startsWith('node:')) {
+    const [, id] = room.split(':');
+    return typeof id === 'string' && id.length > 0;
   }
   return false;
 }
@@ -99,6 +104,7 @@ function hasSubscribers(io: SocketIOServer, room: string): boolean {
 }
 
 export async function createSocketTestServer(): Promise<TestSocketServer> {
+  graphSocket.resetForTests();
   const httpServer: HTTPServer = createServer();
   const io = new SocketIOServer(httpServer, { path: '/socket.io', transports: ['websocket'] });
 
@@ -114,7 +120,14 @@ export async function createSocketTestServer(): Promise<TestSocketServer> {
       if (typeof roomField === 'string') candidateRooms.push(roomField);
       for (const room of candidateRooms) {
         if (!isAllowedRoom(room)) continue;
-        socket.join(room).catch(() => {});
+        try {
+          const joinResult = socket.join(room);
+          if (joinResult && typeof (joinResult as Promise<unknown>).catch === 'function') {
+            (joinResult as Promise<unknown>).catch(() => {});
+          }
+        } catch {
+          // Ignore join errors in tests; invalid rooms are already filtered.
+        }
       }
     });
   });
@@ -192,7 +205,17 @@ export async function createSocketTestServer(): Promise<TestSocketServer> {
       io.close(() => resolve());
     });
     await new Promise<void>((resolve, reject) => {
-      httpServer.close((err) => (err ? reject(err) : resolve()));
+      httpServer.close((err) => {
+        if (!err) {
+          resolve();
+          return;
+        }
+        if ((err as NodeJS.ErrnoException).code === 'ERR_SERVER_NOT_RUNNING') {
+          resolve();
+          return;
+        }
+        reject(err);
+      });
     });
   };
 

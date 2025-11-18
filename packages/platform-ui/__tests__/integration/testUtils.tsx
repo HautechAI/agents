@@ -6,11 +6,13 @@ import { TemplatesProvider } from '../../src/lib/graph/templates.provider';
 import type { NodeStatusEvent, TemplateSchema } from '../../src/lib/graph/types';
 import { TooltipProvider } from '@agyn/ui';
 import type { TestSocketServer } from '../socketServer.helper';
+import { graphSocket } from '../../src/lib/graph/socket';
 
 export const emitted: Array<NodeStatusEvent> = [];
 let socketServerRef: TestSocketServer | null = null;
 
 export function setSocketServer(server: TestSocketServer | null) {
+  graphSocket.resetForTests();
   socketServerRef = server;
 }
 

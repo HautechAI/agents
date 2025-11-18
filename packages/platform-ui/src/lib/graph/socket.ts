@@ -300,6 +300,36 @@ class GraphSocket {
   getRunCursor(runId: string): RunTimelineEventsCursor | null {
     return this.runCursors.get(runId) ?? null;
   }
+
+  resetForTests() {
+    if (process.env.NODE_ENV !== 'test') return;
+    if (this.socket) {
+      try {
+        this.socket.removeAllListeners();
+        this.socket.io.removeAllListeners();
+      } catch {
+        // ignore cleanup errors in tests
+      }
+      try {
+        this.socket.disconnect();
+      } catch {
+        // ignore disconnect errors in tests
+      }
+      this.socket = null;
+    }
+    this.subscribedRooms.clear();
+    this.listeners.clear();
+    this.stateListeners.clear();
+    this.reminderListeners.clear();
+    this.threadCreatedListeners.clear();
+    this.threadUpdatedListeners.clear();
+    this.threadActivityListeners.clear();
+    this.threadRemindersListeners.clear();
+    this.messageCreatedListeners.clear();
+    this.runStatusListeners.clear();
+    this.runEventListeners.clear();
+    this.runCursors.clear();
+  }
 }
 
 export const graphSocket = new GraphSocket();
