@@ -22,6 +22,7 @@ import { RemindMeNode } from './nodes/tools/remind_me/remind_me.node';
 import { ShellCommandNode } from './nodes/tools/shell_command/shell_command.node';
 import { SendSlackMessageNode } from './nodes/tools/send_slack_message/send_slack_message.node';
 import { SendMessageNode } from './nodes/tools/send_message/send_message.node';
+import { LLMProvisioner } from './llm/provisioners/llm.provisioner';
 // Unified Memory tool
 
 export interface TemplateRegistryDeps {
@@ -29,6 +30,7 @@ export interface TemplateRegistryDeps {
   containerService: ContainerService;
   configService: ConfigService;
   ncpsKeyService?: NcpsKeyService;
+  provisioner: LLMProvisioner;
   moduleRef: ModuleRef;
 }
 

@@ -12,6 +12,7 @@ import { InfraModule } from '../infra/infra.module';
 import { ContainerService } from '../infra/container/container.service';
 import { NcpsKeyService } from '../infra/ncps/ncpsKey.service';
 import { LLMModule } from '../llm/llm.module';
+import { LLMProvisioner } from '../llm/provisioners/llm.provisioner';
 import { NodesModule } from '../nodes/nodes.module';
 import { buildTemplateRegistry } from '../templates';
 import { VaultModule } from '../vault/vault.module';
@@ -40,6 +41,7 @@ import { CallAgentLinkingService } from '../agents/call-agent-linking.service';
         containerService: ContainerService,
         configService: ConfigService,
         ncpsKeyService: NcpsKeyService,
+        provisioner: LLMProvisioner,
         moduleRef: ModuleRef,
       ) =>
         buildTemplateRegistry({
@@ -47,9 +49,10 @@ import { CallAgentLinkingService } from '../agents/call-agent-linking.service';
           containerService,
           configService,
           ncpsKeyService,
+          provisioner,
           moduleRef,
         }),
-      inject: [LoggerService, ContainerService, ConfigService, NcpsKeyService, ModuleRef],
+      inject: [LoggerService, ContainerService, ConfigService, NcpsKeyService, LLMProvisioner, ModuleRef],
     },
     PortsRegistry,
     {
