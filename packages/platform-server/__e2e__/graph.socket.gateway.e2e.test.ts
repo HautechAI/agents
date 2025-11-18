@@ -78,41 +78,53 @@ describe('GraphSocketGateway real server handshake', () => {
   });
 
   it('attaches socket.io and acknowledges subscriptions', async () => {
-    const client = createClient(baseUrl, {
-      path: '/socket.io',
-      transports: ['websocket'],
-      reconnection: false,
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        client.removeAllListeners('connect');
-        client.removeAllListeners('connect_error');
-        reject(new Error('Timed out waiting for socket connect'));
-      }, 3000);
-      client.once('connect', () => {
-        clearTimeout(timer);
-        resolve();
+    let upgradeCount = 0;
+    const upgradeListener = () => {
+      upgradeCount += 1;
+    };
+    fastify.server.on('upgrade', upgradeListener);
+    let client: Socket | null = null;
+    try {
+      client = createClient(baseUrl, {
+        path: '/socket.io',
+        transports: ['websocket'],
+        reconnection: false,
       });
-      client.once('connect_error', (err) => {
-        clearTimeout(timer);
-        reject(err);
+
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          client?.removeAllListeners('connect');
+          client?.removeAllListeners('connect_error');
+          reject(new Error('Timed out waiting for socket connect'));
+        }, 3000);
+        client?.once('connect', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        client?.once('connect_error', (err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
       });
-    });
 
-    const ack = await new Promise<{ ok: boolean; rooms?: string[]; error?: string }>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('Timed out waiting for subscribe ack'));
-      }, 3000);
-      client.emit('subscribe', { rooms: ['threads'] }, (response: { ok: boolean; rooms?: string[]; error?: string }) => {
-        clearTimeout(timer);
-        resolve(response);
+      const ack = await new Promise<{ ok: boolean; rooms?: string[]; error?: string }>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('Timed out waiting for subscribe ack'));
+        }, 3000);
+        client?.emit('subscribe', { rooms: ['threads'] }, (response: { ok: boolean; rooms?: string[]; error?: string }) => {
+          clearTimeout(timer);
+          resolve(response);
+        });
       });
-    });
 
-    expect(ack.ok).toBe(true);
-    expect(ack.rooms).toContain('threads');
-
-    await waitForDisconnect(client);
+      expect(ack.ok).toBe(true);
+      expect(ack.rooms).toContain('threads');
+      expect(upgradeCount).toBeGreaterThanOrEqual(1);
+    } finally {
+      if (client) {
+        await waitForDisconnect(client);
+      }
+      fastify.server.off('upgrade', upgradeListener);
+    }
   });
 });

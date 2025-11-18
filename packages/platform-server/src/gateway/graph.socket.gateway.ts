@@ -81,6 +81,30 @@ export class GraphSocketGateway implements GraphEventsPublisher {
       path: '/socket.io',
       transports: ['websocket'] as ServerOptions['transports'],
       cors: { origin: '*' },
+      allowRequest: (req, callback) => {
+        const url = req.url ?? '';
+        let queryRecord: Record<string, unknown> = {};
+        try {
+          if (url.includes('?')) {
+            const parsed = new URL(url, 'http://localhost');
+            parsed.searchParams.forEach((value, key) => {
+              queryRecord[key] = value;
+            });
+          }
+        } catch (error) {
+          queryRecord = { parseError: error instanceof Error ? error.message : 'invalid_url' };
+        }
+        const sanitizedQuery = this.sanitizeQuery(queryRecord);
+        const originHeader = req.headers?.origin;
+        const origin = Array.isArray(originHeader) ? originHeader.join(',') : originHeader;
+        this.logger.info('GraphSocketGateway: allowRequest', {
+          path: url.split('?')[0] || url || '/socket.io',
+          origin,
+          query: sanitizedQuery,
+          headers: this.sanitizeHeaders(req.headers),
+        });
+        callback(null, true);
+      },
     };
     this.logger.info('GraphSocketGateway: attach');
     this.logger.info('GraphSocketGateway: options', {
