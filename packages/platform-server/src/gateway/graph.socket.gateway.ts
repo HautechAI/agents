@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional, Scope } from '@nestjs/common';
-import type { Server as HTTPServer } from 'http';
+import type { IncomingHttpHeaders, Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { z } from 'zod';
 import { LoggerService } from '../core/services/logger.service';
@@ -62,6 +62,7 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   private pendingThreads = new Set<string>();
   private metricsTimer: NodeJS.Timeout | null = null;
   private readonly COALESCE_MS = 100;
+  private static debugEnabled: boolean | null = null;
 
   constructor(
     @Inject(LoggerService) private readonly logger: LoggerService,
@@ -77,8 +78,15 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   init(params: { server: HTTPServer }): this {
     if (this.initialized) return this;
     const server = params.server;
-    this.io = new SocketIOServer(server, { path: '/socket.io', transports: ['websocket'], cors: { origin: '*' } });
+    const options = { path: '/socket.io', transports: ['websocket'], cors: { origin: '*' } } as const;
+    this.debug('Attaching Socket.IO server', () => options);
+    this.io = new SocketIOServer(server, options);
     this.io.on('connection', (socket: Socket) => {
+      this.debug('Client connected', () => ({
+        socketId: socket.id,
+        query: this.sanitizeQuery(socket.handshake.query as Record<string, unknown>),
+        headers: this.sanitizeHeaders(socket.handshake.headers),
+      }));
       // Room subscription
       const RoomSchema = z.union([
         z.literal('threads'),
@@ -98,10 +106,17 @@ export class GraphSocketGateway implements GraphEventsPublisher {
         }
         const p = parsed.data;
         const rooms: string[] = p.rooms ?? (p.room ? [p.room] : []);
+        this.debug('Subscribe request', () => ({ socketId: socket.id, rooms }));
         for (const r of rooms) if (r.length > 0) socket.join(r);
+        if (rooms.length > 0) {
+          this.debug('Rooms joined', () => ({ socketId: socket.id, rooms }));
+        }
+      });
+      socket.on('disconnect', (reason) => {
+        this.debug('Client disconnected', () => ({ socketId: socket.id, reason }));
       });
       socket.on('error', (e: unknown) => {
-        this.logger.error('Socket error', e);
+        this.logger.warn('Graph socket client error', e);
       });
     });
     this.initialized = true;
@@ -123,8 +138,7 @@ export class GraphSocketGateway implements GraphEventsPublisher {
       return;
     }
     const data = parsed.data;
-    this.io.to('graph').emit(event, data);
-    this.io.to(`node:${data.nodeId}`).emit(event, data);
+    this.emitToRooms(['graph', `node:${data.nodeId}`], event, data, () => ({ nodeId: data.nodeId }));
   }
 
   private attachRuntimeSubscriptions() {
@@ -162,30 +176,26 @@ export class GraphSocketGateway implements GraphEventsPublisher {
 
   // Threads realtime events
   emitThreadCreated(thread: { id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null }) {
-    if (!this.io) return;
     const payload = { thread: { ...thread, createdAt: thread.createdAt.toISOString() } };
-    this.io.to('threads').emit('thread_created', payload);
+    this.emitToRooms(['threads'], 'thread_created', payload, () => ({ threadId: thread.id }));
   }
   emitThreadUpdated(thread: { id: string; alias: string; summary: string | null; status: ThreadStatus; createdAt: Date; parentId?: string | null }) {
-    if (!this.io) return;
     const payload = { thread: { ...thread, createdAt: thread.createdAt.toISOString() } };
-    this.io.to('threads').emit('thread_updated', payload);
+    this.emitToRooms(['threads'], 'thread_updated', payload, () => ({ threadId: thread.id }));
   }
   emitMessageCreated(threadId: string, message: { id: string; kind: MessageKind; text: string | null; source: import('type-fest').JsonValue | unknown; createdAt: Date; runId?: string }) {
-    if (!this.io) return;
-    const payload = { message: { ...message, createdAt: message.createdAt.toISOString() } };
-    this.io.to(`thread:${threadId}`).emit('message_created', payload);
+    const payload = { threadId, message: { ...message, createdAt: message.createdAt.toISOString() } };
+    this.emitToRooms([`thread:${threadId}`], 'message_created', payload, () => ({ threadId, messageId: message.id }));
   }
   emitRunStatusChanged(threadId: string, run: { id: string; status: RunStatus; createdAt: Date; updatedAt: Date }) {
-    if (!this.io) return;
     const payload = { run: { ...run, createdAt: run.createdAt.toISOString(), updatedAt: run.updatedAt.toISOString() } };
-    this.io.to(`thread:${threadId}`).emit('run_status_changed', payload);
-    this.io.to(`run:${run.id}`).emit('run_status_changed', payload);
+    this.emitToRooms([`thread:${threadId}`, `run:${run.id}`], 'run_status_changed', payload, () => ({ threadId, runId: run.id, status: run.status }));
   }
   emitRunEvent(runId: string, threadId: string, payload: RunEventBroadcast) {
-    if (!this.io) return;
-    this.io.to(`run:${runId}`).emit('run_event_appended', payload);
-    this.io.to(`thread:${threadId}`).emit('run_event_appended', payload);
+    this.emitToRooms([`run:${runId}`, `thread:${threadId}`], 'run_event_appended', payload, () => {
+      const event = (payload.event ?? {}) as { id?: string; ts?: string };
+      return { threadId, runId, eventId: event.id, ts: event.ts };
+    });
   }
   private flushMetricsQueue = async () => {
     // De-duplicate pending thread IDs per flush (preserve insertion order)
@@ -198,10 +208,10 @@ export class GraphSocketGateway implements GraphEventsPublisher {
       for (const id of ids) {
         const m = map[id];
         if (!m) continue;
-        this.io.to('threads').emit('thread_activity_changed', { threadId: id, activity: m.activity });
-        this.io.to('threads').emit('thread_reminders_count', { threadId: id, remindersCount: m.remindersCount });
-        this.io.to(`thread:${id}`).emit('thread_activity_changed', { threadId: id, activity: m.activity });
-        this.io.to(`thread:${id}`).emit('thread_reminders_count', { threadId: id, remindersCount: m.remindersCount });
+        const activityPayload = { threadId: id, activity: m.activity };
+        this.emitToRooms(['threads', `thread:${id}`], 'thread_activity_changed', activityPayload, () => ({ threadId: id, activity: m.activity }));
+        const remindersPayload = { threadId: id, remindersCount: m.remindersCount };
+        this.emitToRooms(['threads', `thread:${id}`], 'thread_reminders_count', remindersPayload, () => ({ threadId: id, remindersCount: m.remindersCount }));
       }
     } catch (e) {
       this.logger.error('flushMetricsQueue error', e);
@@ -226,6 +236,76 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     } catch (e) {
       this.logger.error('scheduleThreadAndAncestorsMetrics error', e);
       this.scheduleThreadMetrics(threadId);
+    }
+  }
+
+  private static isDebugEnabled(): boolean {
+    if (this.debugEnabled !== null) return this.debugEnabled;
+    this.debugEnabled = process.env.GRAPH_SOCKET_DEBUG === 'true';
+    return this.debugEnabled;
+  }
+
+  private debug(message: string, payload?: unknown | (() => unknown)) {
+    if (!GraphSocketGateway.isDebugEnabled()) return;
+    let value: unknown;
+    if (typeof payload === 'function') {
+      try {
+        value = (payload as () => unknown)();
+      } catch (error) {
+        value = { debugError: error instanceof Error ? { message: error.message, name: error.name } : error };
+      }
+    } else {
+      value = payload;
+    }
+    if (value === undefined) this.logger.debug(`GraphSocketGateway ${message}`);
+    else this.logger.debug(`GraphSocketGateway ${message}`, value);
+  }
+
+  private sanitizeHeaders(headers: IncomingHttpHeaders | undefined): Record<string, unknown> {
+    if (!headers) return {};
+    const sensitive = new Set(['authorization', 'cookie', 'set-cookie']);
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (!key) continue;
+      sanitized[key] = sensitive.has(key.toLowerCase()) ? '[REDACTED]' : value;
+    }
+    return sanitized;
+  }
+
+  private sanitizeQuery(query: Record<string, unknown> | undefined): Record<string, unknown> {
+    if (!query) return {};
+    const sensitive = new Set(['token', 'authorization', 'auth', 'api_key', 'access_token']);
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(query)) {
+      sanitized[key] = key && sensitive.has(key.toLowerCase()) ? '[REDACTED]' : value;
+    }
+    return sanitized;
+  }
+
+  private emitToRooms(
+    rooms: string[],
+    event: string,
+    payload: unknown,
+    summaryFactory: () => Record<string, unknown>,
+  ) {
+    if (!this.io || rooms.length === 0) return;
+    if (GraphSocketGateway.isDebugEnabled()) {
+      let summary: Record<string, unknown> = {};
+      try {
+        summary = summaryFactory();
+      } catch (error) {
+        summary = { summaryError: error instanceof Error ? { message: error.message, name: error.name } : error };
+      }
+      this.logger.debug('GraphSocketGateway emit', { event, rooms, ...summary });
+    }
+    for (const room of rooms) {
+      try {
+        this.io.to(room).emit(event, payload);
+      } catch (error) {
+        const errPayload =
+          error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) };
+        this.logger.warn('GraphSocketGateway emit error', { event, room, error: errPayload });
+      }
     }
   }
 }
