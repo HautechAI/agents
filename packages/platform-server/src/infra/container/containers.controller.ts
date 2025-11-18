@@ -164,12 +164,16 @@ export class ContainersController {
     })();
     let sidecarSource: Array<{ containerId: string; image: string; status: unknown; metadata: unknown }> = [];
     if (hasQueryRaw) {
-      const q = Prisma.sql`
-        SELECT "containerId", "image", "status", "metadata" FROM "Container"
-        WHERE "metadata"->'labels'->>'hautech.ai/role' = 'dind'
-          AND ("metadata"->'labels'->>'hautech.ai/parent_cid') IN (${Prisma.join(parentIds)})
-      `;
-      sidecarSource = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown }>>(q);
+      if (parentIds.length === 0) {
+        sidecarSource = [];
+      } else {
+        const q = Prisma.sql`
+          SELECT "containerId", "image", "status", "metadata" FROM "Container"
+          WHERE "metadata"->'labels'->>'hautech.ai/role' = 'dind'
+            AND ("metadata"->'labels'->>'hautech.ai/parent_cid') IN (${Prisma.join(parentIds)})
+        `;
+        sidecarSource = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown }>>(q);
+      }
     } else {
       sidecarSource = await this.prisma.container.findMany({
         select: { containerId: true, image: true, status: true, metadata: true },
