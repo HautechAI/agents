@@ -109,7 +109,7 @@ describe('ContainerTerminalGateway E2E', () => {
 
   it('supports full websocket terminal lifecycle', async () => {
     const fastify = app.getHttpAdapter().getInstance();
-    const containerId = '22222222-2222-4222-8222-222222222222';
+    const containerId = 'c'.repeat(64);
 
     const sessionResponse = await fastify.inject({
       method: 'POST',

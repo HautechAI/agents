@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 import { io as createClient, type Socket } from 'socket.io-client';
 import WebSocket, { type RawData } from 'ws';
 
+import type { MessageKind, RunStatus } from '@prisma/client';
 import { GraphSocketGateway } from '../src/gateway/graph.socket.gateway';
 import { LoggerService } from '../src/core/services/logger.service';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
@@ -69,6 +70,8 @@ class ContainerServiceStub {
 class TerminalSessionsServiceStub {
   public connected = false;
   public closed = false;
+  public validations = 0;
+  public connects = 0;
   public readonly session: TerminalSessionRecord;
 
   constructor() {
@@ -91,11 +94,14 @@ class TerminalSessionsServiceStub {
   reset(): void {
     this.connected = false;
     this.closed = false;
+    this.validations = 0;
+    this.connects = 0;
     this.session.state = 'pending';
     this.session.lastActivityAt = Date.now();
   }
 
   validate(sessionId: string, token: string): TerminalSessionRecord {
+    this.validations += 1;
     if (sessionId !== this.session.sessionId) throw new Error('session_not_found');
     if (token !== this.session.token) throw new Error('invalid_token');
     this.session.lastActivityAt = Date.now();
@@ -108,6 +114,7 @@ class TerminalSessionsServiceStub {
     this.session.state = 'connected';
     this.session.lastActivityAt = Date.now();
     this.connected = true;
+    this.connects += 1;
   }
 
   get(sessionId: string): TerminalSessionRecord | undefined {
@@ -160,6 +167,7 @@ describe('Socket gateway real server handshakes', () => {
   let fastify: FastifyInstance;
   let baseUrl: string;
   let terminalSessions: TerminalSessionsServiceStub;
+  let graphGateway: GraphSocketGateway;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -184,7 +192,7 @@ describe('Socket gateway real server handshakes', () => {
     const terminalGateway = app.get(ContainerTerminalGateway);
     terminalGateway.registerRoutes(fastify);
 
-    const graphGateway = app.get(GraphSocketGateway);
+    graphGateway = app.get(GraphSocketGateway);
     graphGateway.init({ server: fastify.server });
 
     await app.listen(0, '127.0.0.1');
@@ -204,7 +212,7 @@ describe('Socket gateway real server handshakes', () => {
     terminalSessions.reset();
   });
 
-  it('attaches socket.io and acknowledges subscriptions', async () => {
+  it('attaches socket.io, subscribes, and receives graph events', async () => {
     let upgradeCount = 0;
     const upgradeListener = () => {
       upgradeCount += 1;
@@ -214,7 +222,7 @@ describe('Socket gateway real server handshakes', () => {
     try {
       client = createClient(baseUrl, {
         path: '/socket.io',
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'],
         reconnection: false,
       });
 
@@ -234,18 +242,91 @@ describe('Socket gateway real server handshakes', () => {
         });
       });
 
+      const threadId = 'thread-123';
+      const runId = 'run-456';
+
+      const messagePromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('Timed out waiting for message_created event'));
+        }, 3000);
+        client?.once('message_created', (payload: Record<string, unknown>) => {
+          clearTimeout(timer);
+          resolve(payload);
+        });
+      });
+
+      const statusPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('Timed out waiting for run_status_changed event'));
+        }, 3000);
+        client?.once('run_status_changed', (payload: Record<string, unknown>) => {
+          clearTimeout(timer);
+          resolve(payload);
+        });
+      });
+
+      const runEventPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('Timed out waiting for run_event_appended event'));
+        }, 3000);
+        client?.once('run_event_appended', (payload: Record<string, unknown>) => {
+          clearTimeout(timer);
+          resolve(payload);
+        });
+      });
+
       const ack = await new Promise<{ ok: boolean; rooms?: string[]; error?: string }>((resolve, reject) => {
         const timer = setTimeout(() => {
           reject(new Error('Timed out waiting for subscribe ack'));
         }, 3000);
-        client?.emit('subscribe', { rooms: ['threads'] }, (response: { ok: boolean; rooms?: string[]; error?: string }) => {
-          clearTimeout(timer);
-          resolve(response);
-        });
+        client?.emit(
+          'subscribe',
+          { rooms: ['threads', `thread:${threadId}`, `run:${runId}`] },
+          (response: { ok: boolean; rooms?: string[]; error?: string }) => {
+            clearTimeout(timer);
+            resolve(response);
+          },
+        );
       });
 
       expect(ack.ok).toBe(true);
-      expect(ack.rooms).toContain('threads');
+      expect(ack.rooms).toEqual(expect.arrayContaining(['threads', `thread:${threadId}`, `run:${runId}`]));
+
+      const createdAt = new Date();
+      graphGateway.emitMessageCreated(threadId, {
+        id: 'msg-1',
+        kind: 'assistant' as MessageKind,
+        text: 'hello world',
+        source: { role: 'assistant' },
+        createdAt,
+        runId,
+      });
+
+      graphGateway.emitRunStatusChanged(threadId, {
+        id: runId,
+        status: 'running' as RunStatus,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      graphGateway.emitRunEvent(runId, threadId, {
+        runId,
+        threadId,
+        mutation: 'append',
+        event: {
+          id: 'evt-1',
+          runId,
+          threadId,
+          type: 'tool_execution',
+          status: 'running',
+          ts: createdAt.toISOString(),
+        },
+      });
+
+      const [messagePayload, statusPayload, runEventPayload] = await Promise.all([messagePromise, statusPromise, runEventPromise]);
+      expect(messagePayload).toMatchObject({ threadId, message: expect.any(Object) });
+      expect(statusPayload).toMatchObject({ threadId, run: expect.objectContaining({ id: runId }) });
+      expect(runEventPayload).toMatchObject({ runId, mutation: 'append' });
       expect(upgradeCount).toBeGreaterThanOrEqual(1);
     } finally {
       if (client) {
@@ -303,8 +384,123 @@ describe('Socket gateway real server handshakes', () => {
       expect(payload.type).toBeDefined();
       expect(upgradeCount).toBeGreaterThanOrEqual(1);
       expect(terminalSessions.connected).toBe(true);
+      expect(terminalSessions.validations).toBeGreaterThan(0);
+      expect(terminalSessions.connects).toBeGreaterThan(0);
     } finally {
       await waitForWsClose(client);
+      fastify.server.off('upgrade', upgradeListener);
+    }
+  });
+
+  it('supports concurrent graph and terminal connections with event flow', async () => {
+    let upgradeCount = 0;
+    const upgradeListener = () => {
+      upgradeCount += 1;
+    };
+    fastify.server.on('upgrade', upgradeListener);
+
+    const session = terminalSessions.session;
+    const wsUrl = new URL(baseUrl);
+    wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsUrl.pathname = `/api/containers/${session.containerId}/terminal/ws`;
+    wsUrl.search = new URLSearchParams({ sessionId: session.sessionId, token: session.token }).toString();
+
+    const client = createClient(baseUrl, {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnection: false,
+    });
+
+    const terminalClient = new WebSocket(wsUrl.toString());
+
+    try {
+      await Promise.all([
+        new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error('Timed out waiting for socket connect'));
+          }, 3000);
+          client.once('connect', () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          client.once('connect_error', (err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+        }),
+        new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error('Timed out waiting for terminal websocket open'));
+          }, 3000);
+          terminalClient.once('open', () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          terminalClient.once('error', (err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+        }),
+      ]);
+
+      const threadId = 'thread-999';
+      const runId = 'run-999';
+
+      const subscribeAck = await new Promise<{ ok: boolean; rooms?: string[]; error?: string }>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Timed out waiting for subscribe ack')), 3000);
+        client.emit(
+          'subscribe',
+          { rooms: ['threads', `thread:${threadId}`, `run:${runId}`] },
+          (response: { ok: boolean; rooms?: string[]; error?: string }) => {
+            clearTimeout(timer);
+            resolve(response);
+          },
+        );
+      });
+
+      expect(subscribeAck.ok).toBe(true);
+
+      const runEventReceived = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Timed out waiting for run_event_appended event')), 3000);
+        client.once('run_event_appended', (payload: Record<string, unknown>) => {
+          clearTimeout(timer);
+          resolve(payload);
+        });
+      });
+
+      const terminalMessage = new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Timed out waiting for terminal message')), 3000);
+        terminalClient.once('message', (data) => {
+          clearTimeout(timer);
+          resolve(rawDataToString(data as RawData));
+        });
+      });
+
+      graphGateway.emitRunEvent(runId, threadId, {
+        runId,
+        threadId,
+        mutation: 'append',
+        event: {
+          id: 'evt-999',
+          runId,
+          threadId,
+          type: 'checkpoint',
+          status: 'running',
+          ts: new Date().toISOString(),
+        },
+      });
+
+      const [runEventPayload, terminalFrame] = await Promise.all([runEventReceived, terminalMessage]);
+      expect(runEventPayload).toMatchObject({ runId, mutation: 'append' });
+      expect(terminalFrame.length).toBeGreaterThan(0);
+      expect(terminalSessions.validations).toBeGreaterThan(0);
+      expect(terminalSessions.connects).toBeGreaterThan(0);
+      expect(terminalSessions.connected).toBe(true);
+      expect(upgradeCount).toBeGreaterThanOrEqual(1);
+    } finally {
+      await waitForDisconnect(client);
+      terminalClient.close();
+      await waitForWsClose(terminalClient);
       fastify.server.off('upgrade', upgradeListener);
     }
   });

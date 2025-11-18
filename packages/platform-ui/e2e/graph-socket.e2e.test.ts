@@ -16,7 +16,7 @@ describe('graphSocket real socket handshake', () => {
 
     const ioServer = new SocketIOServer(httpServer, {
       path: '/socket.io',
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
     });
 
     const addressReady = new Promise<AddressInfo>((resolve, reject) => {

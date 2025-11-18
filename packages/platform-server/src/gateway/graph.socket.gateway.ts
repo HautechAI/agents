@@ -232,6 +232,11 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   }
   emitMessageCreated(threadId: string, message: { id: string; kind: MessageKind; text: string | null; source: import('type-fest').JsonValue | unknown; createdAt: Date; runId?: string }) {
     const payload = { threadId, message: { ...message, createdAt: message.createdAt.toISOString() } };
+    this.logger.info('GraphSocketGateway: emitting message_created', {
+      threadId,
+      messageId: message.id,
+      rooms: [`thread:${threadId}`],
+    });
     this.emitToRooms([`thread:${threadId}`], 'message_created', payload, () => ({ threadId, messageId: message.id }));
   }
   emitRunStatusChanged(threadId: string, run: { id: string; status: RunStatus; createdAt: Date; updatedAt: Date }) {
@@ -244,9 +249,21 @@ export class GraphSocketGateway implements GraphEventsPublisher {
         updatedAt: run.updatedAt.toISOString(),
       },
     };
+    this.logger.info('GraphSocketGateway: emitting run_status_changed', {
+      threadId,
+      runId: run.id,
+      status: run.status,
+      rooms: [`thread:${threadId}`, `run:${run.id}`],
+    });
     this.emitToRooms([`thread:${threadId}`, `run:${run.id}`], 'run_status_changed', payload, () => ({ threadId, runId: run.id, status: run.status }));
   }
   emitRunEvent(runId: string, threadId: string, payload: RunEventBroadcast) {
+    this.logger.info('GraphSocketGateway: emitting run_event_appended', {
+      threadId,
+      runId,
+      rooms: [`run:${runId}`, `thread:${threadId}`],
+      eventType: (payload.event as { type?: string } | undefined)?.type,
+    });
     this.emitToRooms([`run:${runId}`, `thread:${threadId}`], 'run_event_appended', payload, () => {
       const event = (payload.event ?? {}) as { id?: string; ts?: string; type?: string };
       return { threadId, runId, eventId: event.id, eventType: event.type, ts: event.ts };

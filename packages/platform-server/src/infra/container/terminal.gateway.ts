@@ -12,6 +12,8 @@ const QuerySchema = z
   .object({ sessionId: z.string().uuid(), token: z.string().min(1) })
   .strict();
 
+const TERMINAL_PATH_REGEX = /^\/api\/containers\/(?:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})|([0-9a-fA-F]{64}))\/terminal\/ws$/;
+
 const IncomingMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('input'), data: z.string().max(8192) }),
   z.object({ type: z.literal('resize'), cols: z.number().int().min(20).max(400), rows: z.number().int().min(10).max(200) }),
@@ -152,56 +154,69 @@ export class ContainerTerminalGateway {
   registerRoutes(fastify: FastifyInstance): void {
     if (this.registered) return;
     this.wss = new WebSocketServer({ noServer: true });
-    const sanitizeHeaders = (headers: IncomingHttpHeaders | undefined): Record<string, unknown> => {
-      if (!headers) return {};
-      const sensitive = new Set(['authorization', 'cookie', 'set-cookie']);
-      const sanitized: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(headers)) {
-        if (!key) continue;
-        sanitized[key] = sensitive.has(key.toLowerCase()) ? '[REDACTED]' : value;
-      }
-      return sanitized;
-    };
-
-    const sanitizeQuery = (params: URLSearchParams): Record<string, string> => {
-      const sanitized: Record<string, string> = {};
-      for (const [key, value] of params.entries()) {
-        sanitized[key] = key.toLowerCase() === 'token' ? '[REDACTED]' : value;
-      }
-      return sanitized;
-    };
 
     fastify.server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
       const rawUrl = req.url ?? '';
-      let url: URL | null = null;
+      let parsedUrl: URL;
       try {
-        url = new URL(rawUrl, 'http://localhost');
+        parsedUrl = new URL(rawUrl, 'http://localhost');
       } catch {
         return;
       }
-      const pathname = url.pathname;
-      const match = pathname.match(/^\/api\/containers\/([0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12})\/terminal\/ws$/);
+
+      const match = TERMINAL_PATH_REGEX.exec(parsedUrl.pathname);
       if (!match) return;
-      const containerId = match[1];
+
+      const containerId = match[1] ?? match[2] ?? '';
       const wss = this.wss;
       if (!wss) return;
+
       this.logger.info('Terminal WS upgrade handled', {
-        url: pathname,
+        path: parsedUrl.pathname,
         containerId,
-        query: sanitizeQuery(url.searchParams),
-        headers: sanitizeHeaders(req.headers),
+        query: this.sanitizeUrlSearchParams(parsedUrl.searchParams),
+        headers: this.sanitizeHeaders(req.headers),
       });
+
       wss.handleUpgrade(req, socket, head, (ws) => {
         const stream: SocketStream = { socket: ws };
         const fakeReq = {
           params: { containerId },
-          query: Object.fromEntries(url.searchParams.entries()),
+          query: Object.fromEntries(parsedUrl.searchParams.entries()),
         } as unknown as FastifyRequest;
         void this.handleConnection(stream, fakeReq);
       });
     });
     this.registered = true;
     this.logger.info('Container terminal WebSocket upgrade handler registered');
+  }
+
+  private sanitizeHeaders(headers: IncomingHttpHeaders | undefined): Record<string, unknown> {
+    if (!headers) return {};
+    const sensitive = new Set(['authorization', 'cookie', 'set-cookie']);
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (!key) continue;
+      sanitized[key] = sensitive.has(key.toLowerCase()) ? '[REDACTED]' : value;
+    }
+    return sanitized;
+  }
+
+  private sanitizeUrlSearchParams(params: URLSearchParams): Record<string, string> {
+    const sanitized: Record<string, string> = {};
+    for (const [key, value] of params.entries()) {
+      sanitized[key] = key.toLowerCase() === 'token' ? '[REDACTED]' : value;
+    }
+    return sanitized;
+  }
+
+  private sanitizeRequestQuery(query: unknown): Record<string, unknown> {
+    if (!query || typeof query !== 'object') return {};
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(query as Record<string, unknown>)) {
+      sanitized[key] = key && key.toLowerCase() === 'token' ? '[REDACTED]' : value;
+    }
+    return sanitized;
   }
 
   private async handleConnection(connection: SocketStream, request: FastifyRequest): Promise<void> {
@@ -215,9 +230,10 @@ export class ContainerTerminalGateway {
       });
     }
     const candidate = (rawSocket ?? connection) as unknown;
-    this.logger.debug('terminal connection received', {
-      requestWs: (request as FastifyRequest & { ws?: boolean }).ws,
-      connectionType: typeof connection,
+    const rawQuery = (request as { query?: unknown }).query;
+    this.logger.info('Terminal connection received', {
+      containerIdParam: (request.params as { containerId?: string })?.containerId,
+      query: this.sanitizeRequestQuery(rawQuery),
     });
     if (!isWsLike(candidate)) {
       this.logger.error('terminal websocket connection lacks ws-like interface', {
@@ -287,6 +303,11 @@ export class ContainerTerminalGateway {
       return;
     }
 
+    this.logger.info('Terminal session validated', {
+      sessionId,
+      containerId: session.containerId,
+    });
+
     const containerId = session.containerId;
     if (containerIdParam && containerIdParam !== containerId) {
       send({ type: 'error', code: 'container_mismatch', message: 'Terminal session belongs to different container' });
@@ -303,6 +324,11 @@ export class ContainerTerminalGateway {
       close(1008, code);
       return;
     }
+
+    this.logger.info('Terminal session connected', {
+      sessionId,
+      containerId,
+    });
 
     send({ type: 'status', phase: 'starting' });
 

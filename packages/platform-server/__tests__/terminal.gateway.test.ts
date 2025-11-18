@@ -41,7 +41,7 @@ const listenFastify = async (app: ReturnType<typeof Fastify>): Promise<number> =
 
 describe('ContainerTerminalGateway (custom websocket server)', () => {
   it('closes connection when required query params are missing', async () => {
-    const record = createSessionRecord();
+    const record = createSessionRecord({ containerId: 'a'.repeat(64) });
     const sessionMocks = {
       validate: vi.fn(),
       markConnected: vi.fn(),
@@ -92,7 +92,13 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
   });
 
   it('handles terminal websocket session end-to-end', async () => {
-    const record = createSessionRecord({ shell: '/bin/bash', cols: 120, rows: 32, maxDurationMs: 300_000 });
+    const record = createSessionRecord({
+      shell: '/bin/bash',
+      cols: 120,
+      rows: 32,
+      maxDurationMs: 300_000,
+      containerId: 'b'.repeat(64),
+    });
     const sessionMocks = {
       validate: vi.fn().mockReturnValue(record),
       markConnected: vi.fn().mockImplementation(() => {
