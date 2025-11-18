@@ -33,6 +33,9 @@ type WsLike = {
   removeAllListeners?: (event?: string) => unknown;
 };
 
+const READY_STATE_OPEN = 1; // WebSocket.OPEN
+type RawDataLike = RawData | string;
+
 const getObjectKeys = (value: unknown): string[] | undefined => {
   if (!value || (typeof value !== 'object' && typeof value !== 'function')) return undefined;
   try {
@@ -53,7 +56,7 @@ const safeSend = (candidate: unknown, payload: Record<string, unknown>, logger: 
     logger.debug('terminal socket send skipped: socket not ws-like', { payloadType: payload.type });
     return;
   }
-  if (candidate.readyState !== WebSocket.OPEN) {
+  if (candidate.readyState !== READY_STATE_OPEN) {
     logger.debug('terminal socket send skipped: socket not open', { payloadType: payload.type });
     return;
   }
@@ -113,6 +116,26 @@ const safeClose = (candidate: unknown, code: number | undefined, reason: string 
   }
 
   logger.debug('terminal socket close fallback exhausted', details);
+};
+
+const isRawDataLike = (value: unknown): value is RawDataLike => {
+  if (typeof value === 'string') return true;
+  if (Buffer.isBuffer(value)) return true;
+  if (Array.isArray(value)) {
+    return value.every((chunk) => Buffer.isBuffer(chunk));
+  }
+  if (value instanceof ArrayBuffer) return true;
+  return false;
+};
+
+const rawDataToUtf8 = (raw: RawDataLike): string => {
+  if (typeof raw === 'string') return raw;
+  if (Buffer.isBuffer(raw)) return raw.toString('utf8');
+  if (Array.isArray(raw)) {
+    return Buffer.concat(raw).toString('utf8');
+  }
+  if (raw instanceof ArrayBuffer) return Buffer.from(raw).toString('utf8');
+  return '';
 };
 
 @Injectable()
@@ -176,7 +199,7 @@ export class ContainerTerminalGateway {
     }
 
     const ws: WsLike = candidate;
-    const isOpen = () => ws.readyState === WebSocket.OPEN;
+    const isOpen = () => ws.readyState === READY_STATE_OPEN;
     const send = (payload: Record<string, unknown>) => safeSend(ws, payload, this.logger);
     const close = (code: number, reason: string) => safeClose(ws, code, reason, this.logger);
     const detach = (event: string, handler?: (...args: unknown[]) => void) => {
@@ -273,7 +296,7 @@ export class ContainerTerminalGateway {
     let stderr: NodeJS.ReadableStream | null = null;
     let closeExec: (() => Promise<{ exitCode: number }>) | null = null;
     let closed = false;
-    let onMessage: ((raw: RawData) => void) | null = null;
+    let onMessage: ((raw: RawDataLike) => void) | null = null;
     let onClose: (() => void) | null = null;
     let onError: ((err: Error) => void) | null = null;
 
@@ -468,9 +491,9 @@ export class ContainerTerminalGateway {
       return;
     }
 
-    onMessage = (raw: RawData) => {
+    onMessage = (raw: RawDataLike) => {
       if (closed) return;
-      const text = typeof raw === 'string' ? raw : raw.toString('utf8');
+      const text = rawDataToUtf8(raw);
       let parsed: unknown;
       try {
         parsed = JSON.parse(text) as unknown;
@@ -601,8 +624,14 @@ export class ContainerTerminalGateway {
     };
 
     const messageListener = (...args: unknown[]) => {
-      const raw = args[0] as RawData;
-      if (onMessage) onMessage(raw);
+      const [first] = args;
+      if (!isRawDataLike(first)) {
+        this.logger.warn('terminal socket message ignored: unsupported payload type', {
+          payloadType: typeof first,
+        });
+        return;
+      }
+      if (onMessage) onMessage(first);
     };
 
     onClose = () => {

@@ -1,11 +1,4 @@
 import 'reflect-metadata';
-// Observability SDK initialization (replaces traceloop)
-import { init as initTracing } from '@agyn/tracing';
-initTracing({
-  mode: 'extended',
-  endpoints: { extended: process.env.TRACING_SERVER_URL || 'http://localhost:4319' },
-  defaultAttributes: { service: 'server' },
-});
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
