@@ -82,10 +82,10 @@ export class GraphSocketGateway implements GraphEventsPublisher {
       transports: ['websocket'] as ServerOptions['transports'],
       cors: { origin: '*' },
     };
-    this.debug('Attaching Socket.IO server', () => options);
+    this.logInfo('Attaching Socket.IO server', () => options);
     this.io = new SocketIOServer(server, options);
     this.io.on('connection', (socket: Socket) => {
-      this.debug('Client connected', () => ({
+      this.logInfo('Client connected', () => ({
         socketId: socket.id,
         query: this.sanitizeQuery(socket.handshake.query as Record<string, unknown>),
         headers: this.sanitizeHeaders(socket.handshake.headers),
@@ -109,14 +109,14 @@ export class GraphSocketGateway implements GraphEventsPublisher {
         }
         const p = parsed.data;
         const rooms: string[] = p.rooms ?? (p.room ? [p.room] : []);
-        this.debug('Subscribe request', () => ({ socketId: socket.id, rooms }));
+        this.logInfo('Subscribe request', () => ({ socketId: socket.id, rooms }));
         for (const r of rooms) if (r.length > 0) socket.join(r);
         if (rooms.length > 0) {
-          this.debug('Rooms joined', () => ({ socketId: socket.id, rooms }));
+          this.logInfo('Rooms joined', () => ({ socketId: socket.id, rooms }));
         }
       });
       socket.on('disconnect', (reason) => {
-        this.debug('Client disconnected', () => ({ socketId: socket.id, reason }));
+        this.logInfo('Client disconnected', () => ({ socketId: socket.id, reason }));
       });
       socket.on('error', (e: unknown) => {
         this.logger.warn('Graph socket client error', e);
@@ -191,13 +191,21 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     this.emitToRooms([`thread:${threadId}`], 'message_created', payload, () => ({ threadId, messageId: message.id }));
   }
   emitRunStatusChanged(threadId: string, run: { id: string; status: RunStatus; createdAt: Date; updatedAt: Date }) {
-    const payload = { run: { ...run, createdAt: run.createdAt.toISOString(), updatedAt: run.updatedAt.toISOString() } };
+    const payload = {
+      threadId,
+      run: {
+        ...run,
+        threadId,
+        createdAt: run.createdAt.toISOString(),
+        updatedAt: run.updatedAt.toISOString(),
+      },
+    };
     this.emitToRooms([`thread:${threadId}`, `run:${run.id}`], 'run_status_changed', payload, () => ({ threadId, runId: run.id, status: run.status }));
   }
   emitRunEvent(runId: string, threadId: string, payload: RunEventBroadcast) {
     this.emitToRooms([`run:${runId}`, `thread:${threadId}`], 'run_event_appended', payload, () => {
-      const event = (payload.event ?? {}) as { id?: string; ts?: string };
-      return { threadId, runId, eventId: event.id, ts: event.ts };
+      const event = (payload.event ?? {}) as { id?: string; ts?: string; type?: string };
+      return { threadId, runId, eventId: event.id, eventType: event.type, ts: event.ts };
     });
   }
   private flushMetricsQueue = async () => {
@@ -242,7 +250,7 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     }
   }
 
-  private debug(message: string, payload?: unknown | (() => unknown)) {
+  private logInfo(message: string, payload?: unknown | (() => unknown)) {
     let value: unknown;
     if (typeof payload === 'function') {
       try {
@@ -253,8 +261,8 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     } else {
       value = payload;
     }
-    if (value === undefined) this.logger.debug(`GraphSocketGateway ${message}`);
-    else this.logger.debug(`GraphSocketGateway ${message}`, value);
+    if (value === undefined) this.logger.info(`GraphSocketGateway ${message}`);
+    else this.logger.info(`GraphSocketGateway ${message}`, value);
   }
 
   private sanitizeHeaders(headers: IncomingHttpHeaders | undefined): Record<string, unknown> {
@@ -291,7 +299,7 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     } catch (error) {
       summary = { summaryError: error instanceof Error ? { message: error.message, name: error.name } : error };
     }
-    this.logger.debug('GraphSocketGateway emit', { event, rooms, ...summary });
+    this.logger.info('GraphSocketGateway emit', { event, rooms, ...summary });
     for (const room of rooms) {
       try {
         this.io.to(room).emit(event, payload);

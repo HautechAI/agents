@@ -9,7 +9,13 @@ import type { RunTimelineEvent, RunTimelineEventsCursor } from '@/api/types/agen
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
 type ThreadSummary = { id: string; alias: string; summary: string | null; status: 'open' | 'closed'; createdAt: string; parentId?: string | null };
 type MessageSummary = { id: string; kind: 'user' | 'assistant' | 'system' | 'tool'; text: string | null; source: unknown; createdAt: string; runId?: string };
-type RunSummary = { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string };
+type RunSummary = {
+  id: string;
+  threadId?: string;
+  status: 'running' | 'finished' | 'terminated';
+  createdAt: string;
+  updatedAt: string;
+};
 type RunEventSocketPayload = { runId: string; mutation: 'append' | 'update'; event: RunTimelineEvent };
 interface ServerToClientEvents {
   node_status: (payload: NodeStatusEvent) => void;
@@ -20,7 +26,7 @@ interface ServerToClientEvents {
   thread_activity_changed: (payload: { threadId: string; activity: 'working' | 'waiting' | 'idle' }) => void;
   thread_reminders_count: (payload: { threadId: string; remindersCount: number }) => void;
   message_created: (payload: { threadId: string; message: MessageSummary }) => void;
-  run_status_changed: (payload: { run: RunSummary }) => void;
+  run_status_changed: (payload: RunStatusChangedPayload) => void;
   run_event_appended: (payload: RunEventSocketPayload) => void;
 }
 // Client-to-server emits: subscribe to rooms
@@ -35,7 +41,7 @@ type ThreadUpdatedPayload = { thread: ThreadSummary };
 type ThreadActivityPayload = { threadId: string; activity: 'working' | 'waiting' | 'idle' };
 type ThreadRemindersPayload = { threadId: string; remindersCount: number };
 type MessageCreatedPayload = { message: MessageSummary; threadId: string };
-type RunStatusChangedPayload = { run: RunSummary };
+type RunStatusChangedPayload = { threadId: string; run: RunSummary };
 type RunEventListenerPayload = RunEventSocketPayload;
 
 class GraphSocket {
@@ -96,7 +102,6 @@ class GraphSocket {
   connect(): Socket<ServerToClientEvents, ClientToServerEvents> {
     if (this.socket) return this.socket;
     const host = getSocketBaseUrl();
-    this.log('resolved socket base URL', () => ({ host }));
     // Cast to typed Socket to enable event payload typing
     const transports: ManagerOptions['transports'] = ['websocket'];
     const options: Partial<ManagerOptions & SocketOptions> = {
@@ -111,79 +116,84 @@ class GraphSocket {
       reconnectionDelayMax: 5000,
       withCredentials: false,
     };
-    this.log('socket.io connection options', () => ({ ...options, transports: [...(transports ?? [])] }));
+    this.log('connect', () => ({ host, opts: { ...options, transports: [...(transports ?? [])] } }));
     this.socket = io(host, options) as unknown as Socket<ServerToClientEvents, ClientToServerEvents>;
     const handleConnect = () => {
-      this.log('socket connected', () => ({ id: this.socket?.id }));
+      this.log('connected', () => ({ socketId: this.socket?.id ?? 'unknown' }));
       this.resubscribeAll();
       for (const fn of this.connectCallbacks) fn();
     };
     const handleReconnect = () => {
-      this.log('socket reconnected', () => ({ id: this.socket?.id }));
+      this.log('reconnected', () => ({ socketId: this.socket?.id ?? 'unknown' }));
       this.resubscribeAll();
       for (const fn of this.reconnectCallbacks) fn();
     };
     const handleDisconnect = (reason: string) => {
-      this.log('socket disconnected', () => ({ id: this.socket?.id, reason }));
+      this.log('disconnect', () => ({ socketId: this.socket?.id ?? 'unknown', reason }));
       for (const fn of this.disconnectCallbacks) fn();
     };
     this.socket.on('connect', handleConnect);
     this.socket.on('disconnect', handleDisconnect);
     this.socket.on('connect_error', (error) => {
-      this.log('socket connect_error', () => ({
-        message: error?.message,
-        name: error?.name,
-        code: (error as { code?: unknown })?.code,
-      }));
+      const errObj = error ?? {};
+      const code = (errObj as { code?: unknown })?.code;
+      const message = errObj instanceof Error ? errObj.message : typeof errObj === 'string' ? errObj : (() => {
+        try {
+          return JSON.stringify(errObj);
+        } catch {
+          return String(errObj);
+        }
+      })();
+      this.log('connect_error', () => ({ err: message, code }));
     });
     const manager = this.socket.io;
     manager.on('reconnect', handleReconnect);
     manager.on('reconnect_attempt', (attempt) => {
-      this.log('socket manager reconnect_attempt', () => ({ attempt }));
+      this.log('reconnect_attempt', () => ({ attempt }));
     });
     // No-op connect listener; optional
     this.socket.on('node_status', (payload: NodeStatusEvent) => {
-      this.log('event node_status received', () => ({ nodeId: payload.nodeId }));
+      this.log('event node_status', () => ({ nodeId: payload.nodeId }));
       const set = this.listeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
     this.socket.on('node_state', (payload: { nodeId: string; state: Record<string, unknown>; updatedAt: string }) => {
-      this.log('event node_state received', () => ({ nodeId: payload.nodeId }));
+      this.log('event node_state', () => ({ nodeId: payload.nodeId }));
       const set = this.stateListeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
     this.socket.on('node_reminder_count', (payload: ReminderCountEvent) => {
-      this.log('event node_reminder_count received', () => ({ nodeId: payload.nodeId, count: payload.count }));
+      this.log('event node_reminder_count', () => ({ nodeId: payload.nodeId, count: payload.count }));
       const set = this.reminderListeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
     // Threads events
     this.socket.on('thread_created', (payload: ThreadCreatedPayload) => {
-      this.log('event thread_created received', () => ({ threadId: payload.thread.id }));
+      this.log('event thread_created', () => ({ threadId: payload.thread.id }));
       for (const fn of this.threadCreatedListeners) fn(payload);
     });
     this.socket.on('thread_updated', (payload: ThreadUpdatedPayload) => {
-      this.log('event thread_updated received', () => ({ threadId: payload.thread.id }));
+      this.log('event thread_updated', () => ({ threadId: payload.thread.id }));
       for (const fn of this.threadUpdatedListeners) fn(payload);
     });
     this.socket.on('thread_activity_changed', (payload: ThreadActivityPayload) => {
-      this.log('event thread_activity_changed received', () => ({ threadId: payload.threadId, activity: payload.activity }));
+      this.log('event thread_activity_changed', () => ({ threadId: payload.threadId, activity: payload.activity }));
       for (const fn of this.threadActivityListeners) fn(payload);
     });
     this.socket.on('thread_reminders_count', (payload: ThreadRemindersPayload) => {
-      this.log('event thread_reminders_count received', () => ({ threadId: payload.threadId, remindersCount: payload.remindersCount }));
+      this.log('event thread_reminders_count', () => ({ threadId: payload.threadId, remindersCount: payload.remindersCount }));
       for (const fn of this.threadRemindersListeners) fn(payload);
     });
     this.socket.on('message_created', (payload: MessageCreatedPayload) => {
-      this.log('event message_created received', () => ({ messageId: payload.message.id, threadId: payload.threadId }));
+      this.log('event message_created', () => ({ threadId: payload.threadId, messageId: payload.message.id }));
       for (const fn of this.messageCreatedListeners) fn(payload);
     });
     this.socket.on('run_status_changed', (payload: RunStatusChangedPayload) => {
-      this.log('event run_status_changed received', () => ({ runId: payload.run.id, status: payload.run.status }));
+      this.log('event run_status_changed', () => ({ threadId: payload.threadId ?? payload.run.threadId ?? 'unknown', runId: payload.run.id, status: payload.run.status }));
       for (const fn of this.runStatusListeners) fn(payload);
     });
     this.socket.on('run_event_appended', (payload: RunEventSocketPayload) => {
-      this.log('event run_event_appended received', () => ({ runId: payload.runId, eventId: payload.event.id, ts: payload.event.ts }));
+      this.log('event run_event_appended', () => ({ threadId: payload.event.threadId, runId: payload.runId, eventId: payload.event.id, ts: payload.event.ts }));
       this.bumpRunCursor(payload.runId, { ts: payload.event.ts, id: payload.event.id });
       for (const fn of this.runEventListeners) fn(payload);
     });
@@ -240,14 +250,14 @@ class GraphSocket {
       toJoin.push(room);
     }
     if (toJoin.length > 0) {
-      this.log('subscribe rooms', () => ({ joining: [...toJoin], tracked: Array.from(this.subscribedRooms) }));
+      this.log('subscribe', () => ({ rooms: [...toJoin], tracked: Array.from(this.subscribedRooms) }));
     }
     this.emitSubscriptions(toJoin);
   }
 
   unsubscribe(rooms: string[]) {
     if (rooms.length > 0) {
-      this.log('unsubscribe rooms', () => ({ rooms: [...rooms] }));
+      this.log('unsubscribe', () => ({ rooms: [...rooms] }));
     }
     for (const room of rooms) {
       this.subscribedRooms.delete(room);
@@ -256,7 +266,7 @@ class GraphSocket {
         this.runCursors.delete(runId);
       }
     }
-    this.log('tracked rooms after unsubscribe', () => ({ tracked: Array.from(this.subscribedRooms) }));
+    this.log('rooms tracked', () => ({ tracked: Array.from(this.subscribedRooms) }));
   }
 
   // Threads listeners

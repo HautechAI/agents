@@ -75,7 +75,7 @@ export function useCheckpointStream({
   const start = useCallback(() => {
     sessionRef.current += 1;
     const sid = sessionRef.current;
-    log('start called', () => ({ sid, url, threadId, agentId, maxItems }));
+    log('start', () => ({ sid, url, threadId, agentId, maxItems }));
     setStatus('connecting');
     setError(null);
     setItems([]);
@@ -83,28 +83,28 @@ export function useCheckpointStream({
 
     if (!url || url.trim() === '') {
       // No server URL; treat as noop.
-      log('no url provided, staying idle');
+      log('no-url');
       setStatus('idle');
       return () => {};
     }
     const transports: ManagerOptions['transports'] = ['websocket'];
     const socketOptions: Partial<ManagerOptions & SocketOptions> = { transports };
-    log('connecting to checkpoint socket', () => ({ url, options: { ...socketOptions, transports: [...(transports ?? [])] } }));
+    log('connect', () => ({ url, opts: { ...socketOptions, transports: [...(transports ?? [])] }, threadId, agentId }));
     const socket = io(url, socketOptions);
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      log('checkpoint socket connected', () => ({ id: socket.id }));
+      log('connected', () => ({ socketId: socket.id ?? 'unknown', sid }));
       setConnected(true);
     });
     socket.on('disconnect', (reason) => {
-      log('checkpoint socket disconnected', () => ({ id: socket.id, reason }));
+      log('disconnect', () => ({ socketId: socket.id ?? 'unknown', reason, sid }));
       setConnected(false);
     });
 
     socket.on('initial', (payload: InitialPayload) => {
       if (sessionRef.current !== sid) return; // stale
-      log('initial payload received', () => ({ count: payload.items.length, sid }));
+      log('initial', () => ({ items: payload.items.length, sid }));
       const normalized = payload.items
         .filter((n) => !EXCLUDED_CHANNELS.current.has(n.channel))
         .map((n): CheckpointWriteClient => ({
@@ -119,7 +119,7 @@ export function useCheckpointStream({
       if (sessionRef.current !== sid) return;
       if (isPaused) return;
       if (EXCLUDED_CHANNELS.current.has(doc.channel)) return;
-      log('append event received', () => ({ id: doc.id, threadId: doc.threadId, channel: doc.channel, sid }));
+      log('append', () => ({ checkpointId: doc.id, threadId: doc.threadId, channel: doc.channel, sid }));
       setItems((prev) => {
         if (prev.some((p) => p.id === doc.id)) return prev; // dedupe
         const next = [...prev, { ...doc, createdAt: new Date(doc.createdAt) } as CheckpointWriteClient];
@@ -135,7 +135,7 @@ export function useCheckpointStream({
     socket.on('error', (e: unknown) => {
       if (sessionRef.current !== sid) return;
       const msg = e instanceof Error ? e.message : 'Unknown error';
-      log('checkpoint socket error', () => ({ message: msg }));
+      log('error', () => ({ message: msg, sid }));
       setError(msg);
       setStatus('error');
     });
@@ -143,11 +143,11 @@ export function useCheckpointStream({
     const initPayload: Record<string, string> = {};
     if (threadId) initPayload.threadId = threadId;
     if (agentId) initPayload.agentId = agentId;
-    log('emitting init payload', () => ({ payload: { ...initPayload }, sid }));
+    log('init', () => ({ payload: { ...initPayload }, sid }));
     socket.emit('init', initPayload);
 
     return () => {
-      log('tearing down checkpoint socket', () => ({ sid }));
+      log('teardown', () => ({ sid }));
       socket.disconnect();
     };
   }, [url, threadId, agentId, isPaused, maxItems, log]);
