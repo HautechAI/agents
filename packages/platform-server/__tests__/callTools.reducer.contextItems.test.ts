@@ -39,7 +39,13 @@ describe('CallToolsLLMReducer context items', () => {
       meta: {},
       context: { messageIds: ['existing-1', 'assistant-existing'], memory: [] },
     } as any;
-    const ctx = { threadId: 'thread-1', runId: 'run-1', callerAgent: { getAgentNodeId: () => 'agent-node' } } as any;
+    const ctx = {
+      threadId: 'thread-1',
+      runId: 'run-1',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: { getAgentNodeId: () => 'agent-node' },
+    } as any;
 
     const result = await reducer.invoke(initialState, ctx);
 
@@ -85,7 +91,13 @@ describe('CallToolsLLMReducer context items', () => {
       meta: {},
       context: { messageIds: ['existing-ctx', 'assistant-ctx'], memory: [] },
     } as any;
-    const ctx = { threadId: 'thread', runId: 'run', callerAgent: { getAgentNodeId: () => 'node' } } as any;
+    const ctx = {
+      threadId: 'thread',
+      runId: 'run',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: { getAgentNodeId: () => 'node' },
+    } as any;
 
     const result = await reducer.invoke(state, ctx);
 
@@ -143,6 +155,7 @@ describe('CallToolsLLMReducer context items', () => {
       threadId: 'thread-ctx',
       runId: 'run-ctx',
       finishSignal: new Signal(),
+      terminateSignal: new Signal(),
       callerAgent: { getAgentNodeId: () => 'agent-node' },
     } as any;
 

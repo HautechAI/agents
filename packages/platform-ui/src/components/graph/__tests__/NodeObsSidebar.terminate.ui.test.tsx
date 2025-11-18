@@ -12,7 +12,7 @@ vi.mock('@/lib/graph/hooks', () => ({ useNodeReminders: () => ({ isLoading: fals
 vi.mock('@/api/modules/graph', () => ({
   graph: {
     listNodeRuns: vi.fn(async () => ({ items: [{ nodeId: 'n', threadId: 't', runId: 't/run-1', status: 'running', startedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }] })),
-    terminateRun: vi.fn(async () => ({ status: 'terminating' })),
+    terminateRun: vi.fn(async () => ({ ok: true })),
   },
 }));
 import { NodeTracingSidebar } from '../NodeTracingSidebar';
@@ -29,6 +29,7 @@ describe('NodeObsSidebar terminate UI behavior', () => {
     const btn = await screen.findByText('Terminate');
     expect(btn).toBeEnabled();
     await act(async () => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(api.terminateRun).toHaveBeenCalledWith('t/run-1');
     const badge = await screen.findByText('terminating');
     expect(badge).toBeInTheDocument();
     expect(btn).toBeDisabled();

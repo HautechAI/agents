@@ -77,6 +77,26 @@ class PrismaStub {
   getClient(): PrismaClient { return this.client as unknown as PrismaClient; }
 }
 
+class PrismaStubWithQueryRaw {
+  private base: MinimalPrismaClient & { $queryRaw?: (...args: unknown[]) => Promise<unknown> };
+  queryRawCalls: unknown[][] = [];
+
+  constructor(rows: Row[]) {
+    this.base = new InMemoryPrismaClient() as unknown as MinimalPrismaClient & {
+      $queryRaw?: (...args: unknown[]) => Promise<unknown>;
+    };
+    this.base.container.rows = rows;
+    this.base.$queryRaw = async (...args: unknown[]) => {
+      this.queryRawCalls.push(args);
+      return [];
+    };
+  }
+
+  getClient(): PrismaClient {
+    return this.base as unknown as PrismaClient;
+  }
+}
+
 describe('ContainersController routes', () => {
   let fastify: FastifyInstance; let prismaSvc: PrismaStub; let controller: ContainersController;
 
@@ -185,5 +205,26 @@ describe('ContainersController routes', () => {
     expect(res.statusCode).toBe(200);
     const items = (res.json() as { items: Array<{ containerId: string }> }).items;
     expect(items.length).toBe(1);
+  });
+
+  it('skips $queryRaw when list has no non-dind parents', async () => {
+    const now = new Date();
+    const rows: Row[] = [
+      {
+        containerId: 'sidecar-only',
+        threadId: 'parentless-thread',
+        image: 'dind:latest',
+        status: 'running',
+        createdAt: now,
+        lastUsedAt: now,
+        killAfterAt: null,
+        metadata: { labels: { 'hautech.ai/role': 'dind', 'hautech.ai/parent_cid': 'missing' } },
+      },
+    ];
+    const prismaSvcWithRaw = new PrismaStubWithQueryRaw(rows);
+    const rawController = new ContainersController(prismaSvcWithRaw);
+    const result = await rawController.list({} as ListContainersQueryDto);
+    expect(result.items).toEqual([]);
+    expect(prismaSvcWithRaw.queryRawCalls.length).toBe(0);
   });
 });
