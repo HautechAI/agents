@@ -105,7 +105,7 @@ class GraphSocket {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      withCredentials: true,
+      withCredentials: false,
     }) as unknown as Socket<ServerToClientEvents, ClientToServerEvents>;
     const handleConnect = () => {
       this.resubscribeAll();
