@@ -12,6 +12,7 @@ import { AgentsPersistenceService } from '../../agents/agents.persistence.servic
 import { PrismaService } from '../../core/services/prisma.service';
 import { SlackAdapter } from '../../messaging/slack/slack.adapter';
 import { ChannelDescriptorSchema, type SendResult, type ChannelDescriptor } from '../../messaging/types';
+import { normalizeError } from '../../messaging/error.util';
 
 type TriggerHumanMessage = {
   kind: 'human';
@@ -281,9 +282,15 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       });
       return res;
     } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
-      this.logger.error('SlackTrigger.sendToThread failed', { threadId, error: msg });
-      return { ok: false, error: msg };
+      const normalized = normalizeError(e);
+      this.logger.error('SlackTrigger.sendToThread failed', {
+        threadId,
+        error: normalized.message,
+        details: normalized.details,
+      });
+      const result: SendResult = { ok: false, error: normalized.message };
+      if (normalized.details) result.details = normalized.details;
+      return result;
     }
   }
 }

@@ -28,6 +28,7 @@ export type SendResult = {
   channelMessageId?: string | null;
   threadId?: string | null;
   error?: string | null;
+  details?: Record<string, unknown>;
 };
 
 // Adapters are provided via DI; no custom deps bags or adapter interfaces needed for v1.

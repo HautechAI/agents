@@ -4,6 +4,7 @@ import { LoggerService } from '../../../core/services/logger.service';
 import type { SendResult } from '../../../messaging/types';
 import { SlackTrigger } from '../../slackTrigger/slackTrigger.node';
 import type { LLMContext } from '../../../llm/types';
+import { normalizeError } from '../../../messaging/error.util';
 
 export const sendMessageInvocationSchema = z.object({ message: z.string().min(1).describe('Message text.') }).strict();
 
@@ -32,8 +33,15 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
       const res: SendResult = await this.trigger.sendToThread(threadId, args.message);
       return JSON.stringify(res);
     } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
-      return JSON.stringify({ ok: false, error: msg });
+      const normalized = normalizeError(e);
+      this.logger.error('SendMessageFunctionTool.execute failed', {
+        threadId,
+        error: normalized.message,
+        details: normalized.details,
+      });
+      const result: SendResult = { ok: false, error: normalized.message };
+      if (normalized.details) result.details = normalized.details;
+      return JSON.stringify(result);
     }
   }
 }

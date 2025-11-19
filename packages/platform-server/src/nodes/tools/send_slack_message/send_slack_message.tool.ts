@@ -6,6 +6,7 @@ import { LoggerService } from '../../../core/services/logger.service';
 import { VaultService } from '../../../vault/vault.service';
 import { ReferenceFieldSchema, normalizeTokenRef, parseVaultRef, resolveTokenRef } from '../../../utils/refs';
 import { SendSlackMessageNode } from './send_slack_message.node';
+import { normalizeError } from '../../../messaging/error.util';
 
 export const SendSlackMessageToolStaticConfigSchema = z
   .object({
@@ -52,11 +53,13 @@ export class SendSlackMessageFunctionTool extends FunctionTool<typeof sendSlackI
     const { channel: channelInput, text, thread_ts, broadcast, ephemeral_user } = args;
 
     const bot = normalizeTokenRef(this.node.config.bot_token) as TokenRef;
-    if ((bot.source || 'static') === 'vault') parseVaultRef(bot.value);
-    else if (!bot.value.startsWith('xoxb-')) throw new Error('Slack bot token must start with xoxb-');
-    const channel = channelInput;
-    if (!channel) throw new Error('channel is required');
     try {
+      if ((bot.source || 'static') === 'vault') parseVaultRef(bot.value);
+      else if (!bot.value.startsWith('xoxb-')) {
+        return JSON.stringify({ ok: false, error: 'Slack bot token must start with xoxb-' });
+      }
+      const channel = channelInput;
+      if (!channel) return JSON.stringify({ ok: false, error: 'channel is required' });
       const token = await resolveTokenRef(bot, {
         expectedPrefix: 'xoxb-',
         fieldName: 'bot_token',
@@ -64,38 +67,53 @@ export class SendSlackMessageFunctionTool extends FunctionTool<typeof sendSlackI
       });
       const client = new WebClient(token, { logLevel: undefined });
       if (ephemeral_user) {
-        const resp: ChatPostEphemeralResponse = await client.chat.postEphemeral({
+        const resp: ChatPostEphemeralResponse | undefined = await client.chat.postEphemeral({
           channel,
           user: ephemeral_user,
           text,
         });
-        if (!resp.ok) return JSON.stringify({ ok: false, error: resp.error });
-        return JSON.stringify({ ok: true, channel, message_ts: resp.message_ts, ephemeral: true });
+        if (!resp?.ok) {
+          const normalized = normalizeError(resp?.error ?? 'unknown_error');
+          const payload: Record<string, unknown> = { ok: false, error: normalized.message };
+          if (normalized.details) payload.details = normalized.details;
+          return JSON.stringify(payload);
+        }
+        return JSON.stringify({ ok: true, channel, message_ts: resp.message_ts ?? null, ephemeral: true });
       }
-      const resp: ChatPostMessageResponse = await client.chat.postMessage({
+      const resp: ChatPostMessageResponse | undefined = await client.chat.postMessage({
         channel,
         text,
         attachments: [],
         ...(thread_ts ? { thread_ts } : {}),
       });
-      if (!resp.ok) return JSON.stringify({ ok: false, error: resp.error });
+      if (!resp?.ok) {
+        const normalized = normalizeError(resp?.error ?? 'unknown_error');
+        const payload: Record<string, unknown> = { ok: false, error: normalized.message };
+        if (normalized.details) payload.details = normalized.details;
+        return JSON.stringify(payload);
+      }
       const thread =
-        (resp.message && 'thread_ts' in resp.message
+        (resp?.message && 'thread_ts' in resp.message
           ? (resp.message as { thread_ts?: string }).thread_ts
           : undefined) ||
         thread_ts ||
-        resp.ts;
+        resp?.ts;
       return JSON.stringify({
         ok: true,
-        channel: resp.channel,
-        ts: resp.ts,
-        thread_ts: thread,
+        channel: resp?.channel ?? channel,
+        ts: resp?.ts ?? null,
+        thread_ts: thread ?? null,
         broadcast: !!broadcast,
       });
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message || String(err);
-      this.logger.error('Error sending Slack message', msg);
-      return JSON.stringify({ ok: false, error: msg });
+      const normalized = normalizeError(err);
+      this.logger.error('Error sending Slack message', {
+        error: normalized.message,
+        details: normalized.details,
+      });
+      const payload: Record<string, unknown> = { ok: false, error: normalized.message };
+      if (normalized.details) payload.details = normalized.details;
+      return JSON.stringify(payload);
     }
   }
 }
