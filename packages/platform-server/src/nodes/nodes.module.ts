@@ -32,7 +32,7 @@ import { LoggerService } from '../core/services/logger.service';
 import { EnvService } from '../env/env.service';
 
 @Module({
-  imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule, GraphServicesModule, forwardRef(() => GraphModule)],
+imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule, forwardRef(() => GraphServicesModule), forwardRef(() => GraphModule)],
   providers: [
     SlackAdapter,
     PostgresMemoryRepository,

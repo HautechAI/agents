@@ -7,6 +7,7 @@ import { ContextItemsController } from '../agents/contextItems.controller';
 import { EnvModule } from '../env/env.module';
 import { GraphSocketGateway } from '../gateway/graph.socket.gateway';
 import { GraphEventsPublisher } from '../gateway/graph.events.publisher';
+import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { GraphController } from './controllers/graph.controller';
 import { GraphPersistController } from './controllers/graphPersist.controller';
 import { GraphVariablesController } from './controllers/graphVariables.controller';
@@ -23,7 +24,7 @@ import { RemindersController } from './controllers/reminders.controller';
 import { LLMModule } from '../llm/llm.module';
 
 @Module({
-  imports: [CoreModule, InfraModule, EnvModule, forwardRef(() => NodesModule), GraphServicesModule, forwardRef(() => LLMModule), forwardRef(() => EventsModule)],
+  imports: [CoreModule, InfraModule, EnvModule, forwardRef(() => NodesModule), forwardRef(() => GraphServicesModule), forwardRef(() => LLMModule), forwardRef(() => EventsModule)],
   controllers: [
     RunsController,
     GraphPersistController,
@@ -47,6 +48,14 @@ import { LLMModule } from '../llm/llm.module';
     {
       provide: GraphEventsPublisher,
       useExisting: GraphSocketGateway,
+    },
+    {
+      provide: 'GRAPH_EVENTS_PUBLISHER_BINDING',
+      useFactory: (persistence: AgentsPersistenceService, publisher: GraphEventsPublisher) => {
+        persistence.setEventsPublisher(publisher);
+        return true;
+      },
+      inject: [AgentsPersistenceService, GraphEventsPublisher],
     },
     // PrismaService is injected by type; no string token aliasing required
     // Standard DI for GraphVariablesService

@@ -16,7 +16,7 @@ describe('graphSocket real socket handshake', () => {
 
     const ioServer = new SocketIOServer(httpServer, {
       path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
     });
 
     const addressReady = new Promise<AddressInfo>((resolve, reject) => {
@@ -70,6 +70,18 @@ describe('graphSocket real socket handshake', () => {
       },
     };
 
+    const updatedPayload = {
+      ...runEventPayload,
+      mutation: 'update' as const,
+      event: {
+        ...runEventPayload.event,
+        toolExecution: {
+          ...runEventPayload.event.toolExecution,
+          output: { answer: 99 },
+        },
+      },
+    };
+
     ioServer.on('connection', (socket) => {
       socket.on('subscribe', (payload: { room?: string; rooms?: string[] }) => {
         const rooms = [
@@ -80,6 +92,9 @@ describe('graphSocket real socket handshake', () => {
         for (const room of rooms) {
           socket.join(room);
           ioServer.to(room).emit('run_event_appended', runEventPayload);
+          setTimeout(() => {
+            ioServer.to(room).emit('run_event_updated', updatedPayload);
+          }, 25);
         }
       });
     });
@@ -109,24 +124,30 @@ describe('graphSocket real socket handshake', () => {
       await connected;
 
       const roomName = 'thread:thread-7';
-      const receivedEvent = await new Promise<typeof runEventPayload>((resolve, reject) => {
+      const receivedEvents = await new Promise<[typeof runEventPayload, typeof updatedPayload]>((resolve, reject) => {
         let detach = () => {};
+        const events: Array<typeof runEventPayload> = [];
         const timeout = setTimeout(() => {
           detach();
-          reject(new Error('timeout waiting for run_event_appended'));
+          reject(new Error('timeout waiting for run events'));
         }, TEST_TIMEOUT_MS);
         detach = graphSocket.onRunEvent((payload) => {
           if (payload.runId !== runEventPayload.runId) return;
-          clearTimeout(timeout);
-          detach();
-          resolve(payload);
+          events.push(payload);
+          if (events.length === 2) {
+            clearTimeout(timeout);
+            detach();
+            resolve([events[0] as typeof runEventPayload, events[1] as typeof updatedPayload]);
+          }
         });
         graphSocket.subscribe([roomName]);
       });
 
       expect(socketClient.connected).toBe(true);
       expect(graphSocket.isConnected()).toBe(true);
-      expect(receivedEvent).toEqual(runEventPayload);
+      expect(receivedEvents[0]).toEqual(runEventPayload);
+      expect(receivedEvents[1]).toEqual(updatedPayload);
+      expect(graphSocket.getRunCursor(runEventPayload.runId)).toEqual({ ts: updatedPayload.event.ts, id: updatedPayload.event.id });
 
       graphSocket.unsubscribe([roomName]);
     } finally {

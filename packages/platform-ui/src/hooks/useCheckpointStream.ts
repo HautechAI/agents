@@ -87,7 +87,7 @@ export function useCheckpointStream({
       setStatus('idle');
       return () => {};
     }
-    const transports: ManagerOptions['transports'] = ['websocket', 'polling'];
+    const transports: ManagerOptions['transports'] = ['websocket'];
     const socketOptions: Partial<ManagerOptions & SocketOptions> = { transports };
     log('connect', () => ({ url, opts: { ...socketOptions, transports: [...(transports ?? [])] }, threadId, agentId }));
     const socket = io(url, socketOptions);

@@ -8,6 +8,8 @@ import { io as createClient, type Socket } from 'socket.io-client';
 import WebSocket, { type RawData } from 'ws';
 
 import type { MessageKind, RunStatus } from '@prisma/client';
+import { RunEventsService } from '../src/events/run-events.service';
+import { GraphEventsPublisher } from '../src/gateway/graph.events.publisher';
 import { GraphSocketGateway } from '../src/gateway/graph.socket.gateway';
 import { LoggerService } from '../src/core/services/logger.service';
 import { LiveGraphRuntime } from '../src/graph/liveGraph.manager';
@@ -30,9 +32,27 @@ class ThreadsMetricsServiceStub {
 }
 
 class PrismaServiceStub {
+  private readonly runEvents = new Map<string, unknown>();
+
+  setRunEvent(event: { id: string }): void {
+    this.runEvents.set(event.id, event);
+  }
+
+  clear(): void {
+    this.runEvents.clear();
+  }
+
   getClient() {
     return {
       $queryRaw: async () => [],
+      runEvent: {
+        findUnique: async ({ where }: { where: { id: string } }) => {
+          const id = where?.id;
+          if (!id) return null;
+          const stored = this.runEvents.get(id);
+          return stored ?? null;
+        },
+      },
     };
   }
 }
@@ -49,9 +69,6 @@ class ContainerServiceStub {
     const execId = 'exec-stub';
     setTimeout(() => {
       stdout.write('ready\n');
-      stdout.end();
-      stderr.end();
-      stdin.end();
     }, 50);
     return {
       execId,
@@ -134,6 +151,58 @@ class TerminalSessionsServiceStub {
   }
 }
 
+type RunEventRecordStub = {
+  id: string;
+  runId: string;
+  threadId: string;
+  type: string;
+  status: string;
+  ts: Date;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  durationMs: number | null;
+  nodeId: string | null;
+  sourceKind: string;
+  sourceSpanId: string | null;
+  metadata: unknown;
+  errorCode: string | null;
+  errorMessage: string | null;
+  llmCall: unknown;
+  toolExecution: unknown;
+  summarization: unknown;
+  injection: unknown;
+  eventMessage: unknown;
+  attachments: unknown[];
+};
+
+const createRunEventRecord = (overrides: Partial<RunEventRecordStub> = {}): RunEventRecordStub => {
+  const now = new Date();
+  return {
+    id: 'evt-stub',
+    runId: 'run-stub',
+    threadId: 'thread-stub',
+    type: 'tool_execution',
+    status: 'running',
+    ts: now,
+    startedAt: now,
+    endedAt: null,
+    durationMs: null,
+    nodeId: 'node-1',
+    sourceKind: 'internal',
+    sourceSpanId: null,
+    metadata: {},
+    errorCode: null,
+    errorMessage: null,
+    llmCall: null,
+    toolExecution: null,
+    summarization: null,
+    injection: null,
+    eventMessage: null,
+    attachments: [],
+    ...overrides,
+  };
+};
+
 const waitForDisconnect = (socket: Socket): Promise<void> =>
   new Promise((resolve) => {
     if (!socket.connected) {
@@ -168,11 +237,14 @@ describe('Socket gateway real server handshakes', () => {
   let baseUrl: string;
   let terminalSessions: TerminalSessionsServiceStub;
   let graphGateway: GraphSocketGateway;
+  let runEventsService: RunEventsService;
+  let prismaStub: PrismaServiceStub;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         GraphSocketGateway,
+        { provide: GraphEventsPublisher, useExisting: GraphSocketGateway },
         LoggerService,
         { provide: LiveGraphRuntime, useClass: LiveGraphRuntimeStub },
         { provide: ThreadsMetricsService, useClass: ThreadsMetricsServiceStub },
@@ -180,6 +252,7 @@ describe('Socket gateway real server handshakes', () => {
         ContainerTerminalGateway,
         { provide: TerminalSessionsService, useClass: TerminalSessionsServiceStub },
         { provide: ContainerService, useClass: ContainerServiceStub },
+        RunEventsService,
       ],
     }).compile();
 
@@ -188,6 +261,8 @@ describe('Socket gateway real server handshakes', () => {
 
     fastify = app.getHttpAdapter().getInstance<FastifyInstance>();
     terminalSessions = app.get(TerminalSessionsService) as unknown as TerminalSessionsServiceStub;
+    prismaStub = app.get(PrismaService) as unknown as PrismaServiceStub;
+    runEventsService = app.get(RunEventsService);
 
     const terminalGateway = app.get(ContainerTerminalGateway);
     terminalGateway.registerRoutes(fastify);
@@ -210,6 +285,7 @@ describe('Socket gateway real server handshakes', () => {
 
   beforeEach(() => {
     terminalSessions.reset();
+    prismaStub.clear();
   });
 
   it('attaches socket.io, subscribes, and receives graph events', async () => {
@@ -222,7 +298,7 @@ describe('Socket gateway real server handshakes', () => {
     try {
       client = createClient(baseUrl, {
         path: '/socket.io',
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'],
         reconnection: false,
       });
 
@@ -265,11 +341,21 @@ describe('Socket gateway real server handshakes', () => {
         });
       });
 
-      const runEventPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+      const runEventAppendedPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
         const timer = setTimeout(() => {
           reject(new Error('Timed out waiting for run_event_appended event'));
         }, 3000);
         client?.once('run_event_appended', (payload: Record<string, unknown>) => {
+          clearTimeout(timer);
+          resolve(payload);
+        });
+      });
+
+      const runEventUpdatedPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('Timed out waiting for run_event_updated event'));
+        }, 3000);
+        client?.once('run_event_updated', (payload: Record<string, unknown>) => {
           clearTimeout(timer);
           resolve(payload);
         });
@@ -309,24 +395,39 @@ describe('Socket gateway real server handshakes', () => {
         updatedAt: createdAt,
       });
 
-      graphGateway.emitRunEvent(runId, threadId, {
+      const runEventId = 'evt-1';
+      const appendRecord = createRunEventRecord({
+        id: runEventId,
         runId,
         threadId,
-        mutation: 'append',
-        event: {
-          id: 'evt-1',
-          runId,
-          threadId,
-          type: 'tool_execution',
-          status: 'running',
-          ts: createdAt.toISOString(),
-        },
+        status: 'running',
+        ts: createdAt,
+        startedAt: createdAt,
       });
+      prismaStub.setRunEvent(appendRecord);
+      const publishAppendResult = await runEventsService.publishEvent(runEventId, 'append');
+      expect(publishAppendResult).not.toBeNull();
 
-      const [messagePayload, statusPayload, runEventPayload] = await Promise.all([messagePromise, statusPromise, runEventPromise]);
+      const [messagePayload, statusPayload, appendedPayload] = await Promise.all([messagePromise, statusPromise, runEventAppendedPromise]);
       expect(messagePayload).toMatchObject({ threadId, message: expect.any(Object) });
       expect(statusPayload).toMatchObject({ threadId, run: expect.objectContaining({ id: runId }) });
-      expect(runEventPayload).toMatchObject({ runId, mutation: 'append' });
+      expect(appendedPayload).toMatchObject({ runId, mutation: 'append' });
+
+      const updatedAt = new Date(createdAt.getTime() + 1000);
+      const updateRecord = createRunEventRecord({
+        id: runEventId,
+        runId,
+        threadId,
+        status: 'success',
+        ts: updatedAt,
+        startedAt: createdAt,
+        endedAt: updatedAt,
+      });
+      prismaStub.setRunEvent(updateRecord);
+      const publishUpdateResult = await runEventsService.publishEvent(runEventId, 'update');
+      expect(publishUpdateResult).not.toBeNull();
+      const updatedPayload = await runEventUpdatedPromise;
+      expect(updatedPayload).toMatchObject({ runId, mutation: 'update' });
       expect(upgradeCount).toBeGreaterThanOrEqual(1);
     } finally {
       if (client) {
@@ -366,6 +467,8 @@ describe('Socket gateway real server handshakes', () => {
         });
       });
 
+      expect(client.readyState).toBe(WebSocket.OPEN);
+
       const message = await new Promise<string>((resolve, reject) => {
         const timer = setTimeout(() => {
           reject(new Error('Timed out waiting for terminal websocket message'));
@@ -381,6 +484,9 @@ describe('Socket gateway real server handshakes', () => {
       });
 
       const payload = JSON.parse(message) as { type?: string };
+      expect(client.readyState).toBe(WebSocket.OPEN);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(client.readyState).toBe(WebSocket.OPEN);
       expect(payload.type).toBeDefined();
       expect(upgradeCount).toBeGreaterThanOrEqual(1);
       expect(terminalSessions.connected).toBe(true);
@@ -407,7 +513,7 @@ describe('Socket gateway real server handshakes', () => {
 
     const client = createClient(baseUrl, {
       path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       reconnection: false,
     });
 
@@ -459,6 +565,7 @@ describe('Socket gateway real server handshakes', () => {
       });
 
       expect(subscribeAck.ok).toBe(true);
+      expect(terminalClient.readyState).toBe(WebSocket.OPEN);
 
       const runEventReceived = new Promise<Record<string, unknown>>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('Timed out waiting for run_event_appended event')), 3000);
@@ -472,6 +579,7 @@ describe('Socket gateway real server handshakes', () => {
         const timer = setTimeout(() => reject(new Error('Timed out waiting for terminal message')), 3000);
         terminalClient.once('message', (data) => {
           clearTimeout(timer);
+          expect(terminalClient.readyState).toBe(WebSocket.OPEN);
           resolve(rawDataToString(data as RawData));
         });
       });
@@ -496,6 +604,8 @@ describe('Socket gateway real server handshakes', () => {
       expect(terminalSessions.validations).toBeGreaterThan(0);
       expect(terminalSessions.connects).toBeGreaterThan(0);
       expect(terminalSessions.connected).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(terminalClient.readyState).toBe(WebSocket.OPEN);
       expect(upgradeCount).toBeGreaterThanOrEqual(1);
     } finally {
       await waitForDisconnect(client);

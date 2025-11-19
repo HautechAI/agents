@@ -28,6 +28,7 @@ interface ServerToClientEvents {
   message_created: (payload: { threadId: string; message: MessageSummary }) => void;
   run_status_changed: (payload: RunStatusChangedPayload) => void;
   run_event_appended: (payload: RunEventSocketPayload) => void;
+  run_event_updated: (payload: RunEventSocketPayload) => void;
 }
 // Client-to-server emits: subscribe to rooms
 type SubscribePayload = { room?: string; rooms?: string[] };
@@ -103,7 +104,7 @@ class GraphSocket {
     if (this.socket) return this.socket;
     const host = getSocketBaseUrl();
     // Cast to typed Socket to enable event payload typing
-    const transports: ManagerOptions['transports'] = ['websocket', 'polling'];
+    const transports: ManagerOptions['transports'] = ['websocket'];
     const options: Partial<ManagerOptions & SocketOptions> = {
       path: '/socket.io',
       transports,
@@ -192,11 +193,15 @@ class GraphSocket {
       this.log('event run_status_changed', () => ({ threadId: payload.threadId ?? payload.run.threadId ?? 'unknown', runId: payload.run.id, status: payload.run.status }));
       for (const fn of this.runStatusListeners) fn(payload);
     });
-    this.socket.on('run_event_appended', (payload: RunEventSocketPayload) => {
-      this.log('event run_event_appended', () => ({ threadId: payload.event.threadId, runId: payload.runId, eventId: payload.event.id, ts: payload.event.ts }));
-      this.bumpRunCursor(payload.runId, { ts: payload.event.ts, id: payload.event.id });
+    const handleRunEvent = (eventName: 'run_event_appended' | 'run_event_updated', payload: RunEventSocketPayload) => {
+      this.log(`event ${eventName}`, () => ({ threadId: payload.event.threadId, runId: payload.runId, eventId: payload.event.id, ts: payload.event.ts }));
+      const cursor = { ts: payload.event.ts, id: payload.event.id } as RunTimelineEventsCursor;
+      const force = eventName === 'run_event_updated';
+      this.bumpRunCursor(payload.runId, cursor, force ? { force: true } : undefined);
       for (const fn of this.runEventListeners) fn(payload);
-    });
+    };
+    this.socket.on('run_event_appended', (payload: RunEventSocketPayload) => handleRunEvent('run_event_appended', payload));
+    this.socket.on('run_event_updated', (payload: RunEventSocketPayload) => handleRunEvent('run_event_updated', payload));
     return this.socket;
   }
 

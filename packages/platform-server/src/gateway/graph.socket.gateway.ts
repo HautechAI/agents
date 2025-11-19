@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 import type { IncomingHttpHeaders, Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, type ServerOptions, type Socket } from 'socket.io';
 import { z } from 'zod';
@@ -8,8 +8,6 @@ import type { ThreadStatus, MessageKind, RunStatus } from '@prisma/client';
 import type { GraphEventsPublisher, RunEventBroadcast } from './graph.events.publisher';
 import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 import { PrismaService } from '../core/services/prisma.service';
-import { AgentsPersistenceService } from '../agents/agents.persistence.service';
-import type { GraphEventsPublisherAware } from './graph.events.publisher';
 
 // Strict outbound event payloads
 export const NodeStatusEventSchema = z
@@ -68,10 +66,7 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
     @Inject(ThreadsMetricsService) private readonly metrics: ThreadsMetricsService,
     @Inject(PrismaService) private readonly prismaService: PrismaService,
-    @Optional() @Inject(AgentsPersistenceService) persistence?: GraphEventsPublisherAware,
-  ) {
-    persistence?.setEventsPublisher(this);
-  }
+  ) {}
 
   /** Attach Socket.IO to the provided HTTP server. */
   init(params: { server: HTTPServer }): this {
@@ -124,9 +119,9 @@ export class GraphSocketGateway implements GraphEventsPublisher {
       const RoomSchema = z.union([
         z.literal('threads'),
         z.literal('graph'),
-        z.string().regex(/^thread:[0-9a-f-]{36}$/i),
-        z.string().regex(/^run:[0-9a-f-]{36}$/i),
-        z.string().regex(/^node:[0-9a-f-]{36}$/i),
+        z.string().regex(/^thread:[0-9a-z-]{1,64}$/i),
+        z.string().regex(/^run:[0-9a-z-]{1,64}$/i),
+        z.string().regex(/^node:[0-9a-z-]{1,64}$/i),
       ]);
       const SubscribeSchema = z
         .object({ rooms: z.array(RoomSchema).optional(), room: RoomSchema.optional() })
