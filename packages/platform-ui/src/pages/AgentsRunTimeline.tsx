@@ -98,12 +98,6 @@ function mergeEvents(
       last: summarizeEventBoundary(prev[prevLength - 1]),
     };
     options?.captureStats?.(stats);
-    if (options?.context) {
-      console.debug('[Timeline] merge', {
-        ...options.context,
-        stats,
-      });
-    }
     return prev;
   }
 
@@ -154,12 +148,6 @@ function mergeEvents(
     last: summarizeEventBoundary(sorted[sorted.length - 1]),
   };
   options?.captureStats?.(stats);
-  if (options?.context) {
-    console.debug('[Timeline] merge', {
-      ...options.context,
-      stats,
-    });
-  }
   return sorted;
 }
 
@@ -376,27 +364,9 @@ export function AgentsRunTimeline() {
       : null;
     const queryCursor = eventsQuery.data.nextCursor ?? null;
 
-    console.info('[Timeline] base query resolved', {
-      runId,
-      filters: {
-        selectedTypes,
-        selectedStatuses,
-        apiTypes,
-        apiStatuses,
-      },
-      params: { limit: 100, order: 'desc' as const },
-      response: {
-        length: incoming.length,
-        first: summarizeEventBoundary(incoming[0]),
-        last: summarizeEventBoundary(incoming[incoming.length - 1]),
-        nextCursor: queryCursor,
-      },
-    });
-
     setLoadOlderError(null);
     const shouldReplace = replaceEventsRef.current;
     const mode: 'MERGE' | 'REPLACE' = shouldReplace ? 'REPLACE' : 'MERGE';
-    let mergeStats: MergeStats | null = null;
     updateEventsState((prev) => {
       const base = shouldReplace ? [] : prev;
       return mergeEvents(base, incoming, selectedTypes, selectedStatuses, {
@@ -407,18 +377,8 @@ export function AgentsRunTimeline() {
           cursor: queryCursor,
           mode,
         },
-        captureStats: (stats) => {
-          mergeStats = stats;
-        },
       });
     }, { setCursor: false });
-    if (mergeStats) {
-      console.info('[Timeline] base query apply', {
-        runId,
-        mode,
-        stats: mergeStats,
-      });
-    }
     if (newestIncoming) {
       setCursor(toCursor(newestIncoming), { force: true });
     } else {
@@ -473,24 +433,10 @@ export function AgentsRunTimeline() {
             successfulMode = mode;
             break;
           }
-          if (i < attemptModes.length - 1) {
-            console.warn('[Timeline] catch-up pagination retry', {
-              runId,
-              cursor,
-              previousMode: mode,
-              retryWith: attemptModes[i + 1],
-            });
-          }
         }
 
         if (!response) {
           reachedHistoryEndRef.current = true;
-          console.warn('[Timeline] pagination did not advance', {
-            runId,
-            cursor,
-            attempts: attemptModes,
-            phase: 'catch-up',
-          });
           return;
         }
 
@@ -500,7 +446,6 @@ export function AgentsRunTimeline() {
         if (items.length > 0) {
           const latestSelectedTypes = selectedTypesRef.current;
           const latestSelectedStatuses = selectedStatusesRef.current;
-          let mergeStats: MergeStats | null = null;
           updateEventsState((prev) => mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses, {
             context: {
               source: 'catch-up',
@@ -509,17 +454,7 @@ export function AgentsRunTimeline() {
               cursor,
               mode: 'MERGE',
             },
-            captureStats: (stats) => {
-              mergeStats = stats;
-            },
           }));
-          if (mergeStats) {
-            console.debug('[Timeline] catch-up merge', {
-              runId,
-              cursor,
-              stats: mergeStats,
-            });
-          }
           const newest = items[items.length - 1];
           if (newest) setCursor(toCursor(newest));
         }
@@ -562,7 +497,6 @@ export function AgentsRunTimeline() {
     graphSocket.subscribe([room]);
     const off = graphSocket.onRunEvent(({ runId: incomingRunId, event }) => {
       if (incomingRunId !== runId) return;
-      let mergeStats: MergeStats | null = null;
       const currentApiTypes = apiTypesRef.current;
       const currentApiStatuses = apiStatusesRef.current;
       updateEventsState((prev) => mergeEvents(prev, [event], selectedTypes, selectedStatuses, {
@@ -573,17 +507,7 @@ export function AgentsRunTimeline() {
           cursor: cursorRef.current,
           mode: 'MERGE',
         },
-        captureStats: (stats) => {
-          mergeStats = stats;
-        },
       }));
-      if (mergeStats) {
-        console.debug('[Timeline] realtime merge', {
-          runId,
-          eventId: event.id,
-          stats: mergeStats,
-        });
-      }
       setCursor(toCursor(event));
       summaryQuery.refetch();
     });
@@ -724,11 +648,6 @@ export function AgentsRunTimeline() {
         prevScrollHeight: listNode.scrollHeight,
         prevScrollTop: listNode.scrollTop,
       };
-      console.debug('[Timeline] capture scroll baseline', {
-        runId,
-        prevScrollHeight: listNode.scrollHeight,
-        prevScrollTop: listNode.scrollTop,
-      });
     } else {
       pendingScrollAdjustmentRef.current = null;
     }
@@ -741,18 +660,6 @@ export function AgentsRunTimeline() {
     try {
       for (let i = 0; i < attemptModes.length; i += 1) {
         const mode = attemptModes[i];
-        console.info('[Timeline] load older request', {
-          runId,
-          attempt: i + 1,
-          params: {
-            types: currentApiTypes,
-            statuses: currentApiStatuses,
-            limit: 100,
-            order: 'desc' as const,
-            cursor,
-            cursorParamMode: mode,
-          },
-        });
         const candidate = await runs.timelineEvents(runId, {
           types: currentApiTypes.length > 0 ? currentApiTypes.join(',') : undefined,
           statuses: currentApiStatuses.length > 0 ? currentApiStatuses.join(',') : undefined,
@@ -762,31 +669,10 @@ export function AgentsRunTimeline() {
           cursorId: cursor.id,
           cursorParamMode: mode,
         });
-        const items = candidate.items ?? [];
-        console.info('[Timeline] load older response', {
-          runId,
-          attempt: i + 1,
-          cursorParamMode: mode,
-          requestCursor: cursor,
-          response: {
-            length: items.length,
-            first: summarizeEventBoundary(items[0]),
-            last: summarizeEventBoundary(items[items.length - 1]),
-            nextCursor: candidate.nextCursor ?? null,
-          },
-        });
         if (!isNonAdvancingPage(candidate, cursor)) {
           response = candidate;
           successfulMode = mode;
           break;
-        }
-        if (i < attemptModes.length - 1) {
-          console.warn('[Timeline] load older pagination retry', {
-            runId,
-            cursor,
-            previousMode: mode,
-            retryWith: attemptModes[i + 1],
-          });
         }
       }
 
@@ -794,12 +680,6 @@ export function AgentsRunTimeline() {
         reachedHistoryEndRef.current = true;
         updateOlderCursor(null);
         pendingScrollAdjustmentRef.current = null;
-        console.warn('[Timeline] pagination did not advance', {
-          runId,
-          cursor,
-          attempts: attemptModes,
-          phase: 'load-older',
-        });
         return;
       }
 
@@ -816,7 +696,6 @@ export function AgentsRunTimeline() {
       if (items.length > 0) {
         const latestSelectedTypes = selectedTypesRef.current;
         const latestSelectedStatuses = selectedStatusesRef.current;
-        let mergeStats: MergeStats | null = null;
         updateEventsState((prev) => mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses, {
           context: {
             source: 'load-older',
@@ -825,27 +704,12 @@ export function AgentsRunTimeline() {
             cursor,
             mode: 'MERGE',
           },
-          captureStats: (stats) => {
-            mergeStats = stats;
-          },
         }));
-        if (mergeStats) {
-          console.info('[Timeline] load older merge', {
-            runId,
-            cursor,
-            stats: mergeStats,
-          });
-        }
       } else {
         pendingScrollAdjustmentRef.current = null;
       }
     } catch (error) {
       pendingScrollAdjustmentRef.current = null;
-      console.error('[Timeline] load older error', {
-        runId,
-        cursor,
-        error,
-      });
       setLoadOlderError((error as Error)?.message ?? 'Failed to load older events');
     } finally {
       loadingOlderRef.current = false;
@@ -876,12 +740,6 @@ export function AgentsRunTimeline() {
     }
     const delta = listNode.scrollHeight - adjustment.prevScrollHeight;
     listNode.scrollTop = adjustment.prevScrollTop + delta;
-    console.debug('[Timeline] apply scroll adjustment', {
-      runId,
-      prevScrollHeight: adjustment.prevScrollHeight,
-      delta,
-      nextScrollTop: listNode.scrollTop,
-    });
     pendingScrollAdjustmentRef.current = null;
   }, [events, runId]);
 
@@ -914,26 +772,8 @@ export function AgentsRunTimeline() {
     }
     const previous = lastSelectedIdRef.current;
     if (previous === nextSelection) return;
-    console.debug('[Timeline] selection changed', {
-      runId,
-      previous,
-      next: nextSelection,
-    });
     lastSelectedIdRef.current = nextSelection;
   }, [selectedEventId, runId]);
-
-  useEffect(() => {
-    if (!runId) return;
-    const length = events.length;
-    const first = summarizeEventBoundary(events[0]);
-    const last = summarizeEventBoundary(events[length - 1]);
-    console.debug('[Timeline] events state updated', {
-      runId,
-      length,
-      first,
-      last,
-    });
-  }, [events, runId]);
 
   useEffect(() => {
     const node = selectedItemRef.current;
