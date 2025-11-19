@@ -211,8 +211,9 @@ describe('ManageTool graph wiring', () => {
     const tool = (inst as ManageToolNode).getTool();
     const ctx: LLMContext = { threadId: 'p', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
     const statusStr = await tool.execute({ command: 'check_status', threadAlias: 'status' }, ctx);
-    const statusSchema = z.object({ activeTasks: z.number(), childThreadIds: z.array(z.string()) });
+    const statusSchema = z.object({ activeTasks: z.number().int(), childThreadIds: z.array(z.string()) });
     const status = statusSchema.parse(JSON.parse(statusStr));
-    expect(Array.isArray(status.childThreadIds)).toBe(true);
+    expect(status.activeTasks).toBe(0);
+    expect(status.childThreadIds).toEqual([]);
   });
 });
