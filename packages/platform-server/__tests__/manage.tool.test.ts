@@ -142,7 +142,7 @@ describe('ManageTool unit', () => {
 });
 
 describe('ManageTool graph wiring', () => {
-  it('connect ManageTool to two agents via agent port; list returns their ids', async () => {
+  it('connect ManageTool to two agents via agent port; check_status returns empty state', async () => {
     const module = await Test.createTestingModule({
       providers: [
         LoggerService,
