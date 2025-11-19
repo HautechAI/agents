@@ -8,6 +8,11 @@ import { RunTimelineEventDetails } from '../RunTimelineEventDetails';
 import * as contextItemsModule from '@/api/hooks/contextItems';
 import type { UseContextItemsResult } from '@/api/hooks/contextItems';
 import type { ContextItem, RunTimelineEvent } from '@/api/types/agents';
+const useToolOutputStreamingMock = vi.fn();
+
+vi.mock('@/hooks/useToolOutputStreaming', () => ({
+  useToolOutputStreaming: (options: unknown) => useToolOutputStreamingMock(options),
+}));
 
 const waitForStableScrollResolvers: Array<() => void> = [];
 const waitForStableScrollHeightMock = vi.fn(() => new Promise<void>((resolve) => {
@@ -117,6 +122,15 @@ function buildEvent(overrides: Partial<RunTimelineEvent> = {}): RunTimelineEvent
 }
 
 beforeEach(() => {
+  useToolOutputStreamingMock.mockReset();
+  useToolOutputStreamingMock.mockReturnValue({
+    text: '',
+    terminal: null,
+    hydrated: false,
+    lastSeq: 0,
+    loading: false,
+    error: null,
+  });
   try {
     window.sessionStorage.clear();
   } catch (_err) {
@@ -296,6 +310,61 @@ describe('RunTimelineEventDetails', () => {
     }
 
     expect(screen.queryByText(/Raw payload/)).toBeNull();
+  });
+
+  it('renders streaming badge and live output when shell tool is active', () => {
+    useToolOutputStreamingMock.mockReturnValue({
+      text: 'stream output',
+      terminal: null,
+      hydrated: true,
+      lastSeq: 1,
+      loading: false,
+      error: null,
+    });
+
+    renderDetails(
+      buildEvent({
+        status: 'running',
+        toolExecution: { toolName: 'shell_command', output: 'original', raw: null },
+      }),
+    );
+
+    expect(screen.getByText(/Streaming…/)).toBeInTheDocument();
+    expect(screen.getByText('stream output')).toBeInTheDocument();
+  });
+
+  it('shows terminal summary metadata when streaming finishes', () => {
+    useToolOutputStreamingMock.mockReturnValue({
+      text: 'final result',
+      terminal: {
+        runId: 'run-1',
+        threadId: 'thread-1',
+        eventId: 'evt-1',
+        status: 'truncated',
+        exitCode: 0,
+        bytesStdout: 10,
+        bytesStderr: 0,
+        totalChunks: 3,
+        droppedChunks: 1,
+        savedPath: '/tmp/output.txt',
+        message: 'Output truncated after limit',
+        ts: '2024-01-01T00:00:05.000Z',
+      },
+      hydrated: true,
+      lastSeq: 3,
+      loading: false,
+      error: null,
+    });
+
+    renderDetails(
+      buildEvent({
+        toolExecution: { toolName: 'shell_command', output: '', raw: null },
+      }),
+    );
+
+    expect(screen.getByText(/Truncated/)).toBeInTheDocument();
+    expect(screen.getByText(/Output truncated after limit/)).toBeInTheDocument();
+    expect(screen.getByText('/tmp/output.txt')).toBeInTheDocument();
   });
 
   it('omits metadata and source detail rows from overview', () => {

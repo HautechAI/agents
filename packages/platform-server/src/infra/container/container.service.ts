@@ -219,6 +219,7 @@ export class ContainerService {
       tty?: boolean;
       killOnTimeout?: boolean;
       signal?: AbortSignal;
+      onOutput?: (source: 'stdout' | 'stderr', chunk: Buffer) => void;
     },
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const container = this.docker.getContainer(containerId);
@@ -253,6 +254,7 @@ export class ContainerService {
         options?.timeoutMs,
         options?.idleTimeoutMs,
         options?.signal,
+        options?.onOutput,
       );
       this.logger.debug(
         `Exec finished cid=${inspectData.Id.substring(0, 12)} exitCode=${exitCode} stdoutBytes=${stdout.length} stderrBytes=${stderr.length}`,
@@ -387,6 +389,7 @@ export class ContainerService {
     timeoutMs?: number,
     idleTimeoutMs?: number,
     signal?: AbortSignal,
+    onOutput?: (source: 'stdout' | 'stderr', chunk: Buffer) => void,
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     return new Promise((resolve, reject) => {
       const destroyIfPossible = (s: unknown) => {
@@ -503,6 +506,13 @@ export class ContainerService {
               stream.on('data', (chunk: Buffer | string) => {
                 if (finished) return;
                 const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+                if (onOutput) {
+                  try {
+                    onOutput('stdout', buf);
+                  } catch (cbErr) {
+                    this.logger.warn('exec onOutput callback failed', { source: 'stdout', error: cbErr });
+                  }
+                }
                 stdoutCollector.append(buf);
                 armIdle();
               });
@@ -511,7 +521,15 @@ export class ContainerService {
               const outStdout = new Writable({
                 write: (chunk, _enc, cb) => {
                   if (!finished) {
-                    stdoutCollector.append(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+                    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+                    if (onOutput) {
+                      try {
+                        onOutput('stdout', buf);
+                      } catch (cbErr) {
+                        this.logger.warn('exec onOutput callback failed', { source: 'stdout', error: cbErr });
+                      }
+                    }
+                    stdoutCollector.append(buf);
                     armIdle();
                   }
                   cb();
@@ -520,7 +538,15 @@ export class ContainerService {
               const outStderr = new Writable({
                 write: (chunk, _enc, cb) => {
                   if (!finished) {
-                    stderrCollector.append(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+                    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+                    if (onOutput) {
+                      try {
+                        onOutput('stderr', buf);
+                      } catch (cbErr) {
+                        this.logger.warn('exec onOutput callback failed', { source: 'stderr', error: cbErr });
+                      }
+                    }
+                    stderrCollector.append(buf);
                     armIdle();
                   }
                   cb();

@@ -60,6 +60,25 @@ export class RunTimelineEventsQueryDto {
   cursorId?: string;
 }
 
+export class RunEventOutputQueryDto {
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  @IsInt()
+  @Min(0)
+  sinceSeq?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  limit?: number;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc';
+}
+
 export class ListThreadsQueryDto {
   @IsOptional()
   @IsBooleanString()
@@ -269,6 +288,23 @@ export class AgentsThreadsController {
       order: query.order,
       cursor,
     });
+  }
+
+  @Get('runs/:runId/events/:eventId/output')
+  async getRunEventOutput(
+    @Param('runId') runId: string,
+    @Param('eventId') eventId: string,
+    @Query() query: RunEventOutputQueryDto,
+  ) {
+    const snapshot = await this.runEvents.getToolOutputSnapshot({
+      runId,
+      eventId,
+      sinceSeq: query.sinceSeq,
+      limit: query.limit,
+      order: query.order,
+    });
+    if (!snapshot) throw new NotFoundException('event_not_found');
+    return snapshot;
   }
 
   @Patch('threads/:threadId')

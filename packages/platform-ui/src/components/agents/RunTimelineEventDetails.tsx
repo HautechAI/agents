@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { stringify as stringifyYaml } from 'yaml';
 import { Link } from 'react-router-dom';
-import type { ContextItem, RunTimelineEvent } from '@/api/types/agents';
+import type { ContextItem, RunTimelineEvent, ToolOutputTerminal } from '@/api/types/agents';
 import { STATUS_COLORS, formatDuration, getEventTypeLabel } from './runTimelineFormatting';
 import { LLMContextViewer } from './LLMContextViewer';
 import { waitForStableScrollHeight } from './waitForStableScrollHeight';
+import { useToolOutputStreaming } from '@/hooks/useToolOutputStreaming';
 
 type Attachment = RunTimelineEvent['attachments'][number];
 
@@ -48,6 +49,24 @@ const CALL_AGENT_STATUS_STYLES = {
 } as const;
 
 type CallAgentStatusKey = keyof typeof CALL_AGENT_STATUS_STYLES;
+
+const TERMINAL_STATUS_LABELS: Record<ToolOutputTerminal['status'], string> = {
+  success: 'Success',
+  error: 'Error',
+  timeout: 'Timeout',
+  idle_timeout: 'Idle timeout',
+  cancelled: 'Cancelled',
+  truncated: 'Truncated',
+};
+
+const TERMINAL_STATUS_STYLES: Record<ToolOutputTerminal['status'], string> = {
+  success: 'bg-emerald-100 text-emerald-700',
+  error: 'bg-red-100 text-red-700',
+  timeout: 'bg-amber-100 text-amber-700',
+  idle_timeout: 'bg-amber-100 text-amber-700',
+  cancelled: 'bg-gray-200 text-gray-700',
+  truncated: 'bg-indigo-100 text-indigo-700',
+};
 
 function normalizeCallAgentStatus(value: string): { display: string; colorKey: CallAgentStatusKey } {
   const raw = (value ?? '').toLowerCase();
@@ -221,21 +240,66 @@ function useToolOutputMode(eventId: string, value: unknown) {
 
 function ToolOutputSection({
   eventId,
-  value,
+  baseValue,
+  liveValue,
+  isStreaming,
+  terminal,
+  streamError,
+  loading,
+  hydrated,
   errorMessage,
   attachments,
 }: {
   eventId: string;
-  value: unknown;
+  baseValue: unknown;
+  liveValue?: unknown;
+  isStreaming?: boolean;
+  terminal?: ToolOutputTerminal | null;
+  streamError?: Error | null;
+  loading?: boolean;
+  hydrated?: boolean;
   errorMessage: string | null | undefined;
   attachments: Attachment[];
 }) {
-  const { mode, setMode, rendered } = useToolOutputMode(eventId, value);
+  const displayValue = liveValue !== undefined && liveValue !== null ? liveValue : baseValue;
+  const { mode, setMode, rendered } = useToolOutputMode(eventId, displayValue);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isStreaming) return;
+    const el = contentRef.current;
+    if (!el) return;
+    try {
+      el.scrollTop = el.scrollHeight;
+    } catch {
+      // ignore scroll errors
+    }
+  }, [isStreaming, displayValue]);
+
+  const statusBadge = isStreaming
+    ? (
+        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700">
+          Streaming…
+        </span>
+      )
+    : terminal
+      ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${TERMINAL_STATUS_STYLES[terminal.status]}`}
+          >
+            {TERMINAL_STATUS_LABELS[terminal.status]}
+            {terminal.exitCode !== null ? ` • Exit ${terminal.exitCode}` : ''}
+          </span>
+        )
+      : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-gray-200 bg-white">
-      <header className="flex items-center justify-between border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-        <span>Output</span>
+      <header className="flex items-center justify-between gap-2 border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <div className="flex items-center gap-2">
+          <span>Output</span>
+          {statusBadge}
+        </div>
         <select
           aria-label="Select output view"
           value={mode}
@@ -249,8 +313,17 @@ function ToolOutputSection({
           <option value="yaml">yaml</option>
         </select>
       </header>
-      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 py-2">
+      <div ref={contentRef} className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 py-2">
+        {loading && !hydrated && <div className="text-[11px] text-gray-500">Loading output…</div>}
         {rendered}
+        {isStreaming && <div className="text-[11px] text-gray-500">Streaming live output…</div>}
+        {streamError && <div className="text-[11px] text-red-600">Stream error: {streamError.message}</div>}
+        {terminal?.message && <div className="text-[11px] text-gray-700">{terminal.message}</div>}
+        {terminal?.savedPath && (
+          <div className="text-[11px] text-gray-600">
+            Full output saved to <span className="font-mono">{terminal.savedPath}</span>
+          </div>
+        )}
         {errorMessage && <div className="text-[11px] text-red-600">Error: {errorMessage}</div>}
         {attachments.map((att) => (
           <div key={att.id} className="space-y-1">
@@ -450,6 +523,17 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
   const contextAdjustTokenRef = useRef(0);
   const hasLlmCall = Boolean(llmCall);
   const contextItemsKey = llmCall ? `${event.id}:${llmCall.contextItemIds.join('|')}` : '';
+
+  const isShellTool = toolExecution?.toolName === 'shell_command';
+  const {
+    text: streamedOutput,
+    terminal: streamedTerminal,
+    hydrated: streamHydrated,
+    loading: streamLoading,
+    error: streamError,
+  } = useToolOutputStreaming({ runId: event.runId, eventId: event.id, enabled: Boolean(isShellTool) });
+  const liveOutput = streamHydrated ? streamedOutput : undefined;
+  const isStreamingActive = Boolean(isShellTool) && streamHydrated && !streamedTerminal && (event.status === 'running' || event.status === 'pending');
 
   const scrollContextToBottom = useCallback(() => {
     const apply = () => {
@@ -670,7 +754,13 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
               </div>
               <ToolOutputSection
                 eventId={event.id}
-                value={toolExecution.output}
+                baseValue={toolExecution.output}
+                liveValue={liveOutput}
+                isStreaming={isStreamingActive}
+                terminal={streamedTerminal}
+                streamError={streamError}
+                loading={streamLoading}
+                hydrated={streamHydrated}
                 errorMessage={toolExecution.errorMessage}
                 attachments={toolOutputAttachments}
               />

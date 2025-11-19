@@ -12,7 +12,16 @@ export class ContainerHandle {
 
   exec(
     command: string[] | string,
-    options?: { workdir?: string; env?: Record<string, string> | string[]; timeoutMs?: number; idleTimeoutMs?: number; killOnTimeout?: boolean; tty?: boolean; signal?: AbortSignal },
+    options?: {
+      workdir?: string;
+      env?: Record<string, string> | string[];
+      timeoutMs?: number;
+      idleTimeoutMs?: number;
+      killOnTimeout?: boolean;
+      tty?: boolean;
+      signal?: AbortSignal;
+      onOutput?: (source: 'stdout' | 'stderr', chunk: Buffer) => void;
+    },
   ) {
     return this.service.execContainer(this.id, command, options);
   }

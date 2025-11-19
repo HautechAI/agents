@@ -8,6 +8,7 @@ import { ToolExecStatus, Prisma } from '@prisma/client';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 import type { ResponseFunctionCallOutputItemList } from 'openai/resources/responses/responses.mjs';
 import { contextItemInputFromMessage } from '../services/context-items.utils';
+import { ShellCommandTool } from '../../nodes/tools/shell_command/shell_command.tool';
 
 type ToolCallErrorCode =
   | 'BAD_JSON_ARGS'
@@ -220,7 +221,16 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
       }
 
       try {
-        const raw = await tool.execute(input, ctx);
+        let raw: unknown;
+        if (tool instanceof ShellCommandTool && startedEventId) {
+          raw = await tool.executeStreaming(input, ctx, {
+            runId: ctx.runId,
+            threadId: ctx.threadId,
+            eventId: startedEventId,
+          });
+        } else {
+          raw = await tool.execute(input, ctx);
+        }
 
         if (typeof raw === 'string' && raw.length > 50000) {
           response = createErrorResponse({

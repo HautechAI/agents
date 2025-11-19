@@ -1,5 +1,11 @@
 import { http, asData } from '@/api/http';
-import type { RunMessageItem, RunMeta, RunTimelineEventsResponse, RunTimelineSummary } from '@/api/types/agents';
+import type {
+  RunMessageItem,
+  RunMeta,
+  RunTimelineEventsResponse,
+  RunTimelineSummary,
+  ToolOutputSnapshot,
+} from '@/api/types/agents';
 
 export const runs = {
   listByThread: (threadId: string) => asData<{ items: RunMeta[] }>(
@@ -33,6 +39,23 @@ export const runs = {
           ...buildCursorParams(params),
         },
       }),
+    ),
+  toolOutputSnapshot: (
+    runId: string,
+    eventId: string,
+    params?: { sinceSeq?: number; limit?: number; order?: 'asc' | 'desc' },
+  ) =>
+    asData<ToolOutputSnapshot>(
+      http.get<ToolOutputSnapshot>(
+        `/api/agents/runs/${encodeURIComponent(runId)}/events/${encodeURIComponent(eventId)}/output`,
+        {
+          params: {
+            order: params?.order ?? 'asc',
+            ...(params?.sinceSeq !== undefined ? { sinceSeq: params.sinceSeq } : {}),
+            ...(params?.limit !== undefined ? { limit: params.limit } : {}),
+          },
+        },
+      ),
     ),
   terminate: (runId: string) =>
     asData<{ ok: boolean }>(
