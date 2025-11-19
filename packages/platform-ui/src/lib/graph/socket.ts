@@ -104,7 +104,7 @@ class GraphSocket {
     if (this.socket) return this.socket;
     const host = getSocketBaseUrl();
     // Cast to typed Socket to enable event payload typing
-    const transports: ManagerOptions['transports'] = ['websocket', 'polling'];
+    const transports: ManagerOptions['transports'] = ['websocket'];
     const options: Partial<ManagerOptions & SocketOptions> = {
       path: '/socket.io',
       transports,

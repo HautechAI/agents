@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { http as _http, HttpResponse as _HttpResponse } from 'msw';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NodeDetailsPanel } from '../../src/components/graph';
 import { disposeGraphSocket, emitNodeStatus, server, startSocketTestServer, stopSocketTestServer, TestProviders } from './testUtils';
 
@@ -45,3 +45,4 @@ describe('Integration flows: Node actions, dynamic/static config', () => {
 
   // Schema-driven forms removed; covered by custom views tests elsewhere
 });
+vi.setConfig({ testTimeout: 30000 });

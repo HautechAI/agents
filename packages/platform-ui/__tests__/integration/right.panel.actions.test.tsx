@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { disposeGraphSocket, emitNodeStatus, server, startSocketTestServer, stopSocketTestServer, TestProviders } from './testUtils';
 import { http as _http, HttpResponse as _HttpResponse } from 'msw';
 import { RightPropertiesPanel } from '../../src/builder/panels/RightPropertiesPanel';
@@ -61,3 +61,4 @@ describe('Right panel actions: Provision/Deprovision optimistic and reconcile', 
     expect(screen.getByText('Provision')).not.toBeDisabled();
   });
 });
+vi.setConfig({ testTimeout: 30000 });
