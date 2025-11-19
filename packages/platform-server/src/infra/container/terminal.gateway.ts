@@ -36,7 +36,7 @@ type WsLike = {
 };
 
 const READY_STATE_OPEN = 1; // WebSocket.OPEN
-const EARLY_CLOSE_DETECTION_MS = 50;
+const EARLY_CLOSE_DETECTION_MS = 5;
 type RawDataLike = RawData | string;
 
 const getObjectKeys = (value: unknown): string[] | undefined => {
@@ -271,7 +271,17 @@ export class ContainerTerminalGateway {
     const ws: WsLike = candidate;
     const path = `/api/containers/${containerIdParamFromReq ?? 'unknown'}/terminal/ws`;
     const isOpen = () => ws.readyState === READY_STATE_OPEN;
-    const send = (payload: Record<string, unknown>) => safeSend(ws, payload, this.logger);
+    const send = (payload: Record<string, unknown>) => {
+      if (!isOpen()) {
+        this.logger.debug('terminal socket send skipped: socket closed', {
+          sessionId,
+          containerId: containerIdParam ?? 'unknown',
+          payloadType: payload.type,
+        });
+        return;
+      }
+      safeSend(ws, payload, this.logger);
+    };
     const close = (code: number, reason: string) => safeClose(ws, code, reason, this.logger);
     const detach = (event: string, handler?: (...args: unknown[]) => void) => {
       const off = (ws as { off?: (event: string, handler: (...args: unknown[]) => void) => void }).off;
@@ -294,6 +304,7 @@ export class ContainerTerminalGateway {
     let idleTimer: NodeJS.Timeout | null = null;
     let maxTimer: NodeJS.Timeout | null = null;
     let execId: string | null = null;
+    let sessionMarkedConnected = false;
     let stdin: NodeJS.WritableStream | null = null;
     let stdout: NodeJS.ReadableStream | null = null;
     let stderr: NodeJS.ReadableStream | null = null;
@@ -366,10 +377,22 @@ export class ContainerTerminalGateway {
       if (onError) onError(err);
     };
 
-    const cleanup = async (reason: string) => {
+    type CleanupOptions = {
+      preserveSession?: boolean;
+      skipStatus?: boolean;
+      skipCloseSocket?: boolean;
+    };
+
+    const cleanup = async (reason: string, options: CleanupOptions = {}) => {
       if (closed) return;
       closed = true;
-      this.logger.info('Terminal cleanup triggered', { execId, sessionId, reason });
+      const { preserveSession = false, skipStatus = false, skipCloseSocket = false } = options;
+      this.logger.info('Terminal cleanup triggered', {
+        execId,
+        sessionId,
+        reason,
+        preserveSession,
+      });
       try {
         if (idleTimer) clearTimeout(idleTimer);
         if (maxTimer) clearTimeout(maxTimer);
@@ -402,20 +425,52 @@ export class ContainerTerminalGateway {
       onMessage = null;
       onClose = null;
       onError = null;
-      try {
-        if (closeExec) {
+
+      let exitCodeResult: number | null = null;
+      let exitError: string | null = null;
+      if (closeExec) {
+        try {
           const { exitCode } = await closeExec();
-          send({ type: 'status', phase: 'exited', exitCode });
-          logStatus('exited', { exitCode });
+          exitCodeResult = exitCode;
+        } catch (err) {
+          exitError = err instanceof Error ? err.message : String(err);
         }
-      } catch (err) {
-        const reasonMessage = err instanceof Error ? err.message : String(err);
-        send({ type: 'status', phase: 'error', reason: reasonMessage });
-        logStatus('error', { reason: reasonMessage });
-      } finally {
-        if (sessionId) {
+      }
+
+      if (!skipStatus) {
+        if (exitError) {
+          send({ type: 'status', phase: 'error', reason: exitError });
+          logStatus('error', { reason: exitError });
+        } else if (exitCodeResult !== null) {
+          send({ type: 'status', phase: 'exited', exitCode: exitCodeResult });
+          logStatus('exited', { exitCode: exitCodeResult });
+        }
+      }
+
+      if (sessionId) {
+        const shouldPreserve = preserveSession || (!sessionMarkedConnected && !execId);
+        if (shouldPreserve) {
+          try {
+            this.sessions.touch(sessionId);
+          } catch (err) {
+            this.logger.debug('terminal session touch during cleanup failed', {
+              sessionId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          this.logger.info('Terminal session retained for reconnect', {
+            sessionId,
+            execId,
+            reason,
+          });
+        } else {
           try {
             this.sessions.close(sessionId);
+            this.logger.info('Terminal session closed after exec', {
+              sessionId,
+              execId,
+              reason,
+            });
           } catch (err) {
             this.logger.debug('terminal session close during cleanup failed', {
               sessionId,
@@ -423,11 +478,13 @@ export class ContainerTerminalGateway {
             });
           }
         }
-        try {
-          if (isOpen()) close(1000, reason);
-        } catch {
-          // ignore close errors
-        }
+      }
+
+      if (skipCloseSocket) return;
+      try {
+        if (isOpen()) close(1000, reason);
+      } catch {
+        // ignore close errors
       }
     };
 
@@ -461,28 +518,65 @@ export class ContainerTerminalGateway {
       });
     };
 
-    const abortIfSocketClosed = async (context: string): Promise<boolean> => {
-      if (closed || !isOpen()) {
-        this.logger.info('Terminal connection aborted: socket closed before exec', {
-          sessionId,
-          containerIdParam,
-          readyState: ws.readyState,
-          context,
-        });
-        return true;
-      }
-      const aborted = await waitForEarlyClose();
+    const abortIfSocketClosed = async (
+      context: string,
+      options: { wait?: boolean } = {},
+    ): Promise<boolean> => {
+      const { wait = true } = options;
+      const alreadyClosed = closed || !isOpen();
+      const aborted = alreadyClosed ? true : wait ? await waitForEarlyClose() : !isOpen();
       if (!aborted) return false;
-      this.logger.info('Terminal connection aborted: socket closed before exec', {
+      const reasonTag = `socket_not_open_before_${context}`;
+      const preserve = !sessionMarkedConnected && !execId;
+      this.logger.info('Terminal connection aborted before exec', {
         sessionId,
         containerIdParam,
         readyState: ws.readyState,
         context,
+        preserve,
       });
       if (!closed) {
-        await cleanup(`socket_not_open_before_${context}`);
+        await cleanup(reasonTag, {
+          preserveSession: preserve,
+          skipStatus: true,
+          skipCloseSocket: true,
+        });
       }
       return true;
+    };
+
+    const markSessionConnected = async (): Promise<boolean> => {
+      if (!sessionId || sessionMarkedConnected) return true;
+      if (!isOpen()) {
+        this.logger.info('Terminal session markConnected skipped: socket not open', {
+          sessionId,
+          containerId: containerId ?? containerIdParam ?? 'unknown',
+          execId,
+        });
+        return false;
+      }
+      try {
+        this.sessions.markConnected(sessionId);
+        session = this.sessions.get(sessionId) ?? session;
+        sessionMarkedConnected = true;
+        this.logger.info('Terminal session marked connected after exec start', {
+          sessionId,
+          containerId,
+          execId,
+        });
+        return true;
+      } catch (err) {
+        const code = err instanceof Error ? err.message : 'session_error';
+        this.logger.warn('Terminal session markConnected failed after exec start', {
+          sessionId,
+          containerId,
+          execId,
+          error: code,
+        });
+        send({ type: 'error', code, message: 'Terminal session already connected' });
+        await cleanup('session_already_connected');
+        return false;
+      }
     };
 
     if (await abortIfSocketClosed('pre_validation')) {
@@ -505,6 +599,10 @@ export class ContainerTerminalGateway {
       sessionId,
       containerId,
     });
+    this.logger.info('Terminal session markConnected deferred until exec start', {
+      sessionId,
+      containerId,
+    });
     if (containerIdParam && containerIdParam !== containerId) {
       send({ type: 'error', code: 'container_mismatch', message: 'Terminal session belongs to different container' });
       close(1008, 'container_mismatch');
@@ -512,26 +610,10 @@ export class ContainerTerminalGateway {
       return;
     }
 
-    try {
-      this.sessions.markConnected(sessionId);
-      session = this.sessions.get(sessionId)!;
-    } catch (err) {
-      const code = err instanceof Error ? err.message : 'session_error';
-      send({ type: 'error', code, message: 'Terminal session already connected' });
-      close(1008, code);
-      await cleanup('session_already_connected');
-      return;
-    }
-
-    this.logger.info('Terminal session connected', {
-      sessionId,
-      containerId,
-    });
-
     send({ type: 'status', phase: 'starting' });
     logStatus('starting');
 
-    if (await abortIfSocketClosed('pre_exec')) {
+    if (await abortIfSocketClosed('pre_exec', { wait: false })) {
       return;
     }
 
@@ -603,6 +685,14 @@ export class ContainerTerminalGateway {
           this.logger.debug('terminal stdin finish', { execId, sessionId });
         });
       }
+      if (await abortIfSocketClosed('post_exec_start', { wait: false })) {
+        return;
+      }
+
+      if (!(await markSessionConnected())) {
+        return;
+      }
+
       send({ type: 'status', phase: 'running' });
       logStatus('running', { execId });
       refreshActivity();
