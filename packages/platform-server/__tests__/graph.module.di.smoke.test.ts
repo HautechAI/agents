@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { GraphModule } from '../src/graph/graph.module';
+import { GraphServicesModule } from '../src/graph/graph-services.module';
 import { MongoService } from '../src/core/services/mongo.service';
 import { PrismaService } from '../src/core/services/prisma.service';
 import type { PrismaClient } from '@prisma/client';
@@ -206,7 +207,7 @@ if (!shouldRunDbTests) {
     } satisfies Partial<GraphRepository>;
 
       const builder = Test.createTestingModule({
-        imports: [GraphModule],
+        imports: [GraphModule, GraphServicesModule],
       });
 
     vi.spyOn(MongoService.prototype, 'connect').mockResolvedValue(undefined);
@@ -256,15 +257,14 @@ if (!shouldRunDbTests) {
       return makeStub({});
     });
 
-      const moduleRef = await builder.compile();
+      const testingModule = await builder.compile();
 
-      const provisioner = moduleRef.get(LLMProvisioner, { strict: false });
+      const provisioner = testingModule.get(LLMProvisioner, { strict: false });
       expect(provisioner).toBeDefined();
 
-      const moduleRefProvider = moduleRef.get(ModuleRef, { strict: false });
+      const moduleRefProvider = testingModule.get(ModuleRef, { strict: false });
       await expect(moduleRefProvider.create(AgentNode)).resolves.toBeInstanceOf(AgentNode);
-
-      await moduleRef.close();
+      await testingModule.close();
     }, 60000);
   });
 }

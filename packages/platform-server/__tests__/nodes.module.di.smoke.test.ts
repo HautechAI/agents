@@ -7,6 +7,7 @@ import { AgentsPersistenceService } from '../src/agents/agents.persistence.servi
 import { PrismaService } from '../src/core/services/prisma.service';
 import { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
+import { RemindMeNode } from '../src/nodes/tools/remind_me/remind_me.node';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
 import { MongoService } from '../src/core/services/mongo.service';
 import { ContainerService } from '../src/infra/container/container.service';
@@ -199,8 +200,10 @@ if (!shouldRunDbTests) {
     const moduleRef = await builder.compile();
 
     const instance = await moduleRef.resolve(SlackTrigger);
-
     expect(instance).toBeInstanceOf(SlackTrigger);
+
+    const remindMeInstance = await moduleRef.resolve(RemindMeNode);
+    expect(remindMeInstance).toBeInstanceOf(RemindMeNode);
 
     await moduleRef.close();
     }, 60000);
