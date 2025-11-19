@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { IncomingHttpHeaders, IncomingMessage } from 'http';
+import type { IncomingMessage } from 'http';
 import type { Duplex } from 'stream';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 import { z } from 'zod';
@@ -36,8 +36,6 @@ type WsLike = {
 };
 
 const READY_STATE_OPEN = 1; // WebSocket.OPEN
-const READY_STATE_CLOSING = 2; // WebSocket.CLOSING
-const READY_STATE_CLOSED = 3; // WebSocket.CLOSED
 const EARLY_CLOSE_DETECTION_MS = 5;
 type RawDataLike = RawData | string;
 
@@ -138,13 +136,13 @@ const rawDataToUtf8 = (raw: RawDataLike): string => {
 @Injectable()
 export class ContainerTerminalGateway {
   private registered = false;
-  private wss: WebSocketServer | null = null;
-
   constructor(
     @Inject(TerminalSessionsService) private readonly sessions: TerminalSessionsService,
     @Inject(ContainerService) private readonly containers: ContainerService,
     @Inject(LoggerService) private readonly logger: LoggerService,
   ) {}
+
+  private wss: WebSocketServer | null = null;
 
   registerRoutes(fastify: FastifyInstance): void {
     if (this.registered) return;
@@ -186,34 +184,6 @@ export class ContainerTerminalGateway {
     this.registered = true;
   }
 
-  private sanitizeHeaders(headers: IncomingHttpHeaders | undefined): Record<string, unknown> {
-    if (!headers) return {};
-    const sensitive = new Set(['authorization', 'cookie', 'set-cookie']);
-    const sanitized: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(headers)) {
-      if (!key) continue;
-      sanitized[key] = sensitive.has(key.toLowerCase()) ? '[REDACTED]' : value;
-    }
-    return sanitized;
-  }
-
-  private sanitizeUrlSearchParams(params: URLSearchParams): Record<string, string> {
-    const sanitized: Record<string, string> = {};
-    for (const [key, value] of params.entries()) {
-      sanitized[key] = key.toLowerCase() === 'token' ? '[REDACTED]' : value;
-    }
-    return sanitized;
-  }
-
-  private sanitizeRequestQuery(query: unknown): Record<string, unknown> {
-    if (!query || typeof query !== 'object') return {};
-    const sanitized: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(query as Record<string, unknown>)) {
-      sanitized[key] = key && key.toLowerCase() === 'token' ? '[REDACTED]' : value;
-    }
-    return sanitized;
-  }
-
   private async handleConnection(connection: SocketStream, request: FastifyRequest): Promise<void> {
     const rawSocket = (connection as { socket?: unknown }).socket;
     const candidate = (rawSocket ?? connection) as unknown;
@@ -242,7 +212,6 @@ export class ContainerTerminalGateway {
 
     const ws: WsLike = candidate;
     const isOpen = () => ws.readyState === READY_STATE_OPEN;
-    const isTerminated = () => ws.readyState === READY_STATE_CLOSING || ws.readyState === READY_STATE_CLOSED;
     const send = (payload: Record<string, unknown>) => {
       if (!isOpen()) {
         return;
@@ -471,7 +440,7 @@ export class ContainerTerminalGateway {
     ws.on('error', errorListener);
 
     const waitForEarlyClose = async (): Promise<boolean> => {
-      if (closed || isTerminated()) return true;
+      if (closed || !isOpen()) return true;
       return await new Promise<boolean>((resolve) => {
         let settled = false;
         const tempCloseListener = () => {
@@ -485,8 +454,7 @@ export class ContainerTerminalGateway {
           if (settled) return;
           settled = true;
           detach('close', tempCloseListener);
-          const terminated = closed || isTerminated();
-          resolve(terminated);
+          resolve(closed || !isOpen());
         }, EARLY_CLOSE_DETECTION_MS);
         ws.on('close', tempCloseListener);
       });
@@ -497,10 +465,8 @@ export class ContainerTerminalGateway {
       options: { wait?: boolean } = {},
     ): Promise<boolean> => {
       const { wait = true } = options;
-      const terminated = closed || isTerminated();
-      const pending = !terminated && !isOpen();
-      const shouldWait = wait || pending;
-      const aborted = terminated ? true : shouldWait ? await waitForEarlyClose() : !isOpen();
+      const alreadyClosed = closed || !isOpen();
+      const aborted = alreadyClosed ? true : wait ? await waitForEarlyClose() : !isOpen();
       if (!aborted) return false;
       const reasonTag = `socket_not_open_before_${context}`;
       const preserve = !sessionMarkedConnected && !execId;
@@ -577,7 +543,7 @@ export class ContainerTerminalGateway {
     send({ type: 'status', phase: 'starting' });
     logStatus('starting');
 
-    if (await abortIfSocketClosed('pre_exec')) {
+    if (await abortIfSocketClosed('pre_exec', { wait: false })) {
       return;
     }
 
