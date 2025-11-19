@@ -258,16 +258,19 @@ export class GraphSocketGateway implements GraphEventsPublisher {
     this.emitToRooms([`thread:${threadId}`, `run:${run.id}`], 'run_status_changed', payload, () => ({ threadId, runId: run.id, status: run.status }));
   }
   emitRunEvent(runId: string, threadId: string, payload: RunEventBroadcast) {
-    this.logger.info('GraphSocketGateway: emitting run_event_appended', {
+    const event = (payload.event ?? {}) as { id?: string; ts?: string; type?: string };
+    const eventName = payload.mutation === 'update' ? 'run_event_updated' : 'run_event_appended';
+    this.logger.info('GraphSocketGateway: emit run_event', {
+      mutation: payload.mutation,
+      eventName,
       threadId,
       runId,
+      eventId: event.id,
+      eventType: event.type,
+      ts: event.ts,
       rooms: [`run:${runId}`, `thread:${threadId}`],
-      eventType: (payload.event as { type?: string } | undefined)?.type,
     });
-    this.emitToRooms([`run:${runId}`, `thread:${threadId}`], 'run_event_appended', payload, () => {
-      const event = (payload.event ?? {}) as { id?: string; ts?: string; type?: string };
-      return { threadId, runId, eventId: event.id, eventType: event.type, ts: event.ts };
-    });
+    this.emitToRooms([`run:${runId}`, `thread:${threadId}`], eventName, payload, () => ({ threadId, runId, eventId: event.id, eventType: event.type, ts: event.ts, mutation: payload.mutation }));
   }
   private flushMetricsQueue = async () => {
     // De-duplicate pending thread IDs per flush (preserve insertion order)

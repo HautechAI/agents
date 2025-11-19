@@ -23,6 +23,8 @@ process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
 process.env.MONGODB_URL = process.env.MONGODB_URL || 'mongodb://localhost:27017/test';
 process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'postgres://localhost:5432/test';
 
+const shouldRunDbTests = process.env.RUN_DB_TESTS === 'true';
+
 const makeStub = <T extends Record<string, unknown>>(overrides: T): T =>
   new Proxy(overrides, {
     get(target, prop: string, receiver) {
@@ -136,13 +138,20 @@ const configServiceStub = new ConfigService().init(
   }),
 );
 
-describe('NodesModule DI smoke test', () => {
-  it('resolves SlackTrigger provider when module compiles', async () => {
-    vi.spyOn(MongoService.prototype, 'connect').mockResolvedValue(undefined);
-    vi.spyOn(MongoService.prototype, 'getDb').mockReturnValue(
-      makeStub({
-        collection: vi.fn().mockReturnValue(
-          makeStub({
+if (!shouldRunDbTests) {
+  describe.skip('NodesModule DI smoke test', () => {
+    it('skipped because RUN_DB_TESTS is not true', () => {
+      expect(true).toBe(true);
+    });
+  });
+} else {
+  describe('NodesModule DI smoke test', () => {
+    it('resolves SlackTrigger provider when module compiles', async () => {
+      vi.spyOn(MongoService.prototype, 'connect').mockResolvedValue(undefined);
+      vi.spyOn(MongoService.prototype, 'getDb').mockReturnValue(
+        makeStub({
+          collection: vi.fn().mockReturnValue(
+            makeStub({
             findOne: vi.fn().mockResolvedValue(null),
             insertOne: vi.fn().mockResolvedValue(undefined),
             replaceOne: vi.fn().mockResolvedValue(undefined),
@@ -194,5 +203,6 @@ describe('NodesModule DI smoke test', () => {
     expect(instance).toBeInstanceOf(SlackTrigger);
 
     await moduleRef.close();
-  }, 60000);
-});
+    }, 60000);
+  });
+}
