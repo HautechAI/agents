@@ -1,7 +1,6 @@
 // CI trigger: no-op comment to touch UI file
 import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket.io-client';
 import { getSocketBaseUrl } from '@/config';
-import { createSocketLogger } from '@/lib/debug/socketDebug';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
 import type { RunTimelineEvent, RunTimelineEventsCursor } from '@/api/types/agents';
 
@@ -46,7 +45,6 @@ type RunStatusChangedPayload = { threadId: string; run: RunSummary };
 type RunEventListenerPayload = RunEventSocketPayload;
 
 class GraphSocket {
-  private readonly log = createSocketLogger('graphSocket');
   // Typed socket instance; null until connected
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   private listeners = new Map<string, Set<Listener>>();
@@ -117,84 +115,56 @@ class GraphSocket {
       reconnectionDelayMax: 5000,
       withCredentials: false,
     };
-    this.log('connect', () => ({ host, opts: { ...options, transports: [...(transports ?? [])] } }));
     this.socket = io(host, options) as unknown as Socket<ServerToClientEvents, ClientToServerEvents>;
     const handleConnect = () => {
-      this.log('connected', () => ({ socketId: this.socket?.id ?? 'unknown' }));
       this.resubscribeAll();
       for (const fn of this.connectCallbacks) fn();
     };
     const handleReconnect = () => {
-      this.log('reconnected', () => ({ socketId: this.socket?.id ?? 'unknown' }));
       this.resubscribeAll();
       for (const fn of this.reconnectCallbacks) fn();
     };
-    const handleDisconnect = (reason: string) => {
-      this.log('disconnect', () => ({ socketId: this.socket?.id ?? 'unknown', reason }));
+    const handleDisconnect = () => {
       for (const fn of this.disconnectCallbacks) fn();
     };
     this.socket.on('connect', handleConnect);
     this.socket.on('disconnect', handleDisconnect);
-    this.socket.on('connect_error', (error) => {
-      const errObj = error ?? {};
-      const code = (errObj as { code?: unknown })?.code;
-      const message = errObj instanceof Error ? errObj.message : typeof errObj === 'string' ? errObj : (() => {
-        try {
-          return JSON.stringify(errObj);
-        } catch {
-          return String(errObj);
-        }
-      })();
-      this.log('connect_error', () => ({ err: message, code }));
-    });
+    this.socket.on('connect_error', () => {});
     const manager = this.socket.io;
     manager.on('reconnect', handleReconnect);
-    manager.on('reconnect_attempt', (attempt) => {
-      this.log('reconnect_attempt', () => ({ attempt }));
-    });
     // No-op connect listener; optional
     this.socket.on('node_status', (payload: NodeStatusEvent) => {
-      this.log('event node_status', () => ({ nodeId: payload.nodeId }));
       const set = this.listeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
     this.socket.on('node_state', (payload: { nodeId: string; state: Record<string, unknown>; updatedAt: string }) => {
-      this.log('event node_state', () => ({ nodeId: payload.nodeId }));
       const set = this.stateListeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
     this.socket.on('node_reminder_count', (payload: ReminderCountEvent) => {
-      this.log('event node_reminder_count', () => ({ nodeId: payload.nodeId, count: payload.count }));
       const set = this.reminderListeners.get(payload.nodeId);
       if (set) for (const fn of set) fn(payload);
     });
     // Threads events
     this.socket.on('thread_created', (payload: ThreadCreatedPayload) => {
-      this.log('event thread_created', () => ({ threadId: payload.thread.id }));
       for (const fn of this.threadCreatedListeners) fn(payload);
     });
     this.socket.on('thread_updated', (payload: ThreadUpdatedPayload) => {
-      this.log('event thread_updated', () => ({ threadId: payload.thread.id }));
       for (const fn of this.threadUpdatedListeners) fn(payload);
     });
     this.socket.on('thread_activity_changed', (payload: ThreadActivityPayload) => {
-      this.log('event thread_activity_changed', () => ({ threadId: payload.threadId, activity: payload.activity }));
       for (const fn of this.threadActivityListeners) fn(payload);
     });
     this.socket.on('thread_reminders_count', (payload: ThreadRemindersPayload) => {
-      this.log('event thread_reminders_count', () => ({ threadId: payload.threadId, remindersCount: payload.remindersCount }));
       for (const fn of this.threadRemindersListeners) fn(payload);
     });
     this.socket.on('message_created', (payload: MessageCreatedPayload) => {
-      this.log('event message_created', () => ({ threadId: payload.threadId, messageId: payload.message.id }));
       for (const fn of this.messageCreatedListeners) fn(payload);
     });
     this.socket.on('run_status_changed', (payload: RunStatusChangedPayload) => {
-      this.log('event run_status_changed', () => ({ threadId: payload.threadId ?? payload.run.threadId ?? 'unknown', runId: payload.run.id, status: payload.run.status }));
       for (const fn of this.runStatusListeners) fn(payload);
     });
     const handleRunEvent = (eventName: 'run_event_appended' | 'run_event_updated', payload: RunEventSocketPayload) => {
-      this.log(`event ${eventName}`, () => ({ threadId: payload.event.threadId, runId: payload.runId, eventId: payload.event.id, ts: payload.event.ts }));
       const cursor = { ts: payload.event.ts, id: payload.event.id } as RunTimelineEventsCursor;
       const force = eventName === 'run_event_updated';
       this.bumpRunCursor(payload.runId, cursor, force ? { force: true } : undefined);
@@ -254,16 +224,10 @@ class GraphSocket {
       this.subscribedRooms.add(room);
       toJoin.push(room);
     }
-    if (toJoin.length > 0) {
-      this.log('subscribe', () => ({ rooms: [...toJoin], tracked: Array.from(this.subscribedRooms) }));
-    }
     this.emitSubscriptions(toJoin);
   }
 
   unsubscribe(rooms: string[]) {
-    if (rooms.length > 0) {
-      this.log('unsubscribe', () => ({ rooms: [...rooms] }));
-    }
     for (const room of rooms) {
       this.subscribedRooms.delete(room);
       if (room.startsWith('run:')) {
@@ -271,7 +235,6 @@ class GraphSocket {
         this.runCursors.delete(runId);
       }
     }
-    this.log('rooms tracked', () => ({ tracked: Array.from(this.subscribedRooms) }));
   }
 
   // Threads listeners

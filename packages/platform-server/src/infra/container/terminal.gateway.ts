@@ -56,15 +56,12 @@ const isWsLike = (value: unknown): value is WsLike => {
 
 const safeSend = (candidate: unknown, payload: Record<string, unknown>, logger: LoggerService): void => {
   if (!isWsLike(candidate)) {
-    logger.debug('terminal socket send skipped: socket not ws-like', { payloadType: payload.type });
     return;
   }
   if (candidate.readyState !== READY_STATE_OPEN) {
-    logger.debug('terminal socket send skipped: socket not open', { payloadType: payload.type });
     return;
   }
   try {
-    logger.debug('terminal socket send', { payload });
     candidate.send(JSON.stringify(payload));
   } catch (err) {
     logger.warn('terminal socket send failed', { error: err instanceof Error ? err.message : String(err) });
@@ -73,14 +70,12 @@ const safeSend = (candidate: unknown, payload: Record<string, unknown>, logger: 
 
 const safeClose = (candidate: unknown, code: number | undefined, reason: string | undefined, logger: LoggerService): void => {
   if (!isWsLike(candidate)) {
-    logger.debug('terminal socket close skipped: socket not ws-like', { code, reason });
     return;
   }
   const ws = candidate;
   const details = { code, reason };
   if (typeof ws.close === 'function') {
     try {
-      logger.debug('terminal socket close via close()', details);
       ws.close(code, reason);
       return;
     } catch (err) {
@@ -93,7 +88,6 @@ const safeClose = (candidate: unknown, code: number | undefined, reason: string 
 
   if (typeof ws.terminate === 'function') {
     try {
-      logger.debug('terminal socket close via terminate()', details);
       ws.terminate();
       return;
     } catch (err) {
@@ -107,7 +101,6 @@ const safeClose = (candidate: unknown, code: number | undefined, reason: string 
   const end = (ws as { end?: () => void }).end;
   if (typeof end === 'function') {
     try {
-      logger.debug('terminal socket close via end()', details);
       end.call(ws);
       return;
     } catch (err) {
@@ -118,7 +111,6 @@ const safeClose = (candidate: unknown, code: number | undefined, reason: string 
     }
   }
 
-  logger.debug('terminal socket close fallback exhausted', details);
 };
 
 const isRawDataLike = (value: unknown): value is RawDataLike => {
@@ -172,13 +164,6 @@ export class ContainerTerminalGateway {
       const wss = this.wss;
       if (!wss) return;
 
-      this.logger.info('Terminal WS upgrade handled', {
-        path: parsedUrl.pathname,
-        containerId,
-        query: this.sanitizeUrlSearchParams(parsedUrl.searchParams),
-        headers: this.sanitizeHeaders(req.headers),
-      });
-
       socket.on('error', (err) => {
         this.logger.warn('Terminal WS upgrade socket error', {
           path: parsedUrl.pathname,
@@ -197,7 +182,6 @@ export class ContainerTerminalGateway {
       });
     });
     this.registered = true;
-    this.logger.info('Container terminal WebSocket upgrade handler registered');
   }
 
   private sanitizeHeaders(headers: IncomingHttpHeaders | undefined): Record<string, unknown> {
@@ -230,21 +214,7 @@ export class ContainerTerminalGateway {
 
   private async handleConnection(connection: SocketStream, request: FastifyRequest): Promise<void> {
     const rawSocket = (connection as { socket?: unknown }).socket;
-    if (process.env.NODE_ENV === 'test') {
-      this.logger.debug('terminal connection shape', {
-        connectionType: typeof connection,
-        connectionKeys: getObjectKeys(connection),
-        socketType: typeof rawSocket,
-        socketKeys: getObjectKeys(rawSocket),
-      });
-    }
     const candidate = (rawSocket ?? connection) as unknown;
-    const rawQuery = (request as { query?: unknown }).query;
-    const containerIdParamFromReq = (request.params as { containerId?: string })?.containerId;
-    this.logger.info('Terminal connection received', {
-      containerIdParam: containerIdParamFromReq,
-      query: this.sanitizeRequestQuery(rawQuery),
-    });
     if (!isWsLike(candidate)) {
       this.logger.error('terminal websocket connection lacks ws-like interface', {
         connectionType: typeof connection,
@@ -269,15 +239,9 @@ export class ContainerTerminalGateway {
     }
 
     const ws: WsLike = candidate;
-    const path = `/api/containers/${containerIdParamFromReq ?? 'unknown'}/terminal/ws`;
     const isOpen = () => ws.readyState === READY_STATE_OPEN;
     const send = (payload: Record<string, unknown>) => {
       if (!isOpen()) {
-        this.logger.debug('terminal socket send skipped: socket closed', {
-          sessionId,
-          containerId: containerIdParam ?? 'unknown',
-          payloadType: payload.type,
-        });
         return;
       }
       safeSend(ws, payload, this.logger);
@@ -334,20 +298,20 @@ export class ContainerTerminalGateway {
     const token = parsedQuery.data.token;
 
     const logStatus = (phase: string, extra: Record<string, unknown> = {}) => {
-      this.logger.info('Terminal session status emitted', {
+      const context = {
         sessionId: session?.sessionId ?? sessionId ?? 'unknown',
         containerId: containerId ?? containerIdParam ?? 'unknown',
         phase,
         ...extra,
-      });
+      };
+      if (phase === 'running') {
+        this.logger.info('Terminal session started', context);
+      } else if (phase === 'exited') {
+        this.logger.info('Terminal session exited', context);
+      } else if (phase === 'error') {
+        this.logger.warn('Terminal session errored', context);
+      }
     };
-
-    this.logger.info('Terminal socket listeners attaching', {
-      path,
-      containerIdParam,
-      sessionId,
-      readyState: ws.readyState,
-    });
 
     const messageListener = (...args: unknown[]) => {
       const [first] = args;
@@ -367,17 +331,12 @@ export class ContainerTerminalGateway {
           try {
             this.sessions.touch(sessionId);
           } catch (err) {
-            this.logger.debug('terminal session touch on early close failed', {
+            this.logger.warn('terminal session touch on early close failed', {
               sessionId,
               error: err instanceof Error ? err.message : String(err),
             });
           }
         }
-        this.logger.info('Terminal socket closed before session start, preserving for reconnect', {
-          sessionId,
-          containerId: containerIdParam ?? 'unknown',
-          readyState: ws.readyState,
-        });
         void cleanup('socket_closed', {
           preserveSession: true,
           skipStatus: true,
@@ -416,12 +375,6 @@ export class ContainerTerminalGateway {
       if (!sessionMarkedConnected && !execId && (preserveSession || reason.startsWith('socket_not_open_before_'))) {
         closedEarly = true;
       }
-      this.logger.info('Terminal cleanup triggered', {
-        execId,
-        sessionId,
-        reason,
-        preserveSession,
-      });
       try {
         if (idleTimer) clearTimeout(idleTimer);
         if (maxTimer) clearTimeout(maxTimer);
@@ -430,7 +383,6 @@ export class ContainerTerminalGateway {
       }
       try {
         if (stdin) {
-          this.logger.debug('terminal stdin end invoked', { execId, sessionId, reason });
           stdin.removeAllListeners?.('drain');
           stdin.end?.();
           stdin = null;
@@ -482,26 +434,16 @@ export class ContainerTerminalGateway {
           try {
             this.sessions.touch(sessionId);
           } catch (err) {
-            this.logger.debug('terminal session touch during cleanup failed', {
+            this.logger.warn('terminal session touch during cleanup failed', {
               sessionId,
               error: err instanceof Error ? err.message : String(err),
             });
           }
-          this.logger.info('Terminal session retained for reconnect', {
-            sessionId,
-            execId,
-            reason,
-          });
         } else {
           try {
             this.sessions.close(sessionId);
-            this.logger.info('Terminal session closed after exec', {
-              sessionId,
-              execId,
-              reason,
-            });
           } catch (err) {
-            this.logger.debug('terminal session close during cleanup failed', {
+            this.logger.warn('terminal session close during cleanup failed', {
               sessionId,
               error: err instanceof Error ? err.message : String(err),
             });
@@ -518,7 +460,6 @@ export class ContainerTerminalGateway {
     };
 
     onClose = () => {
-      this.logger.info('Terminal socket close received', { execId, sessionId });
       void cleanup('socket_closed');
     };
 
@@ -558,13 +499,6 @@ export class ContainerTerminalGateway {
       const reasonTag = `socket_not_open_before_${context}`;
       const preserve = !sessionMarkedConnected && !execId;
       if (preserve) closedEarly = true;
-      this.logger.info('Terminal connection aborted before exec', {
-        sessionId,
-        containerIdParam,
-        readyState: ws.readyState,
-        context,
-        preserve,
-      });
       if (!closed) {
         await cleanup(reasonTag, {
           preserveSession: preserve,
@@ -578,30 +512,15 @@ export class ContainerTerminalGateway {
     const markSessionConnected = async (): Promise<boolean> => {
       if (!sessionId || sessionMarkedConnected) return true;
       if (closedEarly) {
-        this.logger.info('Terminal session markConnected skipped: socket closed early', {
-          sessionId,
-          containerId: containerId ?? containerIdParam ?? 'unknown',
-          execId,
-        });
         return false;
       }
       if (!isOpen()) {
-        this.logger.info('Terminal session markConnected skipped: socket not open', {
-          sessionId,
-          containerId: containerId ?? containerIdParam ?? 'unknown',
-          execId,
-        });
         return false;
       }
       try {
         this.sessions.markConnected(sessionId);
         session = this.sessions.get(sessionId) ?? session;
         sessionMarkedConnected = true;
-        this.logger.info('Terminal session marked connected after exec start', {
-          sessionId,
-          containerId,
-          execId,
-        });
         return true;
       } catch (err) {
         const code = err instanceof Error ? err.message : 'session_error';
@@ -642,14 +561,6 @@ export class ContainerTerminalGateway {
 
     containerId = session.containerId;
 
-    this.logger.info('Terminal session validated', {
-      sessionId,
-      containerId,
-    });
-    this.logger.info('Terminal session markConnected deferred until exec start', {
-      sessionId,
-      containerId,
-    });
     if (containerIdParam && containerIdParam !== containerId) {
       send({ type: 'error', code: 'container_mismatch', message: 'Terminal session belongs to different container' });
       close(1008, 'container_mismatch');
@@ -701,17 +612,8 @@ export class ContainerTerminalGateway {
       stdout = exec.stdout;
       stderr = exec.stderr ?? null;
       closeExec = exec.close;
-      this.logger.debug('terminal exec opened', {
-        sessionId,
-        containerId: containerId.substring(0, 12),
-        execId,
-        hasStdin: Boolean(stdin),
-        hasStdout: Boolean(stdout),
-        hasStderr: Boolean(stderr),
-      });
       if (stdin && typeof (stdin as NodeJS.WriteStream).setDefaultEncoding === 'function') {
         (stdin as NodeJS.WriteStream).setDefaultEncoding('utf8');
-        this.logger.debug('terminal stdin default encoding set', { execId, sessionId, encoding: 'utf8' });
       }
       if (stdin) {
         stdin.on('error', (err) => {
@@ -721,15 +623,6 @@ export class ContainerTerminalGateway {
             containerId: containerId.substring(0, 12),
             error: err instanceof Error ? err.message : String(err),
           });
-        });
-        stdin.on('close', () => {
-          this.logger.debug('terminal stdin close', { execId, sessionId });
-        });
-        stdin.on('end', () => {
-          this.logger.debug('terminal stdin end', { execId, sessionId });
-        });
-        stdin.on('finish', () => {
-          this.logger.debug('terminal stdin finish', { execId, sessionId });
         });
       }
       if (await abortIfSocketClosed('post_exec_start', { wait: false })) {
@@ -747,12 +640,6 @@ export class ContainerTerminalGateway {
       if (execId) {
         try {
           await this.containers.resizeExec(execId, { cols: session.cols, rows: session.rows });
-          this.logger.debug('terminal resize applied', {
-            execId,
-            sessionId,
-            cols: session.cols,
-            rows: session.rows,
-          });
         } catch (err) {
           this.logger.warn('initial terminal resize failed', {
             execId,
@@ -763,9 +650,7 @@ export class ContainerTerminalGateway {
         }
       }
 
-      let firstStdout = true;
       if (stdout) {
-        this.logger.debug('terminal stdout stream attached', { execId, sessionId });
         stdout.on('error', (err) => {
           this.logger.warn('terminal stdout error', {
             execId,
@@ -773,38 +658,16 @@ export class ContainerTerminalGateway {
             error: err instanceof Error ? err.message : String(err),
           });
         });
-        stdout.on('close', () => {
-          this.logger.debug('terminal stdout close', { execId, sessionId });
-        });
       }
       stdout?.on('data', (chunk: Buffer | string) => {
         const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-        if (firstStdout) {
-          firstStdout = false;
-          this.logger.debug('terminal first stdout chunk', {
-            execId,
-            sessionId,
-            length: data.length,
-            preview: data.slice(0, 32),
-          });
-        }
-        if (data.length) {
-          this.logger.debug('terminal stdout chunk', {
-            execId,
-            sessionId,
-            length: data.length,
-            preview: data.slice(0, 32),
-          });
-        }
         if (data.length) send({ type: 'output', data });
         refreshActivity();
       });
       stdout?.on('end', () => {
-        this.logger.debug('terminal stdout end', { execId, sessionId });
         void cleanup('stream_end');
       });
       if (stderr) {
-        this.logger.debug('terminal stderr stream attached', { execId, sessionId });
         stderr.on('error', (err) => {
           this.logger.warn('terminal stderr error', {
             execId,
@@ -812,25 +675,11 @@ export class ContainerTerminalGateway {
             error: err instanceof Error ? err.message : String(err),
           });
         });
-        stderr.on('close', () => {
-          this.logger.debug('terminal stderr close', { execId, sessionId });
-        });
       }
       stderr?.on('data', (chunk: Buffer | string) => {
         const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-        if (data.length) {
-          this.logger.debug('terminal stderr chunk', {
-            execId,
-            sessionId,
-            length: data.length,
-            preview: data.slice(0, 32),
-          });
-        }
         if (data.length) send({ type: 'output', data });
         refreshActivity();
-      });
-      stderr?.on('end', () => {
-        this.logger.debug('terminal stderr end', { execId, sessionId });
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -856,26 +705,8 @@ export class ContainerTerminalGateway {
         return;
       }
       const message = result.data;
-      if (message.type === 'input') {
-        const preview = message.data.slice(0, 16);
-        this.logger.debug('terminal input message parsed', {
-          type: message.type,
-          sessionId,
-          containerId: containerId.substring(0, 12),
-          execId,
-          length: message.data.length,
-          preview,
-        });
-      }
       switch (message.type) {
         case 'input': {
-          this.logger.info('Terminal socket message received', {
-            sessionId,
-            containerId: containerId.substring(0, 12),
-            execId,
-            type: message.type,
-            length: message.data.length,
-          });
           if (!stdin) {
             this.logger.warn('terminal stdin unavailable on input', {
               execId,
@@ -888,16 +719,6 @@ export class ContainerTerminalGateway {
           try {
             const normalized = message.data.replace(/\r\n/g, '\n').replace(/\n/g, '\r');
             const buffer = Buffer.from(normalized, 'utf8');
-            this.logger.debug('terminal stdin write start', {
-              execId,
-              sessionId,
-              inputLength: message.data.length,
-              bufferLength: buffer.byteLength,
-              stdinWritable:
-                typeof (stdin as NodeJS.WriteStream).writable === 'boolean'
-                  ? (stdin as NodeJS.WriteStream).writable
-                  : undefined,
-            });
             const writeOk = stdin.write(buffer, (error) => {
               if (error) {
                 this.logger.warn('terminal stdin write callback error', {
@@ -905,24 +726,12 @@ export class ContainerTerminalGateway {
                   sessionId,
                   error: error instanceof Error ? error.message : String(error),
                 });
-              } else {
-                this.logger.debug('terminal stdin write complete', {
-                  execId,
-                  sessionId,
-                  bytes: buffer.byteLength,
-                });
               }
               refreshActivity();
-            });
-            this.logger.debug('terminal stdin write dispatched', {
-              execId,
-              sessionId,
-              ok: writeOk,
             });
             if (!writeOk) {
               const streamRef = stdin;
               const onDrain = () => {
-                this.logger.debug('terminal stdin drain', { execId, sessionId });
                 streamRef?.removeListener('drain', onDrain);
               };
               streamRef?.once('drain', onDrain);
@@ -934,32 +743,10 @@ export class ContainerTerminalGateway {
         }
         case 'resize': {
           if (!execId) return;
-          this.logger.info('Terminal socket message received', {
-            sessionId,
-            containerId: containerId.substring(0, 12),
-            execId,
-            type: message.type,
-            cols: message.cols,
-            rows: message.rows,
-          });
-          this.logger.debug('terminal resize message received', {
-            execId,
-            sessionId,
-            cols: message.cols,
-            rows: message.rows,
-          });
           this.sessions.touch(sessionId);
           resetIdleTimer();
           void this.containers
             .resizeExec(execId, { cols: message.cols, rows: message.rows })
-            .then(() => {
-              this.logger.debug('terminal resize handled', {
-                execId,
-                sessionId,
-                cols: message.cols,
-                rows: message.rows,
-              });
-            })
             .catch((err) => {
               this.logger.warn('terminal resize failed', {
                 execId,
@@ -978,13 +765,6 @@ export class ContainerTerminalGateway {
           break;
         }
         case 'close': {
-          this.logger.info('Terminal socket message received', {
-            sessionId,
-            containerId: containerId.substring(0, 12),
-            execId,
-            type: message.type,
-          });
-          this.logger.debug('terminal close message received', { execId, sessionId });
           void cleanup('client_closed');
           break;
         }
