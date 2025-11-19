@@ -19,7 +19,7 @@ export const ManageToolStaticConfigSchema = z
 @Injectable({ scope: Scope.TRANSIENT })
 export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStaticConfigSchema>> {
   private tool?: ManageFunctionTool;
-  private readonly workers: { name: string; agent: AgentNode }[] = [];
+  private readonly workers = new Set<AgentNode>();
 
   constructor(
     @Inject(ManageFunctionTool) private readonly manageTool: ManageFunctionTool,
@@ -28,19 +28,52 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     super(logger);
   }
 
-  addWorker(name: string, agent: AgentNode) {
-    const existing = this.workers.find((w) => w.name === name);
-    if (existing) throw new Error(`Worker with name ${name} already exists`);
-    this.workers.push({ name, agent });
+  addWorker(agent: AgentNode) {
+    if (!agent) throw new Error('ManageTool: agent instance is required');
+    if (this.workers.has(agent)) throw new Error('ManageTool: agent already registered');
+    const title = this.getAgentTitle(agent);
+    for (const existing of this.workers) {
+      const existingTitle = this.getAgentTitle(existing);
+      if (existingTitle === title) {
+        throw new Error(`ManageTool: worker with title ${title} already exists`);
+      }
+    }
+    this.workers.add(agent);
   }
 
-  removeWorker(name: string) {
-    const idx = this.workers.findIndex((w) => w.name === name);
-    if (idx >= 0) this.workers.splice(idx, 1);
+  removeWorker(agent: AgentNode) {
+    if (!agent) return;
+    this.workers.delete(agent);
   }
 
   listWorkers() {
-    return [...this.workers];
+    return Array.from(this.workers).map((agent) => this.getAgentTitle(agent));
+  }
+
+  getWorkers() {
+    return Array.from(this.workers);
+  }
+
+  getWorkerByTitle(title: string) {
+    const trimmed = title?.trim();
+    if (!trimmed) return undefined;
+    for (const agent of this.workers) {
+      if (this.getAgentTitle(agent) === trimmed) return agent;
+    }
+    return undefined;
+  }
+
+  private getAgentTitle(agent: AgentNode): string {
+    let rawTitle: unknown;
+    try {
+      rawTitle = agent.config?.title;
+    } catch (_err) {
+      throw new Error('ManageTool: agent configuration not set');
+    }
+    if (typeof rawTitle !== 'string') throw new Error('ManageTool: agent title is required');
+    const title = rawTitle.trim();
+    if (!title) throw new Error('ManageTool: agent title is required');
+    return title;
   }
 
   protected createTool() {

@@ -36,8 +36,8 @@ class FakeAgent extends AgentNode {
   }
 }
 
-describe('ManageTool unit', () => {
-  it('list: empty then after connecting multiple agents (use node ids when available)', async () => {
+describe('ManageToolNode', () => {
+  it('requires configured agent titles and prevents duplicates', async () => {
     const module = await Test.createTestingModule({
       providers: [
         LoggerService,
@@ -46,33 +46,30 @@ describe('ManageTool unit', () => {
         ManageFunctionTool,
         ManageToolNode,
         FakeAgent,
-        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, listThreads: async () => [], listRuns: async () => [], listRunMessages: async () => [] } },
+        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {} } },
         RunSignalsRegistry,
       ],
     }).compile();
     const node = await module.resolve(ManageToolNode);
     await node.setConfig({ description: 'desc' });
-    const tool: ManageFunctionTool = node.getTool();
 
-    const ctx: LLMContext = { threadId: 'p', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
-    const emptyStr = await tool.execute({ command: 'list', threadAlias: 'list' }, ctx);
-    const listSchema = z.array(z.string());
-    const empty = listSchema.parse(JSON.parse(emptyStr));
-    expect(empty.length).toBe(0);
+    const missingConfigAgent = await module.resolve(FakeAgent);
+    expect(() => node.addWorker(missingConfigAgent)).toThrow('ManageTool: agent title is required');
 
-    const a1 = await module.resolve(FakeAgent);
-    const a2 = await module.resolve(FakeAgent);
-    node.addWorker('agent-A', a1);
-    node.addWorker('agent_1', a2);
+    const blankTitleAgent = await module.resolve(FakeAgent);
+    await blankTitleAgent.setConfig({ title: '   ' });
+    expect(() => node.addWorker(blankTitleAgent)).toThrow('ManageTool: agent title is required');
 
-    const afterStr = await tool.execute({ command: 'list', threadAlias: 'list' }, ctx);
-    const after = listSchema.parse(JSON.parse(afterStr));
-    expect(after).toContain('agent-A');
-    const hasFallback = after.some((n) => /^agent_\d+$/.test(n));
-    expect(hasFallback).toBe(true);
+    const agentA = await module.resolve(FakeAgent);
+    await agentA.setConfig({ title: 'Alpha' });
+    node.addWorker(agentA);
+
+    const duplicateTitleAgent = await module.resolve(FakeAgent);
+    await duplicateTitleAgent.setConfig({ title: 'Alpha' });
+    expect(() => node.addWorker(duplicateTitleAgent)).toThrow('ManageTool: worker with title Alpha already exists');
   });
 
-  it('send_message: routes to `${parent}__${worker}` and returns text', async () => {
+  it('listWorkers returns trimmed titles and reflects updates', async () => {
     const module = await Test.createTestingModule({
       providers: [
         LoggerService,
@@ -81,17 +78,104 @@ describe('ManageTool unit', () => {
         ManageFunctionTool,
         ManageToolNode,
         FakeAgent,
-        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async (_src: string, _alias: string, _parent: string, _summary: string) => 'child-t' } },
+        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {} } },
         RunSignalsRegistry,
       ],
     }).compile();
     const node = await module.resolve(ManageToolNode);
     await node.setConfig({ description: 'desc' });
-    const a = await module.resolve(FakeAgent);
-    node.addWorker('child-1', a);
+    const agent = await module.resolve(FakeAgent);
+    await agent.setConfig({ title: '  Alpha  ' });
+    node.addWorker(agent);
+    expect(node.listWorkers()).toEqual(['Alpha']);
+
+    await agent.setConfig({ title: 'Beta' });
+    expect(node.listWorkers()).toEqual(['Beta']);
+  });
+
+  it('removeWorker uses instance identity even after retitling', async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        LoggerService,
+        { provide: ConfigService, useValue: new ConfigService().init(configSchema.parse({ llmProvider: 'openai', agentsDatabaseUrl: 'postgres://localhost/agents' })) },
+        { provide: LLMProvisioner, useClass: StubLLMProvisioner },
+        ManageFunctionTool,
+        ManageToolNode,
+        FakeAgent,
+        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {} } },
+        RunSignalsRegistry,
+      ],
+    }).compile();
+    const node = await module.resolve(ManageToolNode);
+    await node.setConfig({ description: 'desc' });
+    const agent = await module.resolve(FakeAgent);
+    await agent.setConfig({ title: 'Alpha' });
+    node.addWorker(agent);
+    expect(node.listWorkers()).toEqual(['Alpha']);
+
+    await agent.setConfig({ title: 'Gamma' });
+    node.removeWorker(agent);
+    expect(node.listWorkers()).toEqual([]);
+  });
+});
+
+describe('ManageTool unit', () => {
+  it('send_message: routes using agent titles', async () => {
+    const summaryArgs: string[] = [];
+    const persistence = {
+      beginRunThread: async () => ({ runId: 't' }),
+      recordInjected: async () => {},
+      completeRun: async () => {},
+      getOrCreateSubthreadByAlias: async (_src: string, _alias: string, _parent: string, summary: string) => {
+        summaryArgs.push(summary);
+        return 'child-t';
+      },
+    } satisfies Partial<AgentsPersistenceService>;
+    const module = await Test.createTestingModule({
+      providers: [
+        LoggerService,
+        { provide: ConfigService, useValue: new ConfigService().init(configSchema.parse({ llmProvider: 'openai', agentsDatabaseUrl: 'postgres://localhost/agents' })) },
+        { provide: LLMProvisioner, useClass: StubLLMProvisioner },
+        ManageFunctionTool,
+        ManageToolNode,
+        FakeAgent,
+        { provide: AgentsPersistenceService, useValue: persistence },
+        RunSignalsRegistry,
+      ],
+    }).compile();
+    const node = await module.resolve(ManageToolNode);
+    await node.setConfig({ description: 'desc' });
+    const agent = await module.resolve(FakeAgent);
+    await agent.setConfig({ title: 'child-1' });
+    node.addWorker(agent);
     const tool = node.getTool();
     const ctx: LLMContext = { threadId: 'parent', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
-    const res = await tool.execute({ command: 'send_message', worker: 'child-1', message: 'hello', threadAlias: 'child-1', summary: 'Child one summary' }, ctx);
+    const res = await tool.execute({ command: 'send_message', worker: 'child-1', message: 'hello', threadAlias: 'child-1' }, ctx);
+    expect(res?.startsWith('ok-')).toBe(true);
+    expect(summaryArgs).toEqual(['']);
+  });
+
+  it('send_message: trims worker title lookups', async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        LoggerService,
+        { provide: ConfigService, useValue: new ConfigService().init(configSchema.parse({ llmProvider: 'openai', agentsDatabaseUrl: 'postgres://localhost/agents' })) },
+        { provide: LLMProvisioner, useClass: StubLLMProvisioner },
+        ManageFunctionTool,
+        ManageToolNode,
+        FakeAgent,
+        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async () => 'child-t' } },
+        RunSignalsRegistry,
+      ],
+    }).compile();
+    const node = await module.resolve(ManageToolNode);
+    await node.setConfig({ description: 'desc' });
+    const agent = await module.resolve(FakeAgent);
+    await agent.setConfig({ title: 'worker-title' });
+    node.addWorker(agent);
+    const tool = node.getTool();
+    const ctx: LLMContext = { threadId: 'parent', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
+    const res = await tool.execute({ command: 'send_message', worker: '  worker-title  ', message: 'hello', threadAlias: 'alias' }, ctx);
     expect(res?.startsWith('ok-')).toBe(true);
   });
 
@@ -104,7 +188,7 @@ describe('ManageTool unit', () => {
         ManageFunctionTool,
         ManageToolNode,
         FakeAgent,
-        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async (_src: string, _alias: string, _parent: string, _summary: string) => 'child-t' } },
+        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async () => 'child-t' } },
         RunSignalsRegistry,
       ],
     }).compile();
@@ -112,10 +196,11 @@ describe('ManageTool unit', () => {
     await node.setConfig({ description: 'd' });
     const tool = node.getTool();
     const ctx: LLMContext = { threadId: 'p', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
-    await expect(tool.execute({ command: 'send_message', worker: 'x', threadAlias: 'alias-x', summary: 'x' }, ctx)).rejects.toBeTruthy();
+    await expect(tool.execute({ command: 'send_message', worker: 'x', threadAlias: 'alias-x' }, ctx)).rejects.toBeTruthy();
     const a = await module.resolve(FakeAgent);
-    node.addWorker('w1', a);
-    await expect(tool.execute({ command: 'send_message', worker: 'unknown', message: 'm', threadAlias: 'alias-unknown', summary: 'unknown' }, ctx)).rejects.toBeTruthy();
+    await a.setConfig({ title: 'w1' });
+    node.addWorker(a);
+    await expect(tool.execute({ command: 'send_message', worker: 'unknown', message: 'm', threadAlias: 'alias-unknown' }, ctx)).rejects.toBeTruthy();
   });
 
   it('check_status: aggregates active child threads scoped to current thread', async () => {
@@ -127,7 +212,7 @@ describe('ManageTool unit', () => {
         ManageFunctionTool,
         ManageToolNode,
         FakeAgent,
-        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async (_src: string, _alias: string, _parent: string, _summary: string) => 'child-t' } },
+        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async () => 'child-t' } },
         RunSignalsRegistry,
       ],
     }).compile();
@@ -135,8 +220,10 @@ describe('ManageTool unit', () => {
     await node.setConfig({ description: 'desc' });
     const a1 = await module.resolve(FakeAgent);
     const a2 = await module.resolve(FakeAgent);
-    node.addWorker('A', a1);
-    node.addWorker('B', a2);
+    await a1.setConfig({ title: 'A' });
+    await a2.setConfig({ title: 'B' });
+    node.addWorker(a1);
+    node.addWorker(a2);
     // Active threads tracking is not exposed by current AgentNode; check_status returns empty aggregates.
 
     const tool = node.getTool();
@@ -148,7 +235,7 @@ describe('ManageTool unit', () => {
     expect(status.childThreadIds.length).toBe(0);
   });
 
-  it('throws when runtime configurable.thread_id is missing', async () => {
+  it('check_status returns empty aggregates when no workers connected', async () => {
     const module = await Test.createTestingModule({
       providers: [
         LoggerService,
@@ -163,11 +250,12 @@ describe('ManageTool unit', () => {
     const node = await module.resolve(ManageToolNode);
     await node.setConfig({ description: 'desc' });
     const tool = node.getTool();
-    // Missing ctx should throw at compile time; provide minimal ctx for runtime
     const ctx: LLMContext = { threadId: 'p', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
-    const listStr = await tool.execute({ command: 'list', threadAlias: 'list' }, ctx);
-    const list = z.array(z.string()).parse(JSON.parse(listStr));
-    expect(Array.isArray(list)).toBe(true);
+    const statusStr = await tool.execute({ command: 'check_status', threadAlias: 'status' }, ctx);
+    const statusSchema = z.object({ activeTasks: z.number().int(), childThreadIds: z.array(z.string()) });
+    const status = statusSchema.parse(JSON.parse(statusStr));
+    expect(status.activeTasks).toBe(0);
+    expect(status.childThreadIds.length).toBe(0);
   });
 
   it('throws when child agent invoke fails (send_message)', async () => {
@@ -191,15 +279,16 @@ describe('ManageTool unit', () => {
       }
     }
     const a = new ThrowingAgent(module.get(ConfigService), module.get(LoggerService), module.get(LLMProvisioner), module.get(ModuleRef));
-    node.addWorker('W', a);
+    await a.setConfig({ title: 'W' });
+    node.addWorker(a);
     const tool = node.getTool();
     const ctx: LLMContext = { threadId: 'p', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
-    await expect(tool.execute({ command: 'send_message', worker: 'W', message: 'go', threadAlias: 'alias-W', summary: 'W summary' }, ctx)).rejects.toBeTruthy();
+    await expect(tool.execute({ command: 'send_message', worker: 'W', message: 'go', threadAlias: 'alias-W' }, ctx)).rejects.toBeTruthy();
   });
 });
 
 describe('ManageTool graph wiring', () => {
-  it('connect ManageTool to two agents via agent port; list returns their ids', async () => {
+  it('connect ManageTool to two agents via agent port; titles are enforced', async () => {
     const module = await Test.createTestingModule({
       providers: [
         LoggerService,
@@ -212,7 +301,6 @@ describe('ManageTool graph wiring', () => {
         RunSignalsRegistry,
       ],
     }).compile();
-    const logger = module.get(LoggerService);
     class FakeAgentWithTools extends FakeAgent {
       addTool(_tool: unknown) {}
       removeTool(_tool: unknown) {}
@@ -221,17 +309,9 @@ describe('ManageTool graph wiring', () => {
     const moduleRef = module.get(ModuleRef);
     const registry = new TemplateRegistry(moduleRef);
 
-    class ManageToolNodeCompat extends ManageToolNode {
-      override addWorker(agent: AgentNode): void {
-        const id = agent.getAgentNodeId();
-        const name = id && id.length > 0 ? id : `agent_${Math.random().toString(36).slice(2, 6)}`;
-        super.addWorker(name, agent);
-      }
-    }
-
     registry
       .register('agent', { title: 'Agent', kind: 'agent' }, FakeAgentWithTools)
-      .register('manageTool', { title: 'Manage', kind: 'tool' }, ManageToolNodeCompat);
+      .register('manageTool', { title: 'Manage', kind: 'tool' }, ManageToolNode);
 
     const runtimeModule = await Test.createTestingModule({
       providers: [
@@ -240,7 +320,7 @@ describe('ManageTool graph wiring', () => {
         { provide: TemplateRegistry, useValue: registry },
         { provide: GraphRepository, useValue: { initIfNeeded: async () => {}, get: async () => null, upsert: async () => { throw new Error('not-implemented'); }, upsertNodeState: async () => {} } },
         { provide: ModuleRef, useValue: moduleRef },
-        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async (_src: string, _alias: string, _parent: string, _summary: string) => 'child-t' } },
+        { provide: AgentsPersistenceService, useValue: { beginRunThread: async () => ({ runId: 't' }), recordInjected: async () => {}, completeRun: async () => {}, getOrCreateSubthreadByAlias: async () => 'child-t' } },
         RunSignalsRegistry,
       ],
     }).compile();
@@ -248,8 +328,8 @@ describe('ManageTool graph wiring', () => {
 
     const graph = {
       nodes: [
-        { id: 'A', data: { template: 'agent', config: {} } },
-        { id: 'B', data: { template: 'agent', config: {} } },
+        { id: 'A', data: { template: 'agent', config: { title: ' Alpha ' } } },
+        { id: 'B', data: { template: 'agent', config: { title: 'Beta' } } },
         { id: 'M', data: { template: 'manageTool', config: { description: 'desc' } } },
       ],
       edges: [
@@ -265,10 +345,7 @@ describe('ManageTool graph wiring', () => {
     const inst = toolNode.instance;
     const isManage = inst instanceof ManageToolNode;
     if (!isManage) throw new Error('Instance is not ManageToolNode');
-    const tool = (inst as ManageToolNode).getTool();
-    const ctx: LLMContext = { threadId: 'p', runId: 'r', finishSignal: new Signal(), terminateSignal: new Signal(), callerAgent: { invoke: async () => new ResponseMessage({ output: [] }) } };
-    const listStr = await tool.execute({ command: 'list' }, ctx);
-    const list = z.array(z.string()).parse(JSON.parse(listStr));
-    expect(Array.isArray(list)).toBe(true);
+    const titles = (inst as ManageToolNode).listWorkers();
+    expect(titles).toEqual(['Alpha', 'Beta']);
   });
 });
