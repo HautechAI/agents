@@ -5,7 +5,7 @@ import { RunTimelineEventDetails } from '@/components/agents/RunTimelineEventDet
 import { useRunTimelineEvents, useRunTimelineSummary } from '@/api/hooks/runs';
 import { runs } from '@/api/modules/runs';
 import { graphSocket } from '@/lib/graph/socket';
-import type { RunEventStatus, RunEventType, RunTimelineEvent, RunTimelineEventsCursor } from '@/api/types/agents';
+import type { RunEventStatus, RunEventType, RunTimelineEvent, RunTimelineEventsCursor, RunTimelineEventsResponse } from '@/api/types/agents';
 import { getEventTypeLabel } from '@/components/agents/runTimelineFormatting';
 import { notifyError, notifySuccess } from '@/lib/notify';
 
@@ -171,6 +171,21 @@ function compareCursors(a: RunTimelineEventsCursor, b: RunTimelineEventsCursor):
   return a.id.localeCompare(b.id);
 }
 
+type CursorParamMode = 'both' | 'plain' | 'bracketed';
+
+function buildCursorAttemptModes(preferred: CursorParamMode): CursorParamMode[] {
+  if (preferred === 'both') return ['both', 'plain'];
+  const fallback = preferred === 'plain' ? 'bracketed' : 'plain';
+  return [preferred, fallback];
+}
+
+function isNonAdvancingPage(response: RunTimelineEventsResponse, cursor: RunTimelineEventsCursor): boolean {
+  const items = response.items ?? [];
+  const lastMatches = items.length > 0 && compareCursors(toCursor(items[items.length - 1]), cursor) === 0;
+  const nextMatches = response.nextCursor ? compareCursors(response.nextCursor, cursor) === 0 : false;
+  return lastMatches || nextMatches;
+}
+
 function toCursor(event: RunTimelineEvent): RunTimelineEventsCursor {
   return { ts: event.ts, id: event.id };
 }
@@ -233,6 +248,8 @@ export function AgentsRunTimeline() {
   const lastFilterKeyRef = useRef<string>('');
   const reachedHistoryEndRef = useRef(false);
   const olderCursorRef = useRef<RunTimelineEventsCursor | null>(null);
+  const catchUpCursorParamModeRef = useRef<CursorParamMode>('both');
+  const loadOlderCursorParamModeRef = useRef<CursorParamMode>('both');
   const canTerminate = summaryData?.status === 'running';
 
   const updateOlderCursor = useCallback(
@@ -437,12 +454,48 @@ export function AgentsRunTimeline() {
       try {
         const currentApiTypes = apiTypesRef.current;
         const currentApiStatuses = apiStatusesRef.current;
-        const response = await runs.timelineEvents(runId, {
-          types: currentApiTypes.length > 0 ? currentApiTypes.join(',') : undefined,
-          statuses: currentApiStatuses.length > 0 ? currentApiStatuses.join(',') : undefined,
-          cursorTs: cursor.ts,
-          cursorId: cursor.id,
-        });
+        const attemptModes = buildCursorAttemptModes(catchUpCursorParamModeRef.current);
+
+        let response: RunTimelineEventsResponse | null = null;
+        let successfulMode: CursorParamMode | null = null;
+
+        for (let i = 0; i < attemptModes.length; i += 1) {
+          const mode = attemptModes[i];
+          const candidate = await runs.timelineEvents(runId, {
+            types: currentApiTypes.length > 0 ? currentApiTypes.join(',') : undefined,
+            statuses: currentApiStatuses.length > 0 ? currentApiStatuses.join(',') : undefined,
+            cursorTs: cursor.ts,
+            cursorId: cursor.id,
+            cursorParamMode: mode,
+          });
+          if (!isNonAdvancingPage(candidate, cursor)) {
+            response = candidate;
+            successfulMode = mode;
+            break;
+          }
+          if (i < attemptModes.length - 1) {
+            console.warn('[Timeline] catch-up pagination retry', {
+              runId,
+              cursor,
+              previousMode: mode,
+              retryWith: attemptModes[i + 1],
+            });
+          }
+        }
+
+        if (!response) {
+          reachedHistoryEndRef.current = true;
+          console.warn('[Timeline] pagination did not advance', {
+            runId,
+            cursor,
+            attempts: attemptModes,
+            phase: 'catch-up',
+          });
+          return;
+        }
+
+        catchUpCursorParamModeRef.current = successfulMode ?? catchUpCursorParamModeRef.current;
+
         const items = response.items ?? [];
         if (items.length > 0) {
           const latestSelectedTypes = selectedTypesRef.current;
@@ -681,36 +734,78 @@ export function AgentsRunTimeline() {
     }
     const currentApiTypes = apiTypesRef.current;
     const currentApiStatuses = apiStatusesRef.current;
-    console.info('[Timeline] load older request', {
-      runId,
-      params: {
-        types: currentApiTypes,
-        statuses: currentApiStatuses,
-        limit: 100,
-        order: 'desc' as const,
-        cursor,
-      },
-    });
+    const attemptModes = buildCursorAttemptModes(loadOlderCursorParamModeRef.current);
+    let response: RunTimelineEventsResponse | null = null;
+    let successfulMode: CursorParamMode | null = null;
+
     try {
-      const response = await runs.timelineEvents(runId, {
-        types: currentApiTypes.length > 0 ? currentApiTypes.join(',') : undefined,
-        statuses: currentApiStatuses.length > 0 ? currentApiStatuses.join(',') : undefined,
-        limit: 100,
-        order: 'desc',
-        cursorTs: cursor.ts,
-        cursorId: cursor.id,
-      });
+      for (let i = 0; i < attemptModes.length; i += 1) {
+        const mode = attemptModes[i];
+        console.info('[Timeline] load older request', {
+          runId,
+          attempt: i + 1,
+          params: {
+            types: currentApiTypes,
+            statuses: currentApiStatuses,
+            limit: 100,
+            order: 'desc' as const,
+            cursor,
+            cursorParamMode: mode,
+          },
+        });
+        const candidate = await runs.timelineEvents(runId, {
+          types: currentApiTypes.length > 0 ? currentApiTypes.join(',') : undefined,
+          statuses: currentApiStatuses.length > 0 ? currentApiStatuses.join(',') : undefined,
+          limit: 100,
+          order: 'desc',
+          cursorTs: cursor.ts,
+          cursorId: cursor.id,
+          cursorParamMode: mode,
+        });
+        const items = candidate.items ?? [];
+        console.info('[Timeline] load older response', {
+          runId,
+          attempt: i + 1,
+          cursorParamMode: mode,
+          requestCursor: cursor,
+          response: {
+            length: items.length,
+            first: summarizeEventBoundary(items[0]),
+            last: summarizeEventBoundary(items[items.length - 1]),
+            nextCursor: candidate.nextCursor ?? null,
+          },
+        });
+        if (!isNonAdvancingPage(candidate, cursor)) {
+          response = candidate;
+          successfulMode = mode;
+          break;
+        }
+        if (i < attemptModes.length - 1) {
+          console.warn('[Timeline] load older pagination retry', {
+            runId,
+            cursor,
+            previousMode: mode,
+            retryWith: attemptModes[i + 1],
+          });
+        }
+      }
+
+      if (!response) {
+        reachedHistoryEndRef.current = true;
+        updateOlderCursor(null);
+        pendingScrollAdjustmentRef.current = null;
+        console.warn('[Timeline] pagination did not advance', {
+          runId,
+          cursor,
+          attempts: attemptModes,
+          phase: 'load-older',
+        });
+        return;
+      }
+
+      loadOlderCursorParamModeRef.current = successfulMode ?? loadOlderCursorParamModeRef.current;
+
       const items = response.items ?? [];
-      console.info('[Timeline] load older response', {
-        runId,
-        requestCursor: cursor,
-        response: {
-          length: items.length,
-          first: summarizeEventBoundary(items[0]),
-          last: summarizeEventBoundary(items[items.length - 1]),
-          nextCursor: response.nextCursor ?? null,
-        },
-      });
       if (response.nextCursor) {
         reachedHistoryEndRef.current = false;
         updateOlderCursor(response.nextCursor);

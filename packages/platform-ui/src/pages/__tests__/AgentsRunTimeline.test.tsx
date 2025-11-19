@@ -451,6 +451,7 @@ describe('AgentsRunTimeline socket reactions', () => {
       types: undefined,
       cursorTs: appended.ts,
       cursorId: appended.id,
+      cursorParamMode: 'both',
     }));
     expect(summaryRefetch).toHaveBeenCalledTimes(3);
     expect(eventsRefetch).not.toHaveBeenCalled();
@@ -655,6 +656,7 @@ describe('AgentsRunTimeline pagination and scrolling', () => {
       limit: 100,
       cursorTs: olderCursor.ts,
       cursorId: olderCursor.id,
+      cursorParamMode: 'both',
     }));
 
     await waitFor(() => {
@@ -1390,6 +1392,7 @@ describe('AgentsRunTimeline load older regressions', () => {
       limit: 100,
       types: 'tool_execution',
       statuses: 'success',
+      cursorParamMode: 'both',
     });
   });
 
