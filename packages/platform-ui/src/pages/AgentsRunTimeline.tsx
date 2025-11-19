@@ -36,28 +36,131 @@ function matchesFilters(event: RunTimelineEvent, types: RunEventType[], statuses
   return typeOk && statusOk;
 }
 
+type EventBoundary = { id: string; ts: string };
+
+type MergeStats = {
+  incomingLength: number;
+  prevLength: number;
+  nextLength: number;
+  included: number;
+  replaced: number;
+  removed: number;
+  deduped: number;
+  filtered: number;
+  first?: EventBoundary | null;
+  last?: EventBoundary | null;
+};
+
+type MergeContextSource =
+  | 'base-query'
+  | 'load-older'
+  | 'socket-event'
+  | 'catch-up'
+  | 'initial';
+
+type MergeContext = {
+  source: MergeContextSource | string;
+  runId?: string;
+  filters?: { types: RunEventType[]; statuses: RunEventStatus[] };
+  cursor?: RunTimelineEventsCursor | null;
+  mode?: 'MERGE' | 'REPLACE';
+};
+
+type MergeOptions = {
+  context?: MergeContext;
+  captureStats?: (stats: MergeStats) => void;
+};
+
+function summarizeEventBoundary(event: RunTimelineEvent | undefined): EventBoundary | null {
+  if (!event) return null;
+  return { id: event.id, ts: event.ts };
+}
+
 function mergeEvents(
   prev: RunTimelineEvent[],
   incoming: RunTimelineEvent[],
   types: RunEventType[],
   statuses: RunEventStatus[],
+  options?: MergeOptions,
 ): RunTimelineEvent[] {
-  if (incoming.length === 0) return prev;
+  const prevLength = prev.length;
+  if (incoming.length === 0) {
+    const stats: MergeStats = {
+      incomingLength: 0,
+      prevLength,
+      nextLength: prevLength,
+      included: 0,
+      replaced: 0,
+      removed: 0,
+      deduped: 0,
+      filtered: 0,
+      first: summarizeEventBoundary(prev[0]),
+      last: summarizeEventBoundary(prev[prevLength - 1]),
+    };
+    options?.captureStats?.(stats);
+    if (options?.context) {
+      console.debug('[Timeline] merge', {
+        ...options.context,
+        stats,
+      });
+    }
+    return prev;
+  }
+
   const next = [...prev];
+  let included = 0;
+  let replaced = 0;
+  let removed = 0;
+  let deduped = 0;
+  let filtered = 0;
+
   for (const event of incoming) {
     const idx = next.findIndex((existing) => existing.id === event.id);
     const include = matchesFilters(event, types, statuses);
     if (idx >= 0) {
       if (include) {
+        const existing = next[idx];
+        const existingSerialized = existing ? JSON.stringify(existing) : null;
+        const incomingSerialized = JSON.stringify(event);
+        if (existingSerialized === incomingSerialized) {
+          deduped += 1;
+        } else {
+          replaced += 1;
+        }
         next[idx] = event;
       } else {
+        removed += 1;
         next.splice(idx, 1);
       }
     } else if (include) {
+      included += 1;
       next.push(event);
+    } else {
+      filtered += 1;
     }
   }
-  return sortEvents(next);
+
+  const sorted = sortEvents(next);
+  const stats: MergeStats = {
+    incomingLength: incoming.length,
+    prevLength,
+    nextLength: sorted.length,
+    included,
+    replaced,
+    removed,
+    deduped,
+    filtered,
+    first: summarizeEventBoundary(sorted[0]),
+    last: summarizeEventBoundary(sorted[sorted.length - 1]),
+  };
+  options?.captureStats?.(stats);
+  if (options?.context) {
+    console.debug('[Timeline] merge', {
+      ...options.context,
+      stats,
+    });
+  }
+  return sorted;
 }
 
 function compareCursors(a: RunTimelineEventsCursor, b: RunTimelineEventsCursor): number {
@@ -255,11 +358,50 @@ export function AgentsRunTimeline() {
       ? incoming.reduce<RunTimelineEvent>((latest, event) => (compareEvents(event, latest) > 0 ? event : latest), incoming[0])
       : null;
     const queryCursor = eventsQuery.data.nextCursor ?? null;
+
+    console.info('[Timeline] base query resolved', {
+      runId,
+      filters: {
+        selectedTypes,
+        selectedStatuses,
+        apiTypes,
+        apiStatuses,
+      },
+      params: { limit: 100, order: 'desc' as const },
+      response: {
+        length: incoming.length,
+        first: summarizeEventBoundary(incoming[0]),
+        last: summarizeEventBoundary(incoming[incoming.length - 1]),
+        nextCursor: queryCursor,
+      },
+    });
+
     setLoadOlderError(null);
+    const shouldReplace = replaceEventsRef.current;
+    const mode: 'MERGE' | 'REPLACE' = shouldReplace ? 'REPLACE' : 'MERGE';
+    let mergeStats: MergeStats | null = null;
     updateEventsState((prev) => {
-      const base = replaceEventsRef.current ? [] : prev;
-      return mergeEvents(base, incoming, selectedTypes, selectedStatuses);
+      const base = shouldReplace ? [] : prev;
+      return mergeEvents(base, incoming, selectedTypes, selectedStatuses, {
+        context: {
+          source: 'base-query',
+          runId,
+          filters: { types: apiTypes, statuses: apiStatuses },
+          cursor: queryCursor,
+          mode,
+        },
+        captureStats: (stats) => {
+          mergeStats = stats;
+        },
+      });
     }, { setCursor: false });
+    if (mergeStats) {
+      console.info('[Timeline] base query apply', {
+        runId,
+        mode,
+        stats: mergeStats,
+      });
+    }
     if (newestIncoming) {
       setCursor(toCursor(newestIncoming), { force: true });
     } else {
@@ -276,7 +418,7 @@ export function AgentsRunTimeline() {
         return compareCursors(queryCursor, prev) < 0 ? queryCursor : prev;
       });
     }
-  }, [eventsQuery.data, selectedTypes, selectedStatuses, updateEventsState, updateOlderCursor, setCursor]);
+  }, [eventsQuery.data, selectedTypes, selectedStatuses, updateEventsState, updateOlderCursor, setCursor, runId, apiTypes, apiStatuses]);
 
   const fetchSinceCursor = useCallback(() => {
     if (!runId) return Promise.resolve();
@@ -305,7 +447,26 @@ export function AgentsRunTimeline() {
         if (items.length > 0) {
           const latestSelectedTypes = selectedTypesRef.current;
           const latestSelectedStatuses = selectedStatusesRef.current;
-          updateEventsState((prev) => mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses));
+          let mergeStats: MergeStats | null = null;
+          updateEventsState((prev) => mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses, {
+            context: {
+              source: 'catch-up',
+              runId,
+              filters: { types: currentApiTypes, statuses: currentApiStatuses },
+              cursor,
+              mode: 'MERGE',
+            },
+            captureStats: (stats) => {
+              mergeStats = stats;
+            },
+          }));
+          if (mergeStats) {
+            console.debug('[Timeline] catch-up merge', {
+              runId,
+              cursor,
+              stats: mergeStats,
+            });
+          }
           const newest = items[items.length - 1];
           if (newest) setCursor(toCursor(newest));
         }
@@ -348,7 +509,28 @@ export function AgentsRunTimeline() {
     graphSocket.subscribe([room]);
     const off = graphSocket.onRunEvent(({ runId: incomingRunId, event }) => {
       if (incomingRunId !== runId) return;
-      updateEventsState((prev) => mergeEvents(prev, [event], selectedTypes, selectedStatuses));
+      let mergeStats: MergeStats | null = null;
+      const currentApiTypes = apiTypesRef.current;
+      const currentApiStatuses = apiStatusesRef.current;
+      updateEventsState((prev) => mergeEvents(prev, [event], selectedTypes, selectedStatuses, {
+        context: {
+          source: 'socket-event',
+          runId,
+          filters: { types: currentApiTypes, statuses: currentApiStatuses },
+          cursor: cursorRef.current,
+          mode: 'MERGE',
+        },
+        captureStats: (stats) => {
+          mergeStats = stats;
+        },
+      }));
+      if (mergeStats) {
+        console.debug('[Timeline] realtime merge', {
+          runId,
+          eventId: event.id,
+          stats: mergeStats,
+        });
+      }
       setCursor(toCursor(event));
       summaryQuery.refetch();
     });
@@ -446,6 +628,7 @@ export function AgentsRunTimeline() {
 
   const selectedEventId = searchParams.get('eventId');
   const selectedEvent = selectedEventId ? events.find((evt) => evt.id === selectedEventId) : undefined;
+  const lastSelectedIdRef = useRef<string | null>(selectedEventId ?? null);
   const isMdUp = useMediaQuery('(min-width: 768px)');
   const listRef = useRef<HTMLDivElement | null>(null);
   const selectedItemRef = useRef<HTMLDivElement | null>(null);
@@ -488,12 +671,27 @@ export function AgentsRunTimeline() {
         prevScrollHeight: listNode.scrollHeight,
         prevScrollTop: listNode.scrollTop,
       };
+      console.debug('[Timeline] capture scroll baseline', {
+        runId,
+        prevScrollHeight: listNode.scrollHeight,
+        prevScrollTop: listNode.scrollTop,
+      });
     } else {
       pendingScrollAdjustmentRef.current = null;
     }
+    const currentApiTypes = apiTypesRef.current;
+    const currentApiStatuses = apiStatusesRef.current;
+    console.info('[Timeline] load older request', {
+      runId,
+      params: {
+        types: currentApiTypes,
+        statuses: currentApiStatuses,
+        limit: 100,
+        order: 'desc' as const,
+        cursor,
+      },
+    });
     try {
-      const currentApiTypes = apiTypesRef.current;
-      const currentApiStatuses = apiStatusesRef.current;
       const response = await runs.timelineEvents(runId, {
         types: currentApiTypes.length > 0 ? currentApiTypes.join(',') : undefined,
         statuses: currentApiStatuses.length > 0 ? currentApiStatuses.join(',') : undefined,
@@ -503,6 +701,16 @@ export function AgentsRunTimeline() {
         cursorId: cursor.id,
       });
       const items = response.items ?? [];
+      console.info('[Timeline] load older response', {
+        runId,
+        requestCursor: cursor,
+        response: {
+          length: items.length,
+          first: summarizeEventBoundary(items[0]),
+          last: summarizeEventBoundary(items[items.length - 1]),
+          nextCursor: response.nextCursor ?? null,
+        },
+      });
       if (response.nextCursor) {
         reachedHistoryEndRef.current = false;
         updateOlderCursor(response.nextCursor);
@@ -513,12 +721,36 @@ export function AgentsRunTimeline() {
       if (items.length > 0) {
         const latestSelectedTypes = selectedTypesRef.current;
         const latestSelectedStatuses = selectedStatusesRef.current;
-        updateEventsState((prev) => mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses));
+        let mergeStats: MergeStats | null = null;
+        updateEventsState((prev) => mergeEvents(prev, items, latestSelectedTypes, latestSelectedStatuses, {
+          context: {
+            source: 'load-older',
+            runId,
+            filters: { types: currentApiTypes, statuses: currentApiStatuses },
+            cursor,
+            mode: 'MERGE',
+          },
+          captureStats: (stats) => {
+            mergeStats = stats;
+          },
+        }));
+        if (mergeStats) {
+          console.info('[Timeline] load older merge', {
+            runId,
+            cursor,
+            stats: mergeStats,
+          });
+        }
       } else {
         pendingScrollAdjustmentRef.current = null;
       }
     } catch (error) {
       pendingScrollAdjustmentRef.current = null;
+      console.error('[Timeline] load older error', {
+        runId,
+        cursor,
+        error,
+      });
       setLoadOlderError((error as Error)?.message ?? 'Failed to load older events');
     } finally {
       loadingOlderRef.current = false;
@@ -549,8 +781,14 @@ export function AgentsRunTimeline() {
     }
     const delta = listNode.scrollHeight - adjustment.prevScrollHeight;
     listNode.scrollTop = adjustment.prevScrollTop + delta;
+    console.debug('[Timeline] apply scroll adjustment', {
+      runId,
+      prevScrollHeight: adjustment.prevScrollHeight,
+      delta,
+      nextScrollTop: listNode.scrollTop,
+    });
     pendingScrollAdjustmentRef.current = null;
-  }, [events]);
+  }, [events, runId]);
 
   useEffect(() => {
     const itemsCount = eventsQuery.data?.items?.length ?? 0;
@@ -572,6 +810,35 @@ export function AgentsRunTimeline() {
       selectEvent(latestEvent.id, { focus: false });
     }
   }, [events, selectedEventId, selectEvent, clearSelection, isMdUp, eventsQuery.isFetching, eventsQuery.data]);
+
+  useEffect(() => {
+    const nextSelection = selectedEventId ?? null;
+    if (!runId) {
+      lastSelectedIdRef.current = nextSelection;
+      return;
+    }
+    const previous = lastSelectedIdRef.current;
+    if (previous === nextSelection) return;
+    console.debug('[Timeline] selection changed', {
+      runId,
+      previous,
+      next: nextSelection,
+    });
+    lastSelectedIdRef.current = nextSelection;
+  }, [selectedEventId, runId]);
+
+  useEffect(() => {
+    if (!runId) return;
+    const length = events.length;
+    const first = summarizeEventBoundary(events[0]);
+    const last = summarizeEventBoundary(events[length - 1]);
+    console.debug('[Timeline] events state updated', {
+      runId,
+      length,
+      first,
+      last,
+    });
+  }, [events, runId]);
 
   useEffect(() => {
     const node = selectedItemRef.current;
