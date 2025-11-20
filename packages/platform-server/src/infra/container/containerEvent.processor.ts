@@ -112,8 +112,8 @@ export class ContainerEventProcessor {
     }
 
     const update = this.buildContainerUpdate(container.status, eventType, reason);
-    const updateData: Prisma.ContainerUpdateInput = {
-      ...(update ?? {}),
+    const updateData: Prisma.ContainerUncheckedUpdateInput = {
+      ...(update as Prisma.ContainerUncheckedUpdateInput | undefined ?? {}),
     };
 
     if (!container.dockerContainerId || container.dockerContainerId !== dockerId) {
