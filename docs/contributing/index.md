@@ -23,7 +23,7 @@ Thank you for taking the time to contribute! This document explains how to set u
 3. Apply database migrations and generate the Prisma client (required once after cloning and whenever schema changes):
    ```bash
    pnpm --filter @agyn/platform-server prisma migrate deploy
-   pnpm --filter @agyn/platform-server prisma:generate
+   pnpm --filter @agyn/platform-server prisma generate
    ```
 4. Optional: start Postgres via docker-compose:
    ```bash

@@ -15,7 +15,6 @@ import {
 } from '@prisma/client';
 import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
-import { ConfigService } from '../core/services/config.service';
 import { GraphEventsPublisher } from '../gateway/graph.events.publisher';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
 import { ContextItemInput, NormalizedContextItem, normalizeContextItems, upsertNormalizedContextItems } from '../llm/services/context-items.utils';
@@ -340,23 +339,17 @@ export interface SummarizationEventArgs {
 @Injectable()
 export class RunEventsService {
   private readonly events: GraphEventsPublisher;
-  private readonly toolOutputPersistenceEnabled: boolean;
-  private persistenceWarningState: { disabled: boolean; missingModel: boolean } = {
-    disabled: false,
-    missingModel: false,
-  };
+  private missingModelWarningLogged = false;
 
   constructor(
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(LoggerService) private readonly logger: LoggerService,
-    @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(GraphEventsPublisher) events: GraphEventsPublisher,
   ) {
     if (!events) {
       throw new Error('RunEventsService requires a GraphEventsPublisher provider');
     }
     this.events = events;
-    this.toolOutputPersistenceEnabled = this.config.toolOutputPersistenceEnabled;
   }
 
   private get prisma(): PrismaClient {
@@ -373,14 +366,12 @@ export class RunEventsService {
     return hasChunk && hasTerminal;
   }
 
-  private logToolOutputPersistenceUnavailable(reason: 'disabled' | 'missing_model'): void {
-    if (this.persistenceWarningState[reason]) return;
-    this.persistenceWarningState[reason] = true;
-    const message =
-      reason === 'disabled'
-        ? 'Tool output persistence disabled via config; streaming output will not be stored.'
-        : 'Tool output persistence unavailable: Prisma client is missing tool output models. Streaming output will not be stored.';
-    this.logger.warn(message);
+  private logToolOutputPersistenceUnavailable(): void {
+    if (this.missingModelWarningLogged) return;
+    this.missingModelWarningLogged = true;
+    this.logger.warn(
+      'Tool output persistence unavailable: Prisma client is missing tool_output_* models. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+    );
   }
 
   private emitToolOutputChunkEvent(payload: ToolOutputChunkPayload, ts: Date): void {
@@ -422,7 +413,6 @@ export class RunEventsService {
   }
 
   isToolOutputPersistenceAvailable(): boolean {
-    if (!this.toolOutputPersistenceEnabled) return false;
     return this.hasToolOutputChunkModel(this.prisma);
   }
 
@@ -774,14 +764,8 @@ export class RunEventsService {
       data: args.data,
     };
 
-    if (!this.toolOutputPersistenceEnabled) {
-      this.logToolOutputPersistenceUnavailable('disabled');
-      this.emitToolOutputChunkEvent(basePayload, ts);
-      return basePayload;
-    }
-
     if (!this.hasToolOutputChunkModel(tx)) {
-      this.logToolOutputPersistenceUnavailable('missing_model');
+      this.logToolOutputPersistenceUnavailable();
       this.emitToolOutputChunkEvent(basePayload, ts);
       return basePayload;
     }
@@ -840,14 +824,8 @@ export class RunEventsService {
       ts: ts.toISOString(),
     };
 
-    if (!this.toolOutputPersistenceEnabled) {
-      this.logToolOutputPersistenceUnavailable('disabled');
-      this.emitToolOutputTerminalEvent(basePayload, ts);
-      return basePayload;
-    }
-
     if (!this.hasToolOutputChunkModel(tx)) {
-      this.logToolOutputPersistenceUnavailable('missing_model');
+      this.logToolOutputPersistenceUnavailable();
       this.emitToolOutputTerminalEvent(basePayload, ts);
       return basePayload;
     }
@@ -905,13 +883,8 @@ export class RunEventsService {
     limit?: number;
     order?: 'asc' | 'desc';
   }): Promise<ToolOutputSnapshot | null> {
-    if (!this.toolOutputPersistenceEnabled) {
-      this.logToolOutputPersistenceUnavailable('disabled');
-      return null;
-    }
-
     if (!this.hasToolOutputChunkModel(this.prisma)) {
-      this.logToolOutputPersistenceUnavailable('missing_model');
+      this.logToolOutputPersistenceUnavailable();
       return null;
     }
 

@@ -138,10 +138,6 @@ export const configSchema = z.object({
     }),
   ncpsAuthHeader: z.string().optional(),
   ncpsAuthToken: z.string().optional(),
-  toolOutputPersistenceEnabled: z
-    .union([z.boolean(), z.string()])
-    .default('true')
-    .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
   agentsDatabaseUrl: z.string().min(1, 'Agents database connection string is required'),
   // CORS origins (comma-separated in env; parsed to string[])
   corsOrigins: z
@@ -302,9 +298,6 @@ export class ConfigService implements Config {
   get ncpsAuthToken(): string | undefined {
     return this.params.ncpsAuthToken;
   }
-  get toolOutputPersistenceEnabled(): boolean {
-    return this.params.toolOutputPersistenceEnabled;
-  }
   get agentsDatabaseUrl(): string {
     return this.params.agentsDatabaseUrl;
   }
@@ -362,7 +355,6 @@ export class ConfigService implements Config {
       ncpsRotationGraceMinutes: process.env.NCPS_ROTATION_GRACE_MINUTES,
       ncpsAuthHeader: process.env.NCPS_AUTH_HEADER,
       ncpsAuthToken: process.env.NCPS_AUTH_TOKEN,
-      toolOutputPersistenceEnabled: process.env.ENABLE_TOOL_OUTPUT_PERSISTENCE,
       agentsDatabaseUrl: process.env.AGENTS_DATABASE_URL,
       corsOrigins: process.env.CORS_ORIGINS,
     });

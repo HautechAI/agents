@@ -297,7 +297,9 @@ export class AgentsThreadsController {
     @Query() query: RunEventOutputQueryDto,
   ) {
     if (!this.runEvents.isToolOutputPersistenceAvailable()) {
-      throw new NotImplementedException('tool_output_persistence_unavailable');
+      throw new NotImplementedException(
+        'Tool output persistence unavailable. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      );
     }
     const snapshot = await this.runEvents.getToolOutputSnapshot({
       runId,

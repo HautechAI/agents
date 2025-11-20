@@ -11,7 +11,6 @@ import type { TemplateRegistry } from '../src/graph/templateRegistry';
 import type { GraphRepository } from '../src/graph/graph.repository';
 import { HumanMessage, SystemMessage, AIMessage } from '@agyn/llm';
 import { CallAgentLinkingService } from '../src/agents/call-agent-linking.service';
-import type { ConfigService } from '../src/core/services/config.service';
 
 const databaseUrl = process.env.AGENTS_DATABASE_URL;
 const shouldRunDbTests = process.env.RUN_DB_TESTS === 'true' && !!databaseUrl;
@@ -32,8 +31,7 @@ if (!shouldRunDbTests) {
   const graphRepoStub = { get: async () => ({ nodes: [], edges: [] }) } as unknown as GraphRepository;
 
   const eventsPublisher = new NoopGraphEventsPublisher();
-  const config = { toolOutputPersistenceEnabled: true } as ConfigService;
-  const runEvents = new RunEventsService(prismaService, logger, config, eventsPublisher);
+  const runEvents = new RunEventsService(prismaService, logger, eventsPublisher);
   const callAgentLinking = new CallAgentLinkingService(prismaService, runEvents, logger);
   const agents = new AgentsPersistenceService(
     prismaService,

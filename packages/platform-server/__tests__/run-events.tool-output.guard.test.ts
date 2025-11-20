@@ -3,7 +3,6 @@ import { RunEventsService, type ToolOutputChunkPayload, type ToolOutputTerminalP
 import { NoopGraphEventsPublisher } from '../src/gateway/graph.events.publisher';
 import type { PrismaService } from '../src/core/services/prisma.service';
 import type { LoggerService } from '../src/core/services/logger.service';
-import type { ConfigService } from '../src/core/services/config.service';
 
 class CapturingPublisher extends NoopGraphEventsPublisher {
   public chunks: Array<Parameters<NoopGraphEventsPublisher['emitToolOutputChunk']>[0]> = [];
@@ -56,40 +55,12 @@ describe('RunEventsService tool output persistence guards', () => {
     vi.clearAllMocks();
   });
 
-  it('skips persistence when disabled via config but still emits socket events', async () => {
-    const logger = createLoggerStub();
-    const prismaClient = {
-      toolOutputChunk: { create: vi.fn() },
-      toolOutputTerminal: { upsert: vi.fn() },
-    } as const;
-    const prismaService = { getClient: () => prismaClient } as unknown as PrismaService;
-    const config = { toolOutputPersistenceEnabled: false } as ConfigService;
-    const publisher = new CapturingPublisher();
-    const service = new RunEventsService(prismaService, logger, config, publisher);
-
-    const chunk = await service.appendToolOutputChunk(baseChunkArgs);
-    const terminal = await service.finalizeToolOutputTerminal(baseTerminalArgs);
-    const snapshot = await service.getToolOutputSnapshot({ runId: 'run', eventId: 'event' });
-
-    expect(prismaClient.toolOutputChunk.create).not.toHaveBeenCalled();
-    expect(prismaClient.toolOutputTerminal.upsert).not.toHaveBeenCalled();
-    expect(publisher.chunks).toHaveLength(1);
-    expect(publisher.terminals).toHaveLength(1);
-    expect(chunk).toMatchObject({ seqGlobal: 1, data: 'hello' });
-    expect(terminal).toMatchObject({ status: 'success', message: 'done' });
-    expect(snapshot).toBeNull();
-    expect(logger.warn).toHaveBeenCalledWith(
-      'Tool output persistence disabled via config; streaming output will not be stored.',
-    );
-  });
-
   it('skips persistence when Prisma client lacks tool output models', async () => {
     const logger = createLoggerStub();
     const prismaClient = {};
     const prismaService = { getClient: () => prismaClient } as unknown as PrismaService;
-    const config = { toolOutputPersistenceEnabled: true } as ConfigService;
     const publisher = new CapturingPublisher();
-    const service = new RunEventsService(prismaService, logger, config, publisher);
+    const service = new RunEventsService(prismaService, logger, publisher);
 
     const chunk = await service.appendToolOutputChunk(baseChunkArgs);
     const terminal = await service.finalizeToolOutputTerminal(baseTerminalArgs);
@@ -101,8 +72,38 @@ describe('RunEventsService tool output persistence guards', () => {
     expect(terminal.droppedChunks).toBe(0);
     expect(snapshot).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith(
-      'Tool output persistence unavailable: Prisma client is missing tool output models. Streaming output will not be stored.',
+      'Tool output persistence unavailable: Prisma client is missing tool_output_* models. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
     );
+  });
+
+  it('persists when Prisma client exposes tool output models', async () => {
+    const logger = createLoggerStub();
+    const prismaClient = {
+      toolOutputChunk: {
+        create: vi.fn(async ({ data }: { data: any }) => ({ ...data, id: 'chunk-1', ts: new Date() })),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0),
+      },
+      toolOutputTerminal: {
+        upsert: vi.fn(async ({ update }: { update: any }) => ({ ...update, eventId: 'event-1', ts: new Date() })),
+        findUnique: vi.fn(async () => null),
+      },
+      runEvent: { findUnique: vi.fn(async () => ({ id: 'event-1', runId: 'run-1', threadId: 'thread-1' })) },
+    } as any;
+    const prismaService = { getClient: () => prismaClient } as unknown as PrismaService;
+    const publisher = new CapturingPublisher();
+    const service = new RunEventsService(prismaService, logger, publisher);
+
+    await service.appendToolOutputChunk(baseChunkArgs);
+    await service.finalizeToolOutputTerminal(baseTerminalArgs);
+    await service.getToolOutputSnapshot({ runId: 'run-1', eventId: 'event-1' });
+
+    expect(prismaClient.toolOutputChunk.create).toHaveBeenCalledOnce();
+    expect(prismaClient.toolOutputChunk.findMany).toHaveBeenCalledOnce();
+    expect(prismaClient.toolOutputTerminal.upsert).toHaveBeenCalledOnce();
+    expect(publisher.chunks).toHaveLength(1);
+    expect(publisher.terminals).toHaveLength(1);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('reports persistence availability state', () => {
@@ -114,12 +115,10 @@ describe('RunEventsService tool output persistence guards', () => {
     const prismaService = { getClient: () => prismaClient } as unknown as PrismaService;
     const publisher = new CapturingPublisher();
 
-    const disabledConfig = { toolOutputPersistenceEnabled: false } as ConfigService;
-    const disabledService = new RunEventsService(prismaService, logger, disabledConfig, publisher);
-    expect(disabledService.isToolOutputPersistenceAvailable()).toBe(false);
+    const missingModelService = new RunEventsService({ getClient: () => ({}) } as PrismaService, logger, publisher);
+    expect(missingModelService.isToolOutputPersistenceAvailable()).toBe(false);
 
-    const enabledConfig = { toolOutputPersistenceEnabled: true } as ConfigService;
-    const enabledService = new RunEventsService(prismaService, logger, enabledConfig, publisher);
+    const enabledService = new RunEventsService(prismaService, logger, publisher);
     expect(enabledService.isToolOutputPersistenceAvailable()).toBe(true);
   });
 });

@@ -28,7 +28,11 @@ describe('AgentsThreadsController tool output snapshot endpoint', () => {
 
     await expect(
       ctrl.getRunEventOutput('run-1', 'event-1', { order: 'asc' } as any),
-    ).rejects.toBeInstanceOf(NotImplementedException);
+    ).rejects.toThrowError(
+      new NotImplementedException(
+        'Tool output persistence unavailable. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      ),
+    );
     expect(runEventsStub.getToolOutputSnapshot).not.toHaveBeenCalled();
   });
 
