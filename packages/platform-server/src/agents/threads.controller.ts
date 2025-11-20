@@ -296,20 +296,22 @@ export class AgentsThreadsController {
     @Param('eventId') eventId: string,
     @Query() query: RunEventOutputQueryDto,
   ) {
-    if (!this.runEvents.isToolOutputPersistenceAvailable()) {
+    try {
+      const snapshot = await this.runEvents.getToolOutputSnapshot({
+        runId,
+        eventId,
+        sinceSeq: query.sinceSeq,
+        limit: query.limit,
+        order: query.order,
+      });
+      if (!snapshot) throw new NotFoundException('event_not_found');
+      return snapshot;
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
       throw new NotImplementedException(
         'Tool output persistence unavailable. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
       );
     }
-    const snapshot = await this.runEvents.getToolOutputSnapshot({
-      runId,
-      eventId,
-      sinceSeq: query.sinceSeq,
-      limit: query.limit,
-      order: query.order,
-    });
-    if (!snapshot) throw new NotFoundException('event_not_found');
-    return snapshot;
   }
 
   @Patch('threads/:threadId')

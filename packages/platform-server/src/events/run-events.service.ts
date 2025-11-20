@@ -20,10 +20,6 @@ import { toPrismaJsonValue } from '../llm/services/messages.serialization';
 import { ContextItemInput, NormalizedContextItem, normalizeContextItems, upsertNormalizedContextItems } from '../llm/services/context-items.utils';
 
 type Tx = PrismaClient | Prisma.TransactionClient;
-type ToolOutputPersistenceClient = Tx & {
-  toolOutputChunk: PrismaClient['toolOutputChunk'];
-  toolOutputTerminal: PrismaClient['toolOutputTerminal'];
-};
 
 const MAX_INLINE_TEXT = 32_768;
 
@@ -339,7 +335,9 @@ export interface SummarizationEventArgs {
 @Injectable()
 export class RunEventsService {
   private readonly events: GraphEventsPublisher;
-  private missingModelWarningLogged = false;
+  private readonly chunkPersistenceWarnings = new Set<string>();
+  private readonly terminalPersistenceWarnings = new Set<string>();
+  private readonly snapshotWarnings = new Set<string>();
 
   constructor(
     @Inject(PrismaService) private readonly prismaService: PrismaService,
@@ -356,21 +354,45 @@ export class RunEventsService {
     return this.prismaService.getClient();
   }
 
-  private hasToolOutputChunkModel(client: Tx): client is ToolOutputPersistenceClient {
-    if (!client || typeof client !== 'object') return false;
-    const maybeClient = client as Record<string, unknown>;
-    const chunk = maybeClient.toolOutputChunk as { create?: unknown } | undefined;
-    const terminal = maybeClient.toolOutputTerminal as { upsert?: unknown } | undefined;
-    const hasChunk = !!chunk && typeof chunk.create === 'function';
-    const hasTerminal = !!terminal && typeof terminal.upsert === 'function';
-    return hasChunk && hasTerminal;
+  private logChunkPersistenceFailure(runId: string, eventId: string, error: unknown): void {
+    const key = `${runId}:${eventId}`;
+    if (this.chunkPersistenceWarnings.has(key)) return;
+    this.chunkPersistenceWarnings.add(key);
+    this.logger.warn(
+      'Tool output chunk persistence failed. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      {
+        runId,
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
   }
 
-  private logToolOutputPersistenceUnavailable(): void {
-    if (this.missingModelWarningLogged) return;
-    this.missingModelWarningLogged = true;
+  private logTerminalPersistenceFailure(runId: string, eventId: string, error: unknown): void {
+    const key = `${runId}:${eventId}`;
+    if (this.terminalPersistenceWarnings.has(key)) return;
+    this.terminalPersistenceWarnings.add(key);
     this.logger.warn(
-      'Tool output persistence unavailable: Prisma client is missing tool_output_* models. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      'Tool output terminal persistence failed. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      {
+        runId,
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+  }
+
+  private logSnapshotPersistenceFailure(runId: string, eventId: string, error: unknown): void {
+    const key = `${runId}:${eventId}`;
+    if (this.snapshotWarnings.has(key)) return;
+    this.snapshotWarnings.add(key);
+    this.logger.warn(
+      'Tool output snapshot retrieval failed. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      {
+        runId,
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      },
     );
   }
 
@@ -410,10 +432,6 @@ export class RunEventsService {
     } catch (err) {
       this.logger.warn('Failed to emit tool_output_terminal event', err);
     }
-  }
-
-  isToolOutputPersistenceAvailable(): boolean {
-    return this.hasToolOutputChunkModel(this.prisma);
   }
 
   private truncate(text: string | null | undefined): string | null {
@@ -764,37 +782,37 @@ export class RunEventsService {
       data: args.data,
     };
 
-    if (!this.hasToolOutputChunkModel(tx)) {
-      this.logToolOutputPersistenceUnavailable();
+    try {
+      const record = await tx.toolOutputChunk.create({
+        data: {
+          eventId: args.eventId,
+          seqGlobal: args.seqGlobal,
+          seqStream: args.seqStream,
+          source: args.source,
+          data: args.data,
+          ts,
+          bytes: Math.max(0, Math.trunc(args.bytes)),
+        },
+      });
+
+      const payload: ToolOutputChunkPayload = {
+        runId: args.runId,
+        threadId: args.threadId,
+        eventId: args.eventId,
+        seqGlobal: record.seqGlobal,
+        seqStream: record.seqStream,
+        source: record.source,
+        ts: record.ts.toISOString(),
+        data: record.data,
+      };
+
+      this.emitToolOutputChunkEvent(payload, record.ts);
+      return payload;
+    } catch (err) {
+      this.logChunkPersistenceFailure(args.runId, args.eventId, err);
       this.emitToolOutputChunkEvent(basePayload, ts);
       return basePayload;
     }
-
-    const record = await tx.toolOutputChunk.create({
-      data: {
-        eventId: args.eventId,
-        seqGlobal: args.seqGlobal,
-        seqStream: args.seqStream,
-        source: args.source,
-        data: args.data,
-        ts,
-        bytes: Math.max(0, Math.trunc(args.bytes)),
-      },
-    });
-
-    const payload: ToolOutputChunkPayload = {
-      runId: args.runId,
-      threadId: args.threadId,
-      eventId: args.eventId,
-      seqGlobal: record.seqGlobal,
-      seqStream: record.seqStream,
-      source: record.source,
-      ts: record.ts.toISOString(),
-      data: record.data,
-    };
-
-    this.emitToolOutputChunkEvent(payload, record.ts);
-    return payload;
   }
 
   async finalizeToolOutputTerminal(args: ToolOutputTerminalArgs): Promise<ToolOutputTerminalPayload> {
@@ -824,56 +842,56 @@ export class RunEventsService {
       ts: ts.toISOString(),
     };
 
-    if (!this.hasToolOutputChunkModel(tx)) {
-      this.logToolOutputPersistenceUnavailable();
+    try {
+      const record = await tx.toolOutputTerminal.upsert({
+        where: { eventId: args.eventId },
+        update: {
+          exitCode: args.exitCode,
+          status: args.status,
+          bytesStdout: sanitized.bytesStdout,
+          bytesStderr: sanitized.bytesStderr,
+          totalChunks: sanitized.totalChunks,
+          droppedChunks: sanitized.droppedChunks,
+          savedPath: sanitized.savedPath,
+          message: sanitized.message,
+          ts,
+        },
+        create: {
+          eventId: args.eventId,
+          exitCode: args.exitCode,
+          status: args.status,
+          bytesStdout: sanitized.bytesStdout,
+          bytesStderr: sanitized.bytesStderr,
+          totalChunks: sanitized.totalChunks,
+          droppedChunks: sanitized.droppedChunks,
+          savedPath: sanitized.savedPath,
+          message: sanitized.message,
+          ts,
+        },
+      });
+
+      const payload: ToolOutputTerminalPayload = {
+        runId: args.runId,
+        threadId: args.threadId,
+        eventId: record.eventId,
+        exitCode: record.exitCode ?? null,
+        status: record.status,
+        bytesStdout: record.bytesStdout,
+        bytesStderr: record.bytesStderr,
+        totalChunks: record.totalChunks,
+        droppedChunks: record.droppedChunks,
+        savedPath: record.savedPath ?? null,
+        message: record.message ?? null,
+        ts: record.ts.toISOString(),
+      };
+
+      this.emitToolOutputTerminalEvent(payload, record.ts);
+      return payload;
+    } catch (err) {
+      this.logTerminalPersistenceFailure(args.runId, args.eventId, err);
       this.emitToolOutputTerminalEvent(basePayload, ts);
       return basePayload;
     }
-
-    const record = await tx.toolOutputTerminal.upsert({
-      where: { eventId: args.eventId },
-      update: {
-        exitCode: args.exitCode,
-        status: args.status,
-        bytesStdout: sanitized.bytesStdout,
-        bytesStderr: sanitized.bytesStderr,
-        totalChunks: sanitized.totalChunks,
-        droppedChunks: sanitized.droppedChunks,
-        savedPath: sanitized.savedPath,
-        message: sanitized.message,
-        ts,
-      },
-      create: {
-        eventId: args.eventId,
-        exitCode: args.exitCode,
-        status: args.status,
-        bytesStdout: sanitized.bytesStdout,
-        bytesStderr: sanitized.bytesStderr,
-        totalChunks: sanitized.totalChunks,
-        droppedChunks: sanitized.droppedChunks,
-        savedPath: sanitized.savedPath,
-        message: sanitized.message,
-        ts,
-      },
-    });
-
-    const payload: ToolOutputTerminalPayload = {
-      runId: args.runId,
-      threadId: args.threadId,
-      eventId: record.eventId,
-      exitCode: record.exitCode ?? null,
-      status: record.status,
-      bytesStdout: record.bytesStdout,
-      bytesStderr: record.bytesStderr,
-      totalChunks: record.totalChunks,
-      droppedChunks: record.droppedChunks,
-      savedPath: record.savedPath ?? null,
-      message: record.message ?? null,
-      ts: record.ts.toISOString(),
-    };
-
-    this.emitToolOutputTerminalEvent(payload, record.ts);
-    return payload;
   }
 
   async getToolOutputSnapshot(params: {
@@ -883,76 +901,75 @@ export class RunEventsService {
     limit?: number;
     order?: 'asc' | 'desc';
   }): Promise<ToolOutputSnapshot | null> {
-    if (!this.hasToolOutputChunkModel(this.prisma)) {
-      this.logToolOutputPersistenceUnavailable();
-      return null;
-    }
-
     const { runId, eventId } = params;
-    const event = await this.prisma.runEvent.findUnique({
-      where: { id: eventId },
-      select: { id: true, runId: true, threadId: true },
-    });
-    if (!event || event.runId !== runId) {
-      return null;
-    }
-    const threadId = event.threadId;
+    try {
+      const event = await this.prisma.runEvent.findUnique({
+        where: { id: eventId },
+        select: { id: true, runId: true, threadId: true },
+      });
+      if (!event || event.runId !== runId) {
+        return null;
+      }
+      const threadId = event.threadId;
 
-    const order: 'asc' | 'desc' = params.order === 'desc' ? 'desc' : 'asc';
-    const limit = params.limit && Number.isFinite(params.limit) ? Math.min(Math.max(1, params.limit), 5000) : 1000;
+      const order: 'asc' | 'desc' = params.order === 'desc' ? 'desc' : 'asc';
+      const limit = params.limit && Number.isFinite(params.limit) ? Math.min(Math.max(1, params.limit), 5000) : 1000;
 
-    const where: Prisma.ToolOutputChunkWhereInput = { eventId };
-    if (params.sinceSeq && Number.isFinite(params.sinceSeq)) {
-      const since = Math.floor(params.sinceSeq);
-      if (order === 'desc') {
-        where.seqGlobal = { gt: since };
-      } else {
+      const where: Prisma.ToolOutputChunkWhereInput = { eventId };
+      if (params.sinceSeq && Number.isFinite(params.sinceSeq)) {
+        const since = Math.floor(params.sinceSeq);
         where.seqGlobal = { gt: since };
       }
+
+      const records = await this.prisma.toolOutputChunk.findMany({
+        where,
+        orderBy: { seqGlobal: order },
+        take: limit,
+      });
+
+      const items: ToolOutputChunkPayload[] = records.map((row) => ({
+        runId,
+        threadId,
+        eventId,
+        seqGlobal: row.seqGlobal,
+        seqStream: row.seqStream,
+        source: row.source,
+        ts: row.ts.toISOString(),
+        data: row.data,
+      }));
+
+      const nextSeq =
+        items.length > 0
+          ? items.reduce((max, item) => (item.seqGlobal > max ? item.seqGlobal : max), items[0]!.seqGlobal)
+          : null;
+
+      const terminalRecord = await this.prisma.toolOutputTerminal.findUnique({ where: { eventId } });
+      const terminal: ToolOutputTerminalPayload | null = terminalRecord
+        ? {
+            runId,
+            threadId,
+            eventId,
+            exitCode: terminalRecord.exitCode ?? null,
+            status: terminalRecord.status,
+            bytesStdout: terminalRecord.bytesStdout,
+            bytesStderr: terminalRecord.bytesStderr,
+            totalChunks: terminalRecord.totalChunks,
+            droppedChunks: terminalRecord.droppedChunks,
+            savedPath: terminalRecord.savedPath ?? null,
+            message: terminalRecord.message ?? null,
+            ts: terminalRecord.ts.toISOString(),
+          }
+        : null;
+
+      return {
+        items,
+        terminal,
+        nextSeq,
+      };
+    } catch (err) {
+      this.logSnapshotPersistenceFailure(runId, eventId, err);
+      throw err;
     }
-
-    const records = await this.prisma.toolOutputChunk.findMany({
-      where,
-      orderBy: { seqGlobal: order },
-      take: limit,
-    });
-
-    const items: ToolOutputChunkPayload[] = records.map((row) => ({
-      runId,
-      threadId,
-      eventId,
-      seqGlobal: row.seqGlobal,
-      seqStream: row.seqStream,
-      source: row.source,
-      ts: row.ts.toISOString(),
-      data: row.data,
-    }));
-
-    const nextSeq = items.length > 0 ? items.reduce((max, item) => (item.seqGlobal > max ? item.seqGlobal : max), items[0]!.seqGlobal) : null;
-
-    const terminalRecord = await this.prisma.toolOutputTerminal.findUnique({ where: { eventId } });
-    const terminal: ToolOutputTerminalPayload | null = terminalRecord
-      ? {
-          runId,
-          threadId,
-          eventId,
-          exitCode: terminalRecord.exitCode ?? null,
-          status: terminalRecord.status,
-          bytesStdout: terminalRecord.bytesStdout,
-          bytesStderr: terminalRecord.bytesStderr,
-          totalChunks: terminalRecord.totalChunks,
-          droppedChunks: terminalRecord.droppedChunks,
-          savedPath: terminalRecord.savedPath ?? null,
-          message: terminalRecord.message ?? null,
-          ts: terminalRecord.ts.toISOString(),
-        }
-      : null;
-
-    return {
-      items,
-      terminal,
-      nextSeq,
-    };
   }
 
   async getContextItems(ids: string[]): Promise<SerializedContextItem[]> {

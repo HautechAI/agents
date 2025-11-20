@@ -10,8 +10,7 @@ import { NotImplementedException } from '@nestjs/common';
 describe('AgentsThreadsController tool output snapshot endpoint', () => {
   it('returns 501 when tool output persistence is unavailable', async () => {
     const runEventsStub = {
-      isToolOutputPersistenceAvailable: vi.fn(() => false),
-      getToolOutputSnapshot: vi.fn(),
+      getToolOutputSnapshot: vi.fn().mockRejectedValue(new Error('missing table')),
     } as unknown as RunEventsService;
 
     const module = await Test.createTestingModule({
@@ -33,13 +32,18 @@ describe('AgentsThreadsController tool output snapshot endpoint', () => {
         'Tool output persistence unavailable. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
       ),
     );
-    expect(runEventsStub.getToolOutputSnapshot).not.toHaveBeenCalled();
+    expect(runEventsStub.getToolOutputSnapshot).toHaveBeenCalledWith({
+      runId: 'run-1',
+      eventId: 'event-1',
+      order: 'asc',
+      limit: undefined,
+      sinceSeq: undefined,
+    });
   });
 
   it('delegates to RunEventsService when persistence is available', async () => {
     const snapshot = { items: [], terminal: null, nextSeq: null };
     const runEventsStub = {
-      isToolOutputPersistenceAvailable: vi.fn(() => true),
       getToolOutputSnapshot: vi.fn(async () => snapshot),
     } as unknown as RunEventsService;
 
