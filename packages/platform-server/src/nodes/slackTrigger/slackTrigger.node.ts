@@ -302,6 +302,14 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         const fallback: SendResult = { ok: false, error: 'slack_adapter_invalid_response', details: meta };
         return fallback;
       }
+      if (!res.ok) {
+        const payload: Record<string, unknown> = {
+          threadId,
+          error: res.error ?? 'unknown_error',
+        };
+        if (res.details) payload.details = res.details;
+        this.logger.error('SlackTrigger.sendToThread returned non-ok result', payload);
+      }
       return res;
     } catch (e) {
       const normalized = normalizeError(e);

@@ -301,8 +301,34 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
 
   private extractErrorMessage(response: ToolCallResult | undefined): string | null {
     if (!response || response.status === 'success') return null;
-    if (typeof response.output === 'string') return response.output;
-    if (typeof response.raw === 'string') return response.raw;
+    return this.extractErrorFromPayload(response.output ?? response.raw);
+  }
+
+  private extractErrorFromPayload(payload: ToolCallStructuredOutput | ToolCallRaw | undefined): string | null {
+    if (payload == null) return null;
+    if (typeof payload === 'string') {
+      const trimmed = payload.trim();
+      if (!trimmed) return null;
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        const nested = this.extractErrorFromPayload(parsed as ToolCallStructuredOutput);
+        if (nested) return nested;
+      } catch {
+        // Ignore JSON parse failures; fall back to raw string
+      }
+      return trimmed;
+    }
+    if (Array.isArray(payload)) return null;
+    if (typeof payload === 'object') {
+      const candidate = (payload as { error?: unknown }).error;
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        if (trimmed) return trimmed;
+      }
+    }
+    if (typeof payload === 'number' || typeof payload === 'boolean') {
+      return String(payload);
+    }
     return null;
   }
 

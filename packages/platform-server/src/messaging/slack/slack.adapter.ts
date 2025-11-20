@@ -25,6 +25,14 @@ export class SlackAdapter {
       });
       if (!resp?.ok) {
         const normalized = normalizeError(resp?.error ?? 'unknown_error');
+        const logPayload: Record<string, unknown> = {
+          channel,
+          thread_ts,
+          error: normalized.message,
+        };
+        if (resp?.error) logPayload.slack_error = resp.error;
+        if (normalized.details) logPayload.details = normalized.details;
+        this.logger.error('SlackAdapter.sendText: Slack API returned non-ok response', logPayload);
         const errorResponse: SendResult = { ok: false, error: normalized.message };
         if (normalized.details) errorResponse.details = normalized.details;
         return errorResponse;

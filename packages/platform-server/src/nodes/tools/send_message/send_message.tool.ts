@@ -40,6 +40,14 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
         const fallback: SendResult = { ok: false, error: 'send_message_invalid_response' };
         return JSON.stringify(fallback);
       }
+      if (!res.ok) {
+        const payload: Record<string, unknown> = {
+          threadId,
+          error: res.error ?? 'unknown_error',
+        };
+        if (res.details) payload.details = res.details;
+        this.logger.error('SendMessageFunctionTool.execute returning downstream error', payload);
+      }
       return JSON.stringify(res);
     } catch (e) {
       const normalized = normalizeError(e);
