@@ -58,6 +58,9 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     console.log('-----SlackTrigger constructor-----');
     console.log(logger);
     super(logger);
+    this.sendToThread = this.sendToThread.bind(this);
+    this.subscribe = this.subscribe.bind(this);
+    this.unsubscribe = this.unsubscribe.bind(this);
   }
 
   public test() {
