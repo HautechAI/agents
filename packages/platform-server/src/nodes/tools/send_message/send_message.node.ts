@@ -22,9 +22,19 @@ export class SendMessageNode extends BaseToolNode<SendMessageConfig> {
 
   getTool(): SendMessageFunctionTool {
     if (!this.toolInstance) {
-      const trigger = this.moduleRef.get<SlackTrigger>(SlackTrigger, { strict: false });
-      if (!trigger) throw new Error('SlackTrigger not available');
-      this.toolInstance = new SendMessageFunctionTool(this.logger, trigger);
+      let cachedTrigger: SlackTrigger | null = null;
+      const resolveTrigger = async () => {
+        if (cachedTrigger) return cachedTrigger;
+        try {
+          const resolved = await this.moduleRef.resolve<SlackTrigger>(SlackTrigger, undefined, { strict: false });
+          cachedTrigger = resolved;
+          return resolved;
+        } catch (err) {
+          this.logger.error('SendMessageNode failed to resolve SlackTrigger', err);
+          return null;
+        }
+      };
+      this.toolInstance = new SendMessageFunctionTool(this.logger, resolveTrigger);
     }
     return this.toolInstance;
   }

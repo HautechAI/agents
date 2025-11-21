@@ -52,7 +52,7 @@ describe('send_message tool', () => {
     const cfg = { app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-abc', source: 'static' } };
     await trigger.setConfig(cfg);
     await trigger.provision();
-    const tool = new SendMessageFunctionTool(new LoggerService(), trigger);
+    const tool = new SendMessageFunctionTool(new LoggerService(), async () => trigger);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(false);
@@ -84,7 +84,7 @@ describe('send_message tool', () => {
     const cfg2 = { app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-abc', source: 'static' } };
     await trigger.setConfig(cfg2);
     await trigger.provision();
-    const tool = new SendMessageFunctionTool(new LoggerService(), trigger);
+    const tool = new SendMessageFunctionTool(new LoggerService(), async () => trigger);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(true);
@@ -97,7 +97,8 @@ describe('send_message tool', () => {
     } satisfies Pick<SlackTrigger, 'sendToThread'>) as SlackTrigger;
     const logger = new LoggerService();
     const errorSpy = vi.spyOn(logger, 'error');
-    const tool = new SendMessageFunctionTool(logger, triggerStub);
+    const resolver = vi.fn(async () => triggerStub);
+    const tool = new SendMessageFunctionTool(logger, resolver);
     const res = await tool.execute({ message: 'hello' }, { threadId: 'thread-1' });
     const obj = JSON.parse(res);
     expect(obj).toEqual({ ok: false, error: 'tool_invalid_response' });
@@ -111,7 +112,8 @@ describe('send_message tool', () => {
     } satisfies Pick<SlackTrigger, 'sendToThread'>) as SlackTrigger;
     const logger = new LoggerService();
     const errorSpy = vi.spyOn(logger, 'error');
-    const tool = new SendMessageFunctionTool(logger, triggerStub);
+    const resolver = vi.fn(async () => triggerStub);
+    const tool = new SendMessageFunctionTool(logger, resolver);
     const res = await tool.execute({ message: 'hello' }, { threadId: 'thread-2' });
     const obj = JSON.parse(res);
     expect(obj).toEqual({ ok: false, error: 'boom' });
@@ -125,16 +127,18 @@ describe('send_message tool', () => {
 });
 
 describe('SendMessageNode', () => {
-  it('resolves SlackTrigger lazily via ModuleRef', () => {
+  it('resolves SlackTrigger lazily via ModuleRef.resolve', async () => {
     const triggerStub = ({
-      sendToThread: vi.fn(),
+      sendToThread: vi.fn().mockResolvedValue({ ok: true, channelMessageId: 'msg', threadId: 'thread-1' }),
     } satisfies Pick<SlackTrigger, 'sendToThread'>) as SlackTrigger;
-    const moduleRef = ({ get: vi.fn(() => triggerStub) } satisfies Pick<ModuleRef, 'get'>) as ModuleRef;
+    const moduleRef = ({ resolve: vi.fn(async () => triggerStub) } satisfies Pick<ModuleRef, 'resolve'>) as ModuleRef;
     const node = new SendMessageNode(new LoggerService(), moduleRef);
 
     const tool = node.getTool();
-    expect(moduleRef.get).toHaveBeenCalledWith(SlackTrigger, { strict: false });
-    expect(tool).toBeInstanceOf(SendMessageFunctionTool);
+    const res = await tool.execute({ message: 'hello' }, { threadId: 'thread-1' });
+    expect(JSON.parse(res)).toEqual({ ok: true, channelMessageId: 'msg', threadId: 'thread-1' });
+    expect(moduleRef.resolve).toHaveBeenCalledWith(SlackTrigger, undefined, { strict: false });
+    expect(triggerStub.sendToThread).toHaveBeenCalledWith('thread-1', 'hello');
     expect(node.getTool()).toBe(tool);
   });
 });

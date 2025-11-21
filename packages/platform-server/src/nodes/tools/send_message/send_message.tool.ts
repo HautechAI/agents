@@ -10,7 +10,7 @@ export const sendMessageInvocationSchema = z.object({ message: z.string().min(1)
 export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvocationSchema> {
   constructor(
     private logger: LoggerService,
-    private trigger: SlackTrigger,
+    private resolveTrigger: () => Promise<SlackTrigger | null>,
   ) {
     super();
   }
@@ -29,7 +29,18 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
     const threadId = ctx?.threadId;
     if (!threadId) return JSON.stringify({ ok: false, error: 'missing_thread_context' });
     try {
-      const result = (await this.trigger.sendToThread(threadId, args.message)) as unknown;
+      let trigger: SlackTrigger | null;
+      try {
+        trigger = await this.resolveTrigger();
+      } catch (err) {
+        this.logger.error('SendMessageFunctionTool trigger resolution failed', err, { threadId });
+        return JSON.stringify({ ok: false, error: 'slacktrigger_unavailable' });
+      }
+      if (!trigger) {
+        this.logger.error('SendMessageFunctionTool trigger unavailable', { threadId });
+        return JSON.stringify({ ok: false, error: 'slacktrigger_unavailable' });
+      }
+      const result = (await trigger.sendToThread(threadId, args.message)) as unknown;
       const parsed = SendResultSchema.safeParse(result);
       if (!parsed.success) {
         this.logger.error('SendMessageFunctionTool invalid send result', { threadId, result });
