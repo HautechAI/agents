@@ -114,7 +114,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
               : envelope.event;
         const parsedEvent = SlackMessageEventSchema.safeParse(rawEvent);
         if (!parsedEvent.success) {
-          console.log('SlackTrigger: received non-message event or invalid event', { errors: parsedEvent.error });
+          this.logger.debug('SlackTrigger: received non-message event or invalid event', { errors: parsedEvent.error });
           return;
         }
 
@@ -250,9 +250,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
 
   // Send a text message using stored thread descriptor and this trigger's bot token
   async sendToThread(threadId: string, text: string): Promise<SendResult> {
-    console.log('------send------');
-    console.log(this);
-    console.log(this.logger, this.vault, this.persistence, this.prismaService, this.slackAdapter);
     try {
       const prisma = this.prismaService.getClient();
       type ThreadChannelRow = { channel: unknown | null };
@@ -296,9 +293,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     } catch (e) {
       if (e instanceof Error) {
         const message = e.message ? e.message : 'unknown_error';
-        console.log('------');
-        console.log(this.logger);
-        console.log('------');
         this.logger.error('SlackTrigger.sendToThread failed', e, { threadId });
         return { ok: false, error: message };
       }
