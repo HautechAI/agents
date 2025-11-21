@@ -49,6 +49,38 @@ export const ReminderCountEventSchema = z
   })
   .strict();
 export type ReminderCountEvent = z.infer<typeof ReminderCountEventSchema>;
+
+export const ToolOutputChunkEventSchema = z
+  .object({
+    runId: z.string().uuid(),
+    threadId: z.string().uuid(),
+    eventId: z.string().uuid(),
+    seqGlobal: z.number().int().positive(),
+    seqStream: z.number().int().positive(),
+    source: z.enum(['stdout', 'stderr']),
+    ts: z.string().datetime(),
+    data: z.string(),
+  })
+  .strict();
+export type ToolOutputChunkEvent = z.infer<typeof ToolOutputChunkEventSchema>;
+
+export const ToolOutputTerminalEventSchema = z
+  .object({
+    runId: z.string().uuid(),
+    threadId: z.string().uuid(),
+    eventId: z.string().uuid(),
+    exitCode: z.number().int().nullable(),
+    status: z.enum(['success', 'error', 'timeout', 'idle_timeout', 'cancelled', 'truncated']),
+    bytesStdout: z.number().int().min(0),
+    bytesStderr: z.number().int().min(0),
+    totalChunks: z.number().int().min(0),
+    droppedChunks: z.number().int().min(0),
+    savedPath: z.string().optional().nullable(),
+    message: z.string().optional().nullable(),
+    ts: z.string().datetime(),
+  })
+  .strict();
+export type ToolOutputTerminalEvent = z.infer<typeof ToolOutputTerminalEventSchema>;
 /**
  * Socket.IO gateway attached to Fastify/Nest HTTP server for graph events.
  * Constructors DI-only; call init({ server }) explicitly from bootstrap.
@@ -203,6 +235,68 @@ export class GraphSocketGateway implements GraphEventsPublisher {
   emitRunEvent(runId: string, threadId: string, payload: RunEventBroadcast) {
     const eventName = payload.mutation === 'update' ? 'run_event_updated' : 'run_event_appended';
     this.emitToRooms([`run:${runId}`, `thread:${threadId}`], eventName, payload);
+  }
+  emitToolOutputChunk(payload: {
+    runId: string;
+    threadId: string;
+    eventId: string;
+    seqGlobal: number;
+    seqStream: number;
+    source: 'stdout' | 'stderr';
+    ts: Date;
+    data: string;
+  }) {
+    const eventPayload: ToolOutputChunkEvent = {
+      runId: payload.runId,
+      threadId: payload.threadId,
+      eventId: payload.eventId,
+      seqGlobal: payload.seqGlobal,
+      seqStream: payload.seqStream,
+      source: payload.source,
+      ts: payload.ts.toISOString(),
+      data: payload.data,
+    };
+    const parsed = ToolOutputChunkEventSchema.safeParse(eventPayload);
+    if (!parsed.success) {
+      this.logger.error('Gateway payload validation failed for tool_output_chunk', parsed.error.issues);
+      return;
+    }
+    this.emitToRooms([`run:${eventPayload.runId}`, `thread:${eventPayload.threadId}`], 'tool_output_chunk', eventPayload);
+  }
+  emitToolOutputTerminal(payload: {
+    runId: string;
+    threadId: string;
+    eventId: string;
+    exitCode: number | null;
+    status: 'success' | 'error' | 'timeout' | 'idle_timeout' | 'cancelled' | 'truncated';
+    bytesStdout: number;
+    bytesStderr: number;
+    totalChunks: number;
+    droppedChunks: number;
+    savedPath?: string | null;
+    message?: string | null;
+    ts: Date;
+  }) {
+    const eventPayload: ToolOutputTerminalEvent = {
+      runId: payload.runId,
+      threadId: payload.threadId,
+      eventId: payload.eventId,
+      exitCode: payload.exitCode,
+      status: payload.status,
+      bytesStdout: payload.bytesStdout,
+      bytesStderr: payload.bytesStderr,
+      totalChunks: payload.totalChunks,
+      droppedChunks: payload.droppedChunks,
+      savedPath: payload.savedPath ?? null,
+      message: payload.message ?? null,
+      ts: payload.ts.toISOString(),
+    };
+    const parsed = ToolOutputTerminalEventSchema.safeParse(eventPayload);
+    if (!parsed.success) {
+      this.logger.error('Gateway payload validation failed for tool_output_terminal', parsed.error.issues);
+      return;
+    }
+    this.emitToRooms([`run:${eventPayload.runId}`, `thread:${eventPayload.threadId}`], 'tool_output_terminal', eventPayload);
   }
   private flushMetricsQueue = async () => {
     // De-duplicate pending thread IDs per flush (preserve insertion order)

@@ -2,7 +2,7 @@
 import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket.io-client';
 import { getSocketBaseUrl } from '@/config';
 import type { NodeStatusEvent, ReminderCountEvent } from './types';
-import type { RunTimelineEvent, RunTimelineEventsCursor } from '@/api/types/agents';
+import type { RunTimelineEvent, RunTimelineEventsCursor, ToolOutputChunk, ToolOutputTerminal } from '@/api/types/agents';
 
 // Strictly typed server-to-client socket events (listener signatures)
 type NodeStateEvent = { nodeId: string; state: Record<string, unknown>; updatedAt: string };
@@ -28,6 +28,8 @@ interface ServerToClientEvents {
   run_status_changed: (payload: RunStatusChangedPayload) => void;
   run_event_appended: (payload: RunEventSocketPayload) => void;
   run_event_updated: (payload: RunEventSocketPayload) => void;
+  tool_output_chunk: (payload: ToolOutputChunk) => void;
+  tool_output_terminal: (payload: ToolOutputTerminal) => void;
 }
 // Client-to-server emits: subscribe to rooms
 type SubscribePayload = { room?: string; rooms?: string[] };
@@ -43,6 +45,8 @@ type ThreadRemindersPayload = { threadId: string; remindersCount: number };
 type MessageCreatedPayload = { message: MessageSummary; threadId: string };
 type RunStatusChangedPayload = { threadId: string; run: RunSummary };
 type RunEventListenerPayload = RunEventSocketPayload;
+type ToolChunkListener = (payload: ToolOutputChunk) => void;
+type ToolTerminalListener = (payload: ToolOutputTerminal) => void;
 
 class GraphSocket {
   // Typed socket instance; null until connected
@@ -57,6 +61,8 @@ class GraphSocket {
   private messageCreatedListeners = new Set<(payload: MessageCreatedPayload) => void>();
   private runStatusListeners = new Set<(payload: RunStatusChangedPayload) => void>();
   private runEventListeners = new Set<(payload: RunEventListenerPayload) => void>();
+  private toolChunkListeners = new Set<ToolChunkListener>();
+  private toolTerminalListeners = new Set<ToolTerminalListener>();
   private subscribedRooms = new Set<string>();
   private connectCallbacks = new Set<() => void>();
   private reconnectCallbacks = new Set<() => void>();
@@ -217,6 +223,18 @@ class GraphSocket {
       handleRunEvent('run_event_updated', payload);
     socket.on('run_event_updated', handleRunEventUpdated);
     this.socketCleanup.push(() => socket.off('run_event_updated', handleRunEventUpdated));
+    const handleToolOutputChunk: ServerToClientEvents['tool_output_chunk'] = (payload) => {
+      for (const fn of this.toolChunkListeners) fn(payload);
+    };
+    socket.on('tool_output_chunk', handleToolOutputChunk);
+    this.socketCleanup.push(() => socket.off('tool_output_chunk', handleToolOutputChunk));
+
+    const handleToolOutputTerminal: ServerToClientEvents['tool_output_terminal'] = (payload) => {
+      for (const fn of this.toolTerminalListeners) fn(payload);
+    };
+    socket.on('tool_output_terminal', handleToolOutputTerminal);
+    this.socketCleanup.push(() => socket.off('tool_output_terminal', handleToolOutputTerminal));
+
     return socket;
   }
 
@@ -355,6 +373,20 @@ class GraphSocket {
     this.runStatusListeners.add(cb);
     return () => {
       this.runStatusListeners.delete(cb);
+    };
+  }
+
+  onToolOutputChunk(cb: ToolChunkListener) {
+    this.toolChunkListeners.add(cb);
+    return () => {
+      this.toolChunkListeners.delete(cb);
+    };
+  }
+
+  onToolOutputTerminal(cb: ToolTerminalListener) {
+    this.toolTerminalListeners.add(cb);
+    return () => {
+      this.toolTerminalListeners.delete(cb);
     };
   }
 

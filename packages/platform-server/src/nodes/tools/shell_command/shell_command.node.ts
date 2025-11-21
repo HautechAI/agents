@@ -7,6 +7,7 @@ import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LoggerService } from '../../../core/services/logger.service';
 import { ModuleRef } from '@nestjs/core';
 import { ArchiveService } from '../../../infra/archive/archive.service';
+import { RunEventsService } from '../../../events/run-events.service';
 
 // NOTE: ANSI stripping now handled in ShellCommandTool; keep schema exports here only.
 
@@ -41,6 +42,27 @@ export const ShellToolStaticConfigSchema = z
       .describe(
         'Maximum combined cleaned stdout+stderr length. If >0 and exceeded, output is saved to /tmp/<uuid>.txt and a short error message is returned.',
       ),
+    chunkCoalesceMs: z
+      .number()
+      .int()
+      .min(5)
+      .max(1000)
+      .default(40)
+      .describe('Milliseconds to buffer stdout/stderr before emitting a chunk.'),
+    chunkSizeBytes: z
+      .number()
+      .int()
+      .min(256)
+      .max(16384)
+      .default(4096)
+      .describe('Maximum UTF-8 bytes per chunk before forcing an emit.'),
+    clientBufferLimitBytes: z
+      .number()
+      .int()
+      .min(1024)
+      .max(50 * 1024 * 1024)
+      .default(10 * 1024 * 1024)
+      .describe('Maximum streamed bytes delivered to clients before truncation.'),
   })
   .strict();
 
@@ -54,6 +76,7 @@ export class ShellCommandNode extends BaseToolNode<z.infer<typeof ShellToolStati
     @Inject(LoggerService) protected logger: LoggerService,
     @Inject(ModuleRef) protected readonly moduleRef: ModuleRef,
     @Inject(ArchiveService) private readonly archive: ArchiveService,
+    @Inject(RunEventsService) private readonly runEvents: RunEventsService,
   ) {
     super(logger);
   }
@@ -72,7 +95,7 @@ export class ShellCommandNode extends BaseToolNode<z.infer<typeof ShellToolStati
 
   getTool(): ShellCommandTool {
     if (!this.toolInstance) {
-      const tool = new ShellCommandTool(this.archive);
+      const tool = new ShellCommandTool(this.archive, this.runEvents, this.logger);
       tool.init(this);
       this.toolInstance = tool;
     }

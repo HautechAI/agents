@@ -150,3 +150,39 @@ export type RunTimelineEventsResponse = {
   items: RunTimelineEvent[];
   nextCursor: RunTimelineEventsCursor | null;
 };
+
+export type ToolOutputSource = 'stdout' | 'stderr';
+
+export type ToolOutputChunk = {
+  runId: string;
+  threadId: string;
+  eventId: string;
+  seqGlobal: number;
+  seqStream: number;
+  source: ToolOutputSource;
+  ts: string;
+  data: string;
+};
+
+export type ToolOutputTerminalStatus = 'success' | 'error' | 'timeout' | 'idle_timeout' | 'cancelled' | 'truncated';
+
+export type ToolOutputTerminal = {
+  runId: string;
+  threadId: string;
+  eventId: string;
+  exitCode: number | null;
+  status: ToolOutputTerminalStatus;
+  bytesStdout: number;
+  bytesStderr: number;
+  totalChunks: number;
+  droppedChunks: number;
+  savedPath: string | null;
+  message: string | null;
+  ts: string;
+};
+
+export type ToolOutputSnapshot = {
+  items: ToolOutputChunk[];
+  terminal: ToolOutputTerminal | null;
+  nextSeq: number | null;
+};

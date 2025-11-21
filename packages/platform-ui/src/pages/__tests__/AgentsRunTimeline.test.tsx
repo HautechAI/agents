@@ -635,7 +635,6 @@ describe('AgentsRunTimeline follow mode', () => {
 
     secondRender.unmount();
   });
-
   it('supports toggling follow with the "f" keyboard shortcut', async () => {
     const { getByRole, getByTestId, getByText } = renderPage([
       '/agents/threads/thread-1/runs/run-1/timeline',

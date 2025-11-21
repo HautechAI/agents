@@ -26,6 +26,7 @@ const createLoggerStub = (): LoggerService =>
     error: () => undefined,
   }) as LoggerService;
 
+
 const createRuntimeStub = (): LiveGraphRuntime =>
   ({
     subscribe: () => () => undefined,

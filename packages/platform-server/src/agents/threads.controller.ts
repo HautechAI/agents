@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, NotFoundException, NotImplementedException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsBooleanString, IsIn, IsInt, IsOptional, IsString, IsISO8601, Max, Min, ValidateIf } from 'class-validator';
 import { AgentsPersistenceService } from './agents.persistence.service';
 import { Transform, Expose } from 'class-transformer';
@@ -58,6 +58,25 @@ export class RunTimelineEventsQueryDto {
   @Expose({ name: 'cursor[id]' })
   @IsString()
   cursorId?: string;
+}
+
+export class RunEventOutputQueryDto {
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  @IsInt()
+  @Min(0)
+  sinceSeq?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? parseInt(value, 10) : undefined))
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  limit?: number;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc';
 }
 
 export class ListThreadsQueryDto {
@@ -269,6 +288,30 @@ export class AgentsThreadsController {
       order: query.order,
       cursor,
     });
+  }
+
+  @Get('runs/:runId/events/:eventId/output')
+  async getRunEventOutput(
+    @Param('runId') runId: string,
+    @Param('eventId') eventId: string,
+    @Query() query: RunEventOutputQueryDto,
+  ) {
+    try {
+      const snapshot = await this.runEvents.getToolOutputSnapshot({
+        runId,
+        eventId,
+        sinceSeq: query.sinceSeq,
+        limit: query.limit,
+        order: query.order,
+      });
+      if (!snapshot) throw new NotFoundException('event_not_found');
+      return snapshot;
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
+      throw new NotImplementedException(
+        'Tool output persistence unavailable. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      );
+    }
   }
 
   @Patch('threads/:threadId')

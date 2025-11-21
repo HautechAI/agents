@@ -10,6 +10,8 @@ import {
   RunEventType,
   RunStatus,
   ToolExecStatus,
+  ToolOutputSource,
+  ToolOutputStatus,
 } from '@prisma/client';
 import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
@@ -179,6 +181,38 @@ export type RunTimelineEventsResult = {
 
 export type RunEventMetadata = Prisma.InputJsonValue | typeof Prisma.JsonNull | null | undefined;
 
+export type ToolOutputChunkPayload = {
+  runId: string;
+  threadId: string;
+  eventId: string;
+  seqGlobal: number;
+  seqStream: number;
+  source: 'stdout' | 'stderr';
+  ts: string;
+  data: string;
+};
+
+export type ToolOutputTerminalPayload = {
+  runId: string;
+  threadId: string;
+  eventId: string;
+  exitCode: number | null;
+  status: 'success' | 'error' | 'timeout' | 'idle_timeout' | 'cancelled' | 'truncated';
+  bytesStdout: number;
+  bytesStderr: number;
+  totalChunks: number;
+  droppedChunks: number;
+  savedPath: string | null;
+  message: string | null;
+  ts: string;
+};
+
+export type ToolOutputSnapshot = {
+  items: ToolOutputChunkPayload[];
+  terminal: ToolOutputTerminalPayload | null;
+  nextSeq: number | null;
+};
+
 export interface InvocationMessageEventArgs {
   tx?: Tx;
   runId: string;
@@ -272,6 +306,35 @@ export interface ToolExecutionCompleteArgs {
   endedAt?: Date;
 }
 
+export interface ToolOutputChunkArgs {
+  tx?: Tx;
+  runId: string;
+  threadId: string;
+  eventId: string;
+  seqGlobal: number;
+  seqStream: number;
+  source: ToolOutputSource;
+  data: string;
+  bytes: number;
+  ts?: Date;
+}
+
+export interface ToolOutputTerminalArgs {
+  tx?: Tx;
+  runId: string;
+  threadId: string;
+  eventId: string;
+  exitCode: number | null;
+  status: ToolOutputStatus;
+  bytesStdout: number;
+  bytesStderr: number;
+  totalChunks: number;
+  droppedChunks: number;
+  savedPath?: string | null;
+  message?: string | null;
+  ts?: Date;
+}
+
 export interface SummarizationEventArgs {
   tx?: Tx;
   runId: string;
@@ -288,6 +351,9 @@ export interface SummarizationEventArgs {
 @Injectable()
 export class RunEventsService {
   private readonly events: GraphEventsPublisher;
+  private readonly chunkPersistenceWarnings = new Set<string>();
+  private readonly terminalPersistenceWarnings = new Set<string>();
+  private readonly snapshotWarnings = new Set<string>();
 
   constructor(
     @Inject(PrismaService) private readonly prismaService: PrismaService,
@@ -302,6 +368,86 @@ export class RunEventsService {
 
   private get prisma(): PrismaClient {
     return this.prismaService.getClient();
+  }
+
+  private logChunkPersistenceFailure(runId: string, eventId: string, error: unknown): void {
+    const key = `${runId}:${eventId}`;
+    if (this.chunkPersistenceWarnings.has(key)) return;
+    this.chunkPersistenceWarnings.add(key);
+    this.logger.warn(
+      'Tool output chunk persistence failed. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      {
+        runId,
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+  }
+
+  private logTerminalPersistenceFailure(runId: string, eventId: string, error: unknown): void {
+    const key = `${runId}:${eventId}`;
+    if (this.terminalPersistenceWarnings.has(key)) return;
+    this.terminalPersistenceWarnings.add(key);
+    this.logger.warn(
+      'Tool output terminal persistence failed. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      {
+        runId,
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+  }
+
+  private logSnapshotPersistenceFailure(runId: string, eventId: string, error: unknown): void {
+    const key = `${runId}:${eventId}`;
+    if (this.snapshotWarnings.has(key)) return;
+    this.snapshotWarnings.add(key);
+    this.logger.warn(
+      'Tool output snapshot retrieval failed. Run `pnpm --filter @agyn/platform-server prisma migrate deploy` followed by `pnpm --filter @agyn/platform-server prisma generate` to install the latest schema.',
+      {
+        runId,
+        eventId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+  }
+
+  private emitToolOutputChunkEvent(payload: ToolOutputChunkPayload, ts: Date): void {
+    try {
+      this.events.emitToolOutputChunk({
+        runId: payload.runId,
+        threadId: payload.threadId,
+        eventId: payload.eventId,
+        seqGlobal: payload.seqGlobal,
+        seqStream: payload.seqStream,
+        source: payload.source,
+        ts,
+        data: payload.data,
+      });
+    } catch (err) {
+      this.logger.warn('Failed to emit tool_output_chunk event', err);
+    }
+  }
+
+  private emitToolOutputTerminalEvent(payload: ToolOutputTerminalPayload, ts: Date): void {
+    try {
+      this.events.emitToolOutputTerminal({
+        runId: payload.runId,
+        threadId: payload.threadId,
+        eventId: payload.eventId,
+        exitCode: payload.exitCode,
+        status: payload.status,
+        bytesStdout: payload.bytesStdout,
+        bytesStderr: payload.bytesStderr,
+        totalChunks: payload.totalChunks,
+        droppedChunks: payload.droppedChunks,
+        savedPath: payload.savedPath,
+        message: payload.message,
+        ts,
+      });
+    } catch (err) {
+      this.logger.warn('Failed to emit tool_output_terminal event', err);
+    }
   }
 
   private truncate(text: string | null | undefined): string | null {
@@ -658,6 +804,210 @@ export class RunEventsService {
     const event = await this.fetchEvent(eventId);
     if (!event) return null;
     return this.serializeEvent(event);
+  }
+
+  async appendToolOutputChunk(args: ToolOutputChunkArgs): Promise<ToolOutputChunkPayload> {
+    const tx = args.tx ?? this.prisma;
+    const ts = args.ts ?? new Date();
+    const basePayload: ToolOutputChunkPayload = {
+      runId: args.runId,
+      threadId: args.threadId,
+      eventId: args.eventId,
+      seqGlobal: args.seqGlobal,
+      seqStream: args.seqStream,
+      source: args.source,
+      ts: ts.toISOString(),
+      data: args.data,
+    };
+
+    try {
+      const record = await tx.toolOutputChunk.create({
+        data: {
+          eventId: args.eventId,
+          seqGlobal: args.seqGlobal,
+          seqStream: args.seqStream,
+          source: args.source,
+          data: args.data,
+          ts,
+          bytes: Math.max(0, Math.trunc(args.bytes)),
+        },
+      });
+
+      const payload: ToolOutputChunkPayload = {
+        runId: args.runId,
+        threadId: args.threadId,
+        eventId: args.eventId,
+        seqGlobal: record.seqGlobal,
+        seqStream: record.seqStream,
+        source: record.source,
+        ts: record.ts.toISOString(),
+        data: record.data,
+      };
+
+      this.emitToolOutputChunkEvent(payload, record.ts);
+      return payload;
+    } catch (err) {
+      this.logChunkPersistenceFailure(args.runId, args.eventId, err);
+      this.emitToolOutputChunkEvent(basePayload, ts);
+      return basePayload;
+    }
+  }
+
+  async finalizeToolOutputTerminal(args: ToolOutputTerminalArgs): Promise<ToolOutputTerminalPayload> {
+    const tx = args.tx ?? this.prisma;
+    const ts = args.ts ?? new Date();
+    const sanitized = {
+      bytesStdout: Math.max(0, Math.trunc(args.bytesStdout)),
+      bytesStderr: Math.max(0, Math.trunc(args.bytesStderr)),
+      totalChunks: Math.max(0, Math.trunc(args.totalChunks)),
+      droppedChunks: Math.max(0, Math.trunc(args.droppedChunks)),
+      savedPath: args.savedPath ?? null,
+      message: args.message ?? null,
+    };
+
+    const basePayload: ToolOutputTerminalPayload = {
+      runId: args.runId,
+      threadId: args.threadId,
+      eventId: args.eventId,
+      exitCode: args.exitCode,
+      status: args.status,
+      bytesStdout: sanitized.bytesStdout,
+      bytesStderr: sanitized.bytesStderr,
+      totalChunks: sanitized.totalChunks,
+      droppedChunks: sanitized.droppedChunks,
+      savedPath: sanitized.savedPath,
+      message: sanitized.message,
+      ts: ts.toISOString(),
+    };
+
+    try {
+      const record = await tx.toolOutputTerminal.upsert({
+        where: { eventId: args.eventId },
+        update: {
+          exitCode: args.exitCode,
+          status: args.status,
+          bytesStdout: sanitized.bytesStdout,
+          bytesStderr: sanitized.bytesStderr,
+          totalChunks: sanitized.totalChunks,
+          droppedChunks: sanitized.droppedChunks,
+          savedPath: sanitized.savedPath,
+          message: sanitized.message,
+          ts,
+        },
+        create: {
+          eventId: args.eventId,
+          exitCode: args.exitCode,
+          status: args.status,
+          bytesStdout: sanitized.bytesStdout,
+          bytesStderr: sanitized.bytesStderr,
+          totalChunks: sanitized.totalChunks,
+          droppedChunks: sanitized.droppedChunks,
+          savedPath: sanitized.savedPath,
+          message: sanitized.message,
+          ts,
+        },
+      });
+
+      const payload: ToolOutputTerminalPayload = {
+        runId: args.runId,
+        threadId: args.threadId,
+        eventId: record.eventId,
+        exitCode: record.exitCode ?? null,
+        status: record.status,
+        bytesStdout: record.bytesStdout,
+        bytesStderr: record.bytesStderr,
+        totalChunks: record.totalChunks,
+        droppedChunks: record.droppedChunks,
+        savedPath: record.savedPath ?? null,
+        message: record.message ?? null,
+        ts: record.ts.toISOString(),
+      };
+
+      this.emitToolOutputTerminalEvent(payload, record.ts);
+      return payload;
+    } catch (err) {
+      this.logTerminalPersistenceFailure(args.runId, args.eventId, err);
+      this.emitToolOutputTerminalEvent(basePayload, ts);
+      return basePayload;
+    }
+  }
+
+  async getToolOutputSnapshot(params: {
+    runId: string;
+    eventId: string;
+    sinceSeq?: number;
+    limit?: number;
+    order?: 'asc' | 'desc';
+  }): Promise<ToolOutputSnapshot | null> {
+    const { runId, eventId } = params;
+    try {
+      const event = await this.prisma.runEvent.findUnique({
+        where: { id: eventId },
+        select: { id: true, runId: true, threadId: true },
+      });
+      if (!event || event.runId !== runId) {
+        return null;
+      }
+      const threadId = event.threadId;
+
+      const order: 'asc' | 'desc' = params.order === 'desc' ? 'desc' : 'asc';
+      const limit = params.limit && Number.isFinite(params.limit) ? Math.min(Math.max(1, params.limit), 5000) : 1000;
+
+      const where: Prisma.ToolOutputChunkWhereInput = { eventId };
+      if (params.sinceSeq && Number.isFinite(params.sinceSeq)) {
+        const since = Math.floor(params.sinceSeq);
+        where.seqGlobal = { gt: since };
+      }
+
+      const records = await this.prisma.toolOutputChunk.findMany({
+        where,
+        orderBy: { seqGlobal: order },
+        take: limit,
+      });
+
+      const items: ToolOutputChunkPayload[] = records.map((row) => ({
+        runId,
+        threadId,
+        eventId,
+        seqGlobal: row.seqGlobal,
+        seqStream: row.seqStream,
+        source: row.source,
+        ts: row.ts.toISOString(),
+        data: row.data,
+      }));
+
+      const nextSeq =
+        items.length > 0
+          ? items.reduce((max, item) => (item.seqGlobal > max ? item.seqGlobal : max), items[0]!.seqGlobal)
+          : null;
+
+      const terminalRecord = await this.prisma.toolOutputTerminal.findUnique({ where: { eventId } });
+      const terminal: ToolOutputTerminalPayload | null = terminalRecord
+        ? {
+            runId,
+            threadId,
+            eventId,
+            exitCode: terminalRecord.exitCode ?? null,
+            status: terminalRecord.status,
+            bytesStdout: terminalRecord.bytesStdout,
+            bytesStderr: terminalRecord.bytesStderr,
+            totalChunks: terminalRecord.totalChunks,
+            droppedChunks: terminalRecord.droppedChunks,
+            savedPath: terminalRecord.savedPath ?? null,
+            message: terminalRecord.message ?? null,
+            ts: terminalRecord.ts.toISOString(),
+          }
+        : null;
+
+      return {
+        items,
+        terminal,
+        nextSeq,
+      };
+    } catch (err) {
+      this.logSnapshotPersistenceFailure(runId, eventId, err);
+      throw err;
+    }
   }
 
   async getContextItems(ids: string[]): Promise<SerializedContextItem[]> {

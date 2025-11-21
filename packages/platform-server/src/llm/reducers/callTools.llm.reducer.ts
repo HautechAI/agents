@@ -8,6 +8,7 @@ import { ToolExecStatus, Prisma } from '@prisma/client';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 import type { ResponseFunctionCallOutputItemList } from 'openai/resources/responses/responses.mjs';
 import { contextItemInputFromMessage } from '../services/context-items.utils';
+import { ShellCommandTool } from '../../nodes/tools/shell_command/shell_command.tool';
 
 type ToolCallErrorCode =
   | 'BAD_JSON_ARGS'
@@ -35,6 +36,9 @@ type ToolCallResult = {
   raw: ToolCallRaw;
   output: ToolCallStructuredOutput;
 };
+
+const isToolCallRaw = (value: unknown): value is ToolCallRaw =>
+  typeof value === 'string' || Array.isArray(value);
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
@@ -220,7 +224,20 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
       }
 
       try {
-        const raw = await tool.execute(input, ctx);
+        let raw: unknown;
+        if (tool instanceof ShellCommandTool && startedEventId) {
+          raw = await tool.executeStreaming(
+            input as Parameters<ShellCommandTool['executeStreaming']>[0],
+            ctx,
+            {
+              runId: ctx.runId,
+              threadId: ctx.threadId,
+              eventId: startedEventId,
+            },
+          );
+        } else {
+          raw = await tool.execute(input as Parameters<FunctionTool['execute']>[0], ctx);
+        }
 
         if (typeof raw === 'string' && raw.length > 50000) {
           response = createErrorResponse({
@@ -228,6 +245,13 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
             message: `Tool ${toolCall.name} produced output longer than 50000 characters.`,
             originalArgs: input,
             details: { length: raw.length },
+          });
+        } else if (!isToolCallRaw(raw)) {
+          response = createErrorResponse({
+            code: 'TOOL_EXECUTION_ERROR',
+            message: `Tool ${toolCall.name} returned unsupported output type.`,
+            originalArgs: input,
+            details: { receivedType: typeof raw },
           });
         } else {
           response = {

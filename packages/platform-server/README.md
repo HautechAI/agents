@@ -34,14 +34,20 @@ Persistent conversation state (Prisma)
 - Optional Postgres-backed persistence for LLM conversation state per thread/node.
 - Set AGENTS_DATABASE_URL to a Postgres connection string. docker-compose provides a local agents-db on 5443:
   - Example: postgresql://agents:agents@localhost:5443/agents
-- Prisma schema lives under prisma/schema.prisma. Scripts:
-  - pnpm --filter @agyn/platform-server prisma:generate
-  - pnpm --filter @agyn/platform-server prisma:migrate
-  - pnpm --filter @agyn/platform-server prisma:studio
+- Prisma schema lives under prisma/schema.prisma. Common commands:
+  - `pnpm --filter @agyn/platform-server prisma migrate deploy`
+  - `pnpm --filter @agyn/platform-server prisma generate`
+  - `pnpm --filter @agyn/platform-server prisma studio`
 - Best-effort: if AGENTS_DATABASE_URL is not set or DB errors occur, reducers fall back to in-memory only.
 - Local dev:
   - LLM_PROVIDER must be set explicitly to 'openai' or 'litellm'. There is no default.
   - GitHub integration is optional. If no GitHub env is provided, the server boots and logs that GitHub is disabled. Any GitHub-dependent feature will error at runtime until credentials are configured.
+- Shell tool streaming persistence:
+  - Tool stdout/stderr chunks are stored via Prisma when the `tool_output_*` tables exist.
+  - After pulling migrations, run both commands to ensure the schema is installed locally:
+    - `pnpm --filter @agyn/platform-server prisma migrate deploy`
+    - `pnpm --filter @agyn/platform-server prisma generate`
+  - If the tables are missing, the server logs a warning, continues streaming over websockets, and the snapshot endpoint returns HTTP 501 instructing you to run the commands above.
 
 ## Prisma workflow (platform-server)
 
@@ -54,16 +60,16 @@ Persistent conversation state (Prisma)
 2) Generate Prisma Client after schema changes
 - The Prisma schema is at `packages/platform-server/prisma/schema.prisma`.
 - After any schema change, generate the client for the platform-server package:
-  - `pnpm -C packages/platform-server prisma:generate`
-  - Alternative filter syntax: `pnpm --filter @agyn/platform-server prisma:generate`
+  - `pnpm --filter @agyn/platform-server prisma generate`
+  - Alternative (inside package): `pnpm -C packages/platform-server prisma generate`
 - Tip: Always target the package (do not run `prisma generate` from the repo root).
 
 3) Create migrations with Prisma Migrate (no handwritten SQL)
 - Edit `schema.prisma`; do not write SQL directly.
-- Create the initial migration (convenience script):
-  - `pnpm -C packages/platform-server prisma:migrate`  # runs `prisma migrate dev --name init`
+- Create the initial migration:
+  - `pnpm --filter @agyn/platform-server prisma migrate dev --name init`
 - Create a named migration for subsequent changes:
-  - `pnpm -C packages/platform-server prisma migrate dev --name add_message_table`
+  - `pnpm --filter @agyn/platform-server prisma migrate dev --name add_message_table`
 
 4) Apply migrations (dev vs deploy)
 - Development/local: applies and generates client if needed
@@ -79,7 +85,7 @@ Persistent conversation state (Prisma)
   - Add `--force` to skip prompts if needed.
 
 6) Common pitfalls and guidance
-- Client not found / types missing: run `prisma:generate` for the platform-server package.
+- Client not found / types missing: run `pnpm --filter @agyn/platform-server prisma generate` for the platform-server package.
 - Monorepo targeting: use `pnpm -C packages/platform-server ...` or `pnpm --filter @agyn/platform-server ...`.
 - Import enums/types from `@prisma/client` in server code; do not re-declare.
 - Ensure `AGENTS_DATABASE_URL` is set in env (see `packages/platform-server/.env.example`).
@@ -87,7 +93,7 @@ Persistent conversation state (Prisma)
 
 7) CI note
 - CI runs Prisma client generation before tests/build:
-  - `pnpm --filter @agyn/platform-server prisma:generate`
+  - `pnpm --filter @agyn/platform-server prisma generate`
 - For production deployments, apply migrations with `prisma migrate deploy` as part of your release process.
 
 Messaging (Slack-only v1)
