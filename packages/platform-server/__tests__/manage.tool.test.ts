@@ -88,7 +88,7 @@ async function addWorker(module: Awaited<ReturnType<typeof createHarness>>['modu
 }
 
 describe('ManageTool unit', () => {
-  it('send_message: uses explicit threadAlias', async () => {
+  it('send_message: uses explicit threadAlias verbatim after trim', async () => {
     const getOrCreateSubthreadByAlias = vi.fn().mockResolvedValue('child-explicit');
     const persistence = { getOrCreateSubthreadByAlias } as unknown as AgentsPersistenceService;
     const harness = await createHarness({ persistence });
@@ -96,12 +96,17 @@ describe('ManageTool unit', () => {
 
     const ctx = buildCtx();
     const res = await harness.tool.execute(
-      { command: 'send_message', worker: ' child-1 ', message: 'hello', threadAlias: 'explicit-alias' },
+      {
+        command: 'send_message',
+        worker: ' child-1 ',
+        message: 'hello',
+        threadAlias: '  Mixed.Alias-Case_123  ',
+      },
       ctx,
     );
 
     expect(res?.startsWith('ok-')).toBe(true);
-    expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith('manage', 'explicit-alias', 'parent', '');
+    expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith('manage', 'Mixed.Alias-Case_123', 'parent', '');
   });
 
   it('send_message: derives sanitized alias when omitted', async () => {
@@ -120,14 +125,14 @@ describe('ManageTool unit', () => {
     expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith('manage', 'alpha-worker', 'parent', '');
   });
 
-  it('send_message: rejects invalid alias input', async () => {
+  it('send_message: rejects empty alias after trim', async () => {
     const harness = await createHarness();
     await addWorker(harness.module, harness.node, 'Worker X');
     const ctx = buildCtx();
 
     await expect(
       harness.tool.execute(
-        { command: 'send_message', worker: 'Worker X', message: 'hi', threadAlias: '   @@@  ' },
+        { command: 'send_message', worker: 'Worker X', message: 'hi', threadAlias: '   ' },
         ctx,
       ),
     ).rejects.toThrow('Manage: invalid or empty threadAlias');

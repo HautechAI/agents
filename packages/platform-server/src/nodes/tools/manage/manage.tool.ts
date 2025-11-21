@@ -84,7 +84,14 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       if (!targetAgent) throw new Error(`Unknown worker: ${targetTitle}`);
       const persistence = this.getPersistence();
       if (!persistence) throw new Error('Manage: persistence unavailable');
-      const alias = this.sanitizeAlias(threadAlias ?? targetTitle);
+      const alias =
+        typeof threadAlias === 'string'
+          ? (() => {
+              const trimmed = threadAlias.trim();
+              if (!trimmed) throw new Error('Manage: invalid or empty threadAlias');
+              return trimmed;
+            })()
+          : this.sanitizeAlias(targetTitle);
       const childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', alias, parentThreadId, '');
       try {
         const res = await targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
