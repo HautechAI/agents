@@ -11,7 +11,12 @@ import { stringify as YamlStringify } from 'yaml';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { PrismaService } from '../../core/services/prisma.service';
 import { SlackAdapter } from '../../messaging/slack/slack.adapter';
-import { ChannelDescriptorSchema, SendResultSchema, type SendResult, type ChannelDescriptor } from '../../messaging/types';
+import {
+  ChannelDescriptorSchema,
+  SendResultSchema,
+  type SendResult,
+  type ChannelDescriptor,
+} from '../../messaging/types';
 
 type TriggerHumanMessage = {
   kind: 'human';
@@ -50,6 +55,8 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
   ) {
+    console.log('-----init-----');
+    console.log(logger, vault, persistence, prismaService, slackAdapter);
     super(logger);
   }
 
@@ -245,6 +252,9 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
 
   // Send a text message using stored thread descriptor and this trigger's bot token
   async sendToThread(threadId: string, text: string): Promise<SendResult> {
+    console.log('------send------');
+    console.log(this);
+    console.log(this.logger, this.vault, this.persistence, this.prismaService, this.slackAdapter);
     try {
       const prisma = this.prismaService.getClient();
       type ThreadChannelRow = { channel: unknown | null };
@@ -288,6 +298,9 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     } catch (e) {
       if (e instanceof Error) {
         const message = e.message ? e.message : 'unknown_error';
+        console.log('------');
+        console.log(this.logger);
+        console.log('------');
         this.logger.error('SlackTrigger.sendToThread failed', e, { threadId });
         return { ok: false, error: message };
       }
