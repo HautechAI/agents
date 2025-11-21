@@ -63,4 +63,45 @@ describe('CallModelLLMReducer usage metrics', () => {
       }),
     );
   });
+
+  it('passes new context item count to startLLMCall args', async () => {
+    const runEvents = {
+      startLLMCall: vi.fn(async () => ({ id: 'evt-context-1' })),
+      publishEvent: vi.fn(async () => {}),
+      completeLLMCall: vi.fn(async () => {}),
+      createContextItems: vi.fn().mockResolvedValueOnce(['ctx-user-new']).mockResolvedValueOnce(['ctx-assistant']),
+      connectContextItemsToRun: vi.fn(async () => {}),
+      createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
+    };
+
+    const response = new ResponseMessage({ output: [] as any, text: 'ok' } as any);
+    const llm = { call: vi.fn(async () => response) };
+
+    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any).init({
+      llm: llm as any,
+      model: 'gpt-context',
+      systemPrompt: 'SYS',
+      tools: [],
+    });
+
+    const initialState = {
+      messages: [HumanMessage.fromText('Hello there')],
+      context: { messageIds: [], memory: [], system: { id: 'ctx-system-1' } },
+    } as any;
+
+    await reducer.invoke(initialState, {
+      threadId: 'thread-context',
+      runId: 'run-context',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: { getAgentNodeId: () => 'agent-context' } as any,
+    });
+
+    expect(runEvents.startLLMCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        newContextItemCount: 1,
+        contextItemIds: expect.arrayContaining(['ctx-system-1', 'ctx-user-new']),
+      }),
+    );
+  });
 });

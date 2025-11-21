@@ -110,11 +110,26 @@ function buildEvent(overrides: Partial<RunTimelineEvent> = {}): RunTimelineEvent
   const { toolExecution, llmCall, message, attachments, ...rest } = overrides;
   const hasToolOverride = Object.prototype.hasOwnProperty.call(overrides, 'toolExecution');
   const finalToolExecution = hasToolOverride ? toolExecution : base.toolExecution;
+  const finalLlmCall = llmCall
+    ? {
+        provider: null,
+        model: null,
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [] as string[],
+        newContextItemCount: 0,
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [] as Array<{ callId: string; name: string; arguments: unknown }>,
+        ...llmCall,
+      }
+    : base.llmCall;
 
   return {
     ...base,
     ...rest,
-    llmCall: llmCall ?? base.llmCall,
+    llmCall: finalLlmCall,
     toolExecution: finalToolExecution ? { ...base.toolExecution!, ...finalToolExecution } : finalToolExecution,
     message: message ?? base.message,
     attachments: attachments ?? base.attachments,
@@ -842,6 +857,84 @@ describe('RunTimelineEventDetails', () => {
       const badge = within(contextRegion).getByText('user');
       expect(badge).toHaveClass('capitalize');
       expect(within(contextRegion).queryByText('Metadata')).toBeNull();
+    } finally {
+      useContextItemsSpy.mockRestore();
+    }
+  });
+
+  it('highlights the last N context items when flagged as new', () => {
+    const contextItems: ContextItem[] = [
+      {
+        id: 'ctx-1',
+        role: 'system',
+        contentText: 'System prompt',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 42,
+        createdAt: '2024-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'ctx-2',
+        role: 'user',
+        contentText: 'User asks a question',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 64,
+        createdAt: '2024-01-01T00:02:00.000Z',
+      },
+      {
+        id: 'ctx-3',
+        role: 'assistant',
+        contentText: 'Assistant responds',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 128,
+        createdAt: '2024-01-01T00:03:00.000Z',
+      },
+    ];
+
+    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockReturnValue({
+      items: contextItems,
+      total: contextItems.length,
+      loadedCount: contextItems.length,
+      targetCount: contextItems.length,
+      hasMore: false,
+      isInitialLoading: false,
+      isFetching: false,
+      error: null,
+      loadMore: vi.fn(),
+    });
+
+    try {
+      const event = buildEvent({
+        type: 'llm_call',
+        llmCall: {
+          provider: 'openai',
+          model: 'gpt-highlight',
+          temperature: null,
+          topP: null,
+          stopReason: null,
+          contextItemIds: contextItems.map((item) => item.id),
+          newContextItemCount: 2,
+          responseText: null,
+          rawResponse: null,
+          toolCalls: [],
+        },
+        toolExecution: undefined,
+      });
+
+      renderDetails(event);
+
+      const contextRegion = screen.getByTestId('llm-context-scroll');
+      const headers = Array.from(contextRegion.querySelectorAll('header'));
+      expect(headers).toHaveLength(3);
+      expect(headers[0]?.textContent ?? '').not.toContain('New');
+      expect(headers[1]?.textContent ?? '').toContain('New');
+      expect(headers[2]?.textContent ?? '').toContain('New');
+      const highlightedWrappers = headers.slice(1).map((header) => header.parentElement);
+      highlightedWrappers.forEach((wrapper) => {
+        expect(wrapper?.className).toContain('border-sky-200');
+      });
     } finally {
       useContextItemsSpy.mockRestore();
     }

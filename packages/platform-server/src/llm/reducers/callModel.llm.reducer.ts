@@ -82,7 +82,11 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     }
 
     const sequence = this.buildSequence(system, summaryMsg, memoryResult, state.messages);
-    const { contextItemIds, context: nextContext } = await this.resolveContextIds(context, sequence, summaryText);
+    const { contextItemIds, context: nextContext, newContextCount } = await this.resolveContextIds(
+      context,
+      sequence,
+      summaryText,
+    );
     const input = sequence.map((entry) => entry.message);
 
     const nodeId = ctx.callerAgent.getAgentNodeId?.() ?? null;
@@ -92,6 +96,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       nodeId,
       model: this.model,
       contextItemIds,
+      newContextItemCount: newContextCount,
       metadata: {
         summaryIncluded: Boolean(summaryMsg),
         memoryPlacement: memoryResult?.msg ? memoryResult.place : null,
@@ -234,7 +239,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     context: LLMContextState,
     sequence: SequenceEntry[],
     summaryText: string | null,
-  ): Promise<{ contextItemIds: string[]; context: LLMContextState }> {
+  ): Promise<{ contextItemIds: string[]; context: LLMContextState; newContextCount: number }> {
     const pending: Array<{ input: ContextItemInput; assign: (id: string) => void }> = [];
     let conversationIndex = 0;
 
@@ -314,9 +319,11 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       context.messageIds = context.messageIds.slice(0, conversationIndex);
     }
 
+    let newContextCount = 0;
     if (pending.length > 0) {
       const inputs = pending.map((item) => item.input);
       const created = await this.runEvents.createContextItems(inputs);
+      newContextCount = created.filter((id): id is string => typeof id === 'string' && id.length > 0).length;
       created.forEach((id, index) => pending[index].assign(id));
     }
 
@@ -346,7 +353,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       }
     }
 
-    return { contextItemIds, context };
+    return { contextItemIds, context, newContextCount };
   }
 
   private collectContextId(params: {
