@@ -40,6 +40,10 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
         this.logger.error('SendMessageFunctionTool trigger unavailable', { threadId });
         return JSON.stringify({ ok: false, error: 'slacktrigger_unavailable' });
       }
+      if (trigger.status !== 'ready') {
+        this.logger.error('SendMessageFunctionTool trigger not ready', { threadId, status: trigger.status });
+        return JSON.stringify({ ok: false, error: 'slacktrigger_unprovisioned' });
+      }
       const result = (await trigger.sendToThread(threadId, args.message)) as unknown;
       const parsed = SendResultSchema.safeParse(result);
       if (!parsed.success) {
