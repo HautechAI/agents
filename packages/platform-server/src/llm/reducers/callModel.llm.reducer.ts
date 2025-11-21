@@ -32,7 +32,7 @@ type SequenceEntry =
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(
-    @Inject(LoggerService) protected readonly logger: LoggerService,
+    @Inject(LoggerService) protected logger: LoggerService,
     @Inject(RunEventsService) private readonly runEvents: RunEventsService,
     @Inject(EventsBusService) private readonly eventsBus: EventsBusService,
   ) {
@@ -240,7 +240,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     sequence: SequenceEntry[],
     summaryText: string | null,
   ): Promise<{ contextItemIds: string[]; context: LLMContextState; newContextCount: number }> {
-    const pending: Array<{ input: ContextItemInput; assign: (id: string) => void }> = [];
+    const pending: Array<{ input: ContextItemInput; assign: (id: string) => void; isConversation?: boolean }> = [];
     let conversationIndex = 0;
     const initialConversationCount = context.messageIds.length;
 
@@ -309,6 +309,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
                 context.messageIds.push(id);
               }
             },
+            isConversation: existingId === null || idx >= initialConversationCount,
           });
           conversationIndex += 1;
           break;
@@ -320,11 +321,16 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       context.messageIds = context.messageIds.slice(0, conversationIndex);
     }
 
-    const newContextCount = Math.max(0, conversationIndex - initialConversationCount);
+    let newContextCount = 0;
     if (pending.length > 0) {
       const inputs = pending.map((item) => item.input);
       const created = await this.runEvents.createContextItems(inputs);
-      created.forEach((id, index) => pending[index].assign(id));
+      created.forEach((id, index) => {
+        pending[index].assign(id);
+        if (pending[index].isConversation && typeof id === 'string' && id.length > 0) {
+          newContextCount += 1;
+        }
+      });
     }
 
     const contextItemIds: string[] = [];
@@ -358,11 +364,12 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
 
   private collectContextId(params: {
     existingId: string | null;
-    pending: Array<{ input: ContextItemInput; assign: (id: string) => void }>;
+    pending: Array<{ input: ContextItemInput; assign: (id: string) => void; isConversation?: boolean }>;
     input: () => ContextItemInput;
     assign: (id: string) => void;
+    isConversation?: boolean;
   }): void {
-    const { existingId, pending, input, assign } = params;
+    const { existingId, pending, input, assign, isConversation } = params;
     const normalizedId = existingId && existingId.length > 0 ? existingId : null;
     if (normalizedId) {
       assign(normalizedId);
@@ -371,6 +378,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     pending.push({
       input: input(),
       assign,
+      isConversation,
     });
   }
 
@@ -404,22 +412,20 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     }
   }
 
-  private extractStopReason(raw: unknown): string | null {
-    if (!raw || typeof raw !== 'object') return null;
-    const obj = raw as Record<string, unknown>;
-    const reason = obj.stop_reason ?? obj.finish_reason;
-    return typeof reason === 'string' ? reason : null;
-  }
-
   private extractUsage(message: ResponseMessage): LLMCallUsageMetrics | undefined {
     const usage = message.usage;
     if (!usage) return undefined;
+
     return {
-      inputTokens: usage.input_tokens,
+      inputTokens: usage.input_tokens ?? null,
       cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? null,
-      outputTokens: usage.output_tokens,
+      outputTokens: usage.output_tokens ?? null,
       reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? null,
-      totalTokens: usage.total_tokens,
+      totalTokens: usage.total_tokens ?? null,
     };
+  }
+
+  private extractStopReason(message: ResponseMessage): string | null {
+    return message.output[0]?.stopReason ?? null;
   }
 }

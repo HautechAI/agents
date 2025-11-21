@@ -77,7 +77,8 @@ describe('CallModelLLMReducer usage metrics', () => {
     const response = new ResponseMessage({ output: [] as any, text: 'ok' } as any);
     const llm = { call: vi.fn(async () => response) };
 
-    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any).init({
+    const eventsBus = { publishEvent: vi.fn(async () => {}), subscribeToRunEvents: vi.fn(() => vi.fn()) };
+    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any, eventsBus as any).init({
       llm: llm as any,
       model: 'gpt-context',
       systemPrompt: 'SYS',
@@ -126,7 +127,8 @@ describe('CallModelLLMReducer usage metrics', () => {
       place: 'after_system' as const,
     }));
 
-    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any).init({
+    const eventsBus = { publishEvent: vi.fn(async () => {}), subscribeToRunEvents: vi.fn(() => vi.fn()) };
+    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any, eventsBus as any).init({
       llm: llm as any,
       model: 'gpt-context-tail',
       systemPrompt: 'SYS',
