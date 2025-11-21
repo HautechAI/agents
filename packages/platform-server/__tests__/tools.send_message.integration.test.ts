@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { SendMessageFunctionTool } from '../src/nodes/tools/send_message/send_message.tool';
 import { LoggerService } from '../src/core/services/logger.service';
 // Avoid importing PrismaService to prevent prisma client load
@@ -7,7 +7,6 @@ import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import type { VaultRef } from '../src/vault/vault.service';
 
 // Mock slack web api
-import { vi } from 'vitest';
 vi.mock('@slack/socket-mode', () => {
   class MockSocket {
     on() {}
@@ -88,5 +87,37 @@ describe('send_message tool', () => {
     const obj = JSON.parse(res);
     expect(obj.ok).toBe(true);
     expect(obj.channelMessageId).toBe('2001');
+  });
+
+  it('returns tool_invalid_response when trigger result is malformed', async () => {
+    const triggerStub = ({
+      sendToThread: vi.fn().mockResolvedValueOnce({ notOk: true }),
+    } satisfies Pick<SlackTrigger, 'sendToThread'>) as SlackTrigger;
+    const logger = new LoggerService();
+    const errorSpy = vi.spyOn(logger, 'error');
+    const tool = new SendMessageFunctionTool(logger, triggerStub);
+    const res = await tool.execute({ message: 'hello' }, { threadId: 'thread-1' });
+    const obj = JSON.parse(res);
+    expect(obj).toEqual({ ok: false, error: 'tool_invalid_response' });
+    expect(triggerStub.sendToThread).toHaveBeenCalledWith('thread-1', 'hello');
+    expect(errorSpy).toHaveBeenCalledWith('SendMessageFunctionTool invalid send result', { threadId: 'thread-1', result: { notOk: true } });
+  });
+
+  it('propagates trigger errors and logs error object', async () => {
+    const triggerStub = ({
+      sendToThread: vi.fn().mockRejectedValueOnce(new Error('boom')),
+    } satisfies Pick<SlackTrigger, 'sendToThread'>) as SlackTrigger;
+    const logger = new LoggerService();
+    const errorSpy = vi.spyOn(logger, 'error');
+    const tool = new SendMessageFunctionTool(logger, triggerStub);
+    const res = await tool.execute({ message: 'hello' }, { threadId: 'thread-2' });
+    const obj = JSON.parse(res);
+    expect(obj).toEqual({ ok: false, error: 'boom' });
+    expect(errorSpy).toHaveBeenCalled();
+    const call = errorSpy.mock.calls.at(0);
+    expect(call?.[0]).toBe('SendMessageFunctionTool execute failed');
+    expect(call?.[1]).toBeInstanceOf(Error);
+    expect((call?.[1] as Error).message).toBe('boom');
+    expect(call?.[2]).toEqual({ threadId: 'thread-2' });
   });
 });

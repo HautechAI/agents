@@ -1,7 +1,7 @@
 import z from 'zod';
 import { FunctionTool } from '@agyn/llm';
 import { LoggerService } from '../../../core/services/logger.service';
-import type { SendResult } from '../../../messaging/types';
+import { SendResultSchema } from '../../../messaging/types';
 import { SlackTrigger } from '../../slackTrigger/slackTrigger.node';
 import type { LLMContext } from '../../../llm/types';
 
@@ -29,11 +29,21 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
     const threadId = ctx?.threadId;
     if (!threadId) return JSON.stringify({ ok: false, error: 'missing_thread_context' });
     try {
-      const res: SendResult = await this.trigger.sendToThread(threadId, args.message);
-      return JSON.stringify(res);
+      const result = (await this.trigger.sendToThread(threadId, args.message)) as unknown;
+      const parsed = SendResultSchema.safeParse(result);
+      if (!parsed.success) {
+        this.logger.error('SendMessageFunctionTool invalid send result', { threadId, result });
+        return JSON.stringify({ ok: false, error: 'tool_invalid_response' });
+      }
+      return JSON.stringify(parsed.data);
     } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
-      return JSON.stringify({ ok: false, error: msg });
+      if (e instanceof Error) {
+        this.logger.error('SendMessageFunctionTool execute failed', e, { threadId });
+        const message = e.message ? e.message : 'unknown_error';
+        return JSON.stringify({ ok: false, error: message });
+      }
+      this.logger.error('SendMessageFunctionTool execute failed', { threadId, error: e });
+      return JSON.stringify({ ok: false, error: 'unknown_error' });
     }
   }
 }

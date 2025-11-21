@@ -11,7 +11,7 @@ import { stringify as YamlStringify } from 'yaml';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { PrismaService } from '../../core/services/prisma.service';
 import { SlackAdapter } from '../../messaging/slack/slack.adapter';
-import { ChannelDescriptorSchema, type SendResult, type ChannelDescriptor } from '../../messaging/types';
+import { ChannelDescriptorSchema, SendResultSchema, type SendResult, type ChannelDescriptor } from '../../messaging/types';
 
 type TriggerHumanMessage = {
   kind: 'human';
@@ -273,17 +273,26 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       }
       const descriptor = parsed.data;
       const ids = descriptor.identifiers;
-      const res = await this.slackAdapter.sendText({
+      const res = (await this.slackAdapter.sendText({
         token: this.botToken!,
         channel: ids.channel,
         text,
         thread_ts: ids.thread_ts,
-      });
-      return res;
+      })) as unknown;
+      const sendParse = SendResultSchema.safeParse(res);
+      if (!sendParse.success) {
+        this.logger.error('SlackTrigger.sendToThread: invalid adapter response', { threadId, response: res });
+        return { ok: false, error: 'adapter_invalid_response' };
+      }
+      return sendParse.data;
     } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
-      this.logger.error('SlackTrigger.sendToThread failed', { threadId, error: msg });
-      return { ok: false, error: msg };
+      if (e instanceof Error) {
+        const message = e.message ? e.message : 'unknown_error';
+        this.logger.error('SlackTrigger.sendToThread failed', e, { threadId });
+        return { ok: false, error: message };
+      }
+      this.logger.error('SlackTrigger.sendToThread failed', { threadId, error: e });
+      return { ok: false, error: 'unknown_error' };
     }
   }
 }
