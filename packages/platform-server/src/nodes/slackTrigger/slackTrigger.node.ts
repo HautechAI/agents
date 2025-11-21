@@ -51,13 +51,17 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   constructor(
     @Inject(LoggerService) protected readonly logger: LoggerService,
     @Inject(VaultService) protected readonly vault: VaultService,
-    @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
-    @Inject(PrismaService) private readonly prismaService: PrismaService,
-    @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
+    @Inject(AgentsPersistenceService) protected readonly persistence: AgentsPersistenceService,
+    @Inject(PrismaService) protected readonly prismaService: PrismaService,
+    @Inject(SlackAdapter) protected readonly slackAdapter: SlackAdapter,
   ) {
-    console.log('-----init-----');
-    console.log(logger, vault, persistence, prismaService, slackAdapter);
+    console.log('-----SlackTrigger constructor-----');
+    console.log(logger);
     super(logger);
+  }
+
+  public test() {
+    console.log('test', this.logger);
   }
 
   private async resolveAppToken(): Promise<string> {

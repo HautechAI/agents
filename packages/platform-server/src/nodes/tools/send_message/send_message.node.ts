@@ -16,6 +16,9 @@ export class SendMessageNode extends BaseToolNode<SendMessageConfig> {
     @Inject(LoggerService) protected logger: LoggerService,
     @Inject(SlackTrigger) protected trigger: SlackTrigger,
   ) {
+    console.log('-----SendMessageNode constructor-----');
+    console.log(trigger);
+    console.log(trigger.test());
     super(logger);
   }
 
