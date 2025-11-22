@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ReferenceFieldSchema } from '../utils/refs';
 
 // Slack-only channel descriptor
 // thread_ts is optional (omit if not present)
@@ -14,6 +15,7 @@ export const ChannelDescriptorSchema = z
         channel_type: z.string().optional(),
         client_msg_id: z.string().optional(),
         event_ts: z.string().optional(),
+        bot_token_ref: ReferenceFieldSchema.optional(),
       })
       .strict()
       .optional(),

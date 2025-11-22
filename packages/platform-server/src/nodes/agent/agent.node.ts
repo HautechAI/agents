@@ -102,7 +102,6 @@ import type { TemplatePortConfig } from '../../graph/ports.types';
 import type { RuntimeContext } from '../../graph/runtimeContext';
 import Node from '../base/Node';
 import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
-import type { SlackTrigger } from '../slackTrigger/slackTrigger.node';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class AgentNode extends Node<AgentStaticConfig> {
@@ -111,8 +110,6 @@ export class AgentNode extends Node<AgentStaticConfig> {
   private mcpServerTools: Map<LocalMCPServerNode, FunctionTool[]> = new Map();
   private tools: Set<FunctionTool> = new Set();
   private runningThreads: Set<string> = new Set();
-  private slackTrigger?: SlackTrigger;
-
   constructor(
     @Inject(ConfigService) protected configService: ConfigService,
     @Inject(LoggerService) protected logger: LoggerService,
@@ -176,16 +173,6 @@ export class AgentNode extends Node<AgentStaticConfig> {
     } catch {
       return undefined;
     }
-  }
-
-  setSlackTrigger(trigger: SlackTrigger): void;
-  setSlackTrigger(trigger: undefined): void;
-  setSlackTrigger(trigger: SlackTrigger | undefined): void {
-    this.slackTrigger = trigger;
-  }
-
-  getSlackTrigger(): SlackTrigger | undefined {
-    return this.slackTrigger;
   }
 
   setRuntimeContext(ctx: RuntimeContext): void {

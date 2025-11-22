@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { LoggerService } from '../src/core/services/logger.service';
 import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
+import { MessagingService } from '../src/messaging/messaging.service';
 
 type ChannelDescriptor = import('../src/messaging/types').ChannelDescriptor;
 
@@ -74,10 +75,11 @@ describe('SlackTrigger threading integration', () => {
     vi.clearAllMocks();
   });
 
-  const makeLogger = (): Pick<LoggerService, 'info' | 'debug' | 'error'> => ({
+  const makeLogger = (): Pick<LoggerService, 'info' | 'debug' | 'error' | 'warn'> => ({
     info: vi.fn(),
     debug: vi.fn(),
     error: vi.fn(),
+    warn: vi.fn(),
   });
 
   const setup = async (store: DescriptorStore) => {
@@ -100,9 +102,13 @@ describe('SlackTrigger threading integration', () => {
     } satisfies Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>) as import('../src/core/services/prisma.service').PrismaService;
     const slackSend = vi.fn(async (opts: { token: string; channel: string; text: string; thread_ts?: string }) => ({ ok: true, channelMessageId: '200', threadId: opts.thread_ts ?? 'generated-thread' }));
     const slackAdapter = ({ sendText: slackSend } satisfies Pick<SlackAdapter, 'sendText'>) as SlackAdapter;
-    const trigger = new SlackTrigger(logger as LoggerService, vault, persistence, prismaStub, slackAdapter);
-    await trigger.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-bot', source: 'static' } });
+    const trigger = new SlackTrigger(logger as LoggerService, vault, persistence, prismaStub);
+    await trigger.setConfig({
+      app_token: { value: 'xapp-abc', source: 'static' },
+      bot_token: { value: 'secret/slack/BOT', source: 'vault' },
+    });
     await trigger.provision();
+    const messaging = new MessagingService(slackAdapter, vault, prismaStub, logger as LoggerService);
     const client = __getLastSocketClient();
     if (!client || !(client.handlers.message || []).length) throw new Error('socket not initialized');
     const handler = (client.handlers.message || [])[0]!;
@@ -110,6 +116,7 @@ describe('SlackTrigger threading integration', () => {
       trigger,
       handler,
       slackSend,
+      messaging,
       getOrCreateThreadByAlias,
       updateThreadChannelDescriptor,
     };
@@ -117,7 +124,7 @@ describe('SlackTrigger threading integration', () => {
 
   it('replies to top-level channel messages within the same thread', async () => {
     const store = new DescriptorStore();
-    const { handler, trigger, slackSend, updateThreadChannelDescriptor } = await setup(store);
+    const { handler, messaging, slackSend, updateThreadChannelDescriptor } = await setup(store);
     const ack = vi.fn(async () => {});
     const env: SlackEnvelope = {
       envelope_id: 'env1',
@@ -136,7 +143,8 @@ describe('SlackTrigger threading integration', () => {
     };
     await handler(env);
     const threadId = 'thread-U1_1000.1';
-    await trigger.sendToThread(threadId, 'ack');
+    const result = await messaging.sendToThread(threadId, 'ack');
+    expect(result.ok).toBe(true);
     expect(slackSend).toHaveBeenCalledWith({ token: 'xoxb-bot', channel: 'C1', text: 'ack', thread_ts: '1000.1' });
     const descriptor = store.getDescriptor(threadId);
     expect(descriptor?.identifiers.thread_ts).toBe('1000.1');
@@ -145,7 +153,7 @@ describe('SlackTrigger threading integration', () => {
 
   it('keeps reply events in their originating Slack thread', async () => {
     const store = new DescriptorStore();
-    const { handler, trigger, slackSend, updateThreadChannelDescriptor } = await setup(store);
+    const { handler, messaging, slackSend, updateThreadChannelDescriptor } = await setup(store);
     const topLevelAck = vi.fn(async () => {});
     await handler({
       envelope_id: 'env-top',
@@ -182,7 +190,8 @@ describe('SlackTrigger threading integration', () => {
     };
     await handler(env);
     const threadId = 'thread-U2_2000.9';
-    await trigger.sendToThread(threadId, 'follow-up');
+    const result = await messaging.sendToThread(threadId, 'follow-up');
+    expect(result.ok).toBe(true);
     expect(slackSend).toHaveBeenCalledWith({ token: 'xoxb-bot', channel: 'C2', text: 'follow-up', thread_ts: '2000.9' });
     const descriptor = store.getDescriptor(threadId);
     expect(descriptor?.identifiers.thread_ts).toBe('2000.9');

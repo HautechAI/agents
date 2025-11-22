@@ -13,16 +13,16 @@ Schema
 
 Behavior
 
-- Requires ctx.threadId; loads `Thread.channel` and validates the Slack-only descriptor.
-- Uses SlackAdapter directly; no registry or multi-channel support in v1.
+- Requires `ctx.threadId`; loads `Thread.channel` via `MessagingService` and validates the Slack-only descriptor.
+- `MessagingService` resolves the Slack bot token using the descriptor’s `meta.bot_token_ref` and `VaultService`, then delegates to `SlackAdapter`.
 - Returns a JSON envelope: `{ ok, channelMessageId?, threadId?, error? }`.
-- Logs adapter type and identifiers; does not log full text.
+- Logs adapter identifiers; does not log full text.
 
 Slack-only descriptor and token resolution
 
-- `SlackTrigger` writes the descriptor on ingress only when `identifiers.channel` is present: `{ type: 'slack', version: number, identifiers: { channel, thread_ts? } }`.
-- No tokens are persisted. `SlackTrigger` requires a `bot_token` in node config and resolves it during setup/provision only.
-- `SendMessage` uses the `SlackTrigger`'s resolved `bot_token` to call `SlackAdapter`.
+- `SlackTrigger` writes the descriptor on ingress only when `identifiers.channel` is present: `{ type: 'slack', version: number, identifiers: { channel, thread_ts? }, meta?: { bot_token_ref?, ... } }`.
+- For Vault-backed configurations, `SlackTrigger` copies the `bot_token` reference into `meta.bot_token_ref`. Static token values are not persisted.
+- `MessagingService` resolves `meta.bot_token_ref` with the `VaultService` (expecting tokens that start with `xoxb-`). Missing references yield deterministic `missing_bot_token_ref` errors.
 
 Migration
 

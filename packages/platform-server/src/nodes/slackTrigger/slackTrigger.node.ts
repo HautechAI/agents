@@ -6,13 +6,11 @@ import { ReferenceFieldSchema, resolveTokenRef } from '../../utils/refs';
 import Node from '../base/Node';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { BufferMessage } from '../agent/messagesBuffer';
-import type { AgentNode } from '../agent/agent.node';
 import { HumanMessage } from '@agyn/llm';
 import { stringify as YamlStringify } from 'yaml';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { PrismaService } from '../../core/services/prisma.service';
-import { SlackAdapter } from '../../messaging/slack/slack.adapter';
-import { ChannelDescriptorSchema, type SendResult, type ChannelDescriptor } from '../../messaging/types';
+import type { ChannelDescriptor } from '../../messaging/types';
 
 type TriggerHumanMessage = {
   kind: 'human';
@@ -42,14 +40,11 @@ type SlackTriggerConfig = { app_token: SlackTokenRef; bot_token: SlackTokenRef }
 export class SlackTrigger extends Node<SlackTriggerConfig> {
   private client: SocketModeClient | null = null;
 
-  private botToken: string | null = null;
-
   constructor(
     @Inject(LoggerService) protected readonly logger: LoggerService,
     @Inject(VaultService) protected readonly vault: VaultService,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
     @Inject(PrismaService) private readonly prismaService: PrismaService,
-    @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
   ) {
     super(logger);
   }
@@ -141,29 +136,32 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         };
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias, text);
         // Persist descriptor only when channel present and event is top-level (no thread_ts)
-        if (typeof event.channel === 'string' && event.channel) {
-          if (!event.thread_ts && rootTs) {
-            const descriptor: ChannelDescriptor = {
-              type: 'slack',
-              version: 1,
-              identifiers: {
-                channel: event.channel,
-                thread_ts: rootTs,
-              },
-              meta: {
-                channel_type: event.channel_type,
-                client_msg_id: event.client_msg_id,
-                event_ts: event.event_ts,
-              },
-              createdBy: 'SlackTrigger',
-            };
-            await this.persistence.updateThreadChannelDescriptor(threadId, descriptor);
-          }
-        } else {
+        const channel = typeof event.channel === 'string' && event.channel ? event.channel : null;
+        if (!channel) {
           this.logger.warn('SlackTrigger: missing channel in Slack event; not persisting descriptor', {
             threadId,
             alias,
           });
+        } else if (!event.thread_ts && rootTs) {
+          const descriptorMeta: NonNullable<ChannelDescriptor['meta']> = {};
+          if (event.channel_type) descriptorMeta.channel_type = event.channel_type;
+          if (event.client_msg_id) descriptorMeta.client_msg_id = event.client_msg_id;
+          if (event.event_ts) descriptorMeta.event_ts = event.event_ts;
+          const botTokenRef = this.config.bot_token;
+          if ((botTokenRef?.source ?? 'static') === 'vault') {
+            descriptorMeta.bot_token_ref = botTokenRef;
+          }
+          const descriptor: ChannelDescriptor = {
+            type: 'slack',
+            version: 1,
+            identifiers: {
+              channel,
+              thread_ts: rootTs,
+            },
+            meta: Object.keys(descriptorMeta).length ? descriptorMeta : undefined,
+            createdBy: 'SlackTrigger',
+          };
+          await this.persistence.updateThreadChannelDescriptor(threadId, descriptor);
         }
         await this.notify(threadId, [msg]);
       } catch (err) {
@@ -178,12 +176,11 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     this.logger.info('SlackTrigger.doProvision: starting');
     // Resolve bot token during provision/setup only
     try {
-      const token = await resolveTokenRef(this.config.bot_token, {
+      await resolveTokenRef(this.config.bot_token, {
         expectedPrefix: 'xoxb-',
         fieldName: 'bot_token',
         vault: this.vault,
       });
-      this.botToken = token;
     } catch (e) {
       const msg = e instanceof Error && e.message ? e.message : 'invalid_or_missing_bot_token';
       this.logger.error('SlackTrigger.doProvision: bot token resolution failed', { error: msg });
@@ -217,15 +214,9 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   private _listeners: TriggerListener[] = [];
   async subscribe(listener: TriggerListener): Promise<void> {
     this._listeners.push(listener);
-    if (this.isAgentListener(listener)) {
-      listener.setSlackTrigger(this);
-    }
   }
   async unsubscribe(listener: TriggerListener): Promise<void> {
     this._listeners = this._listeners.filter((l) => l !== listener);
-    if (this.isAgentListener(listener) && listener.getSlackTrigger?.() === this) {
-      listener.setSlackTrigger(undefined);
-    }
   }
   protected async notify(thread: string, messages: TriggerHumanMessage[]): Promise<void> {
     this.logger.debug(`[SlackTrigger.notify] thread=${thread} messages=${YamlStringify(messages)}`);
@@ -242,60 +233,12 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     );
   }
 
-  private isAgentListener(listener: TriggerListener): listener is AgentNode & TriggerListener {
-    return typeof (listener as AgentNode).setSlackTrigger === 'function';
-  }
-
   public listeners(): Array<(thread: string, messages: BufferMessage[]) => Promise<void>> {
     return this._listeners.map((l) => async (thread: string, messages: BufferMessage[]) => l.invoke(thread, messages));
   }
 
   getPortConfig() {
     return { sourcePorts: { subscribe: { kind: 'method', create: 'subscribe', destroy: 'unsubscribe' } } } as const;
-  }
-
-  // Send a text message using stored thread descriptor and this trigger's bot token
-  async sendToThread(threadId: string, text: string): Promise<SendResult> {
-    try {
-      const prisma = this.prismaService.getClient();
-      type ThreadChannelRow = { channel: unknown | null };
-      const thread = (await prisma.thread.findUnique({
-        where: { id: threadId },
-        select: { channel: true },
-      })) as ThreadChannelRow | null;
-      if (!thread) {
-        this.logger.error('SlackTrigger.sendToThread: missing descriptor', { threadId });
-        return { ok: false, error: 'missing_channel_descriptor' };
-      }
-      // Bot token must be set after provision/setup; do not resolve here
-      if (!this.botToken) {
-        this.logger.error('SlackTrigger.sendToThread: trigger not provisioned');
-        return { ok: false, error: 'slacktrigger_unprovisioned' };
-      }
-      const channelRaw: unknown = thread.channel as unknown;
-      if (channelRaw == null) {
-        this.logger.error('SlackTrigger.sendToThread: missing descriptor', { threadId });
-        return { ok: false, error: 'missing_channel_descriptor' };
-      }
-      const parsed = ChannelDescriptorSchema.safeParse(channelRaw);
-      if (!parsed.success) {
-        this.logger.error('SlackTrigger.sendToThread: invalid descriptor', { threadId });
-        return { ok: false, error: 'invalid_channel_descriptor' };
-      }
-      const descriptor = parsed.data;
-      const ids = descriptor.identifiers;
-      const res = await this.slackAdapter.sendText({
-        token: this.botToken!,
-        channel: ids.channel,
-        text,
-        thread_ts: ids.thread_ts,
-      });
-      return res;
-    } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
-      this.logger.error('SlackTrigger.sendToThread failed', { threadId, error: msg });
-      return { ok: false, error: msg };
-    }
   }
 
 }
