@@ -4,6 +4,32 @@ declare module '@agyn/ui-new' {
 
   type AnyProps = Record<string, unknown>;
 
+  export type SidebarContextValue = {
+    state: 'expanded' | 'collapsed';
+    open: boolean;
+    setOpen: (open: boolean) => void;
+    openMobile: boolean;
+    setOpenMobile: (open: boolean) => void;
+    isMobile: boolean;
+    toggleSidebar: () => void;
+  };
+
+  export const SidebarProvider: ComponentType<AnyProps>;
+  export const Sidebar: ComponentType<AnyProps>;
+  export const SidebarHeader: ComponentType<AnyProps>;
+  export const SidebarContent: ComponentType<AnyProps>;
+  export const SidebarFooter: ComponentType<AnyProps>;
+  export const SidebarGroup: ComponentType<AnyProps>;
+  export const SidebarGroupLabel: ComponentType<AnyProps>;
+  export const SidebarGroupContent: ComponentType<AnyProps>;
+  export const SidebarMenu: ComponentType<AnyProps>;
+  export const SidebarMenuItem: ComponentType<AnyProps>;
+  export const SidebarMenuButton: ComponentType<AnyProps>;
+  export const SidebarRail: ComponentType<AnyProps>;
+  export const SidebarTrigger: ComponentType<AnyProps>;
+  export const SidebarInset: ComponentType<AnyProps>;
+  export function useSidebar(): SidebarContextValue;
+
   export type GraphNode = {
     id: string;
     kind: string;
