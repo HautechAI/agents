@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Clock, Trash2, ExternalLink, Check, X } from 'lucide-react';
-import Sidebar from '../Sidebar';
+import { MainSidebar } from '../MainSidebar';
 import { Button } from '../Button';
 import { IconButton } from '../IconButton';
 import { Badge } from '../Badge';
@@ -43,7 +43,7 @@ export default function RemindersScreen({
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filter reminders
-  const filteredReminders = reminders.filter(reminder => {
+  const filteredReminders = reminders.filter((reminder) => {
     if (statusFilter === 'all') return true;
     return reminder.status === statusFilter;
   });
@@ -70,7 +70,7 @@ export default function RemindersScreen({
       if (hours > 0) return `${hours}h ${minutes}m`;
       return `${minutes}m`;
     }
-    
+
     return null;
   };
 
@@ -79,17 +79,17 @@ export default function RemindersScreen({
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     // Check if today
     if (date.toDateString() === now.toDateString()) {
       return `Today, ${date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
     }
-    
+
     // Check if tomorrow
     if (date.toDateString() === tomorrow.toDateString()) {
       return `Tomorrow, ${date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
     }
-    
+
     // Otherwise show month and day
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -124,9 +124,9 @@ export default function RemindersScreen({
     }
   };
 
-  const scheduledCount = reminders.filter(r => r.status === 'scheduled').length;
-  const executedCount = reminders.filter(r => r.status === 'executed').length;
-  const cancelledCount = reminders.filter(r => r.status === 'cancelled').length;
+  const scheduledCount = reminders.filter((r) => r.status === 'scheduled').length;
+  const executedCount = reminders.filter((r) => r.status === 'executed').length;
+  const cancelledCount = reminders.filter((r) => r.status === 'cancelled').length;
 
   return (
     <div className="h-screen bg-[var(--agyn-bg-light)] flex flex-col">
@@ -140,20 +140,15 @@ export default function RemindersScreen({
 
       {/* Main Screen Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <Sidebar 
-          selectedMenuItem={selectedMenuItem}
-          onMenuItemSelect={onMenuItemSelect}
-        />
+        {/* Left MainSidebar */}
+        <MainSidebar selectedMenuItem={selectedMenuItem} onMenuItemSelect={onMenuItemSelect} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
           {/* Header */}
           <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-4">
             <h1 className="text-xl font-semibold text-[var(--agyn-dark)]">Reminders</h1>
-            <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">
-              Manage your scheduled and executed reminders
-            </p>
+            <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">Manage your scheduled and executed reminders</p>
           </div>
 
           {/* Filters */}
@@ -273,9 +268,7 @@ export default function RemindersScreen({
                         </td>
                         <td className="py-3 px-6">
                           {countdown ? (
-                            <div className="text-sm text-[var(--agyn-status-pending)] font-medium">
-                              {countdown}
-                            </div>
+                            <div className="text-sm text-[var(--agyn-status-pending)] font-medium">{countdown}</div>
                           ) : (
                             <div className="text-sm text-[var(--agyn-text-subtle)]">—</div>
                           )}

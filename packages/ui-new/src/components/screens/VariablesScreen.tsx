@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from 'lucide-react';
-import Sidebar from '../Sidebar';
+import { MainSidebar } from '../MainSidebar';
 import { IconButton } from '../IconButton';
 import { Input } from '../Input';
 import * as Tooltip from '@radix-ui/react-tooltip';
@@ -94,11 +94,8 @@ export default function VariablesScreen({
 
       {/* Main Screen Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <Sidebar 
-          selectedMenuItem={selectedMenuItem}
-          onMenuItemSelect={onMenuItemSelect}
-        />
+        {/* Left MainSidebar */}
+        <MainSidebar selectedMenuItem={selectedMenuItem} onMenuItemSelect={onMenuItemSelect} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -107,9 +104,7 @@ export default function VariablesScreen({
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-semibold text-[var(--agyn-dark)]">Variables</h1>
-                <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">
-                  Manage graph and local variables
-                </p>
+                <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">Manage graph and local variables</p>
               </div>
               <button
                 onClick={handleStartCreate}
@@ -238,7 +233,10 @@ export default function VariablesScreen({
 
                     if (isEditing) {
                       return (
-                        <tr key={variable.id} className="bg-[var(--agyn-blue)]/5 border-b border-[var(--agyn-border-subtle)]">
+                        <tr
+                          key={variable.id}
+                          className="bg-[var(--agyn-blue)]/5 border-b border-[var(--agyn-border-subtle)]"
+                        >
                           <td className="px-6 py-3" style={{ minHeight: '60px' }}>
                             <Input
                               value={editForm.key}
@@ -272,13 +270,13 @@ export default function VariablesScreen({
                                     >
                                       <Check className="w-4 h-4" />
                                     </button>
-                                    </Tooltip.Trigger>
-                                    <Tooltip.Portal>
-                                      <Tooltip.Content
-                                        className="bg-[var(--agyn-dark)] text-white text-xs px-2 py-1 rounded-md z-50"
-                                        sideOffset={5}
-                                      >
-                                        Save
+                                  </Tooltip.Trigger>
+                                  <Tooltip.Portal>
+                                    <Tooltip.Content
+                                      className="bg-[var(--agyn-dark)] text-white text-xs px-2 py-1 rounded-md z-50"
+                                      sideOffset={5}
+                                    >
+                                      Save
                                       <Tooltip.Arrow className="fill-[var(--agyn-dark)]" />
                                     </Tooltip.Content>
                                   </Tooltip.Portal>
@@ -293,13 +291,13 @@ export default function VariablesScreen({
                                     >
                                       <X className="w-4 h-4" />
                                     </button>
-                                    </Tooltip.Trigger>
-                                    <Tooltip.Portal>
-                                      <Tooltip.Content
-                                        className="bg-[var(--agyn-dark)] text-white text-xs px-2 py-1 rounded-md z-50"
-                                        sideOffset={5}
-                                      >
-                                        Cancel
+                                  </Tooltip.Trigger>
+                                  <Tooltip.Portal>
+                                    <Tooltip.Content
+                                      className="bg-[var(--agyn-dark)] text-white text-xs px-2 py-1 rounded-md z-50"
+                                      sideOffset={5}
+                                    >
+                                      Cancel
                                       <Tooltip.Arrow className="fill-[var(--agyn-dark)]" />
                                     </Tooltip.Content>
                                   </Tooltip.Portal>
@@ -312,7 +310,10 @@ export default function VariablesScreen({
                     }
 
                     return (
-                      <tr key={variable.id} className="border-b border-[var(--agyn-border-subtle)] hover:bg-[var(--agyn-bg-light)]/50 transition-colors">
+                      <tr
+                        key={variable.id}
+                        className="border-b border-[var(--agyn-border-subtle)] hover:bg-[var(--agyn-bg-light)]/50 transition-colors"
+                      >
                         <td className="px-6 h-[60px]">
                           <span className="text-sm text-[var(--agyn-dark)] font-medium font-mono">{variable.key}</span>
                         </td>
@@ -383,8 +384,8 @@ export default function VariablesScreen({
             <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-[var(--agyn-text-subtle)]">
-                  Showing {startIndex + 1} to {Math.min(endIndex, variables.length)} of{' '}
-                  {variables.length} variable{variables.length !== 1 ? 's' : ''}
+                  Showing {startIndex + 1} to {Math.min(endIndex, variables.length)} of {variables.length} variable
+                  {variables.length !== 1 ? 's' : ''}
                 </div>
                 <div className="flex items-center gap-2">
                   <button

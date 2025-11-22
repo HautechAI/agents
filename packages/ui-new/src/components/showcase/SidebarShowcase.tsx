@@ -1,18 +1,17 @@
-import { ArrowLeft } from 'lucide-react';
-import Sidebar from '../Sidebar';
+import { MainSidebar } from '../MainSidebar';
 import { Panel, PanelHeader, PanelBody } from '../Panel';
 import ComponentPreviewHeader from '../ComponentPreviewHeader';
 
-interface SidebarShowcaseProps {
+interface MainSidebarShowcaseProps {
   onBack: () => void;
 }
 
-export default function SidebarShowcase({ onBack }: SidebarShowcaseProps) {
+export default function MainSidebarShowcase({ onBack }: MainSidebarShowcaseProps) {
   return (
     <div>
       {/* Header */}
       <ComponentPreviewHeader
-        title="Sidebar"
+        title="MainSidebar"
         description="Navigation menu with collapsible sections and user information"
         onBack={onBack}
       />
@@ -26,12 +25,13 @@ export default function SidebarShowcase({ onBack }: SidebarShowcaseProps) {
         <PanelBody>
           <div className="rounded-[10px] overflow-hidden border border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)]">
             <div className="flex h-[600px]">
-              <Sidebar currentUser={{ name: 'Jane Smith', email: 'jane@agyn.io' }} />
+              <MainSidebar currentUser={{ name: 'Jane Smith', email: 'jane@agyn.io' }} />
               <div className="flex-1 p-8">
                 <div className="max-w-2xl">
                   <h2 className="mb-4">Main Content Area</h2>
                   <p className="text-[var(--agyn-gray)] mb-4">
-                    The sidebar provides navigation to different sections of the application. Click on menu items to expand/collapse sections and select pages.
+                    The sidebar provides navigation to different sections of the application. Click on menu items to
+                    expand/collapse sections and select pages.
                   </p>
                   <div className="space-y-4">
                     <div className="p-4 bg-white rounded-[10px] border border-[var(--agyn-border-subtle)]">
