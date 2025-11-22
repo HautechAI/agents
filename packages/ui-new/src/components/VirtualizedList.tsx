@@ -1,4 +1,5 @@
-import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import { Virtuoso } from 'react-virtuoso';
+import type { VirtuosoHandle } from 'react-virtuoso';
 import { useRef, useEffect, useState, ReactNode } from 'react';
 
 export interface VirtualizedListProps<T> {
