@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { ArrowLeft, Square, Eye, EyeOff, MessageSquare, Bot, Wrench, FileText, Settings2, ScrollText } from 'lucide-react';
 import Sidebar from '../Sidebar';
-import { RunEventsList, RunEvent } from '../RunEventsList';
+import { RunEventsList } from '../RunEventsList';
+import type { RunEvent } from '../RunEventsList';
 import { RunEventDetails } from '../RunEventDetails';
 import { StatusIndicator } from '../StatusIndicator';
 import type { Status } from '../StatusIndicator';

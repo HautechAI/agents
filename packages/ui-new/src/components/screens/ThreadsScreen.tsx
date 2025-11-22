@@ -3,9 +3,10 @@ import { ArrowLeft, Play, Container, Bell, Send, PanelRightClose, PanelRight } f
 
 import { IconButton } from '../IconButton';
 import { ThreadsList } from '../ThreadsList';
-import { Thread } from '../ThreadItem';
+import type { Thread } from '../ThreadItem';
 import { SegmentedControl } from '../SegmentedControl';
-import { Conversation, Run } from '../Conversation';
+import { Conversation } from '../Conversation';
+import type { Run } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { StatusIndicator } from '../StatusIndicator';
 import type { Status } from '../StatusIndicator';

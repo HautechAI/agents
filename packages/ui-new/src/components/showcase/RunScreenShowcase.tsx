@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import RunScreen from '../screens/RunScreen';
-import { RunEvent } from '../RunEventsList';
+import type { RunEvent } from '../RunEventsList';
 import { Status } from '../StatusIndicator';
 
 const EVENT_TYPES = ['message', 'llm', 'tool', 'summarization'] as const;
