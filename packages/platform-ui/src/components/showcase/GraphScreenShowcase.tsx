@@ -1,4 +1,4 @@
-import GraphScreen from '../screens/GraphScreen';
+import GraphScreen from './screens/GraphScreen';
 
 interface GraphScreenShowcaseProps {
   onBack?: () => void;

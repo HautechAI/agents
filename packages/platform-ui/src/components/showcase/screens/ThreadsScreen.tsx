@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { ArrowLeft, Play, Container, Bell, Send, PanelRightClose, PanelRight } from 'lucide-react';
-import { IconButton } from '../IconButton';
-import { ThreadsList } from '../ThreadsList';
-import { Thread } from '../ThreadItem';
-import { SegmentedControl } from '../SegmentedControl';
-import { Conversation, Run } from '../Conversation';
-import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
-import { StatusIndicator } from '../StatusIndicator';
-import { AutosizeTextarea } from '../AutosizeTextarea';
-import { MainSidebar } from '../MainSidebar';
+import { IconButton } from '../../IconButton';
+import { ThreadsList } from '../../ThreadsList';
+import { Thread } from '../../ThreadItem';
+import { SegmentedControl } from '../../SegmentedControl';
+import { Conversation, Run } from '../../Conversation';
+import { Popover, PopoverTrigger, PopoverContent } from '../../ui/popover';
+import { StatusIndicator } from '../../StatusIndicator';
+import { AutosizeTextarea } from '../../AutosizeTextarea';
+import { MainSidebar } from '../../MainSidebar';
 
 interface ThreadsScreenProps {
   onBack: () => void;

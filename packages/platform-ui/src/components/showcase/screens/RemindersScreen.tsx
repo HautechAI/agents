@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { ArrowLeft, Clock, Trash2, ExternalLink, Check, X } from 'lucide-react';
-import { MainSidebar } from '../MainSidebar';
-import { Button } from '../Button';
-import { IconButton } from '../IconButton';
-import { Badge } from '../Badge';
+import { MainSidebar } from '../../MainSidebar';
+import { Button } from '../../Button';
+import { IconButton } from '../../IconButton';
+import { Badge } from '../../Badge';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
 export type ReminderStatus = 'scheduled' | 'executed' | 'cancelled';

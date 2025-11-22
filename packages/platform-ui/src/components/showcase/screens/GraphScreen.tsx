@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { MainSidebar } from '../MainSidebar';
-import NodePropertiesSidebar from '../NodePropertiesSidebar';
-import Node from '../Node';
-import { IconButton } from '../IconButton';
+import { MainSidebar } from '../../MainSidebar';
+import NodePropertiesSidebar from '../../NodePropertiesSidebar';
+import Node from '../../Node';
+import { IconButton } from '../../IconButton';
 
 export type NodeKind = 'Trigger' | 'Agent' | 'Tool' | 'MCP' | 'Workspace';
 export type NodeStatus =

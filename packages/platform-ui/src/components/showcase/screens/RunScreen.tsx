@@ -11,13 +11,13 @@ import {
   Settings2,
   ScrollText,
 } from 'lucide-react';
-import { MainSidebar } from '../MainSidebar';
-import { RunEventsList, RunEvent } from '../RunEventsList';
-import { RunEventDetails } from '../RunEventDetails';
-import { StatusIndicator, Status } from '../StatusIndicator';
-import { Badge } from '../Badge';
-import { Button } from '../Button';
-import { IconButton } from '../IconButton';
+import { MainSidebar } from '../../MainSidebar';
+import { RunEventsList, RunEvent } from '../../RunEventsList';
+import { RunEventDetails } from '../../RunEventDetails';
+import { StatusIndicator, Status } from '../../StatusIndicator';
+import { Badge } from '../../Badge';
+import { Button } from '../../Button';
+import { IconButton } from '../../IconButton';
 import * as Popover from '@radix-ui/react-popover';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import {
@@ -28,7 +28,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
+} from '../../ui/dropdown-menu';
 
 export type EventFilter = 'message' | 'llm' | 'tool' | 'summary';
 export type StatusFilter = 'running' | 'finished' | 'failed' | 'terminated';

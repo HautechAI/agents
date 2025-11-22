@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { ArrowLeft, Trash2, Terminal, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
-import { MainSidebar } from '../MainSidebar';
-import { IconButton } from '../IconButton';
-import { Badge } from '../Badge';
+import { MainSidebar } from '../../MainSidebar';
+import { IconButton } from '../../IconButton';
+import { Badge } from '../../Badge';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
 export type ContainerStatus = 'running' | 'stopped' | 'starting' | 'stopping';
