@@ -46,16 +46,16 @@ enum ContextItemRole {
 }
 
 model MemoryEntity {
-  id        String        @id @default(uuid()) @db.Uuid
-  parentId  String?       @map("parent_id")
-  parent    MemoryEntity? @relation("MemoryEntitiesHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  id        String         @id @default(uuid()) @db.Uuid
+  parentId  String?        @db.Uuid @map("parent_id")
+  parent    MemoryEntity?  @relation("MemoryEntitiesHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children  MemoryEntity[] @relation("MemoryEntitiesHierarchy")
-  nodeId    String        @map("node_id")
-  threadId  String?       @map("thread_id")
+  nodeId    String         @map("node_id")
+  threadId  String?        @map("thread_id")
   name      String
-  content   String?       @db.Text
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
+  content   String?        @db.Text
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
 
   @@unique([nodeId, threadId, parentId, name], map: "uniq_memory_entity_path")
   @@index([nodeId, threadId, parentId], map: "idx_memory_entity_parent")
