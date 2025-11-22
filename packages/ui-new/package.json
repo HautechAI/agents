@@ -8,15 +8,6 @@
   "sideEffects": [
     "src/styles/index.css"
   ],
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./styles/index.css": "./src/styles/index.css",
-    "./styles.css": "./src/styles/index.css",
-    "./components/ui": "./src/components/ui/index.ts"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
