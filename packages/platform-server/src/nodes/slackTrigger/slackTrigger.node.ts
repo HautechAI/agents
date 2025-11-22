@@ -6,13 +6,13 @@ import { ReferenceFieldSchema, resolveTokenRef } from '../../utils/refs';
 import Node from '../base/Node';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { BufferMessage } from '../agent/messagesBuffer';
+import type { AgentNode } from '../agent/agent.node';
 import { HumanMessage } from '@agyn/llm';
 import { stringify as YamlStringify } from 'yaml';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { PrismaService } from '../../core/services/prisma.service';
 import { SlackAdapter } from '../../messaging/slack/slack.adapter';
 import { ChannelDescriptorSchema, type SendResult, type ChannelDescriptor } from '../../messaging/types';
-import { EventsBusService, type SlackSendRequestEvent } from '../../events/events-bus.service';
 
 type TriggerHumanMessage = {
   kind: 'human';
@@ -49,7 +49,6 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     @Inject(VaultService) protected readonly vault: VaultService,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
     @Inject(PrismaService) private readonly prismaService: PrismaService,
-    @Inject(EventsBusService) private readonly eventsBus: EventsBusService,
     @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
   ) {
     super(logger);
@@ -201,11 +200,9 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       this.setStatus('provisioning_error');
       throw e;
     }
-    this.registerSlackSendListener();
   }
   protected async doDeprovision(): Promise<void> {
     this.logger.info('SlackTrigger.doDeprovision: stopping');
-    this.disposeSlackSendListener();
     try {
       await this.client?.disconnect();
     } catch (e) {
@@ -220,9 +217,15 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   private _listeners: TriggerListener[] = [];
   async subscribe(listener: TriggerListener): Promise<void> {
     this._listeners.push(listener);
+    if (this.isAgentListener(listener)) {
+      listener.setSlackTrigger(this);
+    }
   }
   async unsubscribe(listener: TriggerListener): Promise<void> {
     this._listeners = this._listeners.filter((l) => l !== listener);
+    if (this.isAgentListener(listener) && listener.getSlackTrigger?.() === this) {
+      listener.setSlackTrigger(undefined);
+    }
   }
   protected async notify(thread: string, messages: TriggerHumanMessage[]): Promise<void> {
     this.logger.debug(`[SlackTrigger.notify] thread=${thread} messages=${YamlStringify(messages)}`);
@@ -237,6 +240,10 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
         ),
       ),
     );
+  }
+
+  private isAgentListener(listener: TriggerListener): listener is AgentNode & TriggerListener {
+    return typeof (listener as AgentNode).setSlackTrigger === 'function';
   }
 
   public listeners(): Array<(thread: string, messages: BufferMessage[]) => Promise<void>> {
@@ -291,29 +298,4 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     }
   }
 
-  private slackSendSubscription?: () => void;
-
-  private handleSlackSendRequest = async ({ threadId, text }: SlackSendRequestEvent): Promise<void> => {
-    if (!threadId || !text.trim()) {
-      this.logger.warn('SlackTrigger.handleSlackSendRequest: missing payload', { threadId, textLength: text.length });
-      return;
-    }
-    const result = await this.sendToThread(threadId, text);
-    if (!result.ok) {
-      this.logger.warn('SlackTrigger.handleSlackSendRequest: send failed', { threadId, error: result.error });
-    }
-  };
-
-  private registerSlackSendListener(): void {
-    if (this.slackSendSubscription) return;
-    this.slackSendSubscription = this.eventsBus.subscribeToSlackSendRequested((payload) => {
-      void this.handleSlackSendRequest(payload);
-    });
-  }
-
-  private disposeSlackSendListener(): void {
-    if (!this.slackSendSubscription) return;
-    this.slackSendSubscription();
-    this.slackSendSubscription = undefined;
-  }
 }

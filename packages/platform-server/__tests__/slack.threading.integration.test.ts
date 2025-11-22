@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { LoggerService } from '../src/core/services/logger.service';
 import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
-import type { EventsBusService } from '../src/events/events-bus.service';
 
 type ChannelDescriptor = import('../src/messaging/types').ChannelDescriptor;
 
@@ -101,8 +100,7 @@ describe('SlackTrigger threading integration', () => {
     } satisfies Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>) as import('../src/core/services/prisma.service').PrismaService;
     const slackSend = vi.fn(async (opts: { token: string; channel: string; text: string; thread_ts?: string }) => ({ ok: true, channelMessageId: '200', threadId: opts.thread_ts ?? 'generated-thread' }));
     const slackAdapter = ({ sendText: slackSend } satisfies Pick<SlackAdapter, 'sendText'>) as SlackAdapter;
-    const eventsBus = ({ subscribeToSlackSendRequested: vi.fn(() => () => {}) } satisfies Pick<EventsBusService, 'subscribeToSlackSendRequested'>) as EventsBusService;
-    const trigger = new SlackTrigger(logger as LoggerService, vault, persistence, prismaStub, eventsBus, slackAdapter);
+    const trigger = new SlackTrigger(logger as LoggerService, vault, persistence, prismaStub, slackAdapter);
     await trigger.setConfig({ app_token: { value: 'xapp-abc', source: 'static' }, bot_token: { value: 'xoxb-bot', source: 'static' } });
     await trigger.provision();
     const client = __getLastSocketClient();

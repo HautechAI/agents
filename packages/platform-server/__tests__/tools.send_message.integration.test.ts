@@ -1,14 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { SendMessageNode } from '../src/nodes/tools/send_message/send_message.node';
-import { EventsBusService } from '../src/events/events-bus.service';
-import { RunEventsService } from '../src/events/run-events.service';
 import { LoggerService } from '../src/core/services/logger.service';
 import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import { PrismaService } from '../src/core/services/prisma.service';
 import { VaultService } from '../src/vault/vault.service';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
+import { AgentNode } from '../src/nodes/agent/agent.node';
+import { ConfigService } from '../src/core/services/config.service';
+import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
+import { RunSignalsRegistry } from '../src/agents/run-signals.service';
+import { Signal } from '../src/signal';
+import type { LLMContext } from '../src/llm/types';
 
 vi.mock('@slack/socket-mode', () => {
   class MockSocket {
@@ -54,46 +58,65 @@ const createPersistenceStub = (): Partial<AgentsPersistenceService> => ({
   updateThreadChannelDescriptor: vi.fn(),
 });
 
-describe('send_message tool (events bus)', () => {
-  it('regression: legacy SlackTrigger DI without provision returns slacktrigger_unprovisioned', async () => {
+describe('send_message tool (SlackTrigger bridge)', () => {
+  it('regression: SendMessageFunctionTool fails without runtime SlackTrigger bridge', async () => {
     const descriptor = { type: 'slack', version: 1, identifiers: { channel: 'C1', thread_ts: 'T1' }, meta: {} };
-    const eventsBusStub = ({ subscribeToSlackSendRequested: vi.fn(() => () => {}) } satisfies Partial<EventsBusService>);
-    const testingModule = await Test.createTestingModule({
-      providers: [
-        LoggerService,
-        SlackTrigger,
-        { provide: VaultService, useValue: createVaultStub() },
-        { provide: AgentsPersistenceService, useValue: createPersistenceStub() },
-        { provide: PrismaService, useValue: createPrismaStub(descriptor) },
-        { provide: EventsBusService, useValue: eventsBusStub },
-        { provide: SlackAdapter, useValue: { sendText: vi.fn() } satisfies Partial<SlackAdapter> },
-      ],
-    }).compile();
-
-    const trigger = await testingModule.resolve(SlackTrigger);
-    // Legacy DI path: SlackTrigger resolved from container but never provisioned.
-    const result = await trigger.sendToThread('legacy-thread', 'hello');
-    expect(result.ok).toBe(false);
-    expect(result.error).toBe('slacktrigger_unprovisioned');
-
-    await testingModule.close();
-  });
-
-  it('deterministic: SendMessageFunctionTool emits slack send event handled by SlackTrigger', async () => {
-    const descriptor = { type: 'slack', version: 1, identifiers: { channel: 'C1', thread_ts: 'T1' }, meta: {} };
-    const sendText = vi.fn(async () => ({ ok: true, channelMessageId: 'mid', threadId: 'tid' }));
-    const runEventsStub = { publishEvent: vi.fn() } satisfies Partial<RunEventsService>;
     const testingModule = await Test.createTestingModule({
       providers: [
         LoggerService,
         SendMessageNode,
         SlackTrigger,
-        EventsBusService,
-        { provide: RunEventsService, useValue: runEventsStub },
+        AgentNode,
+        { provide: VaultService, useValue: createVaultStub() },
+        { provide: AgentsPersistenceService, useValue: createPersistenceStub() },
+        { provide: PrismaService, useValue: createPrismaStub(descriptor) },
+        { provide: SlackAdapter, useValue: { sendText: vi.fn() } satisfies Partial<SlackAdapter> },
+        { provide: ConfigService, useValue: {} as ConfigService },
+        { provide: LLMProvisioner, useValue: { getLLM: vi.fn() } satisfies Partial<LLMProvisioner> },
+        { provide: RunSignalsRegistry, useValue: { register: vi.fn(), clear: vi.fn() } satisfies Partial<RunSignalsRegistry> },
+      ],
+    }).compile();
+
+    const node = await testingModule.resolve(SendMessageNode);
+    const tool = node.getTool();
+    const agent = await testingModule.resolve(AgentNode);
+    agent.init({ nodeId: 'agent-node' });
+    expect(agent.getSlackTrigger()).toBeUndefined();
+
+    const ctx: LLMContext = {
+      threadId: 't-thread',
+      runId: 'run-1',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: agent,
+    };
+    const response = await tool.execute({ message: 'hello world' }, ctx);
+    expect(JSON.parse(response)).toEqual({ ok: false, error: 'slacktrigger_missing' });
+
+    const trigger = await testingModule.resolve(SlackTrigger);
+    const sendResult = await trigger.sendToThread('legacy-thread', 'hello');
+    expect(sendResult.ok).toBe(false);
+    expect(sendResult.error).toBe('slacktrigger_unprovisioned');
+
+    await testingModule.close();
+  });
+
+  it('deterministic: runtime subscription registers trigger on AgentNode and send succeeds', async () => {
+    const descriptor = { type: 'slack', version: 1, identifiers: { channel: 'C1', thread_ts: 'T1' }, meta: {} };
+    const sendText = vi.fn(async () => ({ ok: true, channelMessageId: 'mid', threadId: 'tid' }));
+    const testingModule = await Test.createTestingModule({
+      providers: [
+        LoggerService,
+        SendMessageNode,
+        SlackTrigger,
+        AgentNode,
         { provide: VaultService, useValue: createVaultStub() },
         { provide: AgentsPersistenceService, useValue: createPersistenceStub() },
         { provide: PrismaService, useValue: createPrismaStub(descriptor) },
         { provide: SlackAdapter, useValue: { sendText } satisfies Partial<SlackAdapter> },
+        { provide: ConfigService, useValue: {} as ConfigService },
+        { provide: LLMProvisioner, useValue: { getLLM: vi.fn() } satisfies Partial<LLMProvisioner> },
+        { provide: RunSignalsRegistry, useValue: { register: vi.fn(), clear: vi.fn() } satisfies Partial<RunSignalsRegistry> },
       ],
     }).compile();
 
@@ -104,19 +127,31 @@ describe('send_message tool (events bus)', () => {
     });
     await trigger.provision();
 
+    const agent = await testingModule.resolve(AgentNode);
+    agent.init({ nodeId: 'agent-node' });
+    await trigger.subscribe(agent);
+    expect(agent.getSlackTrigger()).toBe(trigger);
+
     const node = await testingModule.resolve(SendMessageNode);
     const tool = node.getTool();
-    const response = await tool.execute({ message: 'hello world' }, { threadId: 't-thread' });
-    expect(JSON.parse(response)).toEqual({ ok: true, status: 'queued' });
-
-    await vi.waitFor(() => {
-      expect(sendText).toHaveBeenCalledWith({
-        token: 'xoxb-token',
-        channel: 'C1',
-        text: 'hello world',
-        thread_ts: 'T1',
-      });
+    const ctx: LLMContext = {
+      threadId: 't-thread',
+      runId: 'run-1',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: agent,
+    };
+    const response = await tool.execute({ message: 'hello world' }, ctx);
+    expect(JSON.parse(response)).toEqual({ ok: true, channelMessageId: 'mid', threadId: 'tid' });
+    expect(sendText).toHaveBeenCalledWith({
+      token: 'xoxb-token',
+      channel: 'C1',
+      text: 'hello world',
+      thread_ts: 'T1',
     });
+
+    await trigger.unsubscribe(agent);
+    expect(agent.getSlackTrigger()).toBeUndefined();
 
     await trigger.deprovision();
     await testingModule.close();

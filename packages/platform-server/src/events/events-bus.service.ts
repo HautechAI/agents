@@ -67,11 +67,6 @@ export type RunStatusBroadcast = {
   };
 };
 
-export type SlackSendRequestEvent = {
-  threadId: string;
-  text: string;
-};
-
 type EventsBusEvents = {
   run_event: [RunEventBusPayload];
   tool_output_chunk: [ToolOutputChunkPayload];
@@ -84,7 +79,6 @@ type EventsBusEvents = {
   run_status_changed: [RunStatusBroadcast];
   thread_metrics: [ThreadMetricsEvent];
   thread_metrics_ancestors: [ThreadMetricsAncestorsEvent];
-  slack_send_requested: [SlackSendRequestEvent];
 };
 
 @Injectable()
@@ -198,17 +192,6 @@ export class EventsBusService implements OnModuleDestroy {
 
   emitRunStatusChanged(payload: RunStatusBroadcast): void {
     this.emitter.emit('run_status_changed', payload);
-  }
-
-  subscribeToSlackSendRequested(listener: (payload: SlackSendRequestEvent) => void): () => void {
-    this.emitter.on('slack_send_requested', listener);
-    return () => {
-      this.emitter.off('slack_send_requested', listener);
-    };
-  }
-
-  emitSlackSendRequested(payload: SlackSendRequestEvent): void {
-    this.emitter.emit('slack_send_requested', payload);
   }
 
   subscribeToThreadMetrics(listener: (payload: ThreadMetricsEvent) => void): () => void {
