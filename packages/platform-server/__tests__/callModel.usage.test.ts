@@ -104,4 +104,60 @@ describe('CallModelLLMReducer usage metrics', () => {
       }),
     );
   });
+
+  it('ignores summary and memory additions when counting new context items', async () => {
+    const runEvents = {
+      startLLMCall: vi.fn(async () => ({ id: 'evt-context-2' })),
+      publishEvent: vi.fn(async () => {}),
+      completeLLMCall: vi.fn(async () => {}),
+      createContextItems: vi
+        .fn()
+        .mockResolvedValueOnce(['ctx-summary-new', 'ctx-memory-new', 'ctx-user-tail'])
+        .mockResolvedValueOnce(['ctx-assistant-latest']),
+      connectContextItemsToRun: vi.fn(async () => {}),
+      createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
+    };
+
+    const response = new ResponseMessage({ output: [] as any, text: 'tail ok' } as any);
+    const llm = { call: vi.fn(async () => response) };
+
+    const memoryProvider = vi.fn(async () => ({
+      msg: SystemMessage.fromText('Memory injection'),
+      place: 'after_system' as const,
+    }));
+
+    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any).init({
+      llm: llm as any,
+      model: 'gpt-context-tail',
+      systemPrompt: 'SYS',
+      tools: [],
+      memoryProvider,
+    });
+
+    const initialState = {
+      summary: 'Fresh summary context',
+      messages: [HumanMessage.fromText('Prior prompt'), HumanMessage.fromText('Newest prompt')],
+      context: {
+        messageIds: ['ctx-convo-existing'],
+        memory: [],
+        system: { id: 'ctx-system-1' },
+        summary: { id: 'ctx-summary-old', text: 'Stale summary' },
+      },
+    } as any;
+
+    await reducer.invoke(initialState, {
+      threadId: 'thread-context-tail',
+      runId: 'run-context-tail',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: { getAgentNodeId: () => 'agent-context-tail' } as any,
+    });
+
+    expect(runEvents.startLLMCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        newContextItemCount: 1,
+        contextItemIds: expect.arrayContaining(['ctx-summary-new', 'ctx-memory-new', 'ctx-user-tail']),
+      }),
+    );
+  });
 });

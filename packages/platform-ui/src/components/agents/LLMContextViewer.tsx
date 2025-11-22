@@ -6,6 +6,7 @@ import type { ContextItem } from '@/api/types/agents';
 type LLMContextViewerProps = {
   ids: readonly string[];
   highlightLastCount?: number;
+  highlightRoles?: ContextItem['role'][];
   onItemsRendered?: (items: ContextItem[]) => void;
   onBeforeLoadMore?: () => void;
 };
@@ -42,7 +43,15 @@ const ROLE_COLORS: Record<ContextItem['role'], string> = {
   other: 'bg-gray-500 text-white',
 };
 
-export function LLMContextViewer({ ids, highlightLastCount, onItemsRendered, onBeforeLoadMore }: LLMContextViewerProps) {
+const DEFAULT_HIGHLIGHT_ROLES: ContextItem['role'][] = ['user', 'assistant', 'tool'];
+
+export function LLMContextViewer({
+  ids,
+  highlightLastCount,
+  highlightRoles = DEFAULT_HIGHLIGHT_ROLES,
+  onItemsRendered,
+  onBeforeLoadMore,
+}: LLMContextViewerProps) {
   const { items, hasMore, isInitialLoading, isFetching, error, loadMore, total, targetCount } = useContextItems(ids, {
     initialCount: 10,
   });
@@ -53,6 +62,20 @@ export function LLMContextViewer({ ids, highlightLastCount, onItemsRendered, onB
     if (!highlightLastCount || !Number.isFinite(highlightLastCount)) return 0;
     return Math.max(0, Math.floor(highlightLastCount));
   }, [highlightLastCount]);
+  const highlightRoleSet = useMemo(() => new Set(highlightRoles), [highlightRoles]);
+  const highlightedIds = useMemo(() => {
+    if (highlightCount <= 0 || highlightRoleSet.size === 0 || items.length === 0) {
+      return new Set<string>();
+    }
+    const selected: string[] = [];
+    for (let index = items.length - 1; index >= 0 && selected.length < highlightCount; index -= 1) {
+      const item = items[index];
+      if (highlightRoleSet.has(item.role)) {
+        selected.push(item.id);
+      }
+    }
+    return new Set(selected);
+  }, [items, highlightCount, highlightRoleSet]);
   const renderedCallbackRef = useRef<((items: ContextItem[]) => void) | undefined>(undefined);
 
   renderedCallbackRef.current = onItemsRendered;
@@ -81,10 +104,10 @@ export function LLMContextViewer({ ids, highlightLastCount, onItemsRendered, onB
         </button>
       )}
 
-      {items.map((item, index) => {
+      {items.map((item) => {
         const textContent = toPlainText(item.contentText, item.contentJson);
         const roleColor = ROLE_COLORS[item.role] ?? 'bg-gray-900 text-white';
-        const isHighlighted = highlightCount > 0 && index >= Math.max(0, items.length - highlightCount);
+        const isHighlighted = highlightedIds.has(item.id);
         const wrapperClasses = ['space-y-2 text-[11px] text-gray-800'];
         if (isHighlighted) {
           wrapperClasses.push('rounded-md border border-sky-200 bg-sky-50/80 px-3 py-2');

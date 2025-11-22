@@ -242,6 +242,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
   ): Promise<{ contextItemIds: string[]; context: LLMContextState; newContextCount: number }> {
     const pending: Array<{ input: ContextItemInput; assign: (id: string) => void }> = [];
     let conversationIndex = 0;
+    const initialConversationCount = context.messageIds.length;
 
     if (!summaryText) {
       context.summary = undefined;
@@ -319,11 +320,10 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       context.messageIds = context.messageIds.slice(0, conversationIndex);
     }
 
-    let newContextCount = 0;
+    const newContextCount = Math.max(0, conversationIndex - initialConversationCount);
     if (pending.length > 0) {
       const inputs = pending.map((item) => item.input);
       const created = await this.runEvents.createContextItems(inputs);
-      newContextCount = created.filter((id): id is string => typeof id === 'string' && id.length > 0).length;
       created.forEach((id, index) => pending[index].assign(id));
     }
 
