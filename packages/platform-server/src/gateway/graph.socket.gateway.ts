@@ -9,7 +9,7 @@ import {
   EventsBusService,
   type MessageBroadcast,
   type NodeStateBusEvent,
-  type ReminderCountEvent,
+  type ReminderCountEvent as ReminderCountBusEvent,
   type RunEventBroadcast,
   type RunEventBusPayload,
   type RunStatusBroadcast,
@@ -53,14 +53,14 @@ export const NodeStateEventSchema = z
 export type NodeStateEvent = z.infer<typeof NodeStateEventSchema>;
 
 // RemindMe: active reminder count event
-export const ReminderCountEventSchema = z
+export const ReminderCountSocketEventSchema = z
   .object({
     nodeId: z.string(),
     count: z.number().int().min(0),
     updatedAt: z.string().datetime(),
   })
   .strict();
-export type ReminderCountEvent = z.infer<typeof ReminderCountEventSchema>;
+export type ReminderCountSocketEvent = z.infer<typeof ReminderCountSocketEventSchema>;
 
 export const ToolOutputChunkEventSchema = z
   .object({
@@ -287,7 +287,7 @@ export class GraphSocketGateway implements OnModuleInit, OnModuleDestroy {
     }
   };
 
-  private readonly handleReminderCount = (payload: ReminderCountEvent): void => {
+  private readonly handleReminderCount = (payload: ReminderCountBusEvent): void => {
     try {
       this.emitReminderCount(payload.nodeId, payload.count, payload.updatedAtMs);
     } catch (err) {
@@ -450,12 +450,12 @@ export class GraphSocketGateway implements OnModuleInit, OnModuleDestroy {
   }
   /** Emit node_reminder_count event for RemindMe tool nodes when registry changes. */
   emitReminderCount(nodeId: string, count: number, updatedAtMs?: number): void {
-    const payload: ReminderCountEvent = {
+    const payload: ReminderCountSocketEvent = {
       nodeId,
       count,
       updatedAt: new Date(updatedAtMs ?? Date.now()).toISOString(),
     };
-    this.broadcast('node_reminder_count', payload, ReminderCountEventSchema);
+    this.broadcast('node_reminder_count', payload, ReminderCountSocketEventSchema);
   }
 
   // Threads realtime events
