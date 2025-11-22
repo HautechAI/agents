@@ -88,6 +88,15 @@ describe('MemoryController', () => {
     expect(ok).toEqual({ content: 'hello world' });
   });
 
+  it('read allows root path', async () => {
+    service.read.mockResolvedValueOnce('');
+
+    const ok = await controller.read({ nodeId: 'node', scope: 'global' } as any, { path: '/' } as any);
+
+    expect(service.read).toHaveBeenCalledWith('node', 'global', undefined, '/');
+    expect(ok).toEqual({ content: '' });
+  });
+
   it('read maps ENOENT to 404', async () => {
     service.read.mockRejectedValueOnce(new Error('ENOENT: missing'));
 

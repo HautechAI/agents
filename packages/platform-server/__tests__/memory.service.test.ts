@@ -63,6 +63,26 @@ maybeDescribe('MemoryService', () => {
     expect(statAfterDelete.contentLength).toBe(0);
   });
 
+  it('provides root document semantics', async () => {
+    const nodeId = 'memory-service-root';
+    await clear([nodeId]);
+    const bound = svc.forMemory(nodeId, 'global');
+
+    const emptyStat = await bound.stat('/');
+    expect(emptyStat).toEqual({ exists: true, hasSubdocs: false, contentLength: 0 });
+    expect(await bound.read('/')).toBe('');
+    expect(await bound.list('/')).toEqual([]);
+
+    await bound.append('/docs/readme', 'hello');
+
+    const populatedStat = await bound.stat('/');
+    expect(populatedStat).toEqual({ exists: true, hasSubdocs: true, contentLength: 0 });
+    expect(await bound.read('/')).toBe('');
+
+    const rootListing = await bound.list('/');
+    expect(rootListing).toEqual(expect.arrayContaining([{ name: 'docs', hasSubdocs: true }]));
+  });
+
   it('treats ensureDir as validation-only no-op', async () => {
     const nodeId = 'memory-service-ensure';
     await clear([nodeId]);

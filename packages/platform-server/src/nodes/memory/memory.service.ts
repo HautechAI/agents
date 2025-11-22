@@ -193,7 +193,8 @@ export class MemoryService {
 
   async read(nodeId: string, scope: MemoryScope, threadId: string | undefined, path: string): Promise<string> {
     const filter = this.buildFilter(nodeId, scope, threadId);
-    const norm = this.normalizePath(path);
+    const norm = this.normalizePath(path, { allowRoot: true });
+    if (norm === '/') return '';
     const segments = this.getSegments(norm);
     const entity = await this.repo.resolvePath(filter, segments);
     if (!entity) throw new Error('ENOENT: document not found');
