@@ -580,7 +580,8 @@ describe('RunTimelineEventDetails', () => {
     await user.selectOptions(streamSelect, 'interleaved');
 
     const stderrBadge = screen.getByText('stderr');
-    expect(stderrBadge.className).toContain('text-gray-200');
+    expect(stderrBadge.className).toContain('bg-gray-200');
+    expect(stderrBadge.className).toContain('text-gray-700');
     expect(stderrBadge.className).not.toMatch(/text-(?:rose|red)/);
   });
 
