@@ -423,7 +423,10 @@ function ToolOutputSection({
     : toText(displayValue);
 
   const hasNeutralStderr = terminal?.exitCode === 0;
-  const renderOptions = useMemo(() => ({ framed: false, stderrTone: hasNeutralStderr ? 'neutral' : 'alert' }), [hasNeutralStderr]);
+  const renderOptions = useMemo<{ framed: false; stderrTone: StderrTone }>(
+    () => ({ framed: false, stderrTone: hasNeutralStderr ? 'neutral' : 'alert' }),
+    [hasNeutralStderr],
+  );
   const { mode, setMode, rendered } = useToolOutputMode(eventId, displayValue, renderOptions);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
