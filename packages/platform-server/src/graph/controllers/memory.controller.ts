@@ -4,7 +4,8 @@ import { ModuleRef } from '@nestjs/core';
 import type { MemoryScope } from '../../nodes/memory/memory.types';
 import { MemoryService } from '../../nodes/memory/memory.service';
 import { PrismaService } from '../../core/services/prisma.service';
-import { GraphRepository } from '../graph.repository';
+import { LiveGraphRuntime } from '../liveGraph.manager';
+import { GLOBAL_THREAD_KEY } from '../../nodes/memory/memory.repository';
 
 class DocParamsDto {
   @IsString()
@@ -76,7 +77,7 @@ export class MemoryController {
   constructor(
     @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
     @Inject(PrismaService) private readonly prismaSvc: PrismaService,
-    @Inject(GraphRepository) private readonly graphRepo: GraphRepository,
+    @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
   ) {}
 
   private resolveThreadId(scope: MemoryScope, ...candidates: Array<string | undefined>): string | undefined {
@@ -93,55 +94,37 @@ export class MemoryController {
   @Get('docs')
   async listDocs(): Promise<{ items: Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> }> {
     const prisma = this.prismaSvc.getClient();
-    const [graph, rows] = await Promise.all([
-      this.graphRepo
-        .get('main')
-        .catch(() => null),
-      prisma.$queryRaw<Array<{ node_id: string; scope: string; thread_id: string | null }>>`
-        SELECT node_id, scope, thread_id FROM memories ORDER BY node_id ASC
-      `,
-    ]);
-
-    if (!graph) {
-      return {
-        items: rows.map((row) => ({
-          nodeId: row.node_id,
-          scope: row.scope as MemoryScope,
-          threadId: row.thread_id ?? undefined,
-        })),
-      };
-    }
-
-    const memoryNodes = (graph.nodes ?? []).filter((node) => node.template === 'memory');
-    const scopeByNode = new Map<string, MemoryScope>();
-    for (const node of memoryNodes) {
-      const config = node.config as { scope?: unknown } | undefined;
-      const scope: MemoryScope = config?.scope === 'perThread' ? 'perThread' : 'global';
-      if (!scopeByNode.has(node.id)) scopeByNode.set(node.id, scope);
-    }
-
-    const threadIdsByNode = new Map<string, Set<string>>();
+    const rows = await prisma.$queryRaw<Array<{ node_id: string; scope: string; thread_id: string }>>`
+      SELECT DISTINCT node_id, scope, thread_id FROM memory_entries ORDER BY node_id ASC, scope ASC, thread_id ASC
+    `;
+    const map = new Map<string, { nodeId: string; scope: MemoryScope; threadId?: string }>();
+    const add = (nodeId: string, scope: MemoryScope, threadId?: string) => {
+      const key = `${nodeId}:${scope}:${threadId ?? ''}`;
+      if (!map.has(key)) map.set(key, { nodeId, scope, threadId });
+    };
     for (const row of rows) {
-      const nodeScope = scopeByNode.get(row.node_id);
-      if (!nodeScope || nodeScope !== 'perThread') continue;
-      if (row.scope !== 'perThread' || typeof row.thread_id !== 'string') continue;
-      const trimmed = row.thread_id.trim();
-      if (!trimmed) continue;
-      if (!threadIdsByNode.has(row.node_id)) threadIdsByNode.set(row.node_id, new Set());
-      threadIdsByNode.get(row.node_id)!.add(trimmed);
+      const scope = row.scope === 'perThread' ? 'perThread' : 'global';
+      const threadKey = row.thread_id;
+      const threadId = scope === 'perThread' && threadKey && threadKey !== GLOBAL_THREAD_KEY ? threadKey : undefined;
+      add(row.node_id, scope, threadId);
     }
-
-    const items: Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> = [];
-    const sortedNodes = Array.from(scopeByNode.entries()).sort(([a], [b]) => a.localeCompare(b));
-    for (const [nodeId, scope] of sortedNodes) {
-      items.push({ nodeId, scope });
-      if (scope !== 'perThread') continue;
-      const threadIds = Array.from(threadIdsByNode.get(nodeId) ?? []).sort((a, b) => a.localeCompare(b));
-      for (const threadId of threadIds) {
-        items.push({ nodeId, scope, threadId });
-      }
+    const liveNodes = this.runtime.getNodes();
+    for (const node of liveNodes) {
+      if (node.template !== 'memory') continue;
+      const cfg = (node.instance.config as { scope?: MemoryScope }) || {};
+      const scope = cfg.scope === 'perThread' ? 'perThread' : 'global';
+      add(node.id, scope, undefined);
     }
-
+    const items = Array.from(map.values()).sort((a, b) => {
+      const nodeCompare = a.nodeId.localeCompare(b.nodeId);
+      if (nodeCompare !== 0) return nodeCompare;
+      const scopeOrder = (scope: MemoryScope) => (scope === 'global' ? 0 : 1);
+      const scopeCompare = scopeOrder(a.scope) - scopeOrder(b.scope);
+      if (scopeCompare !== 0) return scopeCompare;
+      const aThread = a.threadId ?? '';
+      const bThread = b.threadId ?? '';
+      return aThread.localeCompare(bThread);
+    });
     return { items };
   }
 

@@ -2,9 +2,10 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { MemoryController } from '../src/graph/controllers/memory.controller';
 import { ModuleRef } from '@nestjs/core';
-import { PostgresMemoryRepository } from '../src/nodes/memory/memory.repository';
+import { PostgresMemoryEntriesRepository } from '../src/nodes/memory/memory.repository';
 import { MemoryService } from '../src/nodes/memory/memory.service';
 import { HttpException } from '@nestjs/common';
+import type { MemoryScope } from '../src/nodes/memory/memory.types';
 
 const URL = process.env.AGENTS_DATABASE_URL;
 const shouldRunDbTests = process.env.RUN_DB_TESTS === 'true' && !!URL;
@@ -13,31 +14,46 @@ const maybeDescribe = shouldRunDbTests ? describe : describe.skip;
 class StubModuleRef implements Partial<ModuleRef> {
   constructor(private prisma: PrismaClient) {}
   get<T>(_token: any): T {
-    return new MemoryService(new PostgresMemoryRepository({ getClient: () => this.prisma } as any)) as unknown as T;
+    return new MemoryService(new PostgresMemoryEntriesRepository({ getClient: () => this.prisma } as any)) as unknown as T;
   }
 }
 
-const emptyGraph = { name: 'main', version: 0, updatedAt: new Date().toISOString(), nodes: [], edges: [] } as const;
-const stubGraphRepo = { get: async () => emptyGraph };
+class StubRuntime {
+  private nodes: Array<{ id: string; template: string; scope?: MemoryScope }> = [];
+
+  setNodes(nodes: Array<{ id: string; template: string; scope?: MemoryScope }>) {
+    this.nodes = nodes;
+  }
+
+  getNodes() {
+    return this.nodes.map((node) => ({
+      id: node.id,
+      template: node.template,
+      instance: { config: { scope: node.scope ?? 'global' } },
+    }));
+  }
+}
 
 maybeDescribe('MemoryController endpoints', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
+  const runtime = new StubRuntime();
 
   beforeAll(async () => {
-    const svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
+    const svc = new MemoryService(new PostgresMemoryEntriesRepository({ getClient: () => prisma } as any));
     svc.forMemory('bootstrap', 'global');
-    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['bootstrap', 'nodeC', 'nodeT'])})`;
+    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join(['bootstrap', 'nodeC', 'nodeT'])})`;
   });
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['nodeC', 'nodeT'])})`;
+    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join(['nodeC', 'nodeT'])})`;
+    runtime.setNodes([]);
   });
   afterAll(async () => {
     await prisma.$disconnect();
   });
 
   it('append/read via controller', async () => {
-    const controller = new MemoryController(new StubModuleRef(prisma) as any, { getClient: () => prisma } as any, stubGraphRepo as any);
+    const controller = new MemoryController(new StubModuleRef(prisma) as any, { getClient: () => prisma } as any, runtime as any);
     await controller.append({ nodeId: 'nodeC', scope: 'global' } as any, { path: '/greet.txt', data: 'hi' } as any, {} as any);
     await controller.append({ nodeId: 'nodeC', scope: 'global' } as any, { path: '/greet.txt', data: 'there' } as any, {} as any);
     const read = await controller.read({ nodeId: 'nodeC', scope: 'global' } as any, { path: '/greet.txt' } as any);
@@ -47,7 +63,7 @@ maybeDescribe('MemoryController endpoints', () => {
   });
 
   it('enforces thread scoping for per-thread routes', async () => {
-    const controller = new MemoryController(new StubModuleRef(prisma) as any, { getClient: () => prisma } as any, stubGraphRepo as any);
+    const controller = new MemoryController(new StubModuleRef(prisma) as any, { getClient: () => prisma } as any, runtime as any);
 
     let caught: unknown;
     try {
@@ -82,8 +98,8 @@ maybeDescribe('MemoryController endpoints', () => {
     expect(read.content.trim()).toBe('second');
 
     const dump = await controller.dump({ nodeId: 'nodeT', scope: 'perThread' } as any, { threadId: 'thread-1' } as any);
-    expect((dump as any).data['logs.day.txt']).toBe('second');
-    expect((dump as any).dirs['logs']).toBe(true);
+    expect((dump as any).data['/logs/day.txt']).toBe('second');
+    expect((dump as any).dirs['/logs']).toBe(true);
 
     const deletion = await controller.remove({ nodeId: 'nodeT', scope: 'perThread' } as any, { path: '/logs/day.txt', threadId: 'thread-1' } as any);
     expect(deletion.files).toBe(1);
@@ -93,5 +109,35 @@ maybeDescribe('MemoryController endpoints', () => {
 
     const dumpAfter = await controller.dump({ nodeId: 'nodeT', scope: 'perThread' } as any, { threadId: 'thread-1' } as any);
     expect(Object.keys((dumpAfter as any).data)).toHaveLength(0);
+  });
+
+  it('listDocs returns memory entries and configured nodes', async () => {
+    runtime.setNodes([
+      { id: 'nodeC', template: 'memory', scope: 'global' },
+      { id: 'nodeEmptyThread', template: 'memory', scope: 'perThread' },
+    ]);
+
+    await prisma.memoryEntry.create({
+      data: {
+        nodeId: 'nodeWithData',
+        scope: 'perThread',
+        threadId: 'thread-1',
+        path: '/note.txt',
+        parentPath: '/',
+        depth: 1,
+        content: 'hi',
+      },
+    });
+
+    const controller = new MemoryController(new StubModuleRef(prisma) as any, { getClient: () => prisma } as any, runtime as any);
+    const docs = await controller.listDocs();
+    expect(docs.items).toEqual(
+      expect.arrayContaining([
+        { nodeId: 'nodeC', scope: 'global' },
+        { nodeId: 'nodeEmptyThread', scope: 'perThread', threadId: undefined },
+        { nodeId: 'nodeWithData', scope: 'perThread', threadId: 'thread-1' },
+      ]),
+    );
+    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id = ${'nodeWithData'}`;
   });
 });

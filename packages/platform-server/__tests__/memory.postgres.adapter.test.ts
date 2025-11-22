@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { PostgresMemoryRepository } from '../src/nodes/memory/memory.repository';
+import { PostgresMemoryEntriesRepository } from '../src/nodes/memory/memory.repository';
 import { MemoryService } from '../src/nodes/memory/memory.service';
 
 // Integration test against Postgres (requires AGENTS_DATABASE_URL env)
@@ -10,14 +10,14 @@ const shouldRunDbTests = process.env.RUN_DB_TESTS === 'true' && !!URL;
 // Skip tests if no Postgres URL provided or DB tests disabled
 const maybeDescribe = shouldRunDbTests ? describe : describe.skip;
 
-maybeDescribe('PostgresMemoryRepository adapter', () => {
+maybeDescribe('PostgresMemoryEntriesRepository adapter', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   let svc: MemoryService;
 
   beforeAll(async () => {
-    svc = new MemoryService(new PostgresMemoryRepository({ getClient: () => prisma } as any));
-    await prisma.$executeRaw`DELETE FROM memories WHERE node_id IN (${Prisma.join(['nodeA'])})`;
+    svc = new MemoryService(new PostgresMemoryEntriesRepository({ getClient: () => prisma } as any));
+    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join(['nodeA'])})`;
   });
   afterAll(async () => {
     await prisma.$disconnect();

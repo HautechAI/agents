@@ -1,15 +1,17 @@
 export type MemoryScope = 'global' | 'perThread';
 
 export type MemoryFilter = { nodeId: string; scope: MemoryScope; threadId?: string };
-export type MemoryDataMap = Record<string, string | Record<string, unknown>>;
-export type MemoryDirsMap = Record<string, true | Record<string, unknown>>;
 
-export interface MemoryDoc {
+export interface MemoryEntry {
   nodeId: string;
   scope: MemoryScope;
-  threadId?: string;
-  data: MemoryDataMap;
-  dirs: MemoryDirsMap;
+  threadId: string;
+  path: string;
+  parentPath: string;
+  depth: number;
+  content: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface StatResult {
