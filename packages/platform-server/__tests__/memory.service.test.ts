@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
+import { vi } from 'vitest';
 import { PostgresMemoryEntitiesRepository } from '../src/nodes/memory/memory.repository';
 import { MemoryService } from '../src/nodes/memory/memory.service';
 
@@ -10,7 +11,8 @@ maybeDescribe('MemoryService', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   const repo = new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any);
-  const svc = new MemoryService(repo);
+  const graphRepo = { get: vi.fn().mockResolvedValue(null) };
+  const svc = new MemoryService(repo, graphRepo as any);
 
   const clear = async (nodeIds: string[]) => {
     await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(nodeIds)})`;

@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { GraphRepository } from '../../graph/graph.repository';
 import {
   PostgresMemoryEntitiesRepository,
   type MemoryEntitiesRepositoryPort,
@@ -10,7 +11,10 @@ const VALID_SEGMENT = /^[A-Za-z0-9_. -]+$/;
 
 @Injectable()
 export class MemoryService {
-  constructor(@Inject(PostgresMemoryEntitiesRepository) private readonly repo: MemoryEntitiesRepositoryPort) {}
+  constructor(
+    @Inject(PostgresMemoryEntitiesRepository) private readonly repo: MemoryEntitiesRepositoryPort,
+    @Inject(GraphRepository) private readonly graphRepo: GraphRepository,
+  ) {}
 
   normalizePath(rawPath: string, opts: { allowRoot?: boolean } = {}): string {
     const allowRoot = opts.allowRoot ?? false;
@@ -46,6 +50,22 @@ export class MemoryService {
     // Schema managed via migrations; nothing to do.
   }
 
+  async listDocs(): Promise<Array<{ nodeId: string; scope: MemoryScope; threadId?: string }>> {
+    const rows = await this.repo.listDistinctNodeThreads();
+    let graph = null;
+    try {
+      graph = await this.graphRepo.get('main');
+    } catch {
+      graph = null;
+    }
+
+    if (!graph) {
+      return this.buildDocsFromPersistence(rows);
+    }
+
+    return this.buildDocsFromGraph(graph.nodes ?? [], rows);
+  }
+
   private getSegments(path: string): string[] {
     if (path === '/') return [];
     return path.slice(1).split('/');
@@ -57,6 +77,76 @@ export class MemoryService {
       return { nodeId, threadId: threadId.trim() };
     }
     return { nodeId, threadId: null };
+  }
+
+  private normalizeThreadId(threadId: string | null): string | undefined {
+    if (typeof threadId !== 'string') return undefined;
+    const trimmed = threadId.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private buildDocsResponse(
+    scopeByNode: Map<string, MemoryScope>,
+    threadIdsByNode: Map<string, Set<string>>,
+  ): Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> {
+    const sortedNodes = Array.from(scopeByNode.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const items: Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> = [];
+    for (const [nodeId, scope] of sortedNodes) {
+      items.push({ nodeId, scope });
+      if (scope !== 'perThread') continue;
+      const threads = Array.from(threadIdsByNode.get(nodeId) ?? []).sort((a, b) => a.localeCompare(b));
+      for (const threadId of threads) {
+        items.push({ nodeId, scope, threadId });
+      }
+    }
+    return items;
+  }
+
+  private buildDocsFromPersistence(
+    rows: Array<{ nodeId: string; threadId: string | null }>,
+  ): Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> {
+    const scopeByNode = new Map<string, MemoryScope>();
+    const threadIdsByNode = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const threadId = this.normalizeThreadId(row.threadId);
+      const current = scopeByNode.get(row.nodeId);
+      if (!current || current === 'global') {
+        scopeByNode.set(row.nodeId, threadId ? 'perThread' : current ?? 'global');
+      }
+      if (threadId) {
+        if (!threadIdsByNode.has(row.nodeId)) threadIdsByNode.set(row.nodeId, new Set());
+        threadIdsByNode.get(row.nodeId)!.add(threadId);
+      }
+    }
+    return this.buildDocsResponse(scopeByNode, threadIdsByNode);
+  }
+
+  private buildDocsFromGraph(
+    graphNodes: Array<{ id: string; template?: string; config?: Record<string, unknown> | null }>,
+    rows: Array<{ nodeId: string; threadId: string | null }>,
+  ): Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> {
+    const scopeByNode = new Map<string, MemoryScope>();
+    const threadIdsByNode = new Map<string, Set<string>>();
+
+    for (const node of graphNodes) {
+      if (node.template !== 'memory') continue;
+      const cfg = node.config as { scope?: unknown } | undefined;
+      const scope: MemoryScope = cfg?.scope === 'perThread' ? 'perThread' : 'global';
+      if (!scopeByNode.has(node.id)) {
+        scopeByNode.set(node.id, scope);
+      }
+    }
+
+    for (const row of rows) {
+      const scope = scopeByNode.get(row.nodeId);
+      if (!scope || scope !== 'perThread') continue;
+      const threadId = this.normalizeThreadId(row.threadId);
+      if (!threadId) continue;
+      if (!threadIdsByNode.has(row.nodeId)) threadIdsByNode.set(row.nodeId, new Set());
+      threadIdsByNode.get(row.nodeId)!.add(threadId);
+    }
+
+    return this.buildDocsResponse(scopeByNode, threadIdsByNode);
   }
 
   async ensureDir(nodeId: string, scope: MemoryScope, threadId: string | undefined, path: string): Promise<void> {

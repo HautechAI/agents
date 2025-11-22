@@ -35,7 +35,10 @@ describe('templates: memory registration and agent memory port', () => {
     const archiveService = new ArchiveService();
     const ncpsKeyService = new NcpsKeyService(logger, configService);
     const prisma = new PrismaClient({ datasources: { db: { url: process.env.AGENTS_DATABASE_URL || 'postgres://localhost/skip' } } });
-    const memoryService = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    const memoryService = new MemoryService(
+      new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any),
+      { get: async () => null } as any,
+    );
 
     class MinimalModuleRef implements Pick<ModuleRef, 'create' | 'get'> {
       create<T = any>(cls: new (...args: any[]) => T): T {

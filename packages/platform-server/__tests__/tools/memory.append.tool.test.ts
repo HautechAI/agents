@@ -17,7 +17,10 @@ maybeDescribe('memory_append tool: path normalization and validation', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   beforeAll(async () => {
-    const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    const svc = new MemoryService(
+      new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any),
+      { get: async () => null } as any,
+    );
     svc.forMemory('bootstrap', 'global');
     await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join([NODE_ID, 'bootstrap'])})`;
   });
@@ -30,7 +33,7 @@ maybeDescribe('memory_append tool: path normalization and validation', () => {
   const mkTools = () => {
     const db = { getClient: () => prisma } as any;
     const factory = (opts: { threadId?: string }) => {
-      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any));
+      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any), { get: async () => null } as any);
       return svc.forMemory(NODE_ID, opts.threadId ? 'perThread' : 'global', opts.threadId) as any;
     };
     const logger = new LoggerService();

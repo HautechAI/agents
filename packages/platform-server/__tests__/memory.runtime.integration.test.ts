@@ -18,6 +18,9 @@ import { MemoryService } from '../src/nodes/memory/memory.service';
 import type { MemoryScope } from '../src/nodes/memory/memory.types';
 import type { TemplatePortConfig } from '../src/graph/ports.types';
 
+const createMemoryService = (prisma: PrismaClient) =>
+  new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any), { get: async () => null } as any);
+
 // Minimal ModuleRef surface used by TemplateRegistry/LiveGraphRuntime in this test
 interface MinimalModuleRef {
   create(type: new (logger: LoggerService) => Node): Promise<Node>;
@@ -72,7 +75,7 @@ class TestCallModelNode extends Node<Record<string, never>> {
     // Provide MemoryService factory
     conn.setMemorySource((opts: { threadId?: string }) => {
       const scope: MemoryScope = opts.threadId ? 'perThread' : 'global';
-      const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => this.prisma! } as any));
+      const svc = createMemoryService(this.prisma!);
       return svc.forMemory(conn.nodeId, scope, opts.threadId);
     });
   }
@@ -150,7 +153,7 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
 
   beforeAll(async () => {
-    const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    const svc = createMemoryService(prisma);
     svc.forMemory('bootstrap', 'global');
     await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(['bootstrap', 'mem'])})`;
   });
@@ -179,7 +182,7 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
     (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ prisma, placement: 'after_system' });
 
     // Pre-populate memory under mem nodeId in global scope
-    const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    const svc = createMemoryService(prisma);
     const bound = svc.forMemory('mem', 'global');
     await bound.append('/notes/today', 'hello');
 
@@ -206,7 +209,7 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
     (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ prisma, placement: 'last_message' });
 
     // Pre-populate memory
-    const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    const svc = createMemoryService(prisma);
     const bound = svc.forMemory('mem', 'global');
     await bound.append('/alpha', 'a');
 
@@ -232,7 +235,7 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
     (runtime.getNodeInstance('cm') as TestCallModelNode).initExtras({ prisma, placement: 'after_system', content: 'full', maxChars: 20 });
 
     // Populate global memory with a file whose full content would exceed 20 chars.
-    const globalSvc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    const globalSvc = createMemoryService(prisma);
     const boundGlobal = globalSvc.forMemory('mem', 'global');
     await boundGlobal.append('/long/file', 'aaaaaaaaaaaaaaaaaaaa-long');
 

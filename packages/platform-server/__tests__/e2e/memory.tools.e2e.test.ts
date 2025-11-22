@@ -16,7 +16,10 @@ maybeDescribe('E2E: memory tools with Postgres backend', () => {
   let svc: MemoryService;
 
   beforeAll(async () => {
-    svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    svc = new MemoryService(
+      new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any),
+      { get: async () => null } as any,
+    );
     const bootstrap = svc.forMemory('bootstrap', 'global');
   });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PostgresMemoryEntitiesRepository } from '../src/nodes/memory/memory.repository';
 import { MemoryService } from '../src/nodes/memory/memory.service';
@@ -16,7 +16,10 @@ maybeDescribe('PostgresMemoryEntitiesRepository adapter', () => {
   let svc: MemoryService;
 
   beforeAll(async () => {
-    svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    svc = new MemoryService(
+      new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any),
+      { get: vi.fn().mockResolvedValue(null) } as any,
+    );
     await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(['nodeA'])})`;
   });
   afterAll(async () => {

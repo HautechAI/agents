@@ -13,7 +13,10 @@ maybeDescribe('Memory tool adapters', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   beforeAll(async () => {
-    const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
+    const svc = new MemoryService(
+      new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any),
+      { get: async () => null } as any,
+    );
     svc.forMemory('bootstrap', 'global');
     await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(['bootstrap', 'nodeX'])})`;
   });
@@ -26,7 +29,7 @@ maybeDescribe('Memory tool adapters', () => {
   it('wrap LangChain tools and operate on MemoryService via config.thread_id', async () => {
     const db = { getClient: () => prisma } as any;
     const serviceFactory = (opts: { threadId?: string }) => {
-      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any));
+      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any), { get: async () => null } as any);
       return svc.forMemory('nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId) as any;
     };
     const logger = new LoggerService();
@@ -55,7 +58,7 @@ maybeDescribe('Memory tool adapters', () => {
   it('negative cases: ENOENT, EISDIR, EINVAL, ENOTMEM, list empty path', async () => {
     const db = { getClient: () => prisma } as any;
     const serviceFactory = (opts: { threadId?: string }) => {
-      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any));
+      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any), { get: async () => null } as any);
       return svc.forMemory('nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId) as any;
     };
     const logger = new LoggerService();

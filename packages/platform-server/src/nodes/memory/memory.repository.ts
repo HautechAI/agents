@@ -11,6 +11,7 @@ export interface MemoryEntitiesRepositoryPort {
   entityHasChildren(entityId: string): Promise<boolean>;
   updateContent(entityId: string, content: string): Promise<void>;
   listAll(filter: RepoFilter): Promise<MemoryEntity[]>;
+  listDistinctNodeThreads(): Promise<Array<{ nodeId: string; threadId: string | null }>>;
 }
 
 export type RepoFilter = { nodeId: string; threadId: string | null };
@@ -147,6 +148,17 @@ export class PostgresMemoryEntitiesRepository implements MemoryEntitiesRepositor
       orderBy: [{ parentId: 'asc' }, { name: 'asc' }],
     });
     return rows.map((row) => this.toEntity(row));
+  }
+
+  async listDistinctNodeThreads(): Promise<Array<{ nodeId: string; threadId: string | null }>> {
+    const prisma = await this.getClient();
+    const rows = await prisma.$queryRaw<Array<{ node_id: string; thread_id: string | null }>>`
+      SELECT node_id, thread_id
+      FROM memory_entities
+      GROUP BY node_id, thread_id
+      ORDER BY node_id ASC, thread_id ASC
+    `;
+    return rows.map((row) => ({ nodeId: row.node_id, threadId: row.thread_id }));
   }
 
   async deleteSubtree(filter: RepoFilter, entityId: string | null): Promise<{ files: number; dirs: number }> {
