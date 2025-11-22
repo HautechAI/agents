@@ -7,7 +7,8 @@ import { Thread } from '../ThreadItem';
 import { SegmentedControl } from '../SegmentedControl';
 import { Conversation, Run } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
-import { StatusIndicator, Status } from '../StatusIndicator';
+import { StatusIndicator } from '../StatusIndicator';
+import type { Status } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
 import Sidebar from '../Sidebar';
 

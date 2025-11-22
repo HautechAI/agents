@@ -3,7 +3,8 @@ import { ArrowLeft, Square, Eye, EyeOff, MessageSquare, Bot, Wrench, FileText, S
 import Sidebar from '../Sidebar';
 import { RunEventsList, RunEvent } from '../RunEventsList';
 import { RunEventDetails } from '../RunEventDetails';
-import { StatusIndicator, Status } from '../StatusIndicator';
+import { StatusIndicator } from '../StatusIndicator';
+import type { Status } from '../StatusIndicator';
 import { Badge } from '../Badge';
 import { Button } from '../Button';
 import { IconButton } from '../IconButton';

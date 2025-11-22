@@ -1,7 +1,8 @@
 import { ReactNode, useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Badge } from './Badge';
-import { StatusIndicator, Status } from './StatusIndicator';
+import { StatusIndicator } from './StatusIndicator';
+import type { Status } from './StatusIndicator';
 
 export type ThreadStatus = 'running' | 'pending' | 'finished' | 'failed';
 

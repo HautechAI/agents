@@ -5,7 +5,8 @@ import { IconButton } from './IconButton';
 import { JsonViewer } from './JsonViewer';
 import { MarkdownContent } from './MarkdownContent';
 import { Dropdown } from './Dropdown';
-import { StatusIndicator, Status } from './StatusIndicator';
+import { StatusIndicator } from './StatusIndicator';
+import type { Status } from './StatusIndicator';
 
 export type EventType = 'message' | 'llm' | 'tool' | 'summarization';
 export type ToolSubtype = 'generic' | 'shell' | 'manage' | string;

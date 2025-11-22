@@ -1,5 +1,6 @@
 import { Panel, PanelHeader, PanelBody } from '../Panel';
-import { StatusIndicator, Status } from '../StatusIndicator';
+import { StatusIndicator } from '../StatusIndicator';
+import type { Status } from '../StatusIndicator';
 import ComponentPreviewHeader from '../ComponentPreviewHeader';
 
 interface StatusIndicatorShowcaseProps {

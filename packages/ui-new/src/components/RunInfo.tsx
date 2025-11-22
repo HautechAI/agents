@@ -1,4 +1,5 @@
-import { StatusIndicator, Status } from './StatusIndicator';
+import { StatusIndicator } from './StatusIndicator';
+import type { Status } from './StatusIndicator';
 import { ExternalLink } from 'lucide-react';
 
 interface RunInfoProps {
