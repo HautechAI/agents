@@ -8,7 +8,7 @@ import { Conversation, Run } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { StatusIndicator } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
-import Sidebar from '../Sidebar';
+import { MainSidebar } from '../MainSidebar';
 
 interface ThreadsScreenProps {
   onBack: () => void;
@@ -86,7 +86,8 @@ Let's begin!`,
       {
         id: 'msg-3',
         role: 'tool',
-        content: 'Installing OAuth 2.0 libraries...\n\n```bash\nnpm install passport passport-oauth2 jsonwebtoken bcrypt\n```',
+        content:
+          'Installing OAuth 2.0 libraries...\n\n```bash\nnpm install passport passport-oauth2 jsonwebtoken bcrypt\n```',
         timestamp: '10:31 AM',
       },
     ],
@@ -440,11 +441,8 @@ export default function ThreadsScreen({ onBack, selectedMenuItem, onMenuItemSele
 
       {/* Main Screen Content - Full height below navigation */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Main Menu Sidebar - Full Height */}
-        <Sidebar 
-          selectedMenuItem={selectedMenuItem}
-          onMenuItemSelect={onMenuItemSelect}
-        />
+        {/* Main Menu MainSidebar - Full Height */}
+        <MainSidebar selectedMenuItem={selectedMenuItem} onMenuItemSelect={onMenuItemSelect} />
 
         {/* Right Side Content */}
         <div className="flex-1 min-w-0 flex flex-col">
@@ -545,10 +543,7 @@ export default function ThreadsScreen({ onBack, selectedMenuItem, onMenuItemSele
                             <div className="space-y-2">
                               <h4 className="text-sm text-[var(--agyn-dark)] mb-3">Reminders</h4>
                               {mockReminders.map((reminder) => (
-                                <div
-                                  key={reminder.id}
-                                  className="py-2 px-3 bg-[var(--agyn-bg-light)] rounded-[6px]"
-                                >
+                                <div key={reminder.id} className="py-2 px-3 bg-[var(--agyn-bg-light)] rounded-[6px]">
                                   <p className="text-sm text-[var(--agyn-dark)] mb-1">{reminder.title}</p>
                                   <p className="text-xs text-[var(--agyn-gray)]">{reminder.time}</p>
                                 </div>
@@ -560,7 +555,13 @@ export default function ThreadsScreen({ onBack, selectedMenuItem, onMenuItemSele
 
                       {/* Toggle Runs Info Button */}
                       <IconButton
-                        icon={isRunsInfoCollapsed ? <PanelRight className="w-4 h-4" /> : <PanelRightClose className="w-4 h-4" />}
+                        icon={
+                          isRunsInfoCollapsed ? (
+                            <PanelRight className="w-4 h-4" />
+                          ) : (
+                            <PanelRightClose className="w-4 h-4" />
+                          )
+                        }
                         variant="ghost"
                         size="sm"
                         onClick={() => setIsRunsInfoCollapsed(!isRunsInfoCollapsed)}
@@ -571,8 +572,8 @@ export default function ThreadsScreen({ onBack, selectedMenuItem, onMenuItemSele
 
                   {/* Conversation - flex-1 to take remaining space */}
                   <div className="flex-1 min-w-0 overflow-hidden min-h-0">
-                    <Conversation 
-                      runs={mockRuns} 
+                    <Conversation
+                      runs={mockRuns}
                       className="h-full rounded-none border-none"
                       collapsed={isRunsInfoCollapsed}
                       onCollapsedChange={setIsRunsInfoCollapsed}
@@ -592,11 +593,7 @@ export default function ThreadsScreen({ onBack, selectedMenuItem, onMenuItemSele
                         className="pr-12"
                       />
                       <div className="absolute bottom-[11px] right-[5px]">
-                        <IconButton 
-                          icon={<Send className="w-4 h-4" />}
-                          variant="primary" 
-                          size="sm"
-                        />
+                        <IconButton icon={<Send className="w-4 h-4" />} variant="primary" size="sm" />
                       </div>
                     </div>
                   </div>

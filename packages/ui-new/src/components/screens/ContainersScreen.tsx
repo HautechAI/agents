@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Trash2, Terminal, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
-import Sidebar from '../Sidebar';
+import { MainSidebar } from '../MainSidebar';
 import { IconButton } from '../IconButton';
 import { Badge } from '../Badge';
 import * as Tooltip from '@radix-ui/react-tooltip';
@@ -64,9 +64,7 @@ export default function ContainersScreen({
     if (processedIds.has(container.id)) return;
 
     if (container.role === 'workspace') {
-      const dinds = filteredContainers.filter(
-        (c) => c.role === 'dind' && c.parentId === container.id
-      );
+      const dinds = filteredContainers.filter((c) => c.role === 'dind' && c.parentId === container.id);
       if (dinds.length > 0) {
         groupedContainers.push([container, ...dinds]);
         processedIds.add(container.id);
@@ -94,9 +92,7 @@ export default function ContainersScreen({
       case 'running':
         return (
           <Badge variant="success" size="sm">
-            <div className="flex items-center gap-1">
-              Running
-            </div>
+            <div className="flex items-center gap-1">Running</div>
           </Badge>
         );
       case 'stopped':
@@ -166,20 +162,15 @@ export default function ContainersScreen({
 
       {/* Main Screen Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <Sidebar 
-          selectedMenuItem={selectedMenuItem}
-          onMenuItemSelect={onMenuItemSelect}
-        />
+        {/* Left MainSidebar */}
+        <MainSidebar selectedMenuItem={selectedMenuItem} onMenuItemSelect={onMenuItemSelect} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
           {/* Header */}
           <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-4">
             <h1 className="text-xl font-semibold text-[var(--agyn-dark)]">Containers</h1>
-            <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">
-              Manage Docker containers and sidecars
-            </p>
+            <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">Manage Docker containers and sidecars</p>
           </div>
 
           {/* Filters */}
@@ -241,9 +232,7 @@ export default function ContainersScreen({
           {/* Container List */}
           <div className="flex-1 overflow-auto bg-[var(--agyn-bg-light)] p-6">
             {paginatedContainers.length === 0 ? (
-              <div className="py-12 text-center text-sm text-[var(--agyn-text-subtle)]">
-                No containers found
-              </div>
+              <div className="py-12 text-center text-sm text-[var(--agyn-text-subtle)]">No containers found</div>
             ) : (
               <div className="space-y-3">
                 {paginatedContainers.map((item) => {
@@ -291,12 +280,14 @@ export default function ContainersScreen({
                                       </Tooltip.Portal>
                                     </Tooltip.Root>
                                   </Tooltip.Provider>
-                                  <Badge variant="primary" size="sm">Workspace</Badge>
+                                  <Badge variant="primary" size="sm">
+                                    Workspace
+                                  </Badge>
                                   {getStatusBadge(mainContainer.status)}
                                 </div>
                                 <div className="text-sm text-[var(--agyn-text-subtle)] mt-1">{mainContainer.image}</div>
                               </div>
-                              
+
                               {/* Actions */}
                               <div className="flex items-center gap-1">
                                 {mainContainer.threadId && (
@@ -390,7 +381,8 @@ export default function ContainersScreen({
                                       <div className="flex items-center gap-2 cursor-help">
                                         <span className="text-[var(--agyn-text-subtle)]">Volumes:</span>
                                         <span className="text-[var(--agyn-blue)]">
-                                          {mainContainer.volumes.length} volume{mainContainer.volumes.length !== 1 ? 's' : ''}
+                                          {mainContainer.volumes.length} volume
+                                          {mainContainer.volumes.length !== 1 ? 's' : ''}
                                         </span>
                                       </div>
                                     </Tooltip.Trigger>
@@ -401,7 +393,9 @@ export default function ContainersScreen({
                                       >
                                         <div className="space-y-1">
                                           {mainContainer.volumes.map((volume, i) => (
-                                            <div key={i} className="font-mono">{volume}</div>
+                                            <div key={i} className="font-mono">
+                                              {volume}
+                                            </div>
                                           ))}
                                         </div>
                                         <Tooltip.Arrow className="fill-[var(--agyn-dark)]" />
@@ -411,7 +405,7 @@ export default function ContainersScreen({
                                 </Tooltip.Provider>
                               )}
                             </div>
-                            
+
                             {/* Show Sidecars Button */}
                             {hasDinds && (
                               <button
@@ -464,11 +458,13 @@ export default function ContainersScreen({
                                         </Tooltip.Portal>
                                       </Tooltip.Root>
                                     </Tooltip.Provider>
-                                    <Badge variant="neutral" size="sm">DinD</Badge>
+                                    <Badge variant="neutral" size="sm">
+                                      DinD
+                                    </Badge>
                                     {getStatusBadge(dind.status)}
                                   </div>
                                   <div className="text-xs text-[var(--agyn-text-subtle)] mt-1">{dind.image}</div>
-                                  
+
                                   {/* DinD Metadata */}
                                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mt-2">
                                     <div className="flex items-center gap-2">
@@ -477,7 +473,7 @@ export default function ContainersScreen({
                                     </div>
                                   </div>
                                 </div>
-                                
+
                                 {/* DinD Actions */}
                                 <div className="flex items-center gap-1">
                                   <Tooltip.Provider delayDuration={300}>
@@ -498,10 +494,10 @@ export default function ContainersScreen({
                                           Open Terminal
                                           <Tooltip.Arrow className="fill-[var(--agyn-dark)]" />
                                         </Tooltip.Content>
-                                    </Tooltip.Portal>
-                                  </Tooltip.Root>
-                                </Tooltip.Provider>
-                                <Tooltip.Provider delayDuration={300}>
+                                      </Tooltip.Portal>
+                                    </Tooltip.Root>
+                                  </Tooltip.Provider>
+                                  <Tooltip.Provider delayDuration={300}>
                                     <Tooltip.Root>
                                       <Tooltip.Trigger asChild>
                                         <button
