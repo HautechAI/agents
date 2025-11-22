@@ -74,25 +74,18 @@ describe('MemoryController', () => {
   });
 
   it('list forwards defaults and thread resolution for global scope', async () => {
-    service.list.mockResolvedValue([{ name: 'logs', kind: 'dir' }]);
+    service.list.mockResolvedValue([{ name: 'logs', hasSubdocs: true }]);
 
     const result = await controller.list({ nodeId: 'node', scope: 'global' } as any, {} as any);
 
     expect(service.list).toHaveBeenCalledWith('node', 'global', undefined, '/');
-    expect(result).toEqual({ items: [{ name: 'logs', kind: 'dir' }] });
+    expect(result).toEqual({ items: [{ name: 'logs', hasSubdocs: true }] });
   });
 
-  it('read passes through content and maps EISDIR to 400', async () => {
+  it('read passes through content', async () => {
     service.read.mockResolvedValueOnce('hello world');
     const ok = await controller.read({ nodeId: 'node', scope: 'global' } as any, { path: '/note.txt' } as any);
     expect(ok).toEqual({ content: 'hello world' });
-
-    service.read.mockRejectedValueOnce(new Error('EISDIR: cannot read dir'));
-    await expect(controller.read({ nodeId: 'node', scope: 'global' } as any, { path: '/dir' } as any)).rejects.toSatisfy((err) => {
-      expect(err).toBeInstanceOf(HttpException);
-      expect((err as HttpException).getStatus()).toBe(400);
-      return true;
-    });
   });
 
   it('read maps ENOENT to 404', async () => {
@@ -130,12 +123,12 @@ describe('MemoryController', () => {
   });
 
   it('delete delegates to service', async () => {
-    service.delete.mockResolvedValue({ files: 1, dirs: 0 });
+    service.delete.mockResolvedValue({ removed: 1 });
 
     const result = await controller.remove({ nodeId: 'node', scope: 'global' } as any, { path: '/file.txt' } as any);
 
     expect(service.delete).toHaveBeenCalledWith('node', 'global', undefined, '/file.txt');
-    expect(result).toEqual({ files: 1, dirs: 0 });
+    expect(result).toEqual({ removed: 1 });
   });
 
   it('dump delegates to service with resolved thread id', async () => {

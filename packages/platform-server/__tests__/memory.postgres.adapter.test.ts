@@ -28,7 +28,7 @@ maybeDescribe('PostgresMemoryEntitiesRepository adapter', () => {
 
   it('create, append, read, update, delete', async () => {
     const bound = svc.forMemory('nodeA', 'global');
-    expect(await bound.stat('/')).toEqual({ kind: 'dir' });
+    expect(await bound.stat('/')).toEqual({ exists: true, hasSubdocs: false, contentLength: 0 });
     await bound.ensureDir('/docs');
     await bound.append('/docs/readme.txt', 'hello');
     await bound.append('/docs/readme.txt', 'world');
@@ -39,6 +39,6 @@ maybeDescribe('PostgresMemoryEntitiesRepository adapter', () => {
     expect(replaced).toBe(1);
     expect(await bound.read('/docs/readme.txt')).toContain('WORLD');
     const del = await bound.delete('/docs');
-    expect(del.dirs).toBeGreaterThanOrEqual(1);
+    expect(del.removed).toBeGreaterThanOrEqual(1);
   });
 });

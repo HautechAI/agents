@@ -98,6 +98,7 @@ maybeDescribe('E2E: memory tools with Postgres backend', () => {
 
       const delResultRaw = JSON.parse((await unified.execute({ path: targetPath, command: 'delete' } as any)) as any);
       expect(typeof delResultRaw).toBe('object');
+      expect(delResultRaw.result.removed).toBeGreaterThanOrEqual(1);
 
       const listingRaw = JSON.parse((await unified.execute({ path: 'notes', command: 'list' } as any)) as any);
       const names = listingRaw.result.entries.map((i: any) => i.name);

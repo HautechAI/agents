@@ -52,10 +52,10 @@ maybeDescribe('Memory tool adapters', () => {
     expect(Array.isArray(listRes.result.entries)).toBe(true);
 
     const delRes = JSON.parse(await unified.execute({ path: '/a', command: 'delete' } as any, { threadId: 'T1' } as any) as any);
-    expect(delRes.result.files).toBe(1);
+    expect(delRes.result.removed).toBeGreaterThanOrEqual(1);
   });
 
-  it('negative cases: ENOENT, EISDIR, EINVAL, ENOTMEM, list empty path', async () => {
+  it('negative cases: ENOENT, EINVAL, ENOTMEM, list empty path', async () => {
     const db = { getClient: () => prisma } as any;
     const serviceFactory = (opts: { threadId?: string }) => {
       const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any), { get: async () => null } as any);
@@ -82,17 +82,8 @@ maybeDescribe('Memory tool adapters', () => {
     expect(enoentUpdate.ok).toBe(false);
     expect(enoentUpdate.error.code).toBe('ENOENT');
 
-    // Prepare a dir and file
+    // Prepare a doc
     await tool.execute({ path: 'dir/file', command: 'append', content: 'v' } as any);
-
-    // EISDIR on append/update at dir
-    const eisdirAppend = JSON.parse((await tool.execute({ path: '/dir', command: 'append', content: 'x' } as any)) as any);
-    expect(eisdirAppend.ok).toBe(false);
-    expect(eisdirAppend.error.code).toBe('EISDIR');
-
-    const eisdirUpdate = JSON.parse((await tool.execute({ path: '/dir', command: 'update', oldContent: 'a', content: 'b' } as any)) as any);
-    expect(eisdirUpdate.ok).toBe(false);
-    expect(eisdirUpdate.error.code).toBe('EISDIR');
 
     // EINVAL: missing content/oldContent and unknown command
     const einvalAppend = JSON.parse((await tool.execute({ path: '/dir/file', command: 'append' } as any)) as any);

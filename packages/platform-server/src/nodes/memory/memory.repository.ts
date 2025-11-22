@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { MemoryEntity as PrismaMemoryEntity, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../../core/services/prisma.service';
-import type { MemoryEntity, MemoryEntityWithChildren } from './memory.types';
+import type { DeleteResult, MemoryEntity, MemoryEntityWithChildren } from './memory.types';
 
 export interface MemoryEntitiesRepositoryPort {
   resolvePath(filter: RepoFilter, segments: string[]): Promise<MemoryEntity | null>;
   ensurePath(filter: RepoFilter, segments: string[]): Promise<MemoryEntity | null>;
   listChildren(filter: RepoFilter, parentId: string | null): Promise<MemoryEntityWithChildren[]>;
-  deleteSubtree(filter: RepoFilter, entityId: string | null): Promise<{ files: number; dirs: number }>;
+  deleteSubtree(filter: RepoFilter, entityId: string | null): Promise<DeleteResult>;
   entityHasChildren(entityId: string): Promise<boolean>;
   updateContent(entityId: string, content: string): Promise<void>;
   listAll(filter: RepoFilter): Promise<MemoryEntity[]>;
@@ -161,7 +161,7 @@ export class PostgresMemoryEntitiesRepository implements MemoryEntitiesRepositor
     return rows.map((row) => ({ nodeId: row.node_id, threadId: row.thread_id }));
   }
 
-  async deleteSubtree(filter: RepoFilter, entityId: string | null): Promise<{ files: number; dirs: number }> {
+  async deleteSubtree(filter: RepoFilter, entityId: string | null): Promise<DeleteResult> {
     const prisma = await this.getClient();
     const threadId = filter.threadId;
 
@@ -190,18 +190,8 @@ export class PostgresMemoryEntitiesRepository implements MemoryEntitiesRepositor
         `;
 
     if (rows.length === 0) {
-      return { files: 0, dirs: 0 };
+      return { removed: 0 };
     }
-
-    const childCounts = new Map<string, number>();
-    for (const row of rows) {
-      if (row.parent_id) {
-        childCounts.set(row.parent_id, (childCounts.get(row.parent_id) ?? 0) + 1);
-      }
-    }
-
-    const files = rows.filter((row) => row.content != null).length;
-    const dirs = childCounts.size;
 
     if (entityId) {
       await prisma.memoryEntity.delete({ where: { id: entityId } });
@@ -214,6 +204,6 @@ export class PostgresMemoryEntitiesRepository implements MemoryEntitiesRepositor
       });
     }
 
-    return { files, dirs };
+    return { removed: rows.length };
   }
 }

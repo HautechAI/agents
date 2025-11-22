@@ -46,18 +46,21 @@ maybeDescribe('MemoryService', () => {
     const replaced = await bound.update('/notes/today', 'world', 'there');
     expect(replaced).toBe(1);
     const statFile = await bound.stat('/notes/today');
-    expect(statFile.kind).toBe('file');
-    expect(statFile.size).toBeGreaterThan(0);
+    expect(statFile.exists).toBe(true);
+    expect(statFile.hasSubdocs).toBe(false);
+    expect(statFile.contentLength).toBeGreaterThan(0);
 
     const rootList = await bound.list('/');
-    expect(rootList).toEqual(expect.arrayContaining([{ name: 'notes', kind: 'dir' }]));
+    expect(rootList).toEqual(expect.arrayContaining([{ name: 'notes', hasSubdocs: true }]));
     const notesList = await bound.list('/notes');
-    expect(notesList).toEqual(expect.arrayContaining([{ name: 'today', kind: 'file' }]));
+    expect(notesList).toEqual(expect.arrayContaining([{ name: 'today', hasSubdocs: false }]));
 
     const deletion = await bound.delete('/notes');
-    expect(deletion.files).toBe(1);
-    expect(deletion.dirs).toBeGreaterThanOrEqual(1);
-    expect((await bound.stat('/notes')).kind).toBe('none');
+    expect(deletion.removed).toBeGreaterThanOrEqual(1);
+    const statAfterDelete = await bound.stat('/notes');
+    expect(statAfterDelete.exists).toBe(false);
+    expect(statAfterDelete.hasSubdocs).toBe(false);
+    expect(statAfterDelete.contentLength).toBe(0);
   });
 
   it('treats ensureDir as validation-only no-op', async () => {
@@ -66,7 +69,7 @@ maybeDescribe('MemoryService', () => {
     const bound = svc.forMemory(nodeId, 'global');
     await expect(bound.ensureDir('/logs')).resolves.toBeUndefined();
     const list = await bound.list('/');
-    expect(list).toEqual(expect.arrayContaining([{ name: 'logs', kind: 'dir' }]));
+    expect(list).toEqual(expect.arrayContaining([{ name: 'logs', hasSubdocs: false }]));
   });
 
   it('scopes entries by thread id when perThread', async () => {

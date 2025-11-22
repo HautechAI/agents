@@ -5,7 +5,7 @@ import {
   type MemoryEntitiesRepositoryPort,
   type RepoFilter,
 } from './memory.repository';
-import type { ListEntry, MemoryEntity, MemoryScope, StatResult } from './memory.types';
+import type { DeleteResult, ListEntry, MemoryEntity, MemoryScope, StatResult } from './memory.types';
 
 const VALID_SEGMENT = /^[A-Za-z0-9_. -]+$/;
 
@@ -160,16 +160,18 @@ export class MemoryService {
   async stat(nodeId: string, scope: MemoryScope, threadId: string | undefined, path: string): Promise<StatResult> {
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(path, { allowRoot: true });
-    if (norm === '/') return { kind: 'dir' };
+    if (norm === '/') {
+      const children = await this.repo.listChildren(filter, null);
+      return { exists: true, hasSubdocs: children.length > 0, contentLength: 0 };
+    }
     const segments = this.getSegments(norm);
     const entity = await this.repo.resolvePath(filter, segments);
-    if (!entity) return { kind: 'none' };
-    const hasChildren = await this.repo.entityHasChildren(entity.id);
-    if (entity.content != null) {
-      return { kind: 'file', size: Buffer.byteLength(entity.content) };
+    if (!entity) {
+      return { exists: false, hasSubdocs: false, contentLength: 0 };
     }
-    if (hasChildren) return { kind: 'dir' };
-    return { kind: 'none' };
+    const hasChildren = await this.repo.entityHasChildren(entity.id);
+    const contentLength = entity.content != null ? Buffer.byteLength(entity.content) : 0;
+    return { exists: true, hasSubdocs: hasChildren, contentLength };
   }
 
   async list(nodeId: string, scope: MemoryScope, threadId: string | undefined, rawPath: string = '/'): Promise<ListEntry[]> {
@@ -180,13 +182,12 @@ export class MemoryService {
     if (segments.length > 0) {
       const parent = await this.repo.resolvePath(filter, segments);
       if (!parent) return [];
-      if (parent.content != null) throw new Error('ENOTDIR: path is a file');
       parentId = parent.id;
     }
     const children = await this.repo.listChildren(filter, parentId);
     return children.map((child) => ({
       name: child.name,
-      kind: child.hasChildren || child.content == null ? 'dir' : 'file',
+      hasSubdocs: child.hasChildren,
     }));
   }
 
@@ -195,9 +196,8 @@ export class MemoryService {
     const norm = this.normalizePath(path);
     const segments = this.getSegments(norm);
     const entity = await this.repo.resolvePath(filter, segments);
-    if (entity && entity.content != null) return entity.content;
-    if (entity && (await this.repo.entityHasChildren(entity.id))) throw new Error('EISDIR: path is a directory');
-    throw new Error('ENOENT: file not found');
+    if (!entity) throw new Error('ENOENT: document not found');
+    return entity.content ?? '';
   }
 
   async append(nodeId: string, scope: MemoryScope, threadId: string | undefined, path: string, data: string): Promise<void> {
@@ -205,12 +205,9 @@ export class MemoryService {
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(path);
     const segments = this.getSegments(norm);
-    if (segments.length === 0) throw new Error('append requires file path');
+    if (segments.length === 0) throw new Error('append requires document path');
     const entity = await this.repo.ensurePath(filter, segments);
-    if (!entity) throw new Error('append requires file path');
-    if (entity.content == null && (await this.repo.entityHasChildren(entity.id))) {
-      throw new Error('EISDIR: path is a directory');
-    }
+    if (!entity) throw new Error('append requires document path');
     const base = entity.content ?? '';
     const needsSeparator = base.length > 0 && !base.endsWith('\n') && !data.startsWith('\n');
     const next = base.length === 0 ? data : base + (needsSeparator ? '\n' : '') + data;
@@ -230,9 +227,8 @@ export class MemoryService {
     const norm = this.normalizePath(path);
     const segments = this.getSegments(norm);
     const entity = await this.repo.resolvePath(filter, segments);
-    if (!entity || entity.content == null) {
-      if (entity && (await this.repo.entityHasChildren(entity.id))) throw new Error('EISDIR: path is a directory');
-      throw new Error('ENOENT: file not found');
+    if (!entity) {
+      throw new Error('ENOENT: document not found');
     }
     if (oldStr.length === 0) return 0;
     const value = entity.content ?? '';
@@ -244,16 +240,16 @@ export class MemoryService {
     return count;
   }
 
-  async delete(nodeId: string, scope: MemoryScope, threadId: string | undefined, rawPath: string | undefined): Promise<{ files: number; dirs: number }> {
+  async delete(nodeId: string, scope: MemoryScope, threadId: string | undefined, rawPath: string | undefined): Promise<DeleteResult> {
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(rawPath ?? '/', { allowRoot: true });
     if (norm === '/') {
       return this.repo.deleteSubtree(filter, null);
     }
     const segments = this.getSegments(norm);
-    if (segments.length === 0) return { files: 0, dirs: 0 };
+    if (segments.length === 0) return { removed: 0 };
     const entity = await this.repo.resolvePath(filter, segments);
-    if (!entity) return { files: 0, dirs: 0 };
+    if (!entity) return { removed: 0 };
     return this.repo.deleteSubtree(filter, entity.id);
   }
 

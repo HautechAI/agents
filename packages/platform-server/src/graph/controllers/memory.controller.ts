@@ -90,7 +90,7 @@ export class MemoryController {
   }
 
   @Get(':nodeId/:scope/list')
-  async list(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ items: Array<{ name: string; kind: 'file'|'dir' }> }> {
+  async list(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ items: Array<{ name: string; hasSubdocs: boolean }> }> {
     const { nodeId, scope } = params;
     const path = query.path ?? '/';
     const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
@@ -99,7 +99,7 @@ export class MemoryController {
   }
 
   @Get(':nodeId/:scope/stat')
-  async stat(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ kind: 'file'|'dir'|'none'; size?: number }> {
+  async stat(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ exists: boolean; hasSubdocs: boolean; contentLength: number }> {
     const { nodeId, scope } = params;
     const path = query.path;
     const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
@@ -116,7 +116,6 @@ export class MemoryController {
       return { content };
     } catch (e) {
       const msg = (e as Error)?.message || '';
-      if (msg.startsWith('EISDIR')) throw new HttpException({ error: 'EISDIR' }, HttpStatus.BAD_REQUEST);
       if (msg.startsWith('ENOENT')) throw new HttpException({ error: 'ENOENT' }, HttpStatus.NOT_FOUND);
       throw e;
     }
@@ -127,13 +126,7 @@ export class MemoryController {
   async append(@Param() params: DocParamsDto, @Body() body: AppendBodyDto, @Query() query: ThreadOnlyQueryDto): Promise<void> {
     const { nodeId, scope } = params;
     const threadId = this.resolveThreadId(scope, params.threadId, body.threadId, query.threadId);
-    try {
-      await this.memoryService.append(nodeId, scope, threadId, body.path, body.data);
-    } catch (e) {
-      const msg = (e as Error)?.message || '';
-      if (msg.startsWith('EISDIR')) throw new HttpException({ error: 'EISDIR' }, HttpStatus.BAD_REQUEST);
-      throw e;
-    }
+    await this.memoryService.append(nodeId, scope, threadId, body.path, body.data);
   }
 
   @Post(':nodeId/:scope/update')
@@ -145,7 +138,6 @@ export class MemoryController {
       return { replaced };
     } catch (e) {
       const msg = (e as Error)?.message || '';
-      if (msg.startsWith('EISDIR')) throw new HttpException({ error: 'EISDIR' }, HttpStatus.BAD_REQUEST);
       if (msg.startsWith('ENOENT')) throw new HttpException({ error: 'ENOENT' }, HttpStatus.NOT_FOUND);
       throw e;
     }
@@ -160,7 +152,7 @@ export class MemoryController {
   }
 
   @Delete(':nodeId/:scope')
-  async remove(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ files: number; dirs: number }> {
+  async remove(@Param() params: DocParamsDto, @Query() query: PathWithThreadQueryDto): Promise<{ removed: number }> {
     const { nodeId, scope } = params;
     const threadId = this.resolveThreadId(scope, params.threadId, query.threadId);
     return this.memoryService.delete(nodeId, scope, threadId, query.path);

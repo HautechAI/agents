@@ -191,7 +191,7 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
     // Memory system message is inserted at index 1
     const memText = msgs[1].text;
     expect(memText).toMatch(/Memory/);
-    expect(memText).toMatch(/\[D\] notes|\[F\] notes/); // tree view shows notes dir or file
+    expect(memText).toMatch(/\[\+\] notes|\[ \] notes/); // tree view shows notes entry
   });
 
   it('appends memory to last when placement=last_message', async () => {
@@ -217,7 +217,7 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
     const last = msgs[msgs.length - 1];
     expect(last).toBeInstanceOf(SystemMessage);
     expect(last.text).toMatch(/Memory/);
-    expect(last.text).toMatch(/\[F\] alpha|\[D\] alpha/);
+    expect(last.text).toMatch(/\[\+\] alpha|\[ \] alpha/);
   });
 
   it('maxChars fallback: full -> tree when exceeded; per-thread empty falls back to global', async () => {
@@ -244,7 +244,7 @@ maybeDescribe('Runtime integration: memory injection via LiveGraphRuntime', () =
     const sys = msgs[1];
     const text = sys.text;
     expect(text).toMatch(/^Memory\n\//); // starts with Memory and a path line
-    expect(text).toContain('[D] long'); // tree view, not full contents
+    expect(text).toContain('[+] long'); // tree view, not full contents
     expect(text).not.toContain('aaaaaaaaaaaa'); // should not leak full content
   });
 });

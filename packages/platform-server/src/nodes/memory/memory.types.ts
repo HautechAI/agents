@@ -18,11 +18,16 @@ export interface MemoryEntityWithChildren extends MemoryEntity {
 }
 
 export interface StatResult {
-  kind: 'file' | 'dir' | 'none';
-  size?: number;
+  exists: boolean;
+  hasSubdocs: boolean;
+  contentLength: number;
 }
 
 export interface ListEntry {
   name: string;
-  kind: 'file' | 'dir';
+  hasSubdocs: boolean;
+}
+
+export interface DeleteResult {
+  removed: number;
 }
