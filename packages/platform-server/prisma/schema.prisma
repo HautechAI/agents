@@ -45,22 +45,21 @@ enum ContextItemRole {
   other
 }
 
-model MemoryEntry {
-  id         String      @id @default(uuid()) @db.Uuid
-  nodeId     String      @map("node_id")
-  scope      MemoryScope
-  threadId   String      @map("thread_id")
-  path       String
-  parentPath String      @map("parent_path")
-  depth      Int
-  content    String      @db.Text
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
+model MemoryEntity {
+  id        String        @id @default(uuid()) @db.Uuid
+  parentId  String?       @map("parent_id")
+  parent    MemoryEntity? @relation("MemoryEntitiesHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  MemoryEntity[] @relation("MemoryEntitiesHierarchy")
+  nodeId    String        @map("node_id")
+  threadId  String?       @map("thread_id")
+  name      String
+  content   String?       @db.Text
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
 
-  @@unique([nodeId, scope, threadId, path], map: "uniq_memory_entry_path")
-  @@index([nodeId, scope, threadId, parentPath], map: "idx_memory_entry_parent")
-  @@index([nodeId, scope, threadId, depth], map: "idx_memory_entry_depth")
-  @@map("memory_entries")
+  @@unique([nodeId, threadId, parentId, name], map: "uniq_memory_entity_path")
+  @@index([nodeId, threadId, parentId], map: "idx_memory_entity_parent")
+  @@map("memory_entities")
 }
 
 model ContextItem {

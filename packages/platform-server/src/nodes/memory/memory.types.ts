@@ -1,17 +1,20 @@
 export type MemoryScope = 'global' | 'perThread';
 
-export type MemoryFilter = { nodeId: string; scope: MemoryScope; threadId?: string };
+export type MemoryFilter = { nodeId: string; threadId: string | null };
 
-export interface MemoryEntry {
+export interface MemoryEntity {
+  id: string;
   nodeId: string;
-  scope: MemoryScope;
-  threadId: string;
-  path: string;
-  parentPath: string;
-  depth: number;
-  content: string;
+  threadId: string | null;
+  parentId: string | null;
+  name: string;
+  content: string | null;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+export interface MemoryEntityWithChildren extends MemoryEntity {
+  hasChildren: boolean;
 }
 
 export interface StatResult {

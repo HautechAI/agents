@@ -1,13 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { EntryMutation, MemoryEntriesRepositoryPort } from './memory.repository';
-import { PostgresMemoryEntriesRepository } from './memory.repository';
-import type { ListEntry, MemoryFilter, MemoryScope, StatResult } from './memory.types';
+import {
+  PostgresMemoryEntitiesRepository,
+  type MemoryEntitiesRepositoryPort,
+  type RepoFilter,
+} from './memory.repository';
+import type { ListEntry, MemoryEntity, MemoryScope, StatResult } from './memory.types';
 
 const VALID_SEGMENT = /^[A-Za-z0-9_. -]+$/;
 
 @Injectable()
 export class MemoryService {
-  constructor(@Inject(PostgresMemoryEntriesRepository) private readonly repo: MemoryEntriesRepositoryPort) {}
+  constructor(@Inject(PostgresMemoryEntitiesRepository) private readonly repo: MemoryEntitiesRepositoryPort) {}
 
   normalizePath(rawPath: string, opts: { allowRoot?: boolean } = {}): string {
     const allowRoot = opts.allowRoot ?? false;
@@ -48,86 +51,33 @@ export class MemoryService {
     return path.slice(1).split('/');
   }
 
-  private getDepth(path: string): number {
-    if (path === '/') return 0;
-    return this.getSegments(path).length;
-  }
-
-  private getParentPath(path: string): string {
-    if (path === '/') return '/';
-    const idx = path.lastIndexOf('/');
-    if (idx <= 0) return '/';
-    return path.slice(0, idx);
-  }
-
-  private buildFilter(nodeId: string, scope: MemoryScope, threadId?: string): MemoryFilter {
+  private buildFilter(nodeId: string, scope: MemoryScope, threadId?: string): RepoFilter {
     if (scope === 'perThread') {
       if (!threadId || threadId.trim().length === 0) throw new Error('threadId required for perThread scope');
-      return { nodeId, scope, threadId: threadId.trim() };
+      return { nodeId, threadId: threadId.trim() };
     }
-    return { nodeId, scope };
-  }
-
-  private deriveMeta(path: string): { parentPath: string; depth: number } {
-    return {
-      parentPath: this.getParentPath(path),
-      depth: this.getDepth(path),
-    };
-  }
-
-  private combineEntries(files: ListEntry[], dirs: Set<string>): ListEntry[] {
-    const dirEntries = Array.from(dirs)
-      .filter((name) => name.length > 0)
-      .map((name) => ({ name, kind: 'dir' as const }));
-    return [...dirEntries, ...files];
-  }
-
-  private async ensureNotDirectory(filter: MemoryFilter, path: string): Promise<void> {
-    const hasChildren = await this.repo.hasDescendants(filter, path);
-    if (hasChildren) throw new Error('EISDIR: path is a directory');
-  }
-
-  private async mutateEntry<T>(
-    filter: MemoryFilter,
-    path: string,
-    mutator: (entry: string | null) => Promise<EntryMutation<T>> | EntryMutation<T>,
-  ): Promise<T> {
-    const meta = this.deriveMeta(path);
-    return this.repo.withEntry(filter, path, meta, async (current) => {
-      const next = await mutator(current ? current.content : null);
-      return next;
-    });
-  }
-
-  private extractDirName(parentPath: string, base: string): string | null {
-    if (!parentPath || parentPath === base) return null;
-    if (base === '/') {
-      if (!parentPath.startsWith('/')) return null;
-      const trimmed = parentPath.slice(1);
-      if (!trimmed) return null;
-      return trimmed.split('/')[0] ?? null;
-    }
-    const prefix = `${base}/`;
-    if (!parentPath.startsWith(prefix)) return null;
-    const remainder = parentPath.slice(prefix.length);
-    if (!remainder) return null;
-    return remainder.split('/')[0] ?? null;
+    return { nodeId, threadId: null };
   }
 
   async ensureDir(nodeId: string, scope: MemoryScope, threadId: string | undefined, path: string): Promise<void> {
-    void this.buildFilter(nodeId, scope, threadId);
+    const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(path, { allowRoot: true });
     if (norm === '/') return;
-    // Directories are virtual; validation only.
+    const segments = this.getSegments(norm);
+    await this.repo.ensurePath(filter, segments);
   }
 
   async stat(nodeId: string, scope: MemoryScope, threadId: string | undefined, path: string): Promise<StatResult> {
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(path, { allowRoot: true });
     if (norm === '/') return { kind: 'dir' };
-    const entry = await this.repo.getEntry(filter, norm);
-    if (entry) return { kind: 'file', size: Buffer.byteLength(entry.content) };
-    const hasChildren = await this.repo.hasDescendants(filter, norm);
+    const segments = this.getSegments(norm);
+    const entity = await this.repo.resolvePath(filter, segments);
+    if (!entity) return { kind: 'none' };
+    const hasChildren = await this.repo.entityHasChildren(entity.id);
+    if (entity.content != null) {
+      return { kind: 'file', size: Buffer.byteLength(entity.content) };
+    }
     if (hasChildren) return { kind: 'dir' };
     return { kind: 'none' };
   }
@@ -135,29 +85,28 @@ export class MemoryService {
   async list(nodeId: string, scope: MemoryScope, threadId: string | undefined, rawPath: string = '/'): Promise<ListEntry[]> {
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(rawPath || '/', { allowRoot: true });
-    if (norm !== '/') {
-      const entry = await this.repo.getEntry(filter, norm);
-      if (entry) throw new Error('ENOTDIR: path is a file');
+    const segments = this.getSegments(norm);
+    let parentId: string | null = null;
+    if (segments.length > 0) {
+      const parent = await this.repo.resolvePath(filter, segments);
+      if (!parent) return [];
+      if (parent.content != null) throw new Error('ENOTDIR: path is a file');
+      parentId = parent.id;
     }
-    const files = await this.repo.listFiles(filter, norm);
-    const fileEntries = files.map((entry) => ({ name: this.getSegments(entry.path).slice(-1)[0], kind: 'file' as const }));
-    const parentPaths = await this.repo.listDescendantParentPaths(filter, norm);
-    const dirs = new Set<string>();
-    for (const parentPath of parentPaths) {
-      const name = this.extractDirName(parentPath, norm);
-      if (name) dirs.add(name);
-    }
-    const combined = this.combineEntries(fileEntries, dirs);
-    return combined.sort((a, b) => a.name.localeCompare(b.name));
+    const children = await this.repo.listChildren(filter, parentId);
+    return children.map((child) => ({
+      name: child.name,
+      kind: child.hasChildren || child.content == null ? 'dir' : 'file',
+    }));
   }
 
   async read(nodeId: string, scope: MemoryScope, threadId: string | undefined, path: string): Promise<string> {
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(path);
-    const entry = await this.repo.getEntry(filter, norm);
-    if (entry) return entry.content;
-    const hasChildren = await this.repo.hasDescendants(filter, norm);
-    if (hasChildren) throw new Error('EISDIR: path is a directory');
+    const segments = this.getSegments(norm);
+    const entity = await this.repo.resolvePath(filter, segments);
+    if (entity && entity.content != null) return entity.content;
+    if (entity && (await this.repo.entityHasChildren(entity.id))) throw new Error('EISDIR: path is a directory');
     throw new Error('ENOENT: file not found');
   }
 
@@ -165,14 +114,17 @@ export class MemoryService {
     if (typeof data !== 'string') throw new Error('append expects string data');
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(path);
-    const existing = await this.repo.getEntry(filter, norm);
-    if (!existing) await this.ensureNotDirectory(filter, norm);
-    await this.mutateEntry(filter, norm, async (current) => {
-      const base = current ?? '';
-      const needsSeparator = base.length > 0 && !base.endsWith('\n') && !data.startsWith('\n');
-      const next = base.length === 0 ? data : base + (needsSeparator ? '\n' : '') + data;
-      return { type: 'upsert', content: next };
-    });
+    const segments = this.getSegments(norm);
+    if (segments.length === 0) throw new Error('append requires file path');
+    const entity = await this.repo.ensurePath(filter, segments);
+    if (!entity) throw new Error('append requires file path');
+    if (entity.content == null && (await this.repo.entityHasChildren(entity.id))) {
+      throw new Error('EISDIR: path is a directory');
+    }
+    const base = entity.content ?? '';
+    const needsSeparator = base.length > 0 && !base.endsWith('\n') && !data.startsWith('\n');
+    const next = base.length === 0 ? data : base + (needsSeparator ? '\n' : '') + data;
+    await this.repo.updateContent(entity.id, next);
   }
 
   async update(
@@ -186,51 +138,64 @@ export class MemoryService {
     if (typeof oldStr !== 'string' || typeof newStr !== 'string') throw new Error('update expects string args');
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(path);
-    const existing = await this.repo.getEntry(filter, norm);
-    if (!existing) {
-      const hasChildren = await this.repo.hasDescendants(filter, norm);
-      if (hasChildren) throw new Error('EISDIR: path is a directory');
+    const segments = this.getSegments(norm);
+    const entity = await this.repo.resolvePath(filter, segments);
+    if (!entity || entity.content == null) {
+      if (entity && (await this.repo.entityHasChildren(entity.id))) throw new Error('EISDIR: path is a directory');
       throw new Error('ENOENT: file not found');
     }
     if (oldStr.length === 0) return 0;
-    return this.mutateEntry(filter, norm, async (current) => {
-      const value = current ?? '';
-      const parts = value.split(oldStr);
-      const count = parts.length - 1;
-      if (count === 0) return { type: 'noop', result: 0 };
-      const next = parts.join(newStr);
-      return { type: 'upsert', content: next, result: count };
-    });
+    const value = entity.content ?? '';
+    const parts = value.split(oldStr);
+    const count = parts.length - 1;
+    if (count === 0) return 0;
+    const next = parts.join(newStr);
+    await this.repo.updateContent(entity.id, next);
+    return count;
   }
 
   async delete(nodeId: string, scope: MemoryScope, threadId: string | undefined, rawPath: string | undefined): Promise<{ files: number; dirs: number }> {
     const filter = this.buildFilter(nodeId, scope, threadId);
     const norm = this.normalizePath(rawPath ?? '/', { allowRoot: true });
-    const removed = await this.repo.deleteTree(filter, norm);
-    const files = removed.length;
-    const dirs = new Set<string>();
-    for (const row of removed) {
-      const ancestors = this.getAncestorDirs(row.path);
-      for (const dir of ancestors) dirs.add(dir);
+    if (norm === '/') {
+      return this.repo.deleteSubtree(filter, null);
     }
-    return { files, dirs: dirs.size };
+    const segments = this.getSegments(norm);
+    if (segments.length === 0) return { files: 0, dirs: 0 };
+    const entity = await this.repo.resolvePath(filter, segments);
+    if (!entity) return { files: 0, dirs: 0 };
+    return this.repo.deleteSubtree(filter, entity.id);
   }
 
-  private getAncestorDirs(path: string): string[] {
-    const segments = this.getSegments(path);
-    const dirs: string[] = [];
-    for (let i = 1; i < segments.length; i += 1) {
-      const dir = '/' + segments.slice(0, i).join('/');
-      dirs.push(dir);
-    }
-    return dirs;
+  private buildPathMap(entities: MemoryEntity[]): Map<string, string> {
+    const byId = new Map(entities.map((entity) => [entity.id, entity] as const));
+    const cache = new Map<string, string>();
+
+    const resolvePath = (entity: MemoryEntity): string => {
+      const cached = cache.get(entity.id);
+      if (cached) return cached;
+      const parent = entity.parentId ? byId.get(entity.parentId) : undefined;
+      const parentPath = parent ? resolvePath(parent) : '';
+      const path = parentPath ? `${parentPath}/${entity.name}` : `/${entity.name}`;
+      cache.set(entity.id, path);
+      return path;
+    };
+
+    for (const entity of entities) resolvePath(entity);
+    return cache;
   }
 
   async getAll(nodeId: string, scope: MemoryScope, threadId: string | undefined): Promise<Record<string, string>> {
     const filter = this.buildFilter(nodeId, scope, threadId);
-    const entries = await this.repo.listAll(filter);
+    const entities = await this.repo.listAll(filter);
+    if (entities.length === 0) return {};
+    const paths = this.buildPathMap(entities);
     const out: Record<string, string> = {};
-    for (const entry of entries) out[entry.path] = entry.content;
+    for (const entity of entities) {
+      if (entity.content != null) {
+        out[paths.get(entity.id)!] = entity.content;
+      }
+    }
     return out;
   }
 
@@ -240,15 +205,24 @@ export class MemoryService {
     threadId: string | undefined,
   ): Promise<{ nodeId: string; scope: MemoryScope; threadId?: string; data: Record<string, string>; dirs: Record<string, true> }> {
     const filter = this.buildFilter(nodeId, scope, threadId);
-    const entries = await this.repo.listAll(filter);
+    const entities = await this.repo.listAll(filter);
     const data: Record<string, string> = {};
-    const dirSet = new Set<string>();
-    for (const entry of entries) {
-      data[entry.path] = entry.content;
-      for (const dir of this.getAncestorDirs(entry.path)) dirSet.add(dir);
-    }
     const dirs: Record<string, true> = {};
-    for (const dir of dirSet) dirs[dir] = true;
+    if (entities.length === 0) {
+      return { nodeId, scope, threadId: threadId ?? undefined, data, dirs };
+    }
+    const paths = this.buildPathMap(entities);
+    const childCounts = new Map<string, number>();
+    for (const entity of entities) {
+      if (entity.parentId) {
+        childCounts.set(entity.parentId, (childCounts.get(entity.parentId) ?? 0) + 1);
+      }
+    }
+    for (const entity of entities) {
+      const path = paths.get(entity.id)!;
+      if (entity.content != null) data[path] = entity.content;
+      if (childCounts.has(entity.id)) dirs[path] = true;
+    }
     return { nodeId, scope, threadId: threadId ?? undefined, data, dirs };
   }
 

@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { PostgresMemoryEntriesRepository } from '../src/nodes/memory/memory.repository';
+import { PostgresMemoryEntitiesRepository } from '../src/nodes/memory/memory.repository';
 import { MemoryService } from '../src/nodes/memory/memory.service';
 
 const URL = process.env.AGENTS_DATABASE_URL;
@@ -9,11 +9,11 @@ const maybeDescribe = shouldRunDbTests ? describe : describe.skip;
 maybeDescribe('MemoryService', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
-  const repo = new PostgresMemoryEntriesRepository({ getClient: () => prisma } as any);
+  const repo = new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any);
   const svc = new MemoryService(repo);
 
   const clear = async (nodeIds: string[]) => {
-    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join(nodeIds)})`;
+    await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(nodeIds)})`;
   };
 
   afterAll(async () => {
@@ -64,7 +64,7 @@ maybeDescribe('MemoryService', () => {
     const bound = svc.forMemory(nodeId, 'global');
     await expect(bound.ensureDir('/logs')).resolves.toBeUndefined();
     const list = await bound.list('/');
-    expect(list.some((entry) => entry.name === 'logs')).toBe(false);
+    expect(list).toEqual(expect.arrayContaining([{ name: 'logs', kind: 'dir' }]));
   });
 
   it('scopes entries by thread id when perThread', async () => {

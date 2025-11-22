@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { PostgresMemoryEntriesRepository } from '../src/nodes/memory/memory.repository';
+import { PostgresMemoryEntitiesRepository } from '../src/nodes/memory/memory.repository';
 import { MemoryService } from '../src/nodes/memory/memory.service';
 import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../src/nodes/tools/memory/memory.tool';
 import { LoggerService } from '../src/core/services/logger.service.js';
@@ -13,12 +13,12 @@ maybeDescribe('Memory tool adapters', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   beforeAll(async () => {
-    const svc = new MemoryService(new PostgresMemoryEntriesRepository({ getClient: () => prisma } as any));
+    const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
     svc.forMemory('bootstrap', 'global');
-    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join(['bootstrap', 'nodeX'])})`;
+    await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(['bootstrap', 'nodeX'])})`;
   });
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join(['nodeX'])})`;
+    await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(['nodeX'])})`;
   });
   afterAll(async () => {
     await prisma.$disconnect();
@@ -26,7 +26,7 @@ maybeDescribe('Memory tool adapters', () => {
   it('wrap LangChain tools and operate on MemoryService via config.thread_id', async () => {
     const db = { getClient: () => prisma } as any;
     const serviceFactory = (opts: { threadId?: string }) => {
-      const svc = new MemoryService(new PostgresMemoryEntriesRepository(db as any));
+      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any));
       return svc.forMemory('nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId) as any;
     };
     const logger = new LoggerService();
@@ -55,7 +55,7 @@ maybeDescribe('Memory tool adapters', () => {
   it('negative cases: ENOENT, EISDIR, EINVAL, ENOTMEM, list empty path', async () => {
     const db = { getClient: () => prisma } as any;
     const serviceFactory = (opts: { threadId?: string }) => {
-      const svc = new MemoryService(new PostgresMemoryEntriesRepository(db as any));
+      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any));
       return svc.forMemory('nodeX', opts.threadId ? 'perThread' : 'global', opts.threadId) as any;
     };
     const logger = new LoggerService();

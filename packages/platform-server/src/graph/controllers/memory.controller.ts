@@ -5,7 +5,6 @@ import type { MemoryScope } from '../../nodes/memory/memory.types';
 import { MemoryService } from '../../nodes/memory/memory.service';
 import { PrismaService } from '../../core/services/prisma.service';
 import { LiveGraphRuntime } from '../liveGraph.manager';
-import { GLOBAL_THREAD_KEY } from '../../nodes/memory/memory.repository';
 
 class DocParamsDto {
   @IsString()
@@ -94,8 +93,8 @@ export class MemoryController {
   @Get('docs')
   async listDocs(): Promise<{ items: Array<{ nodeId: string; scope: MemoryScope; threadId?: string }> }> {
     const prisma = this.prismaSvc.getClient();
-    const rows = await prisma.$queryRaw<Array<{ node_id: string; scope: string; thread_id: string }>>`
-      SELECT DISTINCT node_id, scope, thread_id FROM memory_entries ORDER BY node_id ASC, scope ASC, thread_id ASC
+    const rows = await prisma.$queryRaw<Array<{ node_id: string; thread_id: string | null }>>`
+      SELECT DISTINCT node_id, thread_id FROM memory_entities ORDER BY node_id ASC, thread_id ASC
     `;
     const map = new Map<string, { nodeId: string; scope: MemoryScope; threadId?: string }>();
     const add = (nodeId: string, scope: MemoryScope, threadId?: string) => {
@@ -103,9 +102,8 @@ export class MemoryController {
       if (!map.has(key)) map.set(key, { nodeId, scope, threadId });
     };
     for (const row of rows) {
-      const scope = row.scope === 'perThread' ? 'perThread' : 'global';
-      const threadKey = row.thread_id;
-      const threadId = scope === 'perThread' && threadKey && threadKey !== GLOBAL_THREAD_KEY ? threadKey : undefined;
+      const scope: MemoryScope = row.thread_id ? 'perThread' : 'global';
+      const threadId = row.thread_id ?? undefined;
       add(row.node_id, scope, threadId);
     }
     const liveNodes = this.runtime.getNodes();

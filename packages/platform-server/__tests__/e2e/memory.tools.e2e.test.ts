@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { PostgresMemoryEntriesRepository } from '../../src/nodes/memory/memory.repository';
+import { PostgresMemoryEntitiesRepository } from '../../src/nodes/memory/memory.repository';
 import { MemoryService } from '../../src/nodes/memory/memory.service';
 import { LoggerService } from '../../src/core/services/logger.service';
 import { MemoryToolNode } from '../../src/nodes/tools/memory/memory.node';
@@ -16,14 +16,14 @@ maybeDescribe('E2E: memory tools with Postgres backend', () => {
   let svc: MemoryService;
 
   beforeAll(async () => {
-    svc = new MemoryService(new PostgresMemoryEntriesRepository({ getClient: () => prisma } as any));
+    svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
     const bootstrap = svc.forMemory('bootstrap', 'global');
   });
 
   const nodeIds = ['node-append-1', 'node-append-2', 'node-lrud-1', 'node-lrud-2'];
 
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join(nodeIds)})`;
+    await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join(nodeIds)})`;
   });
 
   afterAll(async () => {

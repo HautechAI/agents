@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { PostgresMemoryEntriesRepository } from '../../src/nodes/memory/memory.repository';
+import { PostgresMemoryEntitiesRepository } from '../../src/nodes/memory/memory.repository';
 import { MemoryService } from '../../src/nodes/memory/memory.service';
 import { UnifiedMemoryFunctionTool as UnifiedMemoryTool } from '../../src/nodes/tools/memory/memory.tool';
 import { LoggerService } from '../../src/core/services/logger.service';
@@ -17,12 +17,12 @@ maybeDescribe('memory_append tool: path normalization and validation', () => {
   if (!shouldRunDbTests) return;
   const prisma = new PrismaClient({ datasources: { db: { url: URL! } } });
   beforeAll(async () => {
-    const svc = new MemoryService(new PostgresMemoryEntriesRepository({ getClient: () => prisma } as any));
+    const svc = new MemoryService(new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any));
     svc.forMemory('bootstrap', 'global');
-    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join([NODE_ID, 'bootstrap'])})`;
+    await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join([NODE_ID, 'bootstrap'])})`;
   });
   beforeEach(async () => {
-    await prisma.$executeRaw`DELETE FROM memory_entries WHERE node_id IN (${Prisma.join([NODE_ID])})`;
+    await prisma.$executeRaw`DELETE FROM memory_entities WHERE node_id IN (${Prisma.join([NODE_ID])})`;
   });
   afterAll(async () => {
     await prisma.$disconnect();
@@ -30,7 +30,7 @@ maybeDescribe('memory_append tool: path normalization and validation', () => {
   const mkTools = () => {
     const db = { getClient: () => prisma } as any;
     const factory = (opts: { threadId?: string }) => {
-      const svc = new MemoryService(new PostgresMemoryEntriesRepository(db as any));
+      const svc = new MemoryService(new PostgresMemoryEntitiesRepository(db as any));
       return svc.forMemory(NODE_ID, opts.threadId ? 'perThread' : 'global', opts.threadId) as any;
     };
     const logger = new LoggerService();
