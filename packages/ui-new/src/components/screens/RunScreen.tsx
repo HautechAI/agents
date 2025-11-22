@@ -1,6 +1,17 @@
 import { useState } from 'react';
-import { ArrowLeft, Square, Eye, EyeOff, MessageSquare, Bot, Wrench, FileText, Settings2, ScrollText } from 'lucide-react';
-import Sidebar from '../Sidebar';
+import {
+  ArrowLeft,
+  Square,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  Bot,
+  Wrench,
+  FileText,
+  Settings2,
+  ScrollText,
+} from 'lucide-react';
+import { MainSidebar } from '../MainSidebar';
 import { RunEventsList, RunEvent } from '../RunEventsList';
 import { RunEventDetails } from '../RunEventDetails';
 import { StatusIndicator, Status } from '../StatusIndicator';
@@ -84,7 +95,7 @@ export default function RunScreen({
     setStatusFilters(newFilters);
   };
 
-  const filteredEvents = events.filter(event => {
+  const filteredEvents = events.filter((event) => {
     // Apply event type filters
     if (eventFilters.size > 0) {
       const eventType = event.type === 'summarization' ? 'summary' : event.type;
@@ -103,16 +114,16 @@ export default function RunScreen({
     return true;
   });
 
-  const selectedEvent = filteredEvents.find(e => e.id === selectedEventId);
+  const selectedEvent = filteredEvents.find((e) => e.id === selectedEventId);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -123,10 +134,10 @@ export default function RunScreen({
   // Calculate totals by status
   const totalRuns = events.length;
   const runsByStatus = {
-    running: events.filter(e => e.status === 'running').length,
-    finished: events.filter(e => e.status === 'finished').length,
-    failed: events.filter(e => e.status === 'failed').length,
-    terminated: events.filter(e => e.status === 'terminated').length,
+    running: events.filter((e) => e.status === 'running').length,
+    finished: events.filter((e) => e.status === 'finished').length,
+    failed: events.filter((e) => e.status === 'failed').length,
+    terminated: events.filter((e) => e.status === 'terminated').length,
   };
 
   return (
@@ -141,8 +152,8 @@ export default function RunScreen({
 
       {/* Main Screen Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar />
+        {/* MainSidebar */}
+        <MainSidebar />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -161,17 +172,13 @@ export default function RunScreen({
                 <div className="text-[var(--agyn-border-subtle)]">|</div>
 
                 {/* Duration */}
-                <div className="text-sm text-[var(--agyn-dark)]">
-                  {duration}
-                </div>
+                <div className="text-sm text-[var(--agyn-dark)]">{duration}</div>
 
                 {/* Divider */}
                 <div className="text-[var(--agyn-border-subtle)]">|</div>
 
                 {/* Date */}
-                <div className="text-sm text-[var(--agyn-text-subtle)]">
-                  {formatDate(createdAt)}
-                </div>
+                <div className="text-sm text-[var(--agyn-text-subtle)]">{formatDate(createdAt)}</div>
 
                 {/* Divider */}
                 <div className="text-[var(--agyn-border-subtle)]">|</div>
@@ -179,7 +186,7 @@ export default function RunScreen({
                 {/* Tokens with Popover */}
                 <Popover.Root open={tokensPopoverOpen} onOpenChange={setTokensPopoverOpen}>
                   <Popover.Trigger asChild>
-                    <button 
+                    <button
                       className="text-sm text-[var(--agyn-dark)] hover:text-[var(--agyn-blue)] transition-colors cursor-pointer"
                       onMouseEnter={() => setTokensPopoverOpen(true)}
                       onMouseLeave={() => setTokensPopoverOpen(false)}
@@ -228,11 +235,7 @@ export default function RunScreen({
               {/* Right: Actions */}
               <div className="flex items-center gap-2">
                 {status === 'running' && (
-                  <Button
-                    onClick={onTerminate}
-                    variant="danger"
-                    size="sm"
-                  >
+                  <Button onClick={onTerminate} variant="danger" size="sm">
                     <Square className="w-4 h-4 mr-1.5" />
                     Terminate
                   </Button>
@@ -250,7 +253,7 @@ export default function RunScreen({
                 {/* Events Count with Popover */}
                 <Popover.Root open={runsPopoverOpen} onOpenChange={setRunsPopoverOpen}>
                   <Popover.Trigger asChild>
-                    <button 
+                    <button
                       className="text-sm text-[var(--agyn-dark)] hover:text-[var(--agyn-blue)] transition-colors cursor-pointer"
                       onMouseEnter={() => setRunsPopoverOpen(true)}
                       onMouseLeave={() => setRunsPopoverOpen(false)}
@@ -267,7 +270,7 @@ export default function RunScreen({
                     >
                       <div className="space-y-2">
                         <div className="text-xs font-medium text-[var(--agyn-dark)] mb-3">Event Statistics</div>
-                        
+
                         {/* By Kind */}
                         <div>
                           <div className="space-y-1.5">
@@ -276,32 +279,40 @@ export default function RunScreen({
                                 <MessageSquare className="w-3 h-3 text-[var(--agyn-blue)]" />
                                 <span className="text-[var(--agyn-text-subtle)]">Message</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(statistics.messages)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(statistics.messages)}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-1.5">
                                 <Bot className="w-3 h-3 text-[var(--agyn-purple)]" />
                                 <span className="text-[var(--agyn-text-subtle)]">LLM</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(statistics.llm)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(statistics.llm)}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-1.5">
                                 <Wrench className="w-3 h-3 text-[var(--agyn-cyan)]" />
                                 <span className="text-[var(--agyn-text-subtle)]">Tool</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(statistics.tools)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(statistics.tools)}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-1.5">
                                 <FileText className="w-3 h-3 text-[var(--agyn-gray)]" />
                                 <span className="text-[var(--agyn-text-subtle)]">Summary</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(statistics.summaries)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(statistics.summaries)}
+                              </span>
                             </div>
                           </div>
                         </div>
-                        
+
                         {/* By Status */}
                         <div className="pt-2 border-t border-[var(--agyn-border-subtle)]">
                           <div className="space-y-1.5">
@@ -310,28 +321,36 @@ export default function RunScreen({
                                 <StatusIndicator status="running" size="sm" showTooltip={false} />
                                 <span className="text-[var(--agyn-text-subtle)]">Running</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(runsByStatus.running)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(runsByStatus.running)}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-1.5">
                                 <StatusIndicator status="finished" size="sm" showTooltip={false} />
                                 <span className="text-[var(--agyn-text-subtle)]">Finished</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(runsByStatus.finished)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(runsByStatus.finished)}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-1.5">
                                 <StatusIndicator status="failed" size="sm" showTooltip={false} />
                                 <span className="text-[var(--agyn-text-subtle)]">Failed</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(runsByStatus.failed)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(runsByStatus.failed)}
+                              </span>
                             </div>
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-1.5">
                                 <StatusIndicator status="terminated" size="sm" showTooltip={false} />
                                 <span className="text-[var(--agyn-text-subtle)]">Terminated</span>
                               </div>
-                              <span className="text-[var(--agyn-dark)] font-medium">{formatNumber(runsByStatus.terminated)}</span>
+                              <span className="text-[var(--agyn-dark)] font-medium">
+                                {formatNumber(runsByStatus.terminated)}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -366,7 +385,7 @@ export default function RunScreen({
                       </Tooltip.Portal>
                     </Tooltip.Root>
                   </Tooltip.Provider>
-                  
+
                   {/* Filter Configuration Dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -374,166 +393,177 @@ export default function RunScreen({
                         <IconButton icon={<Settings2 />} variant="ghost" size="sm" />
                       </div>
                     </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 bg-white rounded-[10px] border border-[var(--agyn-border-subtle)] shadow-lg p-1">
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-[var(--agyn-text-subtle)]">
-                        Event Kinds
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleEventFilter('message');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4 text-[var(--agyn-blue)]" />
-                          <span className="text-sm">Message</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({formatNumber(statistics.messages)})</span>
-                        </div>
-                        {eventFilters.has('message') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleEventFilter('llm');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Bot className="w-4 h-4 text-[var(--agyn-purple)]" />
-                          <span className="text-sm">LLM</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({formatNumber(statistics.llm)})</span>
-                        </div>
-                        {eventFilters.has('llm') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleEventFilter('tool');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Wrench className="w-4 h-4 text-[var(--agyn-cyan)]" />
-                          <span className="text-sm">Tool</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({formatNumber(statistics.tools)})</span>
-                        </div>
-                        {eventFilters.has('tool') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleEventFilter('summary');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-[var(--agyn-gray)]" />
-                          <span className="text-sm">Summary</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({formatNumber(statistics.summaries)})</span>
-                        </div>
-                        {eventFilters.has('summary') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-56 bg-white rounded-[10px] border border-[var(--agyn-border-subtle)] shadow-lg p-1"
+                    >
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-[var(--agyn-text-subtle)]">
+                          Event Kinds
+                        </DropdownMenuLabel>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleEventFilter('message');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="w-4 h-4 text-[var(--agyn-blue)]" />
+                            <span className="text-sm">Message</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">
+                              ({formatNumber(statistics.messages)})
+                            </span>
+                          </div>
+                          {eventFilters.has('message') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleEventFilter('llm');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Bot className="w-4 h-4 text-[var(--agyn-purple)]" />
+                            <span className="text-sm">LLM</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">
+                              ({formatNumber(statistics.llm)})
+                            </span>
+                          </div>
+                          {eventFilters.has('llm') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleEventFilter('tool');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Wrench className="w-4 h-4 text-[var(--agyn-cyan)]" />
+                            <span className="text-sm">Tool</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">
+                              ({formatNumber(statistics.tools)})
+                            </span>
+                          </div>
+                          {eventFilters.has('tool') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleEventFilter('summary');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-[var(--agyn-gray)]" />
+                            <span className="text-sm">Summary</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">
+                              ({formatNumber(statistics.summaries)})
+                            </span>
+                          </div>
+                          {eventFilters.has('summary') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
 
-                    <DropdownMenuSeparator className="my-1 bg-[var(--agyn-border-subtle)]" />
+                      <DropdownMenuSeparator className="my-1 bg-[var(--agyn-border-subtle)]" />
 
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-[var(--agyn-text-subtle)]">
-                        Event Status
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleStatusFilter('running');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <StatusIndicator status="running" size="sm" showTooltip={false} />
-                          <span className="text-sm">Running</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.running})</span>
-                        </div>
-                        {statusFilters.has('running') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleStatusFilter('finished');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <StatusIndicator status="finished" size="sm" showTooltip={false} />
-                          <span className="text-sm">Finished</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.finished})</span>
-                        </div>
-                        {statusFilters.has('finished') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleStatusFilter('failed');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <StatusIndicator status="failed" size="sm" showTooltip={false} />
-                          <span className="text-sm">Failed</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.failed})</span>
-                        </div>
-                        {statusFilters.has('failed') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          toggleStatusFilter('terminated');
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <StatusIndicator status="terminated" size="sm" showTooltip={false} />
-                          <span className="text-sm">Terminated</span>
-                          <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.terminated})</span>
-                        </div>
-                        {statusFilters.has('terminated') ? (
-                          <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-[var(--agyn-text-subtle)]">
+                          Event Status
+                        </DropdownMenuLabel>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleStatusFilter('running');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <StatusIndicator status="running" size="sm" showTooltip={false} />
+                            <span className="text-sm">Running</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.running})</span>
+                          </div>
+                          {statusFilters.has('running') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleStatusFilter('finished');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <StatusIndicator status="finished" size="sm" showTooltip={false} />
+                            <span className="text-sm">Finished</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.finished})</span>
+                          </div>
+                          {statusFilters.has('finished') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleStatusFilter('failed');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <StatusIndicator status="failed" size="sm" showTooltip={false} />
+                            <span className="text-sm">Failed</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.failed})</span>
+                          </div>
+                          {statusFilters.has('failed') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer rounded-md hover:bg-[var(--agyn-bg-light)] focus:bg-[var(--agyn-bg-light)]"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            toggleStatusFilter('terminated');
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <StatusIndicator status="terminated" size="sm" showTooltip={false} />
+                            <span className="text-sm">Terminated</span>
+                            <span className="text-xs text-[var(--agyn-text-subtle)]">({runsByStatus.terminated})</span>
+                          </div>
+                          {statusFilters.has('terminated') ? (
+                            <Eye className="w-4 h-4 text-[var(--agyn-blue)]" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-[var(--agyn-text-subtle)]" />
+                          )}
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 

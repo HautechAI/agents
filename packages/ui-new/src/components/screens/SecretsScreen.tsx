@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X, Eye, EyeOff } from 'lucide-react';
-import Sidebar from '../Sidebar';
+import { MainSidebar } from '../MainSidebar';
 import { IconButton } from '../IconButton';
 import { Input } from '../Input';
 import { Badge } from '../Badge';
@@ -38,7 +38,11 @@ export default function SecretsScreen({
   const [statusFilter, setStatusFilter] = useState<'all' | 'used' | 'missing'>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [editForm, setEditForm] = useState<{ key: string; value: string; status: 'used' | 'missing' }>({ key: '', value: '', status: 'used' });
+  const [editForm, setEditForm] = useState<{ key: string; value: string; status: 'used' | 'missing' }>({
+    key: '',
+    value: '',
+    status: 'used',
+  });
   const [unmaskedSecrets, setUnmaskedSecrets] = useState<Set<string>>(new Set());
 
   // Filter secrets
@@ -123,11 +127,8 @@ export default function SecretsScreen({
 
       {/* Main Screen Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <Sidebar 
-          selectedMenuItem={selectedMenuItem}
-          onMenuItemSelect={onMenuItemSelect}
-        />
+        {/* Left MainSidebar */}
+        <MainSidebar selectedMenuItem={selectedMenuItem} onMenuItemSelect={onMenuItemSelect} />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -136,9 +137,7 @@ export default function SecretsScreen({
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-semibold text-[var(--agyn-dark)]">Secrets</h1>
-                <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">
-                  Manage secure credentials and API keys
-                </p>
+                <p className="text-sm text-[var(--agyn-text-subtle)] mt-1">Manage secure credentials and API keys</p>
               </div>
               <button
                 onClick={handleStartCreate}
@@ -294,7 +293,10 @@ export default function SecretsScreen({
 
                     if (isEditing) {
                       return (
-                        <tr key={secret.id} className="bg-[var(--agyn-blue)]/5 border-b border-[var(--agyn-border-subtle)]">
+                        <tr
+                          key={secret.id}
+                          className="bg-[var(--agyn-blue)]/5 border-b border-[var(--agyn-border-subtle)]"
+                        >
                           <td className="px-6 h-[60px]">
                             <Input
                               value={editForm.key}
@@ -362,17 +364,24 @@ export default function SecretsScreen({
                     }
 
                     return (
-                      <tr key={secret.id} className="border-b border-[var(--agyn-border-subtle)] hover:bg-[var(--agyn-bg-light)]/50 transition-colors">
+                      <tr
+                        key={secret.id}
+                        className="border-b border-[var(--agyn-border-subtle)] hover:bg-[var(--agyn-bg-light)]/50 transition-colors"
+                      >
                         <td className="px-6 h-[60px]">
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-[var(--agyn-dark)] font-medium font-mono">{secret.key}</span>
-                            {isMissing && <Badge variant="warning" size="sm">Missing</Badge>}
+                            {isMissing && (
+                              <Badge variant="warning" size="sm">
+                                Missing
+                              </Badge>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 h-[60px]">
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-[var(--agyn-dark)] font-mono">
-                              {isMissing ? '-' : (isUnmasked ? secret.value : maskValue(secret.value))}
+                              {isMissing ? '-' : isUnmasked ? secret.value : maskValue(secret.value)}
                             </span>
                           </div>
                         </td>
@@ -469,8 +478,8 @@ export default function SecretsScreen({
             <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-[var(--agyn-text-subtle)]">
-                  Showing {startIndex + 1} to {Math.min(endIndex, filteredSecrets.length)} of{' '}
-                  {filteredSecrets.length} secret{filteredSecrets.length !== 1 ? 's' : ''}
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredSecrets.length)} of {filteredSecrets.length}{' '}
+                  secret{filteredSecrets.length !== 1 ? 's' : ''}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
