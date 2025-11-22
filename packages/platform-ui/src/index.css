@@ -1,7 +1,7 @@
-@source "./**/*.{ts,tsx,js,jsx}";
-@source "../../ui/src/**/*.{ts,tsx,js,jsx}";
-@source "../../ui-new/src/**/*.{ts,tsx,js,jsx}";
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
+@source "./**/*.{ts,tsx}";
+@source "../../ui-new/src/**/*.{ts,tsx}";
+@source "../../ui/src/**/*.{ts,tsx}";
 @import "@agyn/ui-new/styles/globals.css";
 @import "@agyn/ui-new/styles/shadcn-compat.css";
