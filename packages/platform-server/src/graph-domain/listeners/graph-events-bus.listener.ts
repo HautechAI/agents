@@ -171,7 +171,7 @@ export class GraphEventsBusListener implements OnModuleInit, OnModuleDestroy {
     const threadId = payload.threadId;
     if (!threadId) return;
 
-    let scheduleResult: unknown;
+    let scheduleResult: void | Promise<void>;
     try {
       scheduleResult = publisher.scheduleThreadAndAncestorsMetrics(threadId);
     } catch (err) {
@@ -183,14 +183,12 @@ export class GraphEventsBusListener implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (scheduleResult && typeof (scheduleResult as PromiseLike<unknown>).then === 'function') {
-      void (scheduleResult as PromiseLike<unknown>).catch((err) => {
-        this.logger.warn('GraphEventsBusListener failed to schedule metrics from reminder count', {
-          nodeId: payload.nodeId,
-          threadId,
-          error: err instanceof Error ? err.message : String(err),
-        });
+    void Promise.resolve(scheduleResult).catch((err) => {
+      this.logger.warn('GraphEventsBusListener failed to schedule metrics from reminder count', {
+        nodeId: payload.nodeId,
+        threadId,
+        error: err instanceof Error ? err.message : String(err),
       });
-    }
+    });
   };
 }
