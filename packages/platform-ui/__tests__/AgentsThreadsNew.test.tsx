@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { TestProviders, abs, server } from './integration/testUtils';
 import { AgentsThreads } from '../src/pages/AgentsThreads';
@@ -211,6 +211,22 @@ function setupThreadsApi(options?: { includeSecondThread?: boolean }) {
   return { threadId, runId, secondThreadId: threadIdB };
 }
 
+function renderWithRouter(initialEntries: string[]) {
+  const router = createMemoryRouter(
+    [
+      { path: '/agents/threads', element: <AgentsThreads /> },
+      { path: '/agents/threads/:threadId', element: <AgentsThreads /> },
+    ],
+    { initialEntries },
+  );
+  render(
+    <TestProviders>
+      <RouterProvider router={router} />
+    </TestProviders>,
+  );
+  return router;
+}
+
 describe('AgentsThreadsNew', () => {
   beforeAll(() => server.listen());
   afterEach(() => {
@@ -222,13 +238,7 @@ describe('AgentsThreadsNew', () => {
   it('maps threads, runs, reminders, and containers for ThreadsScreen', async () => {
     const { threadId, runId } = setupThreadsApi();
 
-    render(
-      <MemoryRouter>
-        <TestProviders>
-          <AgentsThreads />
-        </TestProviders>
-      </MemoryRouter>,
-    );
+    renderWithRouter(['/agents/threads']);
 
     await screen.findByTestId('threads-screen');
     await waitFor(() => {
@@ -248,13 +258,7 @@ describe('AgentsThreadsNew', () => {
   it('updates selectedThreadId when ThreadsScreen invokes onSelectThread', async () => {
     const { threadId, secondThreadId } = setupThreadsApi({ includeSecondThread: true });
 
-    render(
-      <MemoryRouter>
-        <TestProviders>
-          <AgentsThreads />
-        </TestProviders>
-      </MemoryRouter>,
-    );
+    const router = renderWithRouter(['/agents/threads']);
 
     await screen.findByTestId('threads-screen');
     await waitFor(() => {
@@ -268,7 +272,52 @@ describe('AgentsThreadsNew', () => {
 
     await waitFor(() => {
       const nextProps = renderSpy.mock.calls.at(-1)?.[0];
+      expect(router.state.location.pathname).toBe(`/agents/threads/${secondThreadId}`);
       expect(nextProps?.selectedThreadId).toBe(secondThreadId);
+    });
+  });
+
+  it('selects thread from route params on mount', async () => {
+    const { secondThreadId } = setupThreadsApi({ includeSecondThread: true });
+
+    renderWithRouter([`/agents/threads/${secondThreadId}`]);
+
+    await screen.findByTestId('threads-screen');
+    await waitFor(() => {
+      const props = renderSpy.mock.calls.at(-1)?.[0];
+      expect(props?.selectedThreadId).toBe(secondThreadId);
+    });
+  });
+
+  it('navigates back to previous selection when browser history changes', async () => {
+    const { threadId, secondThreadId } = setupThreadsApi({ includeSecondThread: true });
+
+    const router = renderWithRouter(['/agents/threads']);
+
+    await screen.findByTestId('threads-screen');
+    await waitFor(() => {
+      const props = renderSpy.mock.calls.at(-1)?.[0];
+      expect(props?.selectedThreadId).toBe(threadId);
+      expect(router.state.location.pathname).toBe(`/agents/threads/${threadId}`);
+    });
+
+    const props = renderSpy.mock.calls.at(-1)?.[0];
+    props?.onSelectThread?.(secondThreadId);
+
+    await waitFor(() => {
+      const latest = renderSpy.mock.calls.at(-1)?.[0];
+      expect(latest?.selectedThreadId).toBe(secondThreadId);
+      expect(router.state.location.pathname).toBe(`/agents/threads/${secondThreadId}`);
+    });
+
+    await act(async () => {
+      await router.navigate(-1);
+    });
+
+    await waitFor(() => {
+      const latest = renderSpy.mock.calls.at(-1)?.[0];
+      expect(latest?.selectedThreadId).toBe(threadId);
+      expect(router.state.location.pathname).toBe(`/agents/threads/${threadId}`);
     });
   });
 });

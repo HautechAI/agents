@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ThreadsScreen,
   type ThreadsScreenProps,
@@ -121,12 +122,16 @@ export function AgentsThreadsNew() {
   const [threads, setThreads] = useState<ThreadNode[]>([]);
   const [threadMetrics, setThreadMetrics] = useState<Map<string, ThreadMetricsState>>(new Map());
   const [threadsLoading, setThreadsLoading] = useState(false);
-  const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
+  const { threadId: routeThreadIdParam } = useParams<{ threadId?: string }>();
+  const routeThreadId = routeThreadIdParam ?? undefined;
+  const navigate = useNavigate();
+  const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(routeThreadId);
   const [runs, setRuns] = useState<RunMeta[]>([]);
   const [runMessages, setRunMessages] = useState<Map<string, UnifiedRunMessage[]>>(new Map());
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [containers, setContainers] = useState<ContainerItem[]>([]);
 
+  const pendingNavigateRef = useRef<string | null>(null);
   const pendingMessagesRef = useRef<Map<string, UnifiedRunMessage[]>>(new Map());
   const seenMessageIdsRef = useRef<Map<string, Set<string>>>(new Map());
   const subscribedRunRoomsRef = useRef<Set<string>>(new Set());
@@ -139,6 +144,26 @@ export function AgentsThreadsNew() {
     seenMessageIdsRef.current.set(runId, new Set(merged.map((msg) => msg.id)));
     return merged;
   }, []);
+
+  const navigateToThread = useCallback(
+    (threadId: string, options?: { replace?: boolean }) => {
+      pendingNavigateRef.current = threadId;
+      navigate(`/agents/threads/${threadId}`, { replace: options?.replace ?? false });
+    },
+    [navigate],
+  );
+
+  const clearThreadRoute = useCallback(() => {
+    pendingNavigateRef.current = null;
+    navigate('/agents/threads', { replace: true });
+  }, [navigate]);
+
+  useEffect(() => {
+    setSelectedThreadId((current) => (current === routeThreadId ? current : routeThreadId));
+    if (pendingNavigateRef.current && pendingNavigateRef.current === routeThreadId) {
+      pendingNavigateRef.current = null;
+    }
+  }, [routeThreadId]);
 
   const reloadThreads = useCallback(async () => {
     setThreadsLoading(true);
@@ -158,15 +183,30 @@ export function AgentsThreadsNew() {
         }
         return metrics;
       });
-      if (!selectedThreadId && items.length) {
-        setSelectedThreadId(items[0].id);
-      } else if (selectedThreadId && !items.some((item) => item.id === selectedThreadId)) {
-        setSelectedThreadId(items[0]?.id);
+      const availableIds = new Set(items.map((item) => item.id));
+
+      if (routeThreadId) {
+        if (!availableIds.has(routeThreadId)) {
+          const fallbackId = items[0]?.id;
+          if (fallbackId) {
+            setSelectedThreadId(fallbackId);
+            navigateToThread(fallbackId, { replace: true });
+          } else {
+            setSelectedThreadId(undefined);
+            clearThreadRoute();
+          }
+        }
+      } else if (items.length) {
+        const fallbackId = selectedThreadId && availableIds.has(selectedThreadId) ? selectedThreadId : items[0].id;
+        if (fallbackId) {
+          setSelectedThreadId(fallbackId);
+          navigateToThread(fallbackId, { replace: true });
+        }
       }
     } finally {
       setThreadsLoading(false);
     }
-  }, [filter, selectedThreadId]);
+  }, [clearThreadRoute, filter, navigateToThread, routeThreadId, selectedThreadId]);
 
   useEffect(() => {
     reloadThreads().catch(() => {});
@@ -506,7 +546,16 @@ export function AgentsThreadsNew() {
       reminders={remindersForUi}
       containers={containersForUi}
       selectedThreadId={selectedThreadId}
-      onSelectThread={(id) => setSelectedThreadId(id)}
+      onSelectThread={(id) => {
+        if (!id) {
+          setSelectedThreadId(undefined);
+          clearThreadRoute();
+          return;
+        }
+        if (id === routeThreadId) return;
+        setSelectedThreadId(id);
+        navigateToThread(id);
+      }}
       onThreadFilterChange={setFilter}
       isLoadingThreads={threadsLoading}
     />
