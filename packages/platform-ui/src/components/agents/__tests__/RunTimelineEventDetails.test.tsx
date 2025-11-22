@@ -440,20 +440,21 @@ describe('RunTimelineEventDetails', () => {
     const streamSelect = screen.getByLabelText('Select stream view');
     expect(streamSelect).toHaveValue('interleaved');
 
-    const stderrBadges = screen.getAllByText('stderr');
-    expect(stderrBadges.length).toBeGreaterThan(0);
-    const stderrContainer = stderrBadges[0]?.parentElement;
-    expect(stderrContainer).toHaveAttribute('data-source', 'stderr');
-    expect(stderrContainer?.className).toMatch(/text-(?:red|rose)/);
+    const stderrSegment = document.querySelector('[data-source="stderr"]');
+    expect(stderrSegment).not.toBeNull();
+    expect(stderrSegment?.textContent).toContain('warn');
+    expect(stderrSegment?.className).toMatch(/text-(?:red|rose)/);
 
     await user.selectOptions(streamSelect, 'Stdout only');
-    expect(screen.queryByText('stderr')).toBeNull();
+    expect(document.querySelector('[data-source="stderr"]')).toBeNull();
     expect(screen.getByText(/line1/)).toBeInTheDocument();
     expect(screen.getByText(/done/)).toBeInTheDocument();
     expect(screen.queryByText(/warn/)).toBeNull();
 
     await user.selectOptions(streamSelect, 'Stderr only');
-    expect(screen.getByText(/warn/)).toBeInTheDocument();
+    const stderrOnlySegment = document.querySelector('[data-source="stderr"]');
+    expect(stderrOnlySegment).not.toBeNull();
+    expect(stderrOnlySegment?.textContent).toContain('warn');
     expect(screen.queryByText(/line1/)).toBeNull();
     expect(screen.queryByText(/done/)).toBeNull();
   });
@@ -579,10 +580,10 @@ describe('RunTimelineEventDetails', () => {
     const streamSelect = screen.getByLabelText('Select stream view');
     await user.selectOptions(streamSelect, 'interleaved');
 
-    const stderrBadge = screen.getByText('stderr');
-    expect(stderrBadge.className).toContain('bg-gray-200');
-    expect(stderrBadge.className).toContain('text-gray-700');
-    expect(stderrBadge.className).not.toMatch(/text-(?:rose|red)/);
+    const stderrSegment = document.querySelector('[data-source="stderr"]');
+    expect(stderrSegment).not.toBeNull();
+    expect(stderrSegment?.className).toMatch(/text-gray-(?:200|700)/);
+    expect(stderrSegment?.className).not.toMatch(/text-(?:rose|red)/);
   });
 
   it('defaults stream filter to stderr and keeps alert styling when terminal indicates failure', async () => {
@@ -645,8 +646,9 @@ describe('RunTimelineEventDetails', () => {
     expect(screen.queryByText('Command succeeded; some tools print messages to stderr.')).toBeNull();
 
     await user.selectOptions(streamSelect, 'interleaved');
-    const stderrBadge = screen.getByText('stderr');
-    expect(stderrBadge.className).toMatch(/text-(?:rose|red)/);
+    const stderrSegment = document.querySelector('[data-source="stderr"]');
+    expect(stderrSegment).not.toBeNull();
+    expect(stderrSegment?.className).toMatch(/text-(?:rose|red)/);
   });
 
   it('shows terminal summary metadata when streaming finishes', () => {

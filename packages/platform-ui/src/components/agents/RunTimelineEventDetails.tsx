@@ -289,11 +289,6 @@ function renderStreamSegments(
     preClasses.push('text-gray-800');
   }
 
-  const baseBadgeClass = 'mr-1 inline-flex rounded px-1 text-[9px] font-semibold uppercase tracking-wide';
-  const badgeClass = isTerminal
-    ? `${baseBadgeClass} ${stderrTone === 'neutral' ? 'bg-gray-500/30 text-gray-200' : 'bg-rose-500/20 text-rose-200'}`
-    : `${baseBadgeClass} ${stderrTone === 'neutral' ? 'bg-gray-200 text-gray-700' : 'bg-red-100 text-red-700'}`;
-
   const stderrClass = isTerminal
     ? `${stderrTone === 'neutral' ? 'text-gray-200' : 'text-rose-300'} font-semibold`
     : `${stderrTone === 'neutral' ? 'text-gray-700' : 'text-red-600'} font-semibold`;
@@ -302,14 +297,7 @@ function renderStreamSegments(
     <pre className={preClasses.join(' ')}>
       {segments.map((segment) => (
         <span key={segment.id} data-source={segment.source} className={segment.source === 'stderr' ? stderrClass : undefined}>
-          {segment.source === 'stderr' ? (
-            <>
-              <span className={badgeClass}>stderr</span>
-              {segment.data}
-            </>
-          ) : (
-            segment.data
-          )}
+          {segment.data}
         </span>
       ))}
     </pre>
