@@ -89,6 +89,8 @@ type StreamSegmentsValue = {
   segments: StreamSegment[];
 };
 
+type StderrTone = 'alert' | 'neutral';
+
 function isStreamSegmentsValue(value: unknown): value is StreamSegmentsValue {
   return Boolean(value && typeof value === 'object' && (value as StreamSegmentsValue).kind === 'stream_segments');
 }
@@ -218,8 +220,8 @@ function formatYaml(value: unknown): string {
   }
 }
 
-function renderOutputByMode(mode: OutputMode, value: unknown, options: { framed?: boolean } = {}) {
-  const { framed = true } = options;
+function renderOutputByMode(mode: OutputMode, value: unknown, options: { framed?: boolean; stderrTone?: StderrTone } = {}) {
+  const { framed = true, stderrTone } = options;
   if (mode === 'json') {
     const parsed = typeof value === 'string' ? tryParseJson(value) ?? value : value;
     return jsonBlock(parsed, 'default', '', framed);
@@ -233,7 +235,7 @@ function renderOutputByMode(mode: OutputMode, value: unknown, options: { framed?
   }
   if (mode === 'terminal') {
     if (isStreamSegmentsValue(value)) {
-      return renderStreamSegments('terminal', value.segments, { framed });
+      return renderStreamSegments('terminal', value.segments, { framed, stderrTone });
     }
     const classes = ['content-pre', 'text-[11px]', 'font-mono'];
     if (framed) {
@@ -250,7 +252,7 @@ function renderOutputByMode(mode: OutputMode, value: unknown, options: { framed?
     return <pre className={classes.join(' ')}>{displayText}</pre>;
   }
   if (mode === 'text' && isStreamSegmentsValue(value)) {
-    return renderStreamSegments('text', value.segments, { framed });
+    return renderStreamSegments('text', value.segments, { framed, stderrTone });
   }
   const classes = ['content-wrap', 'text-[11px]', 'text-gray-800'];
   if (framed) classes.push('px-3', 'py-2');
@@ -264,8 +266,12 @@ function formatUsageValue(value: number | null | undefined): string {
   return '—';
 }
 
-function renderStreamSegments(mode: 'terminal' | 'text', segments: StreamSegment[], options: { framed?: boolean } = {}) {
-  const { framed = true } = options;
+function renderStreamSegments(
+  mode: 'terminal' | 'text',
+  segments: StreamSegment[],
+  options: { framed?: boolean; stderrTone?: StderrTone } = {},
+) {
+  const { framed = true, stderrTone = 'alert' } = options;
   const isTerminal = mode === 'terminal';
   const preClasses = isTerminal
     ? ['content-pre', 'text-[11px]', 'font-mono']
@@ -283,31 +289,22 @@ function renderStreamSegments(mode: 'terminal' | 'text', segments: StreamSegment
     preClasses.push('text-gray-800');
   }
 
-  const badgeClass = isTerminal
-    ? 'mr-1 inline-flex rounded bg-rose-500/20 px-1 text-[9px] font-semibold uppercase tracking-wide text-rose-200'
-    : 'mr-1 inline-flex rounded bg-red-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-red-700';
-
-  const stderrClass = isTerminal ? 'text-rose-300 font-semibold' : 'text-red-600 font-semibold';
+  const stderrClass = isTerminal
+    ? `${stderrTone === 'neutral' ? 'text-gray-200' : 'text-rose-300'} font-semibold`
+    : `${stderrTone === 'neutral' ? 'text-gray-700' : 'text-red-600'} font-semibold`;
 
   return (
     <pre className={preClasses.join(' ')}>
       {segments.map((segment) => (
         <span key={segment.id} data-source={segment.source} className={segment.source === 'stderr' ? stderrClass : undefined}>
-          {segment.source === 'stderr' ? (
-            <>
-              <span className={badgeClass}>stderr</span>
-              {segment.data}
-            </>
-          ) : (
-            segment.data
-          )}
+          {segment.data}
         </span>
       ))}
     </pre>
   );
 }
 
-function useToolOutputMode(eventId: string, value: unknown) {
+function useToolOutputMode(eventId: string, value: unknown, renderOptions?: { framed?: boolean; stderrTone?: StderrTone }) {
   const storageKey = useMemo(() => `timeline-output-mode:${eventId}`, [eventId]);
   const [mode, setMode] = useState<OutputMode>(() => {
     return readStoredMode(storageKey) ?? determineDefaultMode(value);
@@ -323,7 +320,11 @@ function useToolOutputMode(eventId: string, value: unknown) {
     writeStoredMode(storageKey, mode);
   }, [mode, storageKey]);
 
-  const rendered = useMemo(() => renderOutputByMode(mode, value, { framed: false }), [mode, value]);
+  const { framed = false, stderrTone } = renderOptions ?? {};
+  const rendered = useMemo(
+    () => renderOutputByMode(mode, value, { framed, stderrTone }),
+    [mode, value, framed, stderrTone],
+  );
 
   return { mode, setMode, rendered };
 }
@@ -357,13 +358,26 @@ function ToolOutputSection({
   attachments: Attachment[];
 }) {
   const hasStreamControls = Boolean(streamData) && ((streamData?.chunks.length ?? 0) > 0 || isStreaming);
-  const [filter, setFilter] = useState<StreamFilter>('interleaved');
+  const isTerminalSuccess = terminal?.status === 'success';
+  const defaultFilter = useMemo<StreamFilter>(() => {
+    if (!hasStreamControls) return 'interleaved';
+    if (isTerminalSuccess) return 'stdout';
+    if (terminal) return 'stderr';
+    return 'interleaved';
+  }, [hasStreamControls, isTerminalSuccess, terminal]);
+  const [filter, setFilter] = useState<StreamFilter>(() => defaultFilter);
 
   useEffect(() => {
     if (!hasStreamControls) {
       setFilter('interleaved');
     }
   }, [hasStreamControls]);
+
+  useEffect(() => {
+    if (!hasStreamControls) return;
+    if (!terminal) return;
+    setFilter((current) => (current === 'interleaved' ? defaultFilter : current));
+  }, [hasStreamControls, terminal, defaultFilter]);
 
   const streamTexts = useMemo(
     () => ({
@@ -373,29 +387,59 @@ function ToolOutputSection({
     }),
     [streamData],
   );
-
   const streamSegments = useMemo<StreamSegment[]>(() => {
     if (!streamData) return [];
     return streamData.chunks.map((chunk) => ({ id: `${chunk.seqGlobal}`, source: chunk.source, data: chunk.data }));
   }, [streamData]);
 
+  const streamSegmentsByFilter = useMemo<Record<StreamFilter, StreamSegment[]>>(() => {
+    if (streamSegments.length === 0) {
+      return { interleaved: [], stdout: [], stderr: [] };
+    }
+    const stdout: StreamSegment[] = [];
+    const stderr: StreamSegment[] = [];
+    for (const segment of streamSegments) {
+      if (segment.source === 'stdout') stdout.push(segment);
+      if (segment.source === 'stderr') stderr.push(segment);
+    }
+    return {
+      interleaved: streamSegments,
+      stdout,
+      stderr,
+    };
+  }, [streamSegments]);
+
+  const hasStderrOutput = useMemo(() => {
+    if (streamSegmentsByFilter.stderr.length > 0) return true;
+    return Boolean(streamTexts.stderr && streamTexts.stderr.length > 0);
+  }, [streamSegmentsByFilter, streamTexts.stderr]);
+
   const displayValue = useMemo(() => {
     if (hasStreamControls) {
+      const segmentsForFilter = streamSegmentsByFilter[filter];
+      if (segmentsForFilter.length > 0) {
+        return { kind: 'stream_segments', segments: segmentsForFilter } as StreamSegmentsValue;
+      }
       if (filter === 'stdout') return streamTexts.stdout;
       if (filter === 'stderr') return streamTexts.stderr;
-      if (streamSegments.length > 0) {
-        return { kind: 'stream_segments', segments: streamSegments } as StreamSegmentsValue;
+      if (streamSegmentsByFilter.interleaved.length > 0) {
+        return { kind: 'stream_segments', segments: streamSegmentsByFilter.interleaved } as StreamSegmentsValue;
       }
       return streamTexts.interleaved;
     }
     return baseValue;
-  }, [hasStreamControls, filter, streamSegments, streamTexts, baseValue]);
+  }, [hasStreamControls, filter, streamSegmentsByFilter, streamTexts, baseValue]);
 
   const scrollKey = hasStreamControls
     ? `${filter}:${filter === 'interleaved' ? streamTexts.interleaved : filter === 'stdout' ? streamTexts.stdout : streamTexts.stderr}`
     : toText(displayValue);
 
-  const { mode, setMode, rendered } = useToolOutputMode(eventId, displayValue);
+  const hasNeutralStderr = terminal?.exitCode === 0;
+  const renderOptions = useMemo<{ framed: false; stderrTone: StderrTone }>(
+    () => ({ framed: false, stderrTone: hasNeutralStderr ? 'neutral' : 'alert' }),
+    [hasNeutralStderr],
+  );
+  const { mode, setMode, rendered } = useToolOutputMode(eventId, displayValue, renderOptions);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -468,6 +512,11 @@ function ToolOutputSection({
       <div ref={contentRef} className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 py-2">
         {loading && !hydrated && <div className="text-[11px] text-gray-500">Loading output…</div>}
         {rendered}
+        {filter === 'stderr' && isTerminalSuccess && hasNeutralStderr && hasStderrOutput && (
+          <div className="text-[11px] text-gray-500">
+            Command succeeded; some tools print messages to stderr.
+          </div>
+        )}
         {isStreaming && <div className="text-[11px] text-gray-500">Streaming live output…</div>}
         {streamError && <div className="text-[11px] text-red-600">Stream error: {streamError.message}</div>}
         {terminal?.message && <div className="text-[11px] text-gray-700">{terminal.message}</div>}
