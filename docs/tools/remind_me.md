@@ -2,7 +2,7 @@
 
 Behavior
 - Supports multiple concurrent reminders for the same thread; each call schedules its own timer and none overwrite others.
-- Async-only: returns immediately with `{ status: 'scheduled', etaMs, at }`. The reminder fires later and posts a system message to the caller agent.
+- Async-only: returns immediately with `{ status: 'scheduled', etaMs, at }`. The reminder fires later and posts a user message (`You asked me to remind you: {note}`) to the caller agent.
 - Persistence, cancel-by-id, and durable scheduling are out of scope for now.
 
 New in vNext
@@ -16,7 +16,7 @@ New in vNext
 Usage
 - Tool name: `remindMeTool`
 - Input: `{ delayMs: number >= 0, note: string }`
-- Effect: schedules a system message `{ kind: 'system', content: note, info: { reason: 'reminded' } }` back to the originating agent/thread.
+- Effect: schedules a user message with text `You asked me to remind you: {note}` back to the originating agent/thread.
 
 Notes
 - In-memory timers drive delivery; persistence to Postgres records scheduled reminders.
