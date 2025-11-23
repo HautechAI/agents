@@ -1,5 +1,5 @@
 import z from 'zod';
-import { FunctionTool, SystemMessage } from '@agyn/llm';
+import { FunctionTool, HumanMessage } from '@agyn/llm';
 import { v4 as uuidv4 } from 'uuid';
 import { LoggerService } from '../../../core/services/logger.service';
 import { PrismaService } from '../../../core/services/prisma.service';
@@ -83,7 +83,7 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
         this.onRegistryChanged?.(this.active.size, undefined, created.threadId);
       }
       try {
-        const msg = SystemMessage.fromText(`Reminder: ${note}`);
+        const msg = HumanMessage.fromText(`You asked me to remind you: ${note}`);
         await ctx.callerAgent.invoke(threadId, [msg]);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : JSON.stringify(e);

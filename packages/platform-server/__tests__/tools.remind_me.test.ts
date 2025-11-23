@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RemindMeFunctionTool } from '../src/nodes/tools/remind_me/remind_me.tool';
-import { SystemMessage } from '@agyn/llm';
+import { HumanMessage } from '@agyn/llm';
 import { LoggerService } from '../src/core/services/logger.service';
 
 // Minimal typed stub for the caller agent used by the tool
-interface CallerAgentStub { invoke(thread: string, messages: SystemMessage[]): Promise<unknown>; }
+interface CallerAgentStub { invoke(thread: string, messages: HumanMessage[]): Promise<unknown>; }
 
 // Helper to extract callable tool
 function getToolInstance() {
@@ -36,7 +36,7 @@ describe('RemindMeTool', () => {
   it('schedules reminder and invokes caller_agent after delay', async () => {
     const tool = getToolInstance();
 
-    const invokeSpy = vi.fn(async (_t: string, _m: SystemMessage[]) => undefined);
+    const invokeSpy = vi.fn(async (_t: string, _m: HumanMessage[]) => undefined);
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const thread_id = 't-123';
 
@@ -59,13 +59,13 @@ describe('RemindMeTool', () => {
     expect(calls0[0][0]).toBe(thread_id);
     expect(calls0[0][1]).toHaveLength(1);
     const m = calls0[0][1][0];
-    expect(m).toBeInstanceOf(SystemMessage);
-    expect(m.text).toContain('Reminder: Ping');
+    expect(m).toBeInstanceOf(HumanMessage);
+    expect(m.text).toBe('You asked me to remind you: Ping');
   });
 
   it('registry tracks active reminders until fired', async () => {
     const tool = getToolInstance() as any;
-    const invokeSpy = vi.fn(async (_t: string, _m: SystemMessage[]) => undefined);
+    const invokeSpy = vi.fn(async (_t: string, _m: HumanMessage[]) => undefined);
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const cfg = { threadId: 't-reg', callerAgent: caller_agent } as any;
 
@@ -89,7 +89,7 @@ describe('RemindMeTool', () => {
 
   it('destroy cancels timers and clears registry', async () => {
     const tool = getToolInstance() as any;
-    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async (_t: string, _m: HumanMessage[]) => undefined) };
     await tool.execute({ delayMs: 10_000, note: 'X' } as any, { threadId: 't', callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } });
     expect((tool as any).getActiveReminders().length).toBe(1);
     await tool.destroy();
@@ -100,7 +100,7 @@ describe('RemindMeTool', () => {
 
   it('enforces cap on active reminders', async () => {
     const tool = getToolInstance() as any;
-    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async (_t: string, _m: HumanMessage[]) => undefined) };
     (tool as any).maxActive = 1;
     await tool.execute({ delayMs: 10_000, note: 'ok' } as any, { threadId: 't', callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } });
     await expect(
@@ -110,7 +110,7 @@ describe('RemindMeTool', () => {
 
   it('schedules immediate reminder when delayMs=0', async () => {
     const tool = getToolInstance();
-    const invokeSpy = vi.fn(async () => undefined);
+    const invokeSpy = vi.fn(async (_t: string, _m: HumanMessage[]) => undefined);
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const config = { threadId: 't-0', callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } } as any;
 
@@ -125,13 +125,13 @@ describe('RemindMeTool', () => {
     {
       const calls = invokeSpy.mock.calls as unknown as any[][];
       expect(calls[0][1]).toHaveLength(1);
-      expect(calls[0][1][0].text).toContain('Reminder: Now');
+      expect(calls[0][1][0].text).toBe('You asked me to remind you: Now');
     }
   });
 
   it('supports multiple concurrent reminders for the same thread (delayMs=0)', async () => {
     const tool = getToolInstance();
-    const invokeSpy = vi.fn(async (_t: string, _m: SystemMessage[]) => undefined);
+    const invokeSpy = vi.fn(async (_t: string, _m: HumanMessage[]) => undefined);
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const cfg = { threadId: 't-x', callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } } as any;
 
@@ -143,15 +143,15 @@ describe('RemindMeTool', () => {
     expect(invokeSpy).toHaveBeenCalledTimes(2);
     const calls = invokeSpy.mock.calls as unknown as any[][];
     const payloads = calls.map((c) => c[1][0].text).sort();
-    expect(payloads[0]).toContain('Reminder: A');
-    expect(payloads[1]).toContain('Reminder: B');
+    expect(payloads[0]).toBe('You asked me to remind you: A');
+    expect(payloads[1]).toBe('You asked me to remind you: B');
     expect(calls[0][0]).toBe('t-x');
     expect(calls[1][0]).toBe('t-x');
   });
 
   it('handles overlapping delays for the same thread', async () => {
     const tool = getToolInstance();
-    const invokeSpy = vi.fn(async (_t: string, _m: SystemMessage[]) => undefined);
+    const invokeSpy = vi.fn(async (_t: string, _m: HumanMessage[]) => undefined);
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
     const cfg = { threadId: 't-ovl', callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } } as any;
 
@@ -162,20 +162,20 @@ describe('RemindMeTool', () => {
     expect(invokeSpy).toHaveBeenCalledTimes(1);
     {
       const calls = invokeSpy.mock.calls as unknown as any[][];
-      expect(calls[0][1][0].text).toContain('Reminder: half');
+      expect(calls[0][1][0].text).toBe('You asked me to remind you: half');
     }
 
     await vi.advanceTimersByTimeAsync(500);
     expect(invokeSpy).toHaveBeenCalledTimes(2);
     {
       const calls = invokeSpy.mock.calls as unknown as any[][];
-      expect(calls[1][1][0].text).toContain('Reminder: full');
+      expect(calls[1][1][0].text).toBe('You asked me to remind you: full');
     }
   });
 
   it('routes reminders to mixed threads correctly', async () => {
     const tool = getToolInstance();
-    const invokeSpy = vi.fn(async () => undefined);
+    const invokeSpy = vi.fn(async (_t: string, _m: HumanMessage[]) => undefined);
     const caller_agent: CallerAgentStub = { invoke: invokeSpy };
 
     await tool.execute({ delayMs: 10, note: 'one' } as any, { threadId: 't-1', callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } } as any);
@@ -186,7 +186,7 @@ describe('RemindMeTool', () => {
     {
       const calls = invokeSpy.mock.calls as unknown as any[][];
       expect(calls[0][0]).toBe('t-1');
-      expect(calls[0][1][0].text).toContain('Reminder: one');
+      expect(calls[0][1][0].text).toBe('You asked me to remind you: one');
     }
 
     await vi.advanceTimersByTimeAsync(10);
@@ -194,13 +194,13 @@ describe('RemindMeTool', () => {
     {
       const calls = invokeSpy.mock.calls as unknown as any[][];
       expect(calls[1][0]).toBe('t-2');
-      expect(calls[1][1][0].text).toContain('Reminder: two');
+      expect(calls[1][1][0].text).toBe('You asked me to remind you: two');
     }
   });
 
   it('returns scheduled ack even when thread_id missing (no invoke)', async () => {
     const tool = getToolInstance();
-    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async (_t: string, _m: HumanMessage[]) => undefined) };
     const res = await tool.execute({ delayMs: 1, note: 'x' } as any, { callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } } as any);
     const parsed = typeof res === 'string' ? JSON.parse(res) : res;
     expect(parsed.status).toBe('scheduled');
@@ -229,7 +229,7 @@ describe('RemindMeTool', () => {
     await node.provision();
     const tool = node.getTool();
 
-    const caller_agent: CallerAgentStub = { invoke: vi.fn(async () => undefined) };
+    const caller_agent: CallerAgentStub = { invoke: vi.fn(async (_t: string, _m: HumanMessage[]) => undefined) };
     const threadId = 't-metrics';
     await tool.execute({ delayMs: 10, note: 'm' } as any, { threadId, callerAgent: caller_agent as any, finishSignal: { activate() {}, deactivate() {}, isActive: false } } as any);
     // Should emit reminder_count with thread id on schedule
