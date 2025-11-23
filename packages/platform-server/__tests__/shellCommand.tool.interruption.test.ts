@@ -3,6 +3,9 @@ import type { PrismaClient } from '@prisma/client';
 import { ShellCommandTool } from '../src/nodes/tools/shell_command/shell_command.tool';
 import type { ArchiveService } from '../src/infra/archive/archive.service';
 import type { PrismaService } from '../src/core/services/prisma.service';
+import type { RunEventsService } from '../src/events/run-events.service';
+import type { EventsBusService } from '../src/events/events-bus.service';
+import type { LoggerService } from '../src/core/services/logger.service';
 
 class StubArchiveService {
   async createSingleFileTar(): Promise<never> {
@@ -35,8 +38,17 @@ class FakePrismaService {
 
 const makeTool = (data: { container?: unknown; event?: unknown }) => {
   const prismaService = new FakePrismaService(new FakePrismaClient(data));
+  const logger = {
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    debug: () => undefined,
+  } as unknown as LoggerService;
   return new ShellCommandTool(
     new StubArchiveService() as unknown as ArchiveService,
+    {} as unknown as RunEventsService,
+    {} as unknown as EventsBusService,
+    logger,
     prismaService as unknown as PrismaService,
   );
 };
