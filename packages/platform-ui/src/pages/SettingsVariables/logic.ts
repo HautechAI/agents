@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { asData, http } from '@/api/http';
 import { notifyError, notifySuccess } from '@/lib/notify';
@@ -131,6 +131,8 @@ export function useLogic(): UseLogicResult {
   const [createForm, setCreateForm] = useState<CreateForm>(INITIAL_CREATE_FORM);
   const [editForm, setEditForm] = useState<EditForm>(INITIAL_EDIT_FORM);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const editFormRef = useRef<EditForm>(INITIAL_EDIT_FORM);
+  const editBaselineRef = useRef<EditForm | null>(null);
 
   const variablesQuery = useQuery({ queryKey: ['variables'], queryFn: fetchVariables });
   const variables = variablesQuery.data ?? EMPTY_LIST;
@@ -153,10 +155,32 @@ export function useLogic(): UseLogicResult {
   }, [filteredCount, totalPages, currentPage]);
 
   useEffect(() => {
+    editFormRef.current = editForm;
+  }, [editForm]);
+
+  useEffect(() => {
     if (!editingKey) return;
     const original = variables.find((item) => item.key === editingKey);
-    if (original) {
-      setEditForm({ graph: original.graph ?? '', local: original.local ?? '' });
+    if (!original) return;
+
+    const sanitized: EditForm = { graph: original.graph ?? '', local: original.local ?? '' };
+    const baseline = editBaselineRef.current;
+
+    if (!baseline) {
+      editBaselineRef.current = sanitized;
+      return;
+    }
+
+    const baselineChanged = baseline.graph !== sanitized.graph || baseline.local !== sanitized.local;
+    if (!baselineChanged) return;
+
+    const currentForm = editFormRef.current;
+    const userModified = currentForm.graph !== baseline.graph || currentForm.local !== baseline.local;
+
+    editBaselineRef.current = sanitized;
+
+    if (!userModified) {
+      setEditForm(sanitized);
     }
   }, [editingKey, variables]);
 
@@ -195,6 +219,7 @@ export function useLogic(): UseLogicResult {
       notifySuccess('Variable updated');
       setEditingKey(null);
       setEditForm(INITIAL_EDIT_FORM);
+      editBaselineRef.current = null;
       queryClient.invalidateQueries({ queryKey: ['variables'] });
     },
     onError: (error) => {
@@ -233,6 +258,7 @@ export function useLogic(): UseLogicResult {
     setIsCreating(true);
     setEditingKey(null);
     setCreateForm(INITIAL_CREATE_FORM);
+    editBaselineRef.current = null;
   }, []);
 
   const handleCancelCreate = useCallback(() => {
@@ -276,7 +302,9 @@ export function useLogic(): UseLogicResult {
       }
       setIsCreating(false);
       setEditingKey(key);
-      setEditForm({ graph: target.graph ?? '', local: target.local ?? '' });
+      const sanitized: EditForm = { graph: target.graph ?? '', local: target.local ?? '' };
+      editBaselineRef.current = sanitized;
+      setEditForm(sanitized);
     },
     [variables]
   );
@@ -284,6 +312,7 @@ export function useLogic(): UseLogicResult {
   const handleCancelEdit = useCallback(() => {
     setEditingKey(null);
     setEditForm(INITIAL_EDIT_FORM);
+    editBaselineRef.current = null;
   }, []);
 
   const handleSetEditField = useCallback((field: keyof EditForm, value: string) => {
@@ -297,6 +326,8 @@ export function useLogic(): UseLogicResult {
     if (!original) {
       notifyError('Variable not found');
       setEditingKey(null);
+      setEditForm(INITIAL_EDIT_FORM);
+      editBaselineRef.current = null;
       return;
     }
 
@@ -324,6 +355,7 @@ export function useLogic(): UseLogicResult {
     if (Object.keys(patch).length === 0) {
       setEditingKey(null);
       setEditForm(INITIAL_EDIT_FORM);
+      editBaselineRef.current = null;
       return;
     }
 

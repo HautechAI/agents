@@ -1,8 +1,9 @@
 import React from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
+import { QueryClient } from '@tanstack/react-query';
 import { TestProviders, server, abs } from './integration/testUtils';
 import { SettingsVariables } from '../src/pages/SettingsVariables';
 
@@ -264,6 +265,63 @@ describe('SettingsVariables page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await screen.findByText('key-25');
     expect(screen.getByText('key-21')).toBeInTheDocument();
+  });
+
+  it('preserves in-progress edits when the data refetches', async () => {
+    const items: Array<{ key: string; graph: string | null; local: string | null }> = [
+      { key: 'alpha', graph: 'server-graph', local: 'server-local' },
+    ];
+
+    const getHandler = () =>
+      HttpResponse.json({
+        items: items.map((item) => ({ ...item })),
+      });
+
+    server.use(
+      http.get('/api/graph/variables', getHandler),
+      http.get(abs('/api/graph/variables'), getHandler),
+    );
+
+    const queryClient = new QueryClient();
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: '/settings/variables' }]}
+      >
+        <TestProviders queryClient={queryClient}>
+          <SettingsVariables />
+        </TestProviders>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('alpha');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit alpha' }));
+
+    const graphInput = screen.getByDisplayValue('server-graph') as HTMLInputElement;
+    const localInput = screen.getByDisplayValue('server-local') as HTMLInputElement;
+
+    fireEvent.change(graphInput, { target: { value: 'user-graph' } });
+    fireEvent.change(localInput, { target: { value: 'user-local' } });
+
+    expect(graphInput).toHaveValue('user-graph');
+    expect(localInput).toHaveValue('user-local');
+
+    items[0] = { key: 'alpha', graph: 'server-graph-updated', local: 'server-local-updated' };
+
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['variables'] });
+    });
+
+    expect(graphInput).toHaveValue('user-graph');
+    expect(localInput).toHaveValue('user-local');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing alpha' }));
+
+    await screen.findByRole('button', { name: 'Edit alpha' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit alpha' }));
+
+    expect(await screen.findByDisplayValue('server-graph-updated')).toBeInstanceOf(HTMLInputElement);
+    expect(await screen.findByDisplayValue('server-local-updated')).toBeInstanceOf(HTMLInputElement);
   });
 
   it('reports server errors with friendly messages', async () => {

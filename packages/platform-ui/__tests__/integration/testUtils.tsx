@@ -324,8 +324,14 @@ export const handlers = API_BASE ? [...relativeHandlers, ...absoluteHandlers] : 
 
 export const server = setupServer(...handlers);
 
-export function TestProviders({ children }: { children: React.ReactNode }) {
-  const qc = new QueryClient();
+export function TestProviders({
+  children,
+  queryClient,
+}: {
+  children: React.ReactNode;
+  queryClient?: QueryClient;
+}) {
+  const qc = React.useMemo(() => queryClient ?? new QueryClient(), [queryClient]);
   return (
     <QueryClientProvider client={qc}>
       {/* Match app root providers; ensure tooltip context exists in tests */}
