@@ -46,7 +46,7 @@ export class AgentsPersistenceService {
     _source: string,
     alias: string,
     summary: string,
-    options?: { triggerNodeId?: string },
+    options?: { channelNodeId?: string },
   ): Promise<string> {
     const existing = await this.prisma.thread.findUnique({ where: { alias }, select: { id: true } });
     if (existing) return existing.id;
@@ -55,7 +55,7 @@ export class AgentsPersistenceService {
       data: {
         alias,
         summary: sanitized,
-        ...(options?.triggerNodeId ? { triggerNodeId: options.triggerNodeId } : {}),
+        ...(options?.channelNodeId ? { channelNodeId: options.channelNodeId } : {}),
       },
     });
     this.eventsBus.emitThreadCreated({
@@ -65,7 +65,7 @@ export class AgentsPersistenceService {
       status: created.status,
       createdAt: created.createdAt,
       parentId: created.parentId ?? null,
-      triggerNodeId: created.triggerNodeId ?? null,
+      channelNodeId: created.channelNodeId ?? null,
     });
     return created.id;
   }
@@ -90,7 +90,7 @@ export class AgentsPersistenceService {
       status: updated.status,
       createdAt: updated.createdAt,
       parentId: updated.parentId ?? null,
-      triggerNodeId: updated.triggerNodeId ?? null,
+      channelNodeId: updated.channelNodeId ?? null,
     });
   }
 
@@ -111,7 +111,7 @@ export class AgentsPersistenceService {
       status: created.status,
       createdAt: created.createdAt,
       parentId: created.parentId ?? null,
-      triggerNodeId: created.triggerNodeId ?? null,
+      channelNodeId: created.channelNodeId ?? null,
     });
     this.eventsBus.emitThreadMetricsAncestors({ threadId: created.id });
     return created.id;

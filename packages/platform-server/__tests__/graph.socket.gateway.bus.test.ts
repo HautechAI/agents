@@ -262,7 +262,7 @@ describe('GraphSocketGateway event bus integration', () => {
       status: 'open',
       createdAt: new Date(),
       parentId: null,
-      triggerNodeId: null,
+      channelNodeId: null,
     } as any);
     ctx.handlers.threadUpdated?.({
       id: 'thread-2',
@@ -271,7 +271,7 @@ describe('GraphSocketGateway event bus integration', () => {
       status: 'open',
       createdAt: new Date(),
       parentId: null,
-      triggerNodeId: null,
+      channelNodeId: null,
     } as any);
     ctx.handlers.messageCreated?.({ threadId: 'thread-1', message: { id: 'msg-1', kind: 'user', text: 'hi', source: {}, createdAt: new Date() } as any });
     ctx.handlers.runStatus?.({ threadId: 'thread-1', run: { id: 'run-1', status: 'running', createdAt: new Date(), updatedAt: new Date() } });

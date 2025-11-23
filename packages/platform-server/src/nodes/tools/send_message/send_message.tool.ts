@@ -35,19 +35,19 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
       const prisma = this.prisma.getClient();
       const thread = await prisma.thread.findUnique({
         where: { id: threadId },
-        select: { triggerNodeId: true },
+        select: { channelNodeId: true },
       });
-      const triggerNodeId = thread?.triggerNodeId ?? null;
-      if (!triggerNodeId) {
-        return JSON.stringify({ ok: false, error: 'missing_trigger_node' });
+      const channelNodeId = thread?.channelNodeId ?? null;
+      if (!channelNodeId) {
+        return JSON.stringify({ ok: false, error: 'missing_channel_node' });
       }
-      const node = this.runtime.getNodeInstance(triggerNodeId);
+      const node = this.runtime.getNodeInstance(channelNodeId);
       if (!node) {
-        return JSON.stringify({ ok: false, error: 'trigger_node_unavailable' });
+        return JSON.stringify({ ok: false, error: 'channel_node_unavailable' });
       }
       if (!(node instanceof SlackTrigger)) {
-        this.logger.error('SendMessageFunctionTool: trigger node is not SlackTrigger', { threadId, triggerNodeId });
-        return JSON.stringify({ ok: false, error: 'invalid_trigger_type' });
+        this.logger.error('SendMessageFunctionTool: channel node is not SlackTrigger', { threadId, channelNodeId });
+        return JSON.stringify({ ok: false, error: 'invalid_channel_type' });
       }
       if (node.status !== 'ready') {
         return JSON.stringify({ ok: false, error: 'slacktrigger_unprovisioned' });

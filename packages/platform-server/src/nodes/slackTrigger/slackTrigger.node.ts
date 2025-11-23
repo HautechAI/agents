@@ -139,7 +139,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
           },
         };
         const threadId = await this.persistence.getOrCreateThreadByAlias('slack', alias, text, {
-          triggerNodeId: this.nodeId,
+          channelNodeId: this.nodeId,
         });
         // Persist descriptor only when channel present and event is top-level (no thread_ts)
         if (typeof event.channel === 'string' && event.channel) {

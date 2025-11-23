@@ -174,7 +174,7 @@ if (!shouldRunRealtimeTests) {
       status: 'open',
       createdAt: new Date(),
       parentId: null,
-      triggerNodeId: null,
+      channelNodeId: null,
     });
     const createdPayload = await createdPromise;
     expect(createdPayload.thread.id).toBe(threadId);
@@ -187,7 +187,7 @@ if (!shouldRunRealtimeTests) {
       status: 'open',
       createdAt: new Date(),
       parentId: null,
-      triggerNodeId: null,
+      channelNodeId: null,
     });
     const updatedPayload = await updatedPromise;
     expect(updatedPayload.thread.summary).toBe('Updated summary');

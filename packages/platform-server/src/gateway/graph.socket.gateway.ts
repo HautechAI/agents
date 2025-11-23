@@ -466,7 +466,7 @@ export class GraphSocketGateway implements OnModuleInit, OnModuleDestroy {
     status: ThreadStatus;
     createdAt: Date;
     parentId?: string | null;
-    triggerNodeId?: string | null;
+    channelNodeId?: string | null;
   }) {
     const payload = { thread: { ...thread, createdAt: thread.createdAt.toISOString() } };
     this.emitToRooms(['threads'], 'thread_created', payload);
@@ -478,7 +478,7 @@ export class GraphSocketGateway implements OnModuleInit, OnModuleDestroy {
     status: ThreadStatus;
     createdAt: Date;
     parentId?: string | null;
-    triggerNodeId?: string | null;
+    channelNodeId?: string | null;
   }) {
     const payload = { thread: { ...thread, createdAt: thread.createdAt.toISOString() } };
     this.emitToRooms(['threads'], 'thread_updated', payload);

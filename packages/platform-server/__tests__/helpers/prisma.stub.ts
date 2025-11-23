@@ -9,7 +9,7 @@ export function createPrismaStub() {
     status: 'open' | 'closed';
     createdAt: Date;
     channel: any;
-    triggerNodeId: string | null;
+    channelNodeId: string | null;
   }> = [];
   const runs: Array<{ id: string; threadId: string; status: string; createdAt: Date; updatedAt: Date }> = [];
   const messages: Array<{ id: string; kind: string; text: string | null; source: any; createdAt: Date }> = [];
@@ -45,7 +45,7 @@ export function createPrismaStub() {
           status: data.status ?? 'open',
           createdAt: new Date(timeSeed + idSeq),
           channel: data.channel ?? null,
-          triggerNodeId: data.triggerNodeId ?? null,
+          channelNodeId: data.channelNodeId ?? null,
         };
         threads.push(row);
         return row;
@@ -57,7 +57,7 @@ export function createPrismaStub() {
         if (Object.prototype.hasOwnProperty.call(data, 'summary')) next.summary = data.summary ?? null;
         if (Object.prototype.hasOwnProperty.call(data, 'status')) next.status = data.status;
         if (Object.prototype.hasOwnProperty.call(data, 'channel')) next.channel = data.channel ?? null;
-        if (Object.prototype.hasOwnProperty.call(data, 'triggerNodeId')) next.triggerNodeId = data.triggerNodeId ?? null;
+        if (Object.prototype.hasOwnProperty.call(data, 'channelNodeId')) next.channelNodeId = data.channelNodeId ?? null;
         threads[idx] = next as any;
         return threads[idx];
       },

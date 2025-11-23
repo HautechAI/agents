@@ -38,7 +38,7 @@ export type ThreadBroadcast = {
   status: ThreadStatus;
   createdAt: Date;
   parentId?: string | null;
-  triggerNodeId?: string | null;
+  channelNodeId?: string | null;
 };
 
 export type MessageBroadcast = {

@@ -57,20 +57,20 @@ describe('AgentsPersistenceService: alias resolution helpers', () => {
     expect(stub._store.threads[0].summary).toBe('Root summary');
   });
 
-  it('getOrCreateThreadByAlias persists trigger node id when provided', async () => {
+  it('getOrCreateThreadByAlias persists channel node id when provided', async () => {
     const stub = createPrismaStub();
     const svc = createService(stub);
     const id = await svc.getOrCreateThreadByAlias('test', 'root-with-trigger', 'Summary', {
-      triggerNodeId: 'node-123',
+      channelNodeId: 'node-123',
     });
     expect(typeof id).toBe('string');
     const created = stub._store.threads.find((t: any) => t.alias === 'root-with-trigger');
-    expect(created?.triggerNodeId).toBe('node-123');
+    expect(created?.channelNodeId).toBe('node-123');
     const eventsBus = (svc as any).__eventsBusStub;
     expect(eventsBus.emitThreadCreated).toHaveBeenCalledWith(
       expect.objectContaining({
         id,
-        triggerNodeId: 'node-123',
+        channelNodeId: 'node-123',
       }),
     );
   });

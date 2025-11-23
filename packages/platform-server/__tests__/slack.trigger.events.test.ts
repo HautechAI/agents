@@ -189,7 +189,7 @@ describe('SlackTrigger events', () => {
     expect(received.length).toBe(1);
     expect(ack).toHaveBeenCalledTimes(1);
     expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'U_1.0', 'hello', {
-      triggerNodeId: nodeId,
+      channelNodeId: nodeId,
     });
     expect(updateThreadChannelDescriptor).toHaveBeenCalledWith(
       't-slack',
@@ -222,7 +222,7 @@ describe('SlackTrigger events', () => {
     expect(received.length).toBe(1);
     expect(ack).toHaveBeenCalledTimes(1);
     expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'UR_root-5', 'reply content', {
-      triggerNodeId: nodeId,
+      channelNodeId: nodeId,
     });
     expect(updateThreadChannelDescriptor).not.toHaveBeenCalled();
   });
@@ -250,7 +250,7 @@ describe('SlackTrigger events', () => {
     expect(received.length).toBe(1);
     expect(ack).toHaveBeenCalledTimes(1);
     expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'U2_2.0', 'hello socket', {
-      triggerNodeId: nodeId,
+      channelNodeId: nodeId,
     });
     expect(updateThreadChannelDescriptor).toHaveBeenCalledWith(
       't-slack',
@@ -276,7 +276,7 @@ describe('SlackTrigger events', () => {
     expect(received.length).toBe(1);
     expect(ack).toHaveBeenCalledTimes(1);
     expect(getOrCreateThreadByAlias).toHaveBeenCalledWith('slack', 'UF_3.0', 'fallback', {
-      triggerNodeId: nodeId,
+      channelNodeId: nodeId,
     });
     expect(updateThreadChannelDescriptor).toHaveBeenCalledWith(
       't-slack',
