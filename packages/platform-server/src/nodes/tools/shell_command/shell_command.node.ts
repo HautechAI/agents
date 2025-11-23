@@ -9,11 +9,8 @@ import { ModuleRef } from '@nestjs/core';
 import { ArchiveService } from '../../../infra/archive/archive.service';
 import { RunEventsService } from '../../../events/run-events.service';
 import { EventsBusService } from '../../../events/events-bus.service';
-<<<<<<< HEAD
 import { PrismaService } from '../../../core/services/prisma.service';
-=======
 import { SecretReferenceSchema, VariableReferenceSchema } from '../../../utils/reference-schemas';
->>>>>>> e91f8a9 (feat(platform-server): integrate reference resolver)
 
 // NOTE: ANSI stripping now handled in ShellCommandTool; keep schema exports here only.
 
