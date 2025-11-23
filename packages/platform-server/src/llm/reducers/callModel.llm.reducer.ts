@@ -32,7 +32,7 @@ type SequenceEntry =
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
   constructor(
-    @Inject(LoggerService) protected logger: LoggerService,
+    @Inject(LoggerService) protected readonly logger: LoggerService,
     @Inject(RunEventsService) private readonly runEvents: RunEventsService,
     @Inject(EventsBusService) private readonly eventsBus: EventsBusService,
   ) {
