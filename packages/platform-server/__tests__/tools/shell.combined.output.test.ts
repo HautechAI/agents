@@ -44,7 +44,7 @@ function createToolWithContainer(container: ContainerHandle) {
     provide: async () => container,
   } as any);
 
-  return { tool: node.getTool(), runEvents };
+  return { tool: node.getTool(), runEvents, node };
 }
 
 const ctx = {
@@ -172,7 +172,7 @@ describe('ShellCommandTool combined output', () => {
     expect(result).not.toContain('\x1b');
   });
 
-  it('returns combined output even when exit code is non-zero', async () => {
+  it('returns exit-coded error message when exit code is non-zero', async () => {
     const chunks: OutputChunk[] = [
       { source: 'stdout', data: 'run started\n' },
       { source: 'stderr', data: 'failure details\n' },
@@ -182,9 +182,48 @@ describe('ShellCommandTool combined output', () => {
 
     const result = await tool.executeStreaming({ command: 'failing' }, ctx as any, streamingOptions);
 
-    expect(result).toBe('run started\nfailure details\n');
+    expect(result.split('\n')[0]).toBe('[exit code 2]');
+    expect(result).toContain('run started');
+    expect(result).toContain('failure details');
     expect(runEvents.finalizeToolOutputTerminal).toHaveBeenCalledTimes(1);
-    expect(runEvents.finalizeToolOutputTerminal.mock.calls[0][0]).toMatchObject({ status: 'error', exitCode: 2 });
+    expect(runEvents.finalizeToolOutputTerminal.mock.calls[0][0]).toMatchObject({ status: 'error', exitCode: 2, savedPath: null });
+  });
+
+  it('execute returns exit-coded error message with full output when under limit', async () => {
+    const chunks: OutputChunk[] = [
+      { source: 'stdout', data: 'alpha\n' },
+      { source: 'stderr', data: 'omega\n' },
+    ];
+    const container = new SequenceContainer(chunks, 7);
+    const { tool } = createToolWithContainer(container);
+
+    const result = await tool.execute({ command: 'fails' }, ctx as any);
+
+    const lines = result.split('\n');
+    expect(lines[0]).toBe('[exit code 7]');
+    expect(result).toContain('alpha');
+    expect(result).toContain('omega');
+  });
+
+  it('references saved output file when non-zero exit exceeds limit in streaming mode', async () => {
+    const largeOutput = Array.from({ length: 30 }, (_, idx) => `line-${idx}`).join('\n');
+    const container = new SequenceContainer([{ source: 'stdout', data: largeOutput }], 3);
+    const { tool, runEvents, node } = createToolWithContainer(container);
+    await node.setConfig({ outputLimitChars: 20 } as any);
+
+    const result = await tool.executeStreaming({ command: 'huge' }, ctx as any, streamingOptions);
+
+    expect(result.split('\n')[0]).toBe('[exit code 3]');
+    expect(result).toContain('Full output saved to:');
+
+    expect(runEvents.finalizeToolOutputTerminal).toHaveBeenCalledTimes(1);
+    const terminalArgs = runEvents.finalizeToolOutputTerminal.mock.calls[0][0];
+    expect(terminalArgs.status).toBe('error');
+    expect(typeof terminalArgs.savedPath).toBe('string');
+    expect(terminalArgs.savedPath).not.toBeNull();
+    const savedPath = terminalArgs.savedPath as string;
+    expect(result).toContain(savedPath);
+    expect(terminalArgs.message).toContain('Full output saved to');
   });
 
   it('removes CSI sequences split across chunks in non-streaming execute', async () => {
