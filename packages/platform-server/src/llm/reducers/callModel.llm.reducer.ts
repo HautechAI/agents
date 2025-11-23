@@ -31,12 +31,19 @@ type SequenceEntry =
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
+  protected logger: LoggerService;
+  private readonly runEvents: RunEventsService;
+  private readonly eventsBus: EventsBusService;
+
   constructor(
-    @Inject(LoggerService) protected logger: LoggerService,
-    @Inject(RunEventsService) private readonly runEvents: RunEventsService,
-    @Inject(EventsBusService) private readonly eventsBus: EventsBusService,
+    @Inject(LoggerService) logger: LoggerService,
+    @Inject(RunEventsService) runEvents: RunEventsService,
+    @Inject(EventsBusService) eventsBus: EventsBusService,
   ) {
     super();
+    this.logger = logger;
+    this.runEvents = runEvents;
+    this.eventsBus = eventsBus;
   }
 
   private tools: FunctionTool[] = [];
