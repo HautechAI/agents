@@ -3,7 +3,7 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 
 import Node, { type NodeKind } from '@agyn/ui-new/components/Node';
 import { useTemplates } from '../useTemplates';
-import { getKind } from '../lib/display';
+import { getDisplayTitle, getKind } from '../lib/display';
 
 interface BuilderNodeData {
   template: string;
@@ -36,6 +36,11 @@ function NodeRFComponent({ id, data, selected }: NodeProps<BuilderNodeData>) {
 
   const templateKind = getKind(templates, data.template);
   const nodeKind = mapTemplateKind(templateKind);
+  const title = getDisplayTitle(templates, data.template, data.config)
+    ?? data.name
+    ?? (data.config as { name?: string } | undefined)?.name
+    ?? data.template
+    ?? id;
 
   const inputs = useMemo(() => targetPorts.map((port) => ({ id: port, title: port })), [targetPorts]);
   const outputs = useMemo(() => sourcePorts.map((port) => ({ id: port, title: port })), [sourcePorts]);
@@ -89,10 +94,11 @@ function NodeRFComponent({ id, data, selected }: NodeProps<BuilderNodeData>) {
     <div ref={containerRef} className="relative">
       <Node
         kind={nodeKind}
-        title={id}
+        title={title}
         inputs={inputs}
         outputs={outputs}
         selected={selected}
+        className="cursor-move"
       />
       <div className="pointer-events-none absolute inset-0">
         {positions.inputs.map((top, index) => (
