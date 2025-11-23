@@ -1,11 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { WebClient, type ChatPostMessageResponse } from '@slack/web-api';
 import type { SendResult } from '../types';
 import { LoggerService } from '../../core/services/logger.service';
 
 @Injectable()
 export class SlackAdapter {
-  constructor(private readonly logger: LoggerService) {}
+  constructor(@Inject(LoggerService) private readonly logger: LoggerService) {}
 
   async sendText(input: { token: string; channel: string; text: string; thread_ts?: string }): Promise<SendResult> {
     const { token, channel, text, thread_ts } = input;
