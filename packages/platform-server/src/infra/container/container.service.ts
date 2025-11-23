@@ -220,6 +220,7 @@ export class ContainerService {
       killOnTimeout?: boolean;
       signal?: AbortSignal;
       onOutput?: (source: 'stdout' | 'stderr', chunk: Buffer) => void;
+      logToPid1?: boolean;
     },
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const container = this.docker.getContainer(containerId);
@@ -228,14 +229,21 @@ export class ContainerService {
       throw new Error(`Container '${containerId}' is not running`);
     }
 
-    const Cmd = Array.isArray(command) ? command : ['/bin/sh', '-lc', command];
+    const logToPid1 = options?.logToPid1 ?? false;
+    const Cmd = logToPid1
+      ? this.buildLogToPid1Command(command)
+      : Array.isArray(command)
+        ? command
+        : ['/bin/sh', '-lc', command];
     const Env: string[] | undefined = Array.isArray(options?.env)
       ? options?.env
       : options?.env
         ? Object.entries(options.env).map(([k, v]) => `${k}=${v}`)
         : undefined;
 
-    this.logger.debug(`Exec in container cid=${inspectData.Id.substring(0, 12)}: ${Cmd.join(' ')}`);
+    this.logger.debug(
+      `Exec in container cid=${inspectData.Id.substring(0, 12)} logToPid1=${logToPid1}: ${Cmd.join(' ')}`,
+    );
     // Update last-used before starting exec
     void this.touchLastUsed(inspectData.Id);
     const exec: Exec = await container.exec({
@@ -244,7 +252,7 @@ export class ContainerService {
       AttachStderr: true,
       WorkingDir: options?.workdir,
       Env,
-      Tty: options?.tty ?? false,
+      Tty: logToPid1 ? false : options?.tty ?? false,
       AttachStdin: false,
     });
 
@@ -382,6 +390,15 @@ export class ContainerService {
     const exec = this.docker.getExec(execId);
     if (!exec) throw new Error('exec_not_found');
     await exec.resize({ w: size.cols, h: size.rows });
+  }
+
+  private buildLogToPid1Command(command: string[] | string): string[] {
+    const script = 'set -o pipefail; { "$@" ; } 2> >(tee -a /proc/1/fd/2 >&2) | tee -a /proc/1/fd/1';
+    const placeholder = '__hautech_exec__';
+    if (Array.isArray(command)) {
+      return ['/bin/bash', '-lc', script, placeholder, ...command];
+    }
+    return ['/bin/bash', '-lc', script, placeholder, '/bin/bash', '-lc', command];
   }
 
   private startAndCollectExec(
