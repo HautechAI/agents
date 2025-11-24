@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -73,6 +73,12 @@ describe('useSecretsData', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.vaultUnavailable).toBe(true);
-    expect(result.current.secrets).toEqual([]);
+    expect(result.current.secrets).toHaveLength(1);
+    expect(result.current.secrets[0]).toMatchObject({
+      key: 'secret/github/TOKEN',
+      status: 'missing',
+      required: true,
+      present: false,
+    });
   });
 });

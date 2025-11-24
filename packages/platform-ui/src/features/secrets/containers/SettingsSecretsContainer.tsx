@@ -95,9 +95,11 @@ export function SettingsSecretsContainer() {
     notifyError(`Delete not supported for ${name}`);
   }, [secretsData.entries]);
 
+  const displayedSecrets = secretsData.isLoading ? [] : secretsData.secrets;
+
   return (
     <SecretsPage
-      secrets={secretsData.secrets}
+      secrets={displayedSecrets}
       isLoading={secretsData.isLoading}
       warningMessage={warningMessage}
       onCreateSecret={handleCreateSecret}

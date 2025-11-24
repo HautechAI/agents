@@ -5,10 +5,24 @@ import { http, HttpResponse } from 'msw';
 import { server, TestProviders, abs } from '../../../__tests__/integration/testUtils';
 import { SettingsSecrets } from '../../pages/SettingsSecrets';
 
+const notifyMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('@/lib/notify', () => ({
+  notifySuccess: (...args: unknown[]) => notifyMocks.success(...args),
+  notifyError: (...args: unknown[]) => notifyMocks.error(...args),
+}));
+
 describe('Settings/Secrets page', () => {
   beforeAll(() => server.listen());
   afterAll(() => server.close());
-  afterEach(() => server.resetHandlers());
+  afterEach(() => {
+    server.resetHandlers();
+    notifyMocks.success.mockReset();
+    notifyMocks.error.mockReset();
+  });
 
   it('allows creating missing secrets and updates counts', async () => {
     server.use(
@@ -60,8 +74,8 @@ describe('Settings/Secrets page', () => {
     );
 
     await screen.findByText('secret/github/GH_TOKEN');
+    await screen.findByText('secret/openai/API_KEY');
     expect(screen.getByRole('button', { name: /Missing \(2\)/ })).toBeInTheDocument();
-    expect(screen.getByText('secret/openai/API_KEY')).toBeInTheDocument();
 
     const githubRow = screen.getByText('secret/github/GH_TOKEN').closest('tr');
     expect(githubRow).not.toBeNull();
@@ -137,33 +151,44 @@ describe('Settings/Secrets page', () => {
     const editButton = await screen.findByRole('button', { name: 'Edit' });
     fireEvent.click(editButton);
 
-    const row = screen.getByText('secret/github/GH_TOKEN').closest('tr');
+    const keyInput = await screen.findByDisplayValue('secret/github/GH_TOKEN');
+    const row = keyInput.closest('tr');
     expect(row).not.toBeNull();
 
     const inputs = within(row as HTMLTableRowElement).getAllByRole('textbox');
-    const keyInput = inputs[0];
-    const valueInput = inputs[1];
+    const valueInput = inputs.find((input) => input !== keyInput) ?? inputs[inputs.length - 1];
 
+    fireEvent.change(valueInput, { target: { value: 'existing-secret' } });
     fireEvent.change(keyInput, { target: { value: 'secret/github/RENAMED' } });
 
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    notifyMocks.error.mockClear();
+    const notifyErrorSpy = notifyMocks.error;
 
     const saveButton = within(row as HTMLTableRowElement).getByRole('button', { name: 'Save' });
     fireEvent.click(saveButton);
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Renaming secrets is not supported yet'));
+    await waitFor(() => expect(notifyErrorSpy).toHaveBeenCalledTimes(1));
+    expect(notifyErrorSpy).toHaveBeenNthCalledWith(1, 'Renaming secrets is not supported yet');
 
-    fireEvent.change(keyInput, { target: { value: 'secret/github/GH_TOKEN' } });
-    fireEvent.click(saveButton);
+    const editButtonAfterError = await screen.findByRole('button', { name: 'Edit' });
+    fireEvent.click(editButtonAfterError);
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Secret value is required'));
+    const keyInputAfter = await screen.findByDisplayValue('secret/github/GH_TOKEN');
+    const rowAfter = keyInputAfter.closest('tr');
+    expect(rowAfter).not.toBeNull();
 
-    fireEvent.change(valueInput, { target: { value: 'new-value' } });
-    fireEvent.click(saveButton);
+    const inputsAfter = within(rowAfter as HTMLTableRowElement).getAllByRole('textbox');
+    const valueInputAfter = inputsAfter.find((input) => input !== keyInputAfter) ?? inputsAfter[inputsAfter.length - 1];
+
+    const saveButtonAfter = within(rowAfter as HTMLTableRowElement).getByRole('button', { name: 'Save' });
+    expect(saveButtonAfter).toBeDisabled();
+    expect(notifyErrorSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(valueInputAfter, { target: { value: 'new-value' } });
+    expect(saveButtonAfter).not.toBeDisabled();
+    fireEvent.click(saveButtonAfter);
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument());
-    expect(alertSpy).toHaveBeenCalledTimes(2);
-
-    alertSpy.mockRestore();
+    expect(notifyErrorSpy).toHaveBeenCalledTimes(1);
   });
 });
