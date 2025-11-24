@@ -89,6 +89,29 @@ const sampleEvents: RunEvent[] = [
     },
   },
   {
+    id: 'evt-4a',
+    type: 'tool' as EventType,
+    timestamp: '2:34:21 PM',
+    duration: '3.5s',
+    status: 'finished',
+    data: {
+      toolName: 'manage',
+      toolSubtype: 'manage',
+      input: {
+        command: 'send_message',
+        worker: 'agent-ops',
+        message: 'Deploy the updated authentication service to staging environment and run integration tests.',
+        threadAlias: 'deploy-auth-staging',
+      },
+      output: {
+        success: true,
+        subthreadId: 'thread-abc-123',
+        runId: 'run-xyz-456',
+        message: 'Message sent to worker agent-ops in thread deploy-auth-staging',
+      },
+    },
+  },
+  {
     id: 'evt-5',
     type: 'summarization' as EventType,
     timestamp: '2:34:38 PM',
