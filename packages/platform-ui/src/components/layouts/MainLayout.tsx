@@ -1,7 +1,8 @@
+import { type ReactNode } from 'react';
 import Sidebar, { type MenuItem } from '../Sidebar';
 
 interface MainLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
   menuItems: MenuItem[];
   selectedMenuItem?: string;
   onMenuItemSelect?: (itemId: string) => void;
