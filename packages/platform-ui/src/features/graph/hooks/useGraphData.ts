@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NodeStatus } from '@/api/types/graph';
 import { graphApiService } from '../services/api';
 import { buildGraphSavePayload, mapPersistedGraphToNodes, type GraphNodeMetadata } from '../mappers';
-import type { GraphNodeConfig, GraphNodeStatus, GraphPersistedEdge, GraphSaveState } from '../types';
+import type {
+  GraphNodeConfig,
+  GraphNodeStatus,
+  GraphPersistedEdge,
+  GraphSaveState,
+  GraphNodeUpdate,
+} from '../types';
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -39,10 +45,11 @@ function cloneEdge(edge: GraphPersistedEdge): GraphPersistedEdge {
 
 interface UseGraphDataResult {
   nodes: GraphNodeConfig[];
+  edges: GraphPersistedEdge[];
   loading: boolean;
   savingState: GraphSaveState;
   savingErrorMessage: string | null;
-  updateNode: (nodeId: string, updates: Partial<GraphNodeConfig>) => void;
+  updateNode: (nodeId: string, updates: GraphNodeUpdate) => void;
   applyNodeStatus: (nodeId: string, status: NodeStatus) => void;
   applyNodeState: (nodeId: string, state: Record<string, unknown>) => void;
   refresh: () => Promise<void>;
@@ -50,6 +57,7 @@ interface UseGraphDataResult {
 
 export function useGraphData(): UseGraphDataResult {
   const [nodes, setNodes] = useState<GraphNodeConfig[]>([]);
+  const [edges, setEdges] = useState<GraphPersistedEdge[]>([]);
   const nodesRef = useRef<GraphNodeConfig[]>([]);
   const metadataRef = useRef<Map<string, GraphNodeMetadata>>(new Map());
   const baseRef = useRef<GraphBaseState>({ name: 'agents', version: 0, edges: [] });
@@ -89,6 +97,7 @@ export function useGraphData(): UseGraphDataResult {
         version: result.version,
         edges: (result.edges ?? []).map(cloneEdge),
       };
+      setEdges((result.edges ?? []).map(cloneEdge));
       setSavingState({ status: 'saved', error: null });
     } catch (error) {
       dirtyRef.current = true;
@@ -98,7 +107,9 @@ export function useGraphData(): UseGraphDataResult {
   }, [clearScheduledSave]);
 
   const scheduleSave = useCallback(() => {
-    if (!hydratedRef.current) return;
+    if (!hydratedRef.current) {
+      return;
+    }
     dirtyRef.current = true;
     setSavingState({ status: 'saving', error: null });
     clearScheduledSave();
@@ -109,19 +120,19 @@ export function useGraphData(): UseGraphDataResult {
 
   const applyNodeStatus = useCallback((nodeId: string, status: NodeStatus) => {
     setNodes((prev) =>
-      prev.map((node) =>
-        node.id === nodeId
-          ? {
-              ...node,
-              status: toGraphStatus(status),
-              data: {
-                ...(node.data ?? {}),
-                provisionStatus: status.provisionStatus,
-                isPaused: status.isPaused,
-              },
-            }
-          : node,
-      ),
+      prev.map((node) => {
+        if (node.id !== nodeId) return node;
+        return {
+          ...node,
+          status: toGraphStatus(status),
+          runtime: {
+            provisionStatus: status.provisionStatus
+              ? { state: toGraphStatus(status), details: status.provisionStatus.details }
+              : undefined,
+            isPaused: status.isPaused,
+          },
+        } satisfies GraphNodeConfig;
+      }),
     );
   }, []);
 
@@ -130,36 +141,53 @@ export function useGraphData(): UseGraphDataResult {
     if (meta) {
       meta.state = { ...state };
     }
+    setNodes((prev) =>
+      prev.map((node) => (node.id === nodeId ? { ...node, state: { ...state } } : node)),
+    );
   }, []);
 
   const updateNode = useCallback(
-    (nodeId: string, updates: Partial<GraphNodeConfig>) => {
-      setNodes((prev) =>
-        prev.map((node) => {
+    (nodeId: string, updates: GraphNodeUpdate) => {
+      setNodes((prev) => {
+        let shouldSave = false;
+        const mapped = prev.map((node) => {
           if (node.id !== nodeId) return node;
+          const meta = metadataRef.current.get(nodeId);
           const next: GraphNodeConfig = { ...node };
-          if (typeof updates.title === 'string') {
+          if (typeof updates.title === 'string' && updates.title !== node.title) {
             next.title = updates.title;
+            if (meta) {
+              meta.config = { ...(meta.config ?? {}), title: updates.title };
+            }
+            shouldSave = true;
           }
-          if (updates.data && typeof updates.data === 'object') {
-            next.data = { ...(node.data ?? {}), ...(updates.data as Record<string, unknown>) };
-          }
-          if (typeof updates.status === 'string') {
+          if (typeof updates.status === 'string' && updates.status !== node.status) {
             next.status = updates.status as GraphNodeStatus;
           }
+          if (updates.config && updates.config !== node.config) {
+            next.config = { ...updates.config };
+            if (meta) {
+              meta.config = { ...updates.config };
+            }
+            shouldSave = true;
+          }
+          if (updates.state && updates.state !== node.state) {
+            next.state = { ...updates.state };
+            if (meta) {
+              meta.state = { ...updates.state };
+            }
+          }
+          if (updates.runtime) {
+            next.runtime = { ...(node.runtime ?? {}), ...updates.runtime };
+          }
           return next;
-        }),
-      );
+        });
 
-      const meta = metadataRef.current.get(nodeId);
-      if (meta && updates.data && typeof updates.data === 'object') {
-        meta.config = { ...(meta.config ?? {}), ...(updates.data as Record<string, unknown>) };
-      }
-      if (meta && typeof updates.title === 'string') {
-        meta.config = { ...(meta.config ?? {}), title: updates.title };
-      }
-
-      scheduleSave();
+        if (shouldSave) {
+          scheduleSave();
+        }
+        return mapped;
+      });
     },
     [scheduleSave],
   );
@@ -177,11 +205,13 @@ export function useGraphData(): UseGraphDataResult {
 
       const { nodes: mappedNodes, metadata } = mapPersistedGraphToNodes(graph, templates);
       metadataRef.current = metadata;
+      const nextEdges = (graph.edges ?? []).map(cloneEdge);
       baseRef.current = {
         name: graph.name,
         version: graph.version,
-        edges: (graph.edges ?? []).map(cloneEdge),
+        edges: nextEdges,
       };
+      setEdges(nextEdges);
       setNodes(mappedNodes);
 
       const statusPromises = graph.nodes.map(async (node) => {
@@ -229,6 +259,7 @@ export function useGraphData(): UseGraphDataResult {
 
   return {
     nodes,
+    edges,
     loading,
     savingState,
     savingErrorMessage,
