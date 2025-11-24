@@ -1,117 +1,113 @@
-import { Clock, MessageSquare, Bot, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, Brain, ExternalLink } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { Clock, MessageSquare, Bot, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from './Badge';
 import { IconButton } from './IconButton';
 import { JsonViewer } from './JsonViewer';
 import { MarkdownContent } from './MarkdownContent';
 import { Dropdown } from './Dropdown';
 import { StatusIndicator, type Status } from './StatusIndicator';
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const asRecordArray = (value: unknown): Record<string, unknown>[] =>
+  Array.isArray(value) ? value.filter(isRecord) : [];
+
+const asString = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const asNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' ? value : undefined;
+
+const safeJsonParse = (value: string): unknown => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
+export interface RunEventData extends Record<string, unknown> {
+  messageSubtype?: MessageSubtype;
+  content?: unknown;
+  toolSubtype?: ToolSubtype;
+  toolName?: string;
+  response?: string;
+  context?: unknown;
+  tokens?: {
+    total?: number;
+    [key: string]: unknown;
+  };
+  cost?: string;
+  model?: string;
+  input?: unknown;
+  output?: unknown;
+  command?: string;
+  workingDir?: string;
+  tool_calls?: unknown[];
+  toolCalls?: unknown[];
+  additional_kwargs?: {
+    tool_calls?: unknown[];
+    [key: string]: unknown;
+  };
+  tool_result?: unknown;
+  oldContext?: unknown;
+  newContext?: unknown;
+  summary?: string;
+}
+
 export type EventType = 'message' | 'llm' | 'tool' | 'summarization';
 export type ToolSubtype = 'generic' | 'shell' | 'manage' | string;
 export type MessageSubtype = 'source' | 'intermediate' | 'result';
 export type OutputViewMode = 'text' | 'terminal' | 'markdown' | 'json' | 'yaml';
 
-type JsonPrimitive = string | number | boolean | null;
-type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-
-interface AssistantToolCall {
-  name?: string;
-  function?: {
-    name?: string;
-    arguments?: JsonValue;
-  };
-  arguments?: JsonValue;
-  output?: JsonValue;
-  status?: Status;
-  duration?: string;
-  [key: string]: unknown;
-}
-
-interface ContextMessage {
-  role?: string;
-  name?: string;
-  content?: string;
-  response?: string;
-  timestamp?: string | number;
-  reasoning?: {
-    tokens?: number;
-    id?: string;
-  } | null;
-  tool_calls?: AssistantToolCall[];
-  tool_result?: JsonValue;
-  [key: string]: unknown;
-}
-
-export interface RunEventData {
-  messageSubtype?: MessageSubtype;
-  content?: string;
-  context?: ContextMessage[];
-  response?: string;
-  tokens?: {
-    total?: number;
-    prompt?: number;
-    completion?: number;
-    [key: string]: number | undefined;
-  } | null;
-  cost?: string;
-  model?: string;
-  prompt?: string;
-  systemPrompt?: string;
-  temperature?: number;
-  topP?: number;
-  frequencyPenalty?: number;
-  presencePenalty?: number;
-  maxTokens?: number;
-  stopSequences?: string[];
-  toolCalls?: AssistantToolCall[];
-  toolSubtype?: ToolSubtype;
-  toolName?: string;
-  input?: JsonValue | string;
-  output?: JsonValue | string;
-  command?: string;
-  workingDir?: string;
-  notes?: string;
-  oldContext?: ContextMessage[];
-  newContext?: ContextMessage[];
-  summary?: string;
-  [key: string]: unknown;
-}
-
 export interface RunEventDetailsProps {
-  event: {
-    id: string;
-    type: EventType;
-    timestamp: string;
-    duration?: string;
-    status?: Status;
-    data: RunEventData;
-  };
+  event: RunEvent;
+}
+
+export interface RunEvent {
+  id: string;
+  type: EventType;
+  timestamp: string;
+  duration?: string;
+  status?: Status;
+  data: RunEventData;
 }
 
 export function RunEventDetails({ event }: RunEventDetailsProps) {
   const [outputViewMode, setOutputViewMode] = useState<OutputViewMode>('text');
-  const [expandedToolCalls, setExpandedToolCalls] = useState<Set<number>>(new Set());
+  const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
 
-  const toggleToolCall = (index: number) => {
-    const newExpanded = new Set(expandedToolCalls);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
-      newExpanded.add(index);
-    }
-    setExpandedToolCalls(newExpanded);
+  const toggleToolCall = (key: string) => {
+    setExpandedToolCalls((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
   };
 
-  const renderOutputContent = (output: JsonValue | string | undefined): ReactNode => {
-    const serialisedOutput = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
-    const outputString = serialisedOutput ?? '';
+  const renderOutputContent = (output: unknown) => {
+    const outputString = typeof output === 'string'
+      ? output
+      : (() => {
+          try {
+            return JSON.stringify(output, null, 2);
+          } catch {
+            return String(output);
+          }
+        })();
 
     switch (outputViewMode) {
       case 'json':
-        try {
-          const jsonData = typeof output === 'string' ? JSON.parse(output) : output;
-          return <JsonViewer data={jsonData as JsonValue} className="flex-1 overflow-auto" />;
-        } catch {
+        {
+          const parsed = typeof output === 'string' ? safeJsonParse(output) : output;
+          if (Array.isArray(parsed) || isRecord(parsed)) {
+            return <JsonViewer data={parsed} className="flex-1 overflow-auto" />;
+          }
           return (
             <pre className="text-sm text-[var(--agyn-dark)] overflow-auto whitespace-pre-wrap flex-1">
               {outputString}
@@ -155,8 +151,11 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
   ];
 
   const renderMessageEvent = () => {
-    const messageSubtype: MessageSubtype = event.data?.messageSubtype || 'source';
-    
+    const subtypeCandidate = event.data.messageSubtype;
+    const messageSubtype: MessageSubtype =
+      subtypeCandidate === 'intermediate' || subtypeCandidate === 'result' ? subtypeCandidate : 'source';
+    const content = asString(event.data.content);
+
     const getMessageLabel = (): string => {
       switch (messageSubtype) {
         case 'source':
@@ -194,18 +193,19 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
             <span className="text-sm text-[var(--agyn-gray)]">Content</span>
             <IconButton icon={<Copy className="w-3 h-3" />} size="sm" variant="ghost" />
           </div>
-          <p className="text-[var(--agyn-dark)] leading-relaxed whitespace-pre-wrap">{event.data?.content || ''}</p>
+          <p className="text-[var(--agyn-dark)] leading-relaxed whitespace-pre-wrap">{content}</p>
         </div>
       </div>
     );
   };
 
   const renderLLMEvent = () => {
-    const context = Array.isArray(event.data.context)
-      ? (event.data.context as ContextMessage[])
-      : [];
-    const response = typeof event.data.response === 'string' ? event.data.response : '';
-    
+    const context = asRecordArray(event.data.context);
+    const response = asString(event.data.response);
+    const totalTokens = asNumber(event.data.tokens?.total);
+    const cost = typeof event.data.cost === 'string' ? event.data.cost : '';
+    const model = asString(event.data.model);
+
     return (
       <div className="space-y-6 h-full flex flex-col">
         {/* Header with Token Usage */}
@@ -225,14 +225,14 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
                     <span>{event.duration}</span>
                   </>
                 )}
-                {event.data.tokens && (
+                {totalTokens !== undefined && (
                   <>
                     <span>•</span>
-                    <span>{event.data.tokens.total?.toLocaleString() || 0} tokens</span>
-                    {event.data.cost && (
+                    <span>{totalTokens.toLocaleString()} tokens</span>
+                    {cost && (
                       <>
                         <span>•</span>
-                        <span>{event.data.cost}</span>
+                        <span>{cost}</span>
                       </>
                     )}
                   </>
@@ -247,14 +247,14 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
           {/* Input */}
           <div className="flex flex-col min-h-0 min-w-0">
             {/* Model */}
-            {event.data.model && (
+            {model && (
               <div className="flex-shrink-0 mb-4">
                 <div className="flex items-center gap-2 mb-3 h-8">
                   <span className="text-sm text-[var(--agyn-gray)]">Model</span>
                   <IconButton icon={<Copy className="w-3 h-3" />} size="sm" variant="ghost" />
                 </div>
                 <div className="text-[var(--agyn-dark)] text-sm font-mono">
-                  {event.data.model}
+                  {model}
                 </div>
               </div>
             )}
@@ -286,7 +286,13 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               <IconButton icon={<Copy className="w-3 h-3" />} size="sm" variant="ghost" />
             </div>
             <div className="flex-1 overflow-y-auto min-h-0 border border-[var(--agyn-border-subtle)] rounded-[10px] p-4">
-              <MarkdownContent content={response || ''} />
+              {response ? (
+                <div className="prose prose-sm max-w-none">
+                  <MarkdownContent content={response} />
+                </div>
+              ) : (
+                <div className="text-sm text-[var(--agyn-gray)]">No response available</div>
+              )}
             </div>
           </div>
         </div>
@@ -294,12 +300,12 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
     );
   };
 
-  const renderContextMessages = (contextArray: ContextMessage[]) => {
-    return contextArray.map((message, index) => {
-      const roleValue = message.role;
-      const role = typeof roleValue === 'string' ? roleValue.toLowerCase() : undefined;
+  const renderContextMessages = (contextArray: Record<string, unknown>[]) =>
+    contextArray.map((message, index) => {
+      const roleValue = asString(message.role).toLowerCase();
+      const role = roleValue || 'user';
 
-      const roleConfig = (() => {
+      const getRoleConfig = () => {
         switch (role) {
           case 'system':
             return {
@@ -327,48 +333,70 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               icon: <MessageSquare className="w-3.5 h-3.5" />,
             };
         }
-      })();
+      };
 
-      const timestampValue = message.timestamp;
-      const formattedTimestamp = typeof timestampValue === 'string' || typeof timestampValue === 'number'
-        ? new Date(timestampValue).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false,
-          })
-        : null;
+      const roleConfig = getRoleConfig();
 
-      const reasoningTokens = typeof message.reasoning?.tokens === 'number'
-        ? message.reasoning.tokens
-        : undefined;
+      const formatTimestamp = (timestamp: unknown) => {
+        if (typeof timestamp !== 'string' && typeof timestamp !== 'number') {
+          return null;
+        }
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) {
+          return null;
+        }
+        return date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+      };
 
-      const toolCalls = Array.isArray(message.tool_calls)
-        ? (message.tool_calls as AssistantToolCall[])
-        : [];
+      const timestamp = formatTimestamp(message.timestamp);
+      const reasoning = isRecord(message.reasoning) ? message.reasoning : undefined;
+      const reasoningTokens = asNumber(reasoning?.tokens);
+      const reasoningScore = asNumber(reasoning?.score);
 
-      const assistantResponse =
-        typeof message.content === 'string'
-          ? message.content
-          : typeof message.response === 'string'
-            ? message.response
-            : '';
+      const getReasoningVariant = () => {
+        if (reasoningTokens !== undefined) {
+          if (reasoningTokens < 50) return 'secondary';
+          if (reasoningTokens < 150) return 'default';
+          return 'error';
+        }
+        return 'neutral';
+      };
 
-      const toolName = typeof message.name === 'string' ? message.name : 'Tool';
+      const additionalKwargs = isRecord(message.additional_kwargs) ? message.additional_kwargs : undefined;
+      const toolCallsRaw = message.tool_calls || message.toolCalls || additionalKwargs?.tool_calls;
+      const toolCalls = Array.isArray(toolCallsRaw) ? toolCallsRaw.filter(isRecord) : [];
+      const hasToolCalls = toolCalls.length > 0;
+
+      const toolResultValue = message.tool_result ?? message.tool_result_if_exists;
+      const hasToolResult = toolResultValue !== undefined;
+
+      const renderAssistantContent = () => {
+        const content = message.content ?? message.response;
+        if (typeof content === 'string') {
+          return <MarkdownContent content={content} />;
+        }
+        if (Array.isArray(content) || isRecord(content)) {
+          return <JsonViewer data={content} />;
+        }
+        return null;
+      };
 
       return (
         <div key={index} className="mb-4 last:mb-0">
           <div className={`flex items-center gap-1.5 ${roleConfig.color} mb-2`}>
             {roleConfig.icon}
             <span className={`text-xs font-medium ${role === 'tool' ? '' : 'capitalize'}`}>
-              {role === 'tool' ? toolName : role}
+              {role === 'tool' ? asString(message.name, 'Tool') : role}
             </span>
-            {formattedTimestamp && (
-              <span className="text-xs text-[var(--agyn-gray)] ml-1">
-                {formattedTimestamp}
-              </span>
+            {timestamp && (
+              <span className="text-xs text-[var(--agyn-gray)] ml-1">{timestamp}</span>
             )}
             {role === 'tool' && (
               <div className="ml-auto">
@@ -381,45 +409,52 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
                 />
               </div>
             )}
+            {(reasoningTokens !== undefined || reasoningScore !== undefined) && (
+              <Badge variant={getReasoningVariant()} className="ml-auto">
+                <span className="text-xs">
+                  {reasoningTokens !== undefined ? (
+                    <span>{reasoningTokens.toLocaleString()} tokens</span>
+                  ) : (
+                    <span>Score: {reasoningScore}</span>
+                  )}
+                </span>
+              </Badge>
+            )}
           </div>
-          <div className="ml-5">
+          <div className="ml-5 space-y-3">
             {(role === 'system' || role === 'user') && (
               <div className="prose prose-sm max-w-none">
-                <MarkdownContent content={typeof message.content === 'string' ? message.content : ''} />
+                <MarkdownContent content={asString(message.content)} />
               </div>
             )}
 
             {role === 'tool' && (
               <div className="text-sm">
-                {renderOutputContent((message.tool_result ?? message.content) as JsonValue | string | undefined)}
+                {renderOutputContent(message.content || toolResultValue || '')}
               </div>
             )}
 
             {role === 'assistant' && (
               <div className="space-y-3">
-                {typeof reasoningTokens === 'number' && (
-                  <div className="flex items-center gap-1.5 text-sm text-[var(--agyn-purple)]">
-                    <Brain className="w-3.5 h-3.5" />
-                    <span>{reasoningTokens.toLocaleString()} tokens</span>
-                  </div>
-                )}
-
-                {assistantResponse && (
-                  <div className="prose prose-sm max-w-none">
-                    <MarkdownContent content={assistantResponse} />
-                  </div>
-                )}
-
-                {toolCalls.length > 0 && (
+                {renderAssistantContent()}
+                {hasToolCalls && (
                   <div className="space-y-1">
                     {toolCalls.map((toolCall, tcIndex) => {
-                      const isExpanded = expandedToolCalls.has(tcIndex);
-                      const functionName = toolCall.name || toolCall.function?.name;
+                      const toolCallRecord = toolCall;
+                      const toolFunction = isRecord(toolCallRecord.function) ? toolCallRecord.function : undefined;
+                      const toggleKey = `${index}-${tcIndex}`;
+                      const isExpanded = expandedToolCalls.has(toggleKey);
+                      const toolLabel =
+                        asString(toolCallRecord.name) ||
+                        asString(toolFunction?.name) ||
+                        'Tool Call';
+
                       return (
-                        <div key={tcIndex} className="space-y-1">
+                        <div key={toggleKey} className="space-y-1">
                           <button
-                            onClick={() => toggleToolCall(tcIndex)}
+                            onClick={() => toggleToolCall(toggleKey)}
                             className="flex items-center gap-1.5 text-sm text-[var(--agyn-dark)] hover:text-[var(--agyn-blue)] transition-colors"
+                            type="button"
                           >
                             {isExpanded ? (
                               <ChevronDown className="w-3.5 h-3.5" />
@@ -427,12 +462,16 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
                               <ChevronRight className="w-3.5 h-3.5" />
                             )}
                             <Wrench className="w-3.5 h-3.5" />
-                            <span className="font-medium">{functionName ?? 'Tool Call'}</span>
+                            <span className="font-medium">{toolLabel}</span>
                           </button>
                           {isExpanded && (
                             <div className="ml-5 mt-2">
                               <JsonViewer
-                                data={(toolCall.arguments ?? toolCall.function?.arguments ?? {}) as JsonValue}
+                                data={
+                                  toolCallRecord.arguments ??
+                                  toolFunction?.arguments ??
+                                  toolCallRecord
+                                }
                               />
                             </div>
                           )}
@@ -443,20 +482,28 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
                 )}
               </div>
             )}
+
+            {hasToolResult && role !== 'tool' && (
+              <div className="bg-[var(--agyn-bg-light)] border border-[var(--agyn-border-subtle)] rounded-[6px] p-3">
+                <div className="text-xs text-[var(--agyn-gray)] mb-1">Tool Result</div>
+                <pre className="text-xs whitespace-pre-wrap overflow-auto">
+                  {typeof toolResultValue === 'string'
+                    ? toolResultValue
+                    : JSON.stringify(toolResultValue, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
         </div>
       );
     });
-  };
 
   const renderGenericToolView = () => {
     const parseInput = () => {
       try {
-        return typeof event.data.input === 'string'
-          ? JSON.parse(event.data.input)
-          : event.data.input ?? null;
+        return typeof event.data.input === 'string' ? JSON.parse(event.data.input) : event.data.input;
       } catch {
-        return event.data.input ?? null;
+        return event.data.input;
       }
     };
 
@@ -502,33 +549,15 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
   const renderShellToolView = () => {
     const parseInput = () => {
       try {
-        return typeof event.data.input === 'string'
-          ? JSON.parse(event.data.input)
-          : event.data.input ?? null;
+        return typeof event.data.input === 'string' ? JSON.parse(event.data.input) : event.data.input;
       } catch {
-        return event.data.input ?? null;
+        return event.data.input;
       }
     };
 
     const input = parseInput();
-    const inputObject =
-      input && typeof input === 'object' && !Array.isArray(input)
-        ? (input as Record<string, JsonValue>)
-        : undefined;
-
-    const commandCandidate = inputObject?.command;
-    const command = typeof commandCandidate === 'string'
-      ? commandCandidate
-      : typeof event.data.command === 'string'
-        ? event.data.command
-        : '';
-
-    const cwdCandidate = inputObject?.cwd;
-    const cwd = typeof cwdCandidate === 'string'
-      ? cwdCandidate
-      : typeof event.data.workingDir === 'string'
-        ? event.data.workingDir
-        : '';
+    const command = input?.command || event.data.command || '';
+    const cwd = input?.cwd || event.data.workingDir || '';
 
     return (
       <>
@@ -588,57 +617,28 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
   const renderManageToolView = () => {
     const parseInput = () => {
       try {
-        return typeof event.data.input === 'string'
-          ? JSON.parse(event.data.input)
-          : event.data.input ?? null;
+        return typeof event.data.input === 'string' ? JSON.parse(event.data.input) : event.data.input;
       } catch {
-        return event.data.input ?? null;
+        return event.data.input;
       }
     };
 
     const parseOutput = () => {
       try {
-        return typeof event.data.output === 'string'
-          ? JSON.parse(event.data.output)
-          : event.data.output ?? null;
+        return typeof event.data.output === 'string' ? JSON.parse(event.data.output) : event.data.output;
       } catch {
-        return event.data.output ?? null;
+        return event.data.output;
       }
     };
 
     const input = parseInput();
-    const inputObject =
-      input && typeof input === 'object' && !Array.isArray(input)
-        ? (input as Record<string, JsonValue>)
-        : undefined;
-
+    const command = input?.command;
+    const worker = input?.worker;
+    const threadAlias = input?.threadAlias;
+    const message = input?.message;
     const output = parseOutput();
-    const outputObject =
-      output && typeof output === 'object' && !Array.isArray(output)
-        ? (output as Record<string, JsonValue>)
-        : undefined;
-
-    const commandCandidate = inputObject?.command;
-    const command = typeof commandCandidate === 'string' ? commandCandidate : undefined;
-
-    const workerCandidate = inputObject?.worker;
-    const worker = typeof workerCandidate === 'string' ? workerCandidate : undefined;
-
-    const threadAliasCandidate = inputObject?.threadAlias;
-    const threadAlias = typeof threadAliasCandidate === 'string' ? threadAliasCandidate : undefined;
-
-    const messageCandidate = inputObject?.message;
-    const message = typeof messageCandidate === 'string'
-      ? messageCandidate
-      : messageCandidate !== undefined
-        ? JSON.stringify(messageCandidate, null, 2)
-        : undefined;
-
-    const subthreadCandidate = outputObject?.subthreadId ?? outputObject?.threadId;
-    const subthreadId = typeof subthreadCandidate === 'string' ? subthreadCandidate : undefined;
-
-    const runIdCandidate = outputObject?.runId;
-    const runId = typeof runIdCandidate === 'string' ? runIdCandidate : undefined;
+    const subthreadId = output?.subthreadId || output?.threadId;
+    const runId = output?.runId;
 
     return (
       <>
@@ -760,7 +760,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
 
   const renderToolEvent = () => {
     const toolSubtype: ToolSubtype = event.data.toolSubtype || 'generic';
-    
+
     return (
       <div className="space-y-6 flex flex-col h-full">
         {/* Header */}

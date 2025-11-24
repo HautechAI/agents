@@ -65,7 +65,7 @@ export function ThreadsList({
     });
   };
 
-  const renderThread = (thread: Thread, depth = 0): ReactNode[] => {
+  const renderThread = (thread: Thread, depth: number = 0): ReactNode[] => {
     const items: ReactNode[] = [];
     const isExpanded = expandedThreads.has(thread.id);
 

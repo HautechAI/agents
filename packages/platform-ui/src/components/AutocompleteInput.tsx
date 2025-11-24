@@ -6,14 +6,15 @@ export interface AutocompleteOption {
   label: string;
 }
 
-interface AutocompleteInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'onChange' | 'onSelect'> {
+interface AutocompleteInputProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'onChange' | 'onSelect'> {
   label?: string;
   error?: string;
   helperText?: string;
   size?: 'sm' | 'default';
   value: string;
   onChange: (value: string) => void;
-  onOptionSelect?: (option: AutocompleteOption) => void;
+  onSelect?: (option: AutocompleteOption) => void;
   fetchOptions: (query: string) => Promise<AutocompleteOption[]>;
   debounceMs?: number;
   minChars?: number;
@@ -29,7 +30,7 @@ export function AutocompleteInput({
   className = '',
   value,
   onChange,
-  onOptionSelect,
+  onSelect,
   fetchOptions,
   debounceMs = 300,
   minChars = 0,
@@ -78,7 +79,6 @@ export function AutocompleteInput({
     if (value.length >= minChars) {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
       }
 
       debounceTimerRef.current = setTimeout(async () => {
@@ -115,7 +115,7 @@ export function AutocompleteInput({
 
   const handleSelectOption = (option: AutocompleteOption) => {
     onChange(option.value);
-    onOptionSelect?.(option);
+    onSelect?.(option);
     setIsOpen(false);
     setHasInteracted(false); // Reset to prevent triggering search on programmatic value change
     inputRef.current?.focus();

@@ -29,3 +29,5 @@ export const buttonVariants = cva(
     },
   },
 );
+
+export type ButtonVariantOptions = typeof buttonVariants;

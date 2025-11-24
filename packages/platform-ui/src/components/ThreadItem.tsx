@@ -23,13 +23,6 @@ interface ThreadItemProps {
   isSelected?: boolean;
 }
 
-const statusMap: Record<ThreadStatus, Status> = {
-  running: 'running',
-  pending: 'pending',
-  finished: 'finished',
-  failed: 'failed',
-};
-
 const getAgentAvatarColor = (agentName: string): string => {
   // Use consistent colors based on agent name
   const colors = [
@@ -111,7 +104,7 @@ export function ThreadItem({
 
           {/* Status Indicator */}
           <div className="flex-shrink-0 flex items-center gap-2">
-            <StatusIndicator status={statusMap[thread.status]} size="sm" />
+            <StatusIndicator status={thread.status as Status} size="sm" />
           </div>
         </div>
 

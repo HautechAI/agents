@@ -2,12 +2,7 @@
 
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
-import type {
-  NameType,
-  Payload as TooltipPayload,
-  ValueType,
-} from "recharts/types/component/DefaultTooltipContent";
-import type { Payload as LegendPayload } from "recharts/types/component/DefaultLegendContent";
+import type { LegendProps, TooltipProps } from "recharts";
 
 import { cn } from "./utils";
 
@@ -110,10 +105,22 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
-type TooltipPayloadItem = TooltipPayload<ValueType, NameType>;
-type ChartTooltipProps = RechartsPrimitive.TooltipProps<ValueType, NameType>;
+type ChartTooltipContentProps<
+  TValue extends number | string = number,
+  TName extends string = string,
+> = TooltipProps<TValue, TName> &
+  React.ComponentProps<"div"> & {
+    hideLabel?: boolean;
+    hideIndicator?: boolean;
+    indicator?: "line" | "dot" | "dashed";
+    nameKey?: string;
+    labelKey?: string;
+  };
 
-function ChartTooltipContent({
+function ChartTooltipContent<
+  TValue extends number | string = number,
+  TName extends string = string,
+>({
   active,
   payload,
   className,
@@ -127,14 +134,7 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-}: ChartTooltipProps &
-  React.ComponentProps<"div"> & {
-    hideLabel?: boolean;
-    hideIndicator?: boolean;
-    indicator?: "line" | "dot" | "dashed";
-    nameKey?: string;
-    labelKey?: string;
-  }) {
+}: ChartTooltipContentProps<TValue, TName>) {
   const { config } = useChart();
 
   const tooltipLabel = React.useMemo(() => {
@@ -177,8 +177,13 @@ function ChartTooltipContent({
     return null;
   }
 
-  const items: TooltipPayloadItem[] = payload ?? [];
-  const nestLabel = items.length === 1 && indicator !== "dot";
+  const nestLabel = payload.length === 1 && indicator !== "dot";
+
+  const tooltipItems: NonNullable<TooltipProps<TValue, TName>["payload"]> = Array.isArray(
+    payload,
+  )
+    ? payload
+    : [];
 
   return (
     <div
@@ -189,14 +194,10 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {items.map((item, index) => {
+        {tooltipItems.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
-          const payloadColor =
-            typeof item.payload === "object" && item.payload !== null
-              ? (item.payload as { fill?: string }).fill
-              : undefined;
-          const indicatorColor = color || payloadColor || item.color;
+          const indicatorColor = color || item.payload.fill || item.color;
 
           return (
             <div
@@ -246,9 +247,9 @@ function ChartTooltipContent({
                         {itemConfig?.label || item.name}
                       </span>
                     </div>
-                    {item.value !== undefined && item.value !== null && (
+                    {item.value && (
                       <span className="text-foreground font-mono font-medium tabular-nums">
-                        {formatTooltipValue(item.value)}
+                        {item.value.toLocaleString()}
                       </span>
                     )}
                   </div>
@@ -262,34 +263,6 @@ function ChartTooltipContent({
   );
 }
 
-function formatTooltipValue(value: ValueType): string {
-  if (Array.isArray(value)) {
-    return value.map((entry) => formatTooltipValue(entry)).join(", ");
-  }
-
-  return typeof value === "number" ? value.toLocaleString() : String(value);
-}
-
-function formatLegendValue(value: unknown, fallback: string): string {
-  if (typeof value === "number") {
-    return value.toLocaleString();
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) =>
-        typeof entry === "number" ? entry.toLocaleString() : String(entry),
-      )
-      .join(", ");
-  }
-
-  return fallback;
-}
-
 const ChartLegend = RechartsPrimitive.Legend;
 
 function ChartLegendContent({
@@ -299,7 +272,7 @@ function ChartLegendContent({
   verticalAlign = "bottom",
   nameKey,
 }: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+  Pick<LegendProps, "payload" | "verticalAlign"> & {
     hideIcon?: boolean;
     nameKey?: string;
   }) {
@@ -309,8 +282,6 @@ function ChartLegendContent({
     return null;
   }
 
-  const items: LegendPayload[] = payload ?? [];
-
   return (
     <div
       className={cn(
@@ -319,29 +290,13 @@ function ChartLegendContent({
         className,
       )}
     >
-      {items.map((item, index) => {
-        const derivedKey =
-          nameKey ??
-          (typeof item.dataKey === "string" || typeof item.dataKey === "number"
-            ? String(item.dataKey)
-            : typeof item.value === "string"
-              ? item.value
-              : "value");
-        const itemConfig = getPayloadConfigFromPayload(
-          config,
-          item,
-          derivedKey,
-        );
-        const listKey =
-          typeof item.dataKey === "string" || typeof item.dataKey === "number"
-            ? String(item.dataKey)
-            : `${derivedKey}-${index}`;
-        const labelText =
-          itemConfig?.label ?? formatLegendValue(item.value, derivedKey);
+      {payload.map((item) => {
+        const key = `${nameKey || item.dataKey || "value"}`;
+        const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
         return (
           <div
-            key={listKey}
+            key={item.value}
             className={cn(
               "[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3",
             )}
@@ -356,7 +311,7 @@ function ChartLegendContent({
                 }}
               />
             )}
-            {labelText}
+            {itemConfig?.label}
           </div>
         );
       })}

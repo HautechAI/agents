@@ -42,7 +42,6 @@ interface ConversationProps {
   className?: string;
   defaultCollapsed?: boolean;
   collapsed?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export function Conversation({
@@ -54,26 +53,12 @@ export function Conversation({
   className = '',
   defaultCollapsed = false,
   collapsed,
-  onCollapsedChange,
 }: ConversationProps) {
   const messagesRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [runHeights, setRunHeights] = useState<Map<string, number>>(new Map());
-  const [internalCollapsed, setInternalCollapsed] = useState(defaultCollapsed);
 
   // Use controlled or uncontrolled state
-  const isCollapsed = collapsed !== undefined ? collapsed : internalCollapsed;
-
-  useEffect(() => {
-    if (collapsed !== undefined) {
-      setInternalCollapsed(collapsed);
-    }
-  }, [collapsed]);
-
-  useEffect(() => {
-    if (collapsed === undefined) {
-      onCollapsedChange?.(internalCollapsed);
-    }
-  }, [collapsed, internalCollapsed, onCollapsedChange]);
+  const isCollapsed = collapsed ?? defaultCollapsed;
   
   // Measure run heights for the sticky run info column
   useEffect(() => {

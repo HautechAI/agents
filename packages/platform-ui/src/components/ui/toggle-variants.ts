@@ -21,3 +21,5 @@ export const toggleVariants = cva(
     },
   },
 );
+
+export type ToggleVariantOptions = typeof toggleVariants;

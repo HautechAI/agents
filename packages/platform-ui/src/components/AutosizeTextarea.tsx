@@ -1,4 +1,4 @@
-import { type TextareaHTMLAttributes, useEffect, useRef, useCallback } from 'react';
+import { type ChangeEvent, type TextareaHTMLAttributes, useCallback, useEffect, useRef } from 'react';
 
 interface AutosizeTextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'rows'> {
   label?: string;
@@ -72,7 +72,7 @@ export function AutosizeTextarea({
     adjustHeight();
   }, [adjustHeight]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     adjustHeight();
     if (onChange) {
       onChange(e);

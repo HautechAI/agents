@@ -26,10 +26,19 @@ type NodeStatus =
 
 type NodeKind = 'Agent' | 'Tool' | 'MCP' | 'Trigger' | 'Workspace';
 
-interface NodePropertiesSidebarProps {
-  nodeKind: NodeKind;
-  nodeTitle: string;
+export interface NodeConfig extends Record<string, unknown> {
+  kind: NodeKind;
+  title: string;
+}
+
+export interface NodeState extends Record<string, unknown> {
   status: NodeStatus;
+}
+
+interface NodePropertiesSidebarProps {
+  config: NodeConfig;
+  state: NodeState;
+  onConfigChange?: (updates: Partial<NodeConfig>) => void;
 }
 
 const statusConfig: Record<NodeStatus, { label: string; color: string; bgColor: string }> = {
@@ -67,10 +76,12 @@ function FieldLabel({ label, hint, required }: FieldLabelProps) {
 }
 
 export default function NodePropertiesSidebar({ 
-  nodeKind, 
-  nodeTitle, 
-  status,
+  config,
+  state,
+  onConfigChange,
 }: NodePropertiesSidebarProps) {
+  const { kind: nodeKind, title: nodeTitle } = config;
+  const { status } = state;
   const [requireToolCallToFinish, setRequireToolCallToFinish] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState(
     'You are a helpful assistant that provides accurate and concise information.'
@@ -133,6 +144,7 @@ export default function NodePropertiesSidebar({
     'OPENAI_API_KEY',
   ];
 
+  // Mock Nix packages for autocomplete
   // Fetch Nix packages for autocomplete
   const fetchNixPackages = useCallback(async (query: string) => {
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -229,7 +241,11 @@ export default function NodePropertiesSidebar({
               label="Title" 
               hint="The display name for this node"
             />
-            <Input defaultValue={nodeTitle} size="sm" />
+            <Input 
+              value={nodeTitle} 
+              onChange={(e) => onConfigChange?.({ title: e.target.value })}
+              size="sm" 
+            />
           </section>
 
           {/* Agent-specific Configuration */}
@@ -876,7 +892,7 @@ export default function NodePropertiesSidebar({
                         onChange={setNixPackageSearch}
                         fetchOptions={fetchNixPackages}
                         placeholder="Search packages..."
-                        onOptionSelect={(option) => {
+                        onSelect={(option) => {
                           // Add package to list if not already there
                           if (!nixPackages.some(pkg => pkg.name === option.value)) {
                             setNixPackages([...nixPackages, { name: option.value, version: 'latest' }]);
