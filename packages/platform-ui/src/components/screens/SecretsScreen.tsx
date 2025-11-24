@@ -105,6 +105,7 @@ export default function SecretsScreen({
 
   const usedCount = secrets.filter((s) => s.status === 'used').length;
   const missingCount = secrets.filter((s) => s.status === 'missing').length;
+  const tooltipDelay = import.meta.env.MODE === 'test' ? 0 : 300;
 
   return (
     <div className="h-screen flex flex-col">
@@ -221,12 +222,14 @@ export default function SecretsScreen({
                     </td>
                     <td className="px-6 h-[60px]">
                       <div className="flex items-center justify-end gap-1">
-                        <Tooltip.Provider delayDuration={300}>
+                        <Tooltip.Provider delayDuration={tooltipDelay}>
                           <Tooltip.Root>
                             <Tooltip.Trigger asChild>
                               <button
                                 onClick={handleSaveCreate}
-                                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-status-success)] hover:bg-[var(--agyn-status-success)]/10 transition-colors"
+                                aria-label="Save"
+                                disabled={!editForm.key.trim() || !editForm.value.trim()}
+                                className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-status-success)] hover:bg-[var(--agyn-status-success)]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Check className="w-4 h-4" />
                               </button>
@@ -242,11 +245,12 @@ export default function SecretsScreen({
                             </Tooltip.Portal>
                           </Tooltip.Root>
                         </Tooltip.Provider>
-                        <Tooltip.Provider delayDuration={300}>
+                        <Tooltip.Provider delayDuration={tooltipDelay}>
                           <Tooltip.Root>
                             <Tooltip.Trigger asChild>
                               <button
                                 onClick={handleCancel}
+                                aria-label="Cancel"
                                 className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-bg-light)] transition-colors"
                               >
                                 <X className="w-4 h-4" />
@@ -302,12 +306,14 @@ export default function SecretsScreen({
                           </td>
                           <td className="px-6 h-[60px]">
                             <div className="flex items-center justify-end gap-1">
-                              <Tooltip.Provider delayDuration={300}>
+                              <Tooltip.Provider delayDuration={tooltipDelay}>
                                 <Tooltip.Root>
                                   <Tooltip.Trigger asChild>
                                     <button
                                       onClick={handleSaveEdit}
-                                      className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-status-success)] hover:bg-[var(--agyn-status-success)]/10 transition-colors"
+                                      aria-label="Save"
+                                      disabled={!editForm.key.trim() || !editForm.value.trim()}
+                                      className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-status-success)] hover:bg-[var(--agyn-status-success)]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       <Check className="w-4 h-4" />
                                     </button>
@@ -323,11 +329,12 @@ export default function SecretsScreen({
                                   </Tooltip.Portal>
                                 </Tooltip.Root>
                               </Tooltip.Provider>
-                              <Tooltip.Provider delayDuration={300}>
+                              <Tooltip.Provider delayDuration={tooltipDelay}>
                                 <Tooltip.Root>
                                   <Tooltip.Trigger asChild>
                                     <button
                                       onClick={handleCancel}
+                                      aria-label="Cancel"
                                       className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-bg-light)] transition-colors"
                                     >
                                       <X className="w-4 h-4" />
@@ -376,11 +383,12 @@ export default function SecretsScreen({
                               </button>
                             ) : (
                               <>
-                                <Tooltip.Provider delayDuration={300}>
+                                <Tooltip.Provider delayDuration={tooltipDelay}>
                                   <Tooltip.Root>
                                     <Tooltip.Trigger asChild>
                                       <button
                                         onClick={() => toggleUnmask(secret.id)}
+                                        aria-label={isUnmasked ? 'Mask' : 'Unmask'}
                                         className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-bg-light)] hover:text-[var(--agyn-blue)] transition-colors"
                                       >
                                         {isUnmasked ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -397,12 +405,13 @@ export default function SecretsScreen({
                                     </Tooltip.Portal>
                                   </Tooltip.Root>
                                 </Tooltip.Provider>
-                                <Tooltip.Provider delayDuration={300}>
+                                <Tooltip.Provider delayDuration={tooltipDelay}>
                                   <Tooltip.Root>
                                     <Tooltip.Trigger asChild>
                                       <button
                                         onClick={() => handleStartEdit(secret)}
                                         disabled={isCreating || editingId !== null}
+                                        aria-label="Edit"
                                         className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-bg-light)] hover:text-[var(--agyn-blue)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                       >
                                         <Pencil className="w-4 h-4" />
@@ -419,12 +428,13 @@ export default function SecretsScreen({
                                     </Tooltip.Portal>
                                   </Tooltip.Root>
                                 </Tooltip.Provider>
-                                <Tooltip.Provider delayDuration={300}>
+                                <Tooltip.Provider delayDuration={tooltipDelay}>
                                   <Tooltip.Root>
                                     <Tooltip.Trigger asChild>
                                       <button
                                         onClick={() => handleDelete(secret.id)}
                                         disabled={isCreating || editingId !== null}
+                                        aria-label="Delete"
                                         className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-status-failed)]/10 hover:text-[var(--agyn-status-failed)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                       >
                                         <Trash2 className="w-4 h-4" />
