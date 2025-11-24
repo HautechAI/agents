@@ -193,22 +193,39 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       const ncpsEnabled = this.configService?.ncpsEnabled === true;
       const ncpsUrl = this.configService?.ncpsUrl;
       const keys = this.ncpsKeyService?.getKeysForInjection() || [];
+      let nixConfigInjected = false;
       if (!hasNixConfig && ncpsEnabled && !!ncpsUrl && keys.length > 0) {
         const joined = keys.join(' ');
         const nixConfig = `substituters = ${ncpsUrl} https://cache.nixos.org\ntrusted-public-keys = ${joined} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=`;
         envMerged = { ...(envMerged || {}), NIX_CONFIG: nixConfig } as Record<string, string>;
+        nixConfigInjected = true;
       }
 
       const normalizedEnv: Record<string, string> | undefined = envMerged;
       const cpuLimitNano = this.normalizeCpuLimit(this.config?.cpu_limit);
       const memoryLimitBytes = this.normalizeMemoryLimit(this.config?.memory_limit);
-      const createExtras =
+      const networkSpec = this.resolveWorkspaceNetwork(threadId);
+      const createExtrasHostConfig =
         cpuLimitNano !== undefined || memoryLimitBytes !== undefined
           ? {
               HostConfig: {
                 ...(cpuLimitNano !== undefined ? { NanoCPUs: cpuLimitNano } : {}),
                 ...(memoryLimitBytes !== undefined ? { Memory: memoryLimitBytes } : {}),
               },
+            }
+          : undefined;
+      const createExtrasNetworking = networkSpec.endpointsConfig
+        ? {
+            NetworkingConfig: {
+              EndpointsConfig: networkSpec.endpointsConfig,
+            },
+          }
+        : undefined;
+      const createExtras =
+        createExtrasHostConfig || createExtrasNetworking
+          ? {
+              ...(createExtrasHostConfig ?? {}),
+              ...(createExtrasNetworking ?? {}),
             }
           : undefined;
       container = await this.containerService.start({
@@ -221,9 +238,18 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
         labels: { ...workspaceLabels },
         platform: requestedPlatform,
         ttlSeconds: this.config?.ttlSeconds ?? 86400,
+        networkMode: networkSpec.networkMode,
         createExtras,
       });
       if (enableDinD) await this.ensureDinD(container, labels, DOCKER_MIRROR_URL);
+      if (nixConfigInjected) {
+        await this.runWorkspaceNetworkDiagnostics(container).catch((err: unknown) => {
+          this.logger.warn('Workspace Nix diagnostics failed', {
+            containerId: container.id.substring(0, 12),
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
 
       if (this.config?.initialScript) {
         const script = this.config.initialScript;
@@ -326,6 +352,126 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       await sleep(1000);
     }
     throw new Error('DinD sidecar did not become ready within timeout');
+  }
+
+  private resolveWorkspaceNetwork(threadId: string): {
+    networkMode?: string;
+    endpointsConfig?: Record<string, { Aliases: string[] }>;
+  } {
+    const raw = this.configService?.workspaceDockerNetwork;
+    if (!raw) return {};
+    const trimmed = raw.trim();
+    if (!trimmed) return {};
+    const lower = trimmed.toLowerCase();
+    if (lower === 'bridge' || lower === 'host' || lower === 'none') {
+      return { networkMode: lower };
+    }
+    if (lower.startsWith('container:')) {
+      const idx = trimmed.indexOf(':');
+      const target = idx >= 0 ? trimmed.slice(idx + 1).trim() : '';
+      if (!target) return {};
+      return { networkMode: `container:${target}` };
+    }
+    return {
+      endpointsConfig: {
+        [trimmed]: {
+          Aliases: [this.sanitizeNetworkAlias(threadId)],
+        },
+      },
+    };
+  }
+
+  private sanitizeNetworkAlias(threadId: string): string {
+    const normalized = (threadId ?? '').toLowerCase();
+    const replaced = normalized.replace(/[^a-z0-9_.-]/g, '-');
+    const collapsed = replaced.replace(/-+/g, '-');
+    const trimmed = collapsed.replace(/^-+/, '').replace(/-+$/, '');
+    const truncated = trimmed.slice(0, 63);
+    if (truncated && /^[a-z0-9]/.test(truncated)) return truncated;
+    const alnum = normalized.replace(/[^a-z0-9]/g, '');
+    if (alnum) {
+      const suffix = alnum.slice(0, 61);
+      return `ws-${suffix}`.slice(0, 63);
+    }
+    const encoded = Array.from(normalized)
+      .map((ch) => ch.charCodeAt(0).toString(36))
+      .join('')
+      .slice(0, 20);
+    return `ws-${encoded || 'thread'}`.slice(0, 63);
+  }
+
+  private async runWorkspaceNetworkDiagnostics(container: ContainerHandle): Promise<void> {
+    const shortId = container.id.substring(0, 12);
+    try {
+      const { stdout } = await container.exec([
+        'sh',
+        '-lc',
+        "nix show-config | grep -E '^(substituters|trusted-public-keys)\\s*=' || true",
+      ]);
+      const lines = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      if (lines.length) {
+        for (const line of lines) {
+          this.logger.info('Workspace Nix config', { containerId: shortId, line });
+        }
+      } else {
+        this.logger.warn('Workspace Nix config produced no substituters/trusted-public-keys output', {
+          containerId: shortId,
+        });
+      }
+    } catch (err) {
+      this.logger.warn('Workspace Nix config check failed', {
+        containerId: shortId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    await this.runWorkspaceDiagnosticCommand(container, 'getent hosts ncps', 'ncps host lookup');
+    await this.runWorkspaceDiagnosticCommand(
+      container,
+      'curl -sS --max-time 3 http://ncps:8501/nix-cache-info',
+      'ncps cache probe',
+      { logStdoutSnippet: true },
+    );
+  }
+
+  private async runWorkspaceDiagnosticCommand(
+    container: ContainerHandle,
+    command: string,
+    description: string,
+    options: { logStdoutSnippet?: boolean } = {},
+  ): Promise<void> {
+    const shortId = container.id.substring(0, 12);
+    try {
+      const { stdout, stderr, exitCode } = await container.exec(['sh', '-lc', command]);
+      if (exitCode === 0) {
+        const payload = options.logStdoutSnippet ? this.snip(stdout) : stdout.trim();
+        this.logger.info(`Workspace ${description} succeeded`, {
+          containerId: shortId,
+          stdout: payload,
+        });
+      } else {
+        this.logger.warn(`Workspace ${description} failed`, {
+          containerId: shortId,
+          exitCode,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`Workspace ${description} error`, {
+        containerId: shortId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private snip(value: string, max = 256): string {
+    const trimmed = value.trim();
+    if (trimmed.length <= max) return trimmed;
+    return `${trimmed.slice(0, max)}...`;
   }
 
   private chooseNonDinDContainer(
