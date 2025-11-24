@@ -195,6 +195,72 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
     return `/tmp/${filename}`;
   }
 
+  private async formatExitCodeErrorMessage(params: {
+    exitCode: number;
+    combinedOutput: string;
+    limit: number;
+    container: ContainerHandle;
+    savedPath?: string | null;
+    truncationMessage?: string | null;
+  }): Promise<{ message: string; savedPath: string | null; truncationMessage: string | null }> {
+    const {
+      exitCode,
+      combinedOutput,
+      limit,
+      container,
+      savedPath: existingSavedPath,
+      truncationMessage: existingTruncationMessage,
+    } = params;
+
+    const sanitizedOutput = combinedOutput ?? '';
+    let savedPath = existingSavedPath ?? null;
+    let truncationMessage = existingTruncationMessage ?? null;
+
+    const shouldPersist = limit > 0 && sanitizedOutput.length > limit;
+    if (shouldPersist && !truncationMessage) {
+      truncationMessage = `Output exceeded ${limit} characters.`;
+    }
+
+    const details: string[] = [];
+    if (truncationMessage) {
+      details.push(truncationMessage);
+    }
+
+    if (shouldPersist) {
+      if (!savedPath) {
+        const file = `${randomUUID()}.txt`;
+        savedPath = await this.saveOversizedOutputInContainer(container, file, sanitizedOutput);
+      }
+      if (savedPath) {
+        details.push(`Full output saved to: ${savedPath}`);
+      }
+
+      const snippetLength = Math.min(2000, sanitizedOutput.length);
+      if (snippetLength > 0) {
+        const snippet = sanitizedOutput.slice(-snippetLength);
+        if (snippet) {
+          details.push('--- output tail ---');
+          details.push(snippet);
+        }
+      }
+    } else if (sanitizedOutput) {
+      details.push(sanitizedOutput);
+    } else if (!truncationMessage) {
+      details.push('Command produced no output.');
+    }
+
+    const messageSections = [`[exit code ${exitCode}]`];
+    if (details.length > 0) {
+      messageSections.push(details.join('\n'));
+    }
+
+    return {
+      message: messageSections.join('\n'),
+      savedPath,
+      truncationMessage,
+    };
+  }
+
   async execute(args: z.infer<typeof bashCommandSchema>, ctx: LLMContext): Promise<string> {
     const { command, cwd } = args;
     const { threadId } = ctx;
@@ -310,7 +376,19 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
     }
 
     const combined = getCombinedOutput({ stdout: response.stdout, stderr: response.stderr });
+    const exitCode = response.exitCode;
     const limit = cfg.outputLimitChars;
+
+    if (typeof exitCode === 'number' && exitCode !== 0) {
+      const { message } = await this.formatExitCodeErrorMessage({
+        exitCode,
+        combinedOutput: combined,
+        limit,
+        container,
+      });
+      return message;
+    }
+
     if (limit > 0 && combined.length > limit) {
       const id = randomUUID();
       const file = `${id}.txt`;
@@ -509,6 +587,8 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
 
     let execError: unknown = null;
     let response: { stdout: string; stderr: string; exitCode: number } | null = null;
+    let formattedExitCodeMessage: string | null = null;
+    let finalCombinedOutput = '';
 
     try {
       response = await container.exec(command, {
@@ -585,19 +665,34 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
         cleanedStdout = cleanedStdoutFinal;
         cleanedStderr = cleanedStderrFinal;
         exitCode = response.exitCode;
-        if (truncated) {
-          terminalStatus = 'truncated';
-        } else if (terminalStatus !== 'timeout' && terminalStatus !== 'idle_timeout') {
-          terminalStatus = response.exitCode === 0 ? 'success' : 'error';
+        if (terminalStatus !== 'timeout' && terminalStatus !== 'idle_timeout') {
+          if (typeof response.exitCode === 'number' && response.exitCode !== 0) {
+            terminalStatus = 'error';
+          } else if (truncated) {
+            terminalStatus = 'truncated';
+          } else {
+            terminalStatus = 'success';
+          }
         }
       }
 
+      finalCombinedOutput = getCombinedOutput();
+
+      const ensureTruncationMessageIncludesPath = (path: string) => {
+        if (!path) return;
+        if (truncationMessage?.includes(path)) return;
+        if (truncationMessage) {
+          truncationMessage = `${truncationMessage} Full output saved to ${path}.`;
+        } else {
+          truncationMessage = `Full output saved to ${path}.`;
+        }
+      };
+
       if (truncated) {
-        const combined = getCombinedOutput();
-        if (combined.length > 0) {
+        if (finalCombinedOutput.length > 0 && !savedPath) {
           try {
             const file = `${randomUUID()}.txt`;
-            savedPath = await this.saveOversizedOutputInContainer(container, file, combined);
+            savedPath = await this.saveOversizedOutputInContainer(container, file, finalCombinedOutput);
           } catch (saveErr) {
             this.logger.warn('ShellCommandTool failed to persist truncated output', {
               eventId: options.eventId,
@@ -616,7 +711,39 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
           }
         }
         if (savedPath) {
-          truncationMessage = `${truncationMessage} Full output saved to ${savedPath}.`;
+          ensureTruncationMessageIncludesPath(savedPath);
+        }
+      }
+
+      if (typeof exitCode === 'number' && exitCode !== 0) {
+        try {
+          const result = await this.formatExitCodeErrorMessage({
+            exitCode,
+            combinedOutput: finalCombinedOutput,
+            limit: outputLimit,
+            container,
+            savedPath,
+            truncationMessage: truncationMessage ?? undefined,
+          });
+          formattedExitCodeMessage = result.message;
+          if (result.savedPath && !savedPath) {
+            savedPath = result.savedPath;
+            ensureTruncationMessageIncludesPath(result.savedPath);
+          } else if (result.savedPath) {
+            ensureTruncationMessageIncludesPath(result.savedPath);
+          }
+          if (!truncationMessage && result.truncationMessage) {
+            truncationMessage = result.truncationMessage;
+            if (result.savedPath) {
+              ensureTruncationMessageIncludesPath(result.savedPath);
+            }
+          }
+        } catch (formatErr) {
+          this.logger.warn('ShellCommandTool failed to format exit code error', {
+            eventId: options.eventId,
+            error: formatErr,
+          });
+          formattedExitCodeMessage = `[exit code ${exitCode}]`;
         }
       }
 
@@ -647,11 +774,15 @@ export class ShellCommandTool extends FunctionTool<typeof bashCommandSchema> {
       throw execError;
     }
 
+    if (formattedExitCodeMessage) {
+      return formattedExitCodeMessage;
+    }
+
     if (terminalStatus === 'truncated') {
       return truncationMessage ?? (savedPath ? `Output truncated. Full output saved to ${savedPath}.` : 'Output truncated.');
     }
 
-    return getCombinedOutput();
+    return finalCombinedOutput;
   }
 
   private isConnectionInterruption(err: unknown): boolean {
