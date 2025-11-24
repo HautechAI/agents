@@ -1,16 +1,33 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThreadTreeNode } from '../ThreadTreeNode';
 import type { ThreadNode } from '@/api/types/agents';
 
-vi.mock('@/api/modules/threads', () => ({
-  threads: {
-    children: vi.fn().mockResolvedValue({ items: [] }),
-    patchStatus: vi.fn().mockResolvedValue(undefined),
-  },
+const useThreadChildren = vi.fn();
+const useToggleThreadStatus = vi.fn();
+
+vi.mock('@/api/hooks/threads', () => ({
+  useThreadChildren,
+  useToggleThreadStatus,
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  const refetch = vi.fn().mockResolvedValue({});
+  useThreadChildren.mockReturnValue({
+    data: { items: [] },
+    isLoading: false,
+    isFetching: false,
+    error: null,
+    refetch,
+  });
+  useToggleThreadStatus.mockReturnValue({
+    mutateAsync: vi.fn().mockResolvedValue(undefined),
+    isPending: false,
+  });
+});
 
 const baseNode: ThreadNode = {
   id: 'thread-1',

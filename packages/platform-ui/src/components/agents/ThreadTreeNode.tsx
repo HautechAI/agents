@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { ThreadStatusFilter } from './ThreadStatusFilterSwitch';
-import { threads } from '@/api/modules/threads';
+import { useThreadChildren, useToggleThreadStatus } from '@/api/hooks/threads';
 import type { ThreadNode } from '@/api/types/agents';
 
 export function ThreadTreeNode({
@@ -22,10 +22,13 @@ export function ThreadTreeNode({
   onSelectedNodeChange?: (node: ThreadNode) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [children, setChildren] = useState<ThreadNode[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toggling, setToggling] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const childrenQuery = useThreadChildren(node.id, statusFilter, { enabled: expanded });
+  const children = childrenQuery.data?.items ?? [];
+  const childrenError =
+    childrenQuery.error instanceof Error ? childrenQuery.error.message : childrenQuery.error ? String(childrenQuery.error) : null;
+  const toggleMutation = useToggleThreadStatus(node.id, (node.status ?? 'open') as 'open' | 'closed');
+  const toggling = toggleMutation.isPending;
 
   const summary = node.summary && node.summary.trim().length > 0 ? node.summary.trim() : '(no summary yet)';
   const agentTitle = node.agentTitle && node.agentTitle.trim().length > 0 ? node.agentTitle.trim() : '(unknown agent)';
@@ -40,36 +43,15 @@ export function ThreadTreeNode({
     if (isSelected) onSelectedNodeChange?.(node);
   }, [isSelected, node, onSelectedNodeChange]);
 
-  async function loadChildren() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await threads.children(node.id, statusFilter);
-      setChildren(res.items || []);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load children';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function toggleStatus() {
-    setToggling(true);
-    setError(null);
+    setToggleError(null);
     try {
-      const next = (node.status || 'open') === 'open' ? 'closed' : 'open';
-      await threads.patchStatus(node.id, next);
-      // status updated server-side; refresh UI via refetches below
-      // Refresh children list if visible to apply filter
-      if (expanded) await loadChildren();
-      // Allow parent to refresh roots if provided
+      await toggleMutation.mutateAsync();
+      if (expanded) await childrenQuery.refetch();
       invalidateSiblingCache?.();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to update status';
-      setError(msg);
-    } finally {
-      setToggling(false);
+      setToggleError(msg);
     }
   }
 
@@ -118,10 +100,9 @@ export function ThreadTreeNode({
               className={toggleButtonClasses}
               aria-label={expanded ? 'Collapse' : 'Expand'}
               aria-controls={expanded ? childrenGroupId : undefined}
-              onClick={async () => {
+              onClick={() => {
                 const next = !expanded;
                 setExpanded(next);
-                if (next && children == null) await loadChildren();
               }}
             >
               <ChevronDown className={toggleIconClasses} />
@@ -141,20 +122,25 @@ export function ThreadTreeNode({
             </button>
           </div>
         )}
+        {showFooter && toggleError && (
+          <div className="mt-1 text-xs text-destructive" role="alert">
+            {toggleError}
+          </div>
+        )}
       </div>
       {expanded && (
         <ul
           id={childrenGroupId}
           role="group"
           className="ml-6 mt-1 space-y-1 border-l pl-2"
-          aria-busy={loading}
+          aria-busy={childrenQuery.isFetching}
         >
-          {loading && <li className="text-xs text-muted-foreground">Loading…</li>}
-          {error && <li className="text-xs text-destructive" role="alert">{error}</li>}
-          {!loading && !error && children && children.length === 0 && (
+          {childrenQuery.isLoading && <li className="text-xs text-muted-foreground">Loading…</li>}
+          {childrenError && <li className="text-xs text-destructive" role="alert">{childrenError}</li>}
+          {!childrenQuery.isLoading && !childrenError && children.length === 0 && (
             <li className="text-xs text-muted-foreground">No children</li>
           )}
-          {!loading && !error && (children || []).map((c) => (
+          {!childrenQuery.isLoading && !childrenError && children.map((c) => (
             <ThreadTreeNode
               key={c.id}
               node={c}

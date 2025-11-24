@@ -16,9 +16,10 @@ export function useThreadRoots(status: 'open' | 'closed' | 'all') {
   });
 }
 
-export function useThreadChildren(id: string | undefined, status: 'open' | 'closed' | 'all') {
+export function useThreadChildren(id: string | undefined, status: 'open' | 'closed' | 'all', options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? !!id;
   return useQuery({
-    enabled: !!id,
+    enabled: enabled && !!id,
     queryKey: ['agents', 'threads', id, 'children', status],
     queryFn: () => threads.children(id as string, status),
   });
