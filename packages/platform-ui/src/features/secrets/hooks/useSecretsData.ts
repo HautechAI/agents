@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import axios from 'axios';
 import { useQuery } from '@tanstack/react-query';
 import type { PersistedGraph } from '@agyn/shared';
 import * as api from '@/api/modules/graph';
@@ -35,6 +36,18 @@ async function discoverVaultKeys(mounts: string[]): Promise<SecretKey[]> {
   return keyLists.flat();
 }
 
+class VaultReadHydrationError extends Error {
+  readonly failureCount: number;
+  readonly partialValues: Map<string, string>;
+
+  constructor(failureCount: number, partialValues: Map<string, string>) {
+    super(`vault-read-failure:${failureCount}`);
+    this.name = 'VaultReadHydrationError';
+    this.failureCount = failureCount;
+    this.partialValues = partialValues;
+  }
+}
+
 export interface SecretsData {
   secrets: ScreenSecret[];
   entries: SecretEntry[];
@@ -43,7 +56,8 @@ export interface SecretsData {
   isLoading: boolean;
   vaultUnavailable: boolean;
   mounts: string[];
-  valueReadErrors: string[];
+  valuesIsError: boolean;
+  valuesError: unknown;
   graphError: unknown;
   mountsError: unknown;
   discoveryError: unknown;
@@ -87,46 +101,59 @@ export function useSecretsData(): SecretsData {
   const valuesQuery = useQuery({
     queryKey: ['vault', 'values', presentEntries.map((entry) => toId(entry))],
     queryFn: async () => {
-      const results = await Promise.all(
+      const settled = await Promise.allSettled(
         presentEntries.map(async (entry) => {
-          const id = toId(entry);
-          try {
-            const res = await api.graph.readVaultKey(entry.mount, entry.path, entry.key);
-            return { id, value: res.value ?? '' } as const;
-          } catch (_error) {
-            return { id, error: true } as const;
-          }
+          const res = await api.graph.readVaultKey(entry.mount, entry.path, entry.key);
+          return { id: toId(entry), value: res.value ?? '' } as const;
         }),
       );
 
       const values = new Map<string, string>();
-      const errors: string[] = [];
-      for (const result of results) {
-        if ('error' in result) {
-          errors.push(result.id);
-        } else {
-          values.set(result.id, result.value);
+      let failureCount = 0;
+
+      for (const result of settled) {
+        if (result.status === 'fulfilled') {
+          values.set(result.value.id, result.value.value);
+          continue;
         }
+
+        const reason = result.reason;
+        if (axios.isAxiosError(reason) && reason.response?.status === 404) {
+          continue;
+        }
+
+        failureCount += 1;
       }
 
-      return { values, errors };
+      if (failureCount > 0) {
+        throw new VaultReadHydrationError(failureCount, values);
+      }
+
+      return values;
     },
     enabled: presentEntries.length > 0,
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
+  const valuesMap = useMemo(() => {
+    if (valuesQuery.data) return valuesQuery.data;
+    const error = valuesQuery.error;
+    if (error instanceof VaultReadHydrationError) {
+      return error.partialValues;
+    }
+    return undefined;
+  }, [valuesQuery.data, valuesQuery.error]);
+
   const secrets = useMemo(() => {
-    const valuesData = valuesQuery.data;
-    const valuesMap = valuesData?.values;
+    const map = valuesMap;
     return entries.map((entry) => {
       const secret = mapEntryToScreenSecret(entry);
       if (!entry.present) return secret;
-      const value = valuesMap?.get(toId(entry)) ?? '';
+      const value = map?.get(toId(entry)) ?? '';
       return { ...secret, value };
     });
-  }, [entries, valuesQuery.data]);
-
-  const valueReadErrors = valuesQuery.data?.errors ?? [];
+  }, [entries, valuesMap]);
 
   const missingCount = useMemo(() => entries.filter((entry) => entry.required && !entry.present).length, [entries]);
   const requiredCount = requiredKeys.length;
@@ -151,7 +178,8 @@ export function useSecretsData(): SecretsData {
     isLoading,
     vaultUnavailable,
     mounts,
-    valueReadErrors,
+    valuesIsError: valuesQuery.isError,
+    valuesError: valuesQuery.error,
     graphError: graphQuery.error,
     mountsError: mountsQuery.error,
     discoveryError: discoveryQuery.error,

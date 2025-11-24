@@ -258,6 +258,49 @@ describe('Settings/Secrets page', () => {
     );
 
     await screen.findByText('secret/github/GH_TOKEN');
-    await screen.findByText('Failed to read 1 secret value(s). Showing placeholders.');
+    await screen.findByText('Vault error: failed to read one or more secret values. Showing placeholders.');
+  });
+
+  it('treats 404 value reads as placeholders without showing a warning', async () => {
+    server.use(
+      http.get(abs('/api/graph'), () =>
+        HttpResponse.json({
+          name: 'g',
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          nodes: [
+            { id: 'n1', template: 'githubCloneRepoTool', config: { token: { value: 'secret/github/GH_TOKEN', source: 'vault' } } },
+          ],
+          edges: [],
+        }),
+      ),
+    );
+    server.use(
+      http.get(abs('/api/vault/mounts'), () => HttpResponse.json({ items: ['secret'] })),
+      http.get(abs('/api/vault/kv/:mount/paths'), () => HttpResponse.json({ items: ['github'] })),
+      http.get(abs('/api/vault/kv/:mount/keys'), () => HttpResponse.json({ items: ['GH_TOKEN'] })),
+      http.get(abs('/api/vault/kv/:mount/read'), () => HttpResponse.json({ message: 'not found' }, { status: 404 })),
+    );
+
+    render(
+      <TestProviders>
+        <SettingsSecrets />
+      </TestProviders>,
+    );
+
+    const secretCell = await screen.findByText('secret/github/GH_TOKEN');
+    const secretRow = secretCell.closest('tr');
+    expect(secretRow).not.toBeNull();
+
+    expect(
+      screen.queryByText('Vault error: failed to read one or more secret values. Showing placeholders.'),
+    ).not.toBeInTheDocument();
+
+    const valueCell = within(secretRow as HTMLTableRowElement).getAllByRole('cell')[1];
+    expect(valueCell.textContent?.trim()).toBe('');
+
+    const unmaskButton = within(secretRow as HTMLTableRowElement).getByRole('button', { name: 'Unmask' });
+    fireEvent.click(unmaskButton);
+    await waitFor(() => expect(valueCell.textContent?.trim()).toBe(''));
   });
 });

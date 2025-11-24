@@ -56,7 +56,8 @@ describe('useSecretsData', () => {
 
     expect(result.current.secrets).toHaveLength(1);
     expect(result.current.secrets[0]).toMatchObject({ value: 'gh-secret' });
-    expect(result.current.valueReadErrors).toEqual([]);
+    expect(result.current.valuesIsError).toBe(false);
+    expect(result.current.valuesError).toBeNull();
     expect(result.current.missingCount).toBe(0);
     expect(result.current.requiredCount).toBe(1);
     expect(result.current.vaultUnavailable).toBe(false);
@@ -84,11 +85,16 @@ describe('useSecretsData', () => {
       required: true,
       present: false,
     });
-    expect(result.current.valueReadErrors).toEqual([]);
+    expect(result.current.valuesIsError).toBe(false);
+    expect(result.current.valuesError).toBeNull();
   });
 
-  it('records read failures and leaves values empty', async () => {
-    graphMocks.readVaultKey.mockRejectedValueOnce(new Error('read failed'));
+  it('treats 404 reads as missing values without surfacing an error', async () => {
+    const notFoundError = Object.assign(new Error('not found'), {
+      isAxiosError: true,
+      response: { status: 404 },
+    });
+    graphMocks.readVaultKey.mockRejectedValueOnce(notFoundError);
 
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
@@ -100,6 +106,29 @@ describe('useSecretsData', () => {
 
     expect(result.current.secrets).toHaveLength(1);
     expect(result.current.secrets[0]).toMatchObject({ value: '' });
-    expect(result.current.valueReadErrors).toEqual(['secret::github::TOKEN']);
+    expect(result.current.valuesIsError).toBe(false);
+    expect(result.current.valuesError).toBeNull();
+  });
+
+  it('surfaces non-404 read failures while leaving placeholders', async () => {
+    const serverError = Object.assign(new Error('read failed'), {
+      isAxiosError: true,
+      response: { status: 500 },
+    });
+    graphMocks.readVaultKey.mockRejectedValueOnce(serverError);
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useSecretsData(), { wrapper });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.secrets).toHaveLength(1);
+    expect(result.current.secrets[0]).toMatchObject({ value: '' });
+    expect(result.current.valuesIsError).toBe(true);
+    expect(result.current.valuesError).toBeInstanceOf(Error);
+    expect((result.current.valuesError as Error).message).toBe('vault-read-failure:1');
   });
 });

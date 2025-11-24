@@ -37,13 +37,13 @@ export function SettingsSecretsContainer() {
       messages.push('Vault not configured/unavailable. Showing graph-required secrets only.');
     }
 
-    if (secretsData.valueReadErrors.length > 0) {
-      messages.push(`Failed to read ${secretsData.valueReadErrors.length} secret value(s). Showing placeholders.`);
+    if (secretsData.valuesIsError) {
+      messages.push('Vault error: failed to read one or more secret values. Showing placeholders.');
     }
 
     if (messages.length === 0) return null;
     return messages.join(' ');
-  }, [secretsData.discoveryError, secretsData.vaultUnavailable, secretsData.valueReadErrors]);
+  }, [secretsData.discoveryError, secretsData.vaultUnavailable, secretsData.valuesIsError]);
 
   const persistSecret = useCallback(
     async (keyPath: string, rawValue: string) => {
