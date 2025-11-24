@@ -88,11 +88,11 @@ export function RunEventsList({
     }
   };
 
-  const getEventSubtitle = () => {
+  const getEventSubtitle = (_event: RunEvent) => {
     return null;
   };
 
-  const renderEventItem = (index: number, event: RunEvent) => {
+  const renderEventItem = (_index: number, event: RunEvent) => {
     const subtitle = getEventSubtitle(event);
     const isSelected = selectedEventId === event.id;
     

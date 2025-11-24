@@ -7,7 +7,7 @@ import NodePropertiesSidebar from '../NodePropertiesSidebar';
 import EmptySelectionSidebar from '../EmptySelectionSidebar';
 import { IconButton } from '../IconButton';
 import { GraphCanvas, type GraphCanvasDropContext, type GraphNodeData } from '../GraphCanvas';
-import type { NodeKind, NodeStatus } from '../Node';
+import type { NodeKind } from '../Node';
 import type { SavingStatus } from '../SavingStatusControl';
 
 const nodeKindToColor: Record<NodeKind, string> = {
@@ -17,6 +17,14 @@ const nodeKindToColor: Record<NodeKind, string> = {
   MCP: 'var(--agyn-cyan)',
   Workspace: 'var(--agyn-purple)',
 };
+
+type NodeStatus =
+  | 'not_ready'
+  | 'provisioning'
+  | 'ready'
+  | 'deprovisioning'
+  | 'provisioning_error'
+  | 'deprovisioning_error';
 
 function GradientEdge(props: EdgeProps<Edge>) {
   const [edgePath] = getBezierPath(props);

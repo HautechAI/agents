@@ -165,7 +165,6 @@ export default function ThreadsScreen({
                       runs={runs} 
                       className="h-full rounded-none border-none"
                       collapsed={isRunsInfoCollapsed}
-                      onCollapsedChange={setIsRunsInfoCollapsed}
                     />
                   </div>
 

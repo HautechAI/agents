@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
-import type { CodeProps } from 'react-markdown/lib/ast-to-react';
+import type { ComponentPropsWithoutRef } from 'react';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -9,6 +9,11 @@ interface MarkdownContentProps {
   content: string;
   className?: string;
 }
+
+type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & {
+  inline?: boolean;
+  node?: unknown;
+};
 
 export function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
   const markdownComponents: Components = {
@@ -69,7 +74,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
     ),
 
     // Inline code
-    code: ({ inline, className: codeClassName, children, ...props }: CodeProps) => {
+    code: ({ inline, className: codeClassName, children, style, node: _node, ...props }: MarkdownCodeProps) => {
       const match = /language-(\w+)/.exec(codeClassName || '');
       const text = String(children).replace(/\n$/, '');
 
@@ -100,6 +105,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       ) : (
         <code
           className="bg-[var(--agyn-bg-light)] text-[var(--agyn-purple)] px-1.5 py-0.5 rounded text-sm break-all"
+          style={style}
           {...props}
         >
           {children}

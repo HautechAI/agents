@@ -6,7 +6,8 @@ export interface AutocompleteOption {
   label: string;
 }
 
-interface AutocompleteInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'onChange'> {
+interface AutocompleteInputProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'onChange' | 'onSelect'> {
   label?: string;
   error?: string;
   helperText?: string;
@@ -46,7 +47,7 @@ export function AutocompleteInput({
   const [hasInteracted, setHasInteracted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout>();
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const paddingClasses = size === 'sm' ? 'px-3 py-2' : 'px-4 py-3';
   const heightClasses = size === 'sm' ? 'h-10' : 'h-auto';
@@ -102,6 +103,7 @@ export function AutocompleteInput({
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
   }, [value, fetchOptions, debounceMs, minChars, hasInteracted]);

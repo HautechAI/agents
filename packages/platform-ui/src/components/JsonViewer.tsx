@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
 interface JsonViewerProps {
@@ -51,7 +51,7 @@ export function JsonViewer({ data, className = '' }: JsonViewerProps) {
     return false;
   };
 
-  const renderValue = (value: unknown, path: string, depth = 0): JSX.Element => {
+  const renderValue = (value: unknown, path: string, depth = 0): ReactNode => {
     const indent = depth * 16;
 
     if (value === null) {

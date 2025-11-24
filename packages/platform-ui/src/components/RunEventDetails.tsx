@@ -364,9 +364,9 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
         if (reasoningTokens !== undefined) {
           if (reasoningTokens < 50) return 'secondary';
           if (reasoningTokens < 150) return 'default';
-          return 'destructive';
+          return 'error';
         }
-        return 'outline';
+        return 'neutral';
       };
 
       const additionalKwargs = isRecord(message.additional_kwargs) ? message.additional_kwargs : undefined;
