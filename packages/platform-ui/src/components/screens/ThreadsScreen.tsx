@@ -1,19 +1,15 @@
 import { useState } from 'react';
-import { ArrowLeft, Play, Container, Bell, Send, PanelRightClose, PanelRight } from 'lucide-react';
+import { Play, Container, Bell, Send, PanelRightClose, PanelRight } from 'lucide-react';
 import { IconButton } from '../IconButton';
 import { ThreadsList } from '../ThreadsList';
-import { Thread } from '../ThreadItem';
+import type { Thread } from '../ThreadItem';
 import { SegmentedControl } from '../SegmentedControl';
-import { Conversation, Run } from '../Conversation';
+import { Conversation, type Run } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { StatusIndicator } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
-import { MainLayout } from '../layouts/MainLayout';
 
 interface ThreadsScreenProps {
-  onBack: () => void;
-  selectedMenuItem?: string;
-  onMenuItemSelect?: (itemId: string) => void;
   threads: Thread[];
   runs: Run[];
   containers: { id: string; name: string; status: 'running' | 'finished' }[];
@@ -21,9 +17,6 @@ interface ThreadsScreenProps {
 }
 
 export default function ThreadsScreen({
-  onBack,
-  selectedMenuItem,
-  onMenuItemSelect,
   threads,
   runs,
   containers,
@@ -46,10 +39,7 @@ export default function ThreadsScreen({
   const selectedThread = (threads ?? []).find((t) => t.id === selectedThreadId);
 
   return (
-  <MainLayout selectedMenuItem={selectedMenuItem} onMenuItemSelect={onMenuItemSelect}>
-    {/* Right Side Content */}
-          {/* Main Content - 2 columns */}
-          <div className="flex-1 min-w-0 flex overflow-hidden">
+    <div className="flex-1 min-w-0 flex overflow-hidden">
             {/* Threads List Column */}
             <div className="w-[360px] border-r border-[var(--agyn-border-subtle)] flex flex-col bg-white">
               {/* Threads List Header - 66px */}
@@ -86,7 +76,7 @@ export default function ThreadsScreen({
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <StatusIndicator status={selectedThread.status as any} size="sm" />
+                          <StatusIndicator status={selectedThread.status as 'running' | 'finished' | 'pending'} size="sm" />
                           <span className="text-xs text-[var(--agyn-gray)]">{selectedThread.agentName}</span>
                           <span className="text-xs text-[var(--agyn-gray)]">•</span>
                           <span className="text-xs text-[var(--agyn-gray)]">{selectedThread.createdAt}</span>
@@ -208,6 +198,5 @@ export default function ThreadsScreen({
               )}
             </div>
           </div>
-      </MainLayout>
   );
 }

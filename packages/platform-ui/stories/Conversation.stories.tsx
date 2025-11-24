@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Conversation, type Run, type QueuedMessageData, type ReminderData } from '../src/components/Conversation';
+import { type Status } from '../src/components/StatusIndicator';
 import { AutosizeTextarea } from '../src/components/AutosizeTextarea';
 import { IconButton } from '../src/components/IconButton';
 import { Button } from '../src/components/Button';

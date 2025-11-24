@@ -1,65 +1,24 @@
 import { useState } from 'react';
 import { 
-  ChevronDown, 
   ChevronRight,
-  Network,
-  GitBranch,
-  MessageSquare,
-  Bell,
-  Activity,
-  Container,
-  HardDrive,
-  Settings,
-  Key,
-  Variable,
   User
 } from 'lucide-react';
 
-interface MenuItem {
+export interface MenuItem {
   id: string;
   label: string;
   icon: React.ReactNode;
   items?: SubMenuItem[];
 }
 
-interface SubMenuItem {
+export interface SubMenuItem {
   id: string;
   label: string;
   icon: React.ReactNode;
 }
 
-const menuItems: MenuItem[] = [
-  {
-    id: 'agents',
-    label: 'Agents',
-    icon: <Network className="w-5 h-5" />,
-    items: [
-      { id: 'graph', label: 'Graph', icon: <GitBranch className="w-4 h-4" /> },
-      { id: 'threads', label: 'Threads', icon: <MessageSquare className="w-4 h-4" /> },
-      { id: 'reminders', label: 'Reminders', icon: <Bell className="w-4 h-4" /> },
-    ],
-  },
-  {
-    id: 'monitoring',
-    label: 'Monitoring',
-    icon: <Activity className="w-5 h-5" />,
-    items: [
-      { id: 'containers', label: 'Containers', icon: <Container className="w-4 h-4" /> },
-      { id: 'resources', label: 'Resources', icon: <HardDrive className="w-4 h-4" /> },
-    ],
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    icon: <Settings className="w-5 h-5" />,
-    items: [
-      { id: 'secrets', label: 'Secrets', icon: <Key className="w-4 h-4" /> },
-      { id: 'variables', label: 'Variables', icon: <Variable className="w-4 h-4" /> },
-    ],
-  },
-];
-
 interface SidebarProps {
+  menuItems: MenuItem[];
   currentUser?: {
     name: string;
     email: string;
@@ -70,6 +29,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ 
+  menuItems,
   currentUser = { name: 'John Doe', email: 'john@agyn.io' },
   selectedMenuItem = 'graph',
   onMenuItemSelect

@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import SecretsScreen, { type Secret } from '../src/components/screens/SecretsScreen';
-import { MainLayout } from '../src/components/layouts/MainLayout';
+import { withMainLayout } from './decorators/withMainLayout';
 
 const meta: Meta<typeof SecretsScreen> = {
   title: 'Screens/Secrets',
   component: SecretsScreen,
+  decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -41,23 +42,19 @@ const manySecrets: Secret[] = Array.from({ length: 75 }).map((_, index) => {
 });
 
 export const Default: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="secrets">
-      <SecretsScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     secrets: sampleSecrets,
+  },
+  parameters: {
+    selectedMenuItem: 'secrets',
   },
 };
 
 export const ManySecretsPagination: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="secrets">
-      <SecretsScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     secrets: manySecrets,
+  },
+  parameters: {
+    selectedMenuItem: 'secrets',
   },
 };

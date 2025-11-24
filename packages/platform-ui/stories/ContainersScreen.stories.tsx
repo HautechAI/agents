@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import ContainersScreen, { type Container } from '../src/components/screens/ContainersScreen';
-import { MainLayout } from '../src/components/layouts/MainLayout';
+import { withMainLayout } from './decorators/withMainLayout';
 
 const meta: Meta<typeof ContainersScreen> = {
   title: 'Screens/Containers',
   component: ContainersScreen,
+  decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -80,23 +81,19 @@ const manyContainers: Container[] = Array.from({ length: 65 }).flatMap((_, index
 });
 
 export const Default: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="containers">
-      <ContainersScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     containers: sampleContainers,
+  },
+  parameters: {
+    selectedMenuItem: 'containers',
   },
 };
 
 export const ManyContainersPagination: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="containers">
-      <ContainersScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     containers: manyContainers,
+  },
+  parameters: {
+    selectedMenuItem: 'containers',
   },
 };

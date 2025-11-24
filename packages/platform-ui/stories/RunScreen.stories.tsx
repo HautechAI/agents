@@ -1,13 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import RunScreen from '../src/components/screens/RunScreen';
-import { MainLayout } from '../src/components/layouts/MainLayout';
+import { withMainLayout } from './decorators/withMainLayout';
 import type { RunEvent } from '../src/components/RunEventsList';
 import type { EventType } from '../src/components/RunEventDetails';
-import type { Status } from '../src/components/StatusIndicator';
+import { type Status } from '../src/components/StatusIndicator';
 
 const meta: Meta<typeof RunScreen> = {
   title: 'Screens/Run',
   component: RunScreen,
+  decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -112,11 +113,6 @@ const sampleEvents: RunEvent[] = [
 ];
 
 export const Default: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="threads">
-      <RunScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     runId: 'run-001',
     status: 'running' as Status,
@@ -137,5 +133,8 @@ export const Default: Story = {
       total: 800,
     },
     events: sampleEvents,
+  },
+  parameters: {
+    selectedMenuItem: 'threads',
   },
 };

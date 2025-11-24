@@ -2,10 +2,12 @@ import type { Meta, StoryObj } from '@storybook/react';
 import ThreadsScreen from '../src/components/screens/ThreadsScreen';
 import type { Thread } from '../src/components/ThreadItem';
 import type { Run } from '../src/components/Conversation';
+import { withMainLayout } from './decorators/withMainLayout';
 
 const meta: Meta<typeof ThreadsScreen> = {
   title: 'Screens/Threads',
   component: ThreadsScreen,
+  decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -125,5 +127,8 @@ export const Default: Story = {
     runs,
     containers,
     reminders,
+  },
+  parameters: {
+    selectedMenuItem: 'threads',
   },
 };

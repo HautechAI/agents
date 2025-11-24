@@ -1,5 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/react';
-import Sidebar, { MenuItem } from '../src/components/Sidebar';
+import type { Decorator } from '@storybook/react';
+import { MainLayout } from '../../src/components/layouts/MainLayout';
+import type { MenuItem } from '../../src/components/Sidebar';
 import { 
   Network,
   GitBranch,
@@ -44,26 +45,17 @@ const defaultMenuItems: MenuItem[] = [
   },
 ];
 
-const meta: Meta<typeof Sidebar> = {
-  title: 'Layouts/MainLayout/Sidebar',
-  component: Sidebar,
-  parameters: {
-    layout: 'fullscreen',
-    tags: ['autodocs'],
-  },
-};
+export const withMainLayout: Decorator = (Story, context) => {
+  const selectedMenuItem = (context.parameters.selectedMenuItem as string | undefined) || 'graph';
+  const onMenuItemSelect = context.args.onMenuItemSelect as ((itemId: string) => void) | undefined;
 
-export default meta;
-
-type Story = StoryObj<typeof Sidebar>;
-
-export const Playground: Story = {
-  args: {
-    menuItems: defaultMenuItems,
-    currentUser: {
-      name: 'John Developer',
-      email: 'john@agyn.io',
-    },
-    selectedMenuItem: 'graph',
-  },
+  return (
+    <MainLayout 
+      menuItems={defaultMenuItems}
+      selectedMenuItem={selectedMenuItem}
+      onMenuItemSelect={onMenuItemSelect}
+    >
+      <Story />
+    </MainLayout>
+  );
 };

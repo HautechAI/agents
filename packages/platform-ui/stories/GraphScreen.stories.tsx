@@ -1,13 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import GraphScreen from '../src/components/screens/GraphScreen';
-import { MainLayout } from '../src/components/layouts/MainLayout';
+import { withMainLayout } from './decorators/withMainLayout';
 import type { GraphNodeConfig } from '../src/components/screens/GraphScreen';
 import type { SavingStatus } from '../src/components/SavingStatusControl';
 
 const meta: Meta<typeof GraphScreen> = {
   title: 'Screens/Graph',
   component: GraphScreen,
+  decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -19,11 +20,6 @@ export default meta;
 type Story = StoryObj<typeof GraphScreen>;
 
 export const Default: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="graph">
-      <GraphScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     nodes: [
       { id: 'node-1', kind: 'Trigger', title: 'HTTP Trigger', x: 0, y: 0, status: 'ready', data: { method: 'POST' } },
@@ -34,14 +30,12 @@ export const Default: Story = {
       { id: 'node-6', kind: 'Agent', title: 'Claude Agent', x: 640, y: 220, status: 'not_ready', data: { model: 'claude-3' }, avatarSeed: 'ClaudeAgent' },
     ],
   },
+  parameters: {
+    selectedMenuItem: 'graph',
+  },
 };
 
 export const Saving: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="graph">
-      <GraphScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     nodes: [
       { id: 'node-1', kind: 'Trigger', title: 'HTTP Trigger', x: 0, y: 0, status: 'ready', data: { method: 'POST' } },
@@ -56,11 +50,6 @@ export const Saving: Story = {
 };
 
 export const SaveError: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="graph">
-      <GraphScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     nodes: [
       { id: 'node-1', kind: 'Trigger', title: 'HTTP Trigger', x: 0, y: 0, status: 'ready', data: { method: 'POST' } },
@@ -118,13 +107,11 @@ export const Interactive: Story = {
     }, []);
 
     return (
-      <MainLayout selectedMenuItem="graph">
-        <GraphScreen
-          nodes={nodes}
-          savingStatus={savingStatus}
-          onNodeUpdate={handleNodeUpdate}
-        />
-      </MainLayout>
+      <GraphScreen
+        nodes={nodes}
+        savingStatus={savingStatus}
+        onNodeUpdate={handleNodeUpdate}
+      />
     );
   },
 };

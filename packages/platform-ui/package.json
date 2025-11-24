@@ -12,7 +12,8 @@
     "test:e2e": "vitest run e2e/graph-socket.e2e.test.ts",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "test:watch": "vitest",
-    "storybook": "storybook dev -p 6006"
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@agyn/shared": "workspace:*",

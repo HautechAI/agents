@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import RemindersScreen, { Reminder } from '../src/components/screens/RemindersScreen';
+import { withMainLayout } from './decorators/withMainLayout';
 
 const meta: Meta<typeof RemindersScreen> = {
   title: 'Screens/Reminders',
   component: RemindersScreen,
+  decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -35,5 +37,8 @@ const sampleReminders: Reminder[] = [
 export const Default: Story = {
   args: {
     reminders: sampleReminders,
+  },
+  parameters: {
+    selectedMenuItem: 'reminders',
   },
 };

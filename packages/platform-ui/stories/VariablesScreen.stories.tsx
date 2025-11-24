@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import VariablesScreen, { type Variable } from '../src/components/screens/VariablesScreen';
-import { MainLayout } from '../src/components/layouts/MainLayout';
+import { withMainLayout } from './decorators/withMainLayout';
 
 const meta: Meta<typeof VariablesScreen> = {
   title: 'Screens/Variables',
   component: VariablesScreen,
+  decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -41,23 +42,19 @@ const manyVariables: Variable[] = Array.from({ length: 80 }).map((_, index) => {
 });
 
 export const Default: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="variables">
-      <VariablesScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     variables: sampleVariables,
+  },
+  parameters: {
+    selectedMenuItem: 'variables',
   },
 };
 
 export const ManyVariablesPagination: Story = {
-  render: (args) => (
-    <MainLayout selectedMenuItem="variables">
-      <VariablesScreen {...args} />
-    </MainLayout>
-  ),
   args: {
     variables: manyVariables,
+  },
+  parameters: {
+    selectedMenuItem: 'variables',
   },
 };

@@ -1,8 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Clock, Trash2, ExternalLink, Check, X } from 'lucide-react';
-import Sidebar from '../Sidebar';
-import { Button } from '../Button';
-import { IconButton } from '../IconButton';
+import { Trash2, ExternalLink, Check, X } from 'lucide-react';
 import { Badge } from '../Badge';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
@@ -23,27 +20,21 @@ interface RemindersScreenProps {
   onViewThread?: (threadId: string) => void;
   onViewRun?: (runId: string) => void;
   onDeleteReminder?: (reminderId: string) => void;
-  onBack?: () => void;
-  selectedMenuItem?: string;
-  onMenuItemSelect?: (itemId: string) => void;
 }
 
 const ITEMS_PER_PAGE = 20;
 
 export default function RemindersScreen({
-  reminders,
+  reminders = [],
   onViewThread,
   onViewRun,
   onDeleteReminder,
-  onBack,
-  selectedMenuItem,
-  onMenuItemSelect,
 }: RemindersScreenProps) {
   const [statusFilter, setStatusFilter] = useState<ReminderStatus | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
 
   // Filter reminders
-  const filteredReminders = reminders.filter(reminder => {
+  const filteredReminders = (reminders || []).filter(reminder => {
     if (statusFilter === 'all') return true;
     return reminder.status === statusFilter;
   });
@@ -129,25 +120,7 @@ export default function RemindersScreen({
   const cancelledCount = reminders.filter(r => r.status === 'cancelled').length;
 
   return (
-    <div className="h-screen bg-[var(--agyn-bg-light)] flex flex-col">
-      {/* Showcase Navigation - NOT PART OF FINAL SCREEN */}
-      {onBack && (
-        <div className="h-[40px] bg-[var(--agyn-dark)] border-b border-[var(--agyn-border-subtle)] flex items-center px-4 gap-3">
-          <IconButton icon={<ArrowLeft />} onClick={onBack} variant="ghost" size="sm" />
-          <span className="text-sm text-white">Reminders</span>
-        </div>
-      )}
-
-      {/* Main Screen Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <Sidebar 
-          selectedMenuItem={selectedMenuItem}
-          onMenuItemSelect={onMenuItemSelect}
-        />
-
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
           {/* Header */}
           <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-4">
             <h1 className="text-xl font-semibold text-[var(--agyn-dark)]">Reminders</h1>
@@ -383,8 +356,6 @@ export default function RemindersScreen({
               </div>
             </div>
           )}
-        </div>
-      </div>
     </div>
   );
 }
