@@ -4,7 +4,7 @@ import type { PersistedGraph } from '@agyn/shared';
 import * as api from '@/api/modules/graph';
 import { computeRequiredKeys, computeSecretsUnion } from '@/api/modules/graph';
 import type { SecretEntry, SecretKey } from '@/api/modules/graph';
-import { mapEntryToScreenSecret, type ScreenSecret } from '../types';
+import { mapEntryToScreenSecret, toId, type ScreenSecret } from '../types';
 
 async function discoverVaultKeys(mounts: string[]): Promise<SecretKey[]> {
   async function listAllPaths(mount: string, prefix = ''): Promise<string[]> {
@@ -81,12 +81,52 @@ export function useSecretsData(): SecretsData {
     [requiredKeys, discoveryQuery.data],
   );
 
-  const secrets = useMemo(() => entries.map(mapEntryToScreenSecret), [entries]);
+  const presentEntries = useMemo(() => entries.filter((entry) => entry.present), [entries]);
+
+  const valuesQuery = useQuery({
+    queryKey: ['vault', 'values', presentEntries.map((entry) => toId(entry))],
+    queryFn: async () => {
+      const pairs = await Promise.all(
+        presentEntries.map(async (entry) => {
+          try {
+            const res = await api.graph.readVaultKey(entry.mount, entry.path, entry.key);
+            return [toId(entry), res.value] as const;
+          } catch (_error) {
+            return [toId(entry), null] as const;
+          }
+        }),
+      );
+
+      const map = new Map<string, string>();
+      for (const [id, value] of pairs) {
+        if (typeof value === 'string') {
+          map.set(id, value);
+        }
+      }
+      return map;
+    },
+    enabled: presentEntries.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const secrets = useMemo(() => {
+    const valuesMap = valuesQuery.data;
+    return entries.map((entry) => {
+      const secret = mapEntryToScreenSecret(entry);
+      if (!entry.present) return secret;
+      const value = valuesMap?.get(toId(entry)) ?? '';
+      return { ...secret, value };
+    });
+  }, [entries, valuesQuery.data]);
 
   const missingCount = useMemo(() => entries.filter((entry) => entry.required && !entry.present).length, [entries]);
   const requiredCount = requiredKeys.length;
 
-  const isLoading = graphQuery.isLoading || mountsQuery.isLoading || discoveryQuery.isLoading;
+  const isLoading =
+    graphQuery.isLoading ||
+    mountsQuery.isLoading ||
+    discoveryQuery.isLoading ||
+    valuesQuery.isLoading;
 
   const vaultUnavailable = Boolean(
     mountsQuery.isError ||

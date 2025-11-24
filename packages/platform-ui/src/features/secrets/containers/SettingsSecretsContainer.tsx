@@ -20,6 +20,7 @@ async function invalidateVaultQueries(qc: QueryClient, mount: string, path: stri
   await Promise.all([
     qc.invalidateQueries({ queryKey: ['vault', 'keys', mount, path] }),
     qc.invalidateQueries({ queryKey: ['vault', 'discover'] }),
+    qc.invalidateQueries({ queryKey: ['vault', 'values'] }),
   ]);
 }
 

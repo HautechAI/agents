@@ -8,6 +8,7 @@ const graphMocks = vi.hoisted(() => ({
   listVaultMounts: vi.fn(),
   listVaultPaths: vi.fn(),
   listVaultKeys: vi.fn(),
+  readVaultKey: vi.fn(),
 }));
 
 const computeRequiredKeysMock = vi.hoisted(() => vi.fn());
@@ -29,6 +30,7 @@ describe('useSecretsData', () => {
     graphMocks.listVaultMounts.mockResolvedValue({ items: ['secret'] });
     graphMocks.listVaultPaths.mockResolvedValue({ items: ['github'] });
     graphMocks.listVaultKeys.mockResolvedValue({ items: ['TOKEN'] });
+    graphMocks.readVaultKey.mockResolvedValue({ value: 'gh-secret' });
 
     computeRequiredKeysMock.mockReturnValue([{ mount: 'secret', path: 'github', key: 'TOKEN' }]);
     computeSecretsUnionMock.mockImplementation((required, available) =>
@@ -53,6 +55,7 @@ describe('useSecretsData', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.secrets).toHaveLength(1);
+    expect(result.current.secrets[0]).toMatchObject({ value: 'gh-secret' });
     expect(result.current.missingCount).toBe(0);
     expect(result.current.requiredCount).toBe(1);
     expect(result.current.vaultUnavailable).toBe(false);

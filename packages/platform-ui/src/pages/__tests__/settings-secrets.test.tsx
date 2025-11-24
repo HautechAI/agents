@@ -43,6 +43,7 @@ describe('Settings/Secrets page', () => {
     let ghKeys: string[] = [];
     let slackKeys: string[] = [];
     const openaiKeys: string[] = ['API_KEY'];
+    const vaultValues = new Map<string, string>([['secret/openai/API_KEY', 'openai-secret']]);
     server.use(
       http.get(abs('/api/vault/mounts'), () => HttpResponse.json({ items: ['secret'] })),
       http.get(abs('/api/vault/kv/:mount/paths'), ({ request }) => {
@@ -59,10 +60,22 @@ describe('Settings/Secrets page', () => {
         if (path === 'openai') return HttpResponse.json({ items: openaiKeys });
         return HttpResponse.json({ items: [] });
       }),
-      http.post(abs('/api/vault/kv/:mount/write'), async ({ request }) => {
+      http.get(abs('/api/vault/kv/:mount/read'), ({ params, request }) => {
+        const mount = params.mount as string;
+        const url = new URL(request.url);
+        const path = url.searchParams.get('path') || '';
+        const key = url.searchParams.get('key') || '';
+        const keyPath = path ? `${mount}/${path}/${key}` : `${mount}/${key}`;
+        const value = vaultValues.get(keyPath) ?? '';
+        return HttpResponse.json({ value });
+      }),
+      http.post(abs('/api/vault/kv/:mount/write'), async ({ request, params }) => {
         const body = (await request.json()) as { path: string; key: string; value: string };
         if (body.path === 'github') ghKeys = Array.from(new Set([...ghKeys, body.key]));
         if (body.path === 'slack') slackKeys = Array.from(new Set([...slackKeys, body.key]));
+        const mount = params.mount as string;
+        const keyPath = body.path ? `${mount}/${body.path}/${body.key}` : `${mount}/${body.key}`;
+        vaultValues.set(keyPath, body.value);
         return HttpResponse.json({ mount: 'secret', path: body.path, key: body.key, version: Date.now() });
       }),
     );
@@ -134,11 +147,23 @@ describe('Settings/Secrets page', () => {
         }),
       ),
     );
+    const vaultValues = new Map<string, string>([['secret/github/GH_TOKEN', 'existing-secret']]);
     server.use(
       http.get(abs('/api/vault/mounts'), () => HttpResponse.json({ items: ['secret'] })),
       http.get(abs('/api/vault/kv/:mount/paths'), () => HttpResponse.json({ items: ['github'] })),
       http.get(abs('/api/vault/kv/:mount/keys'), () => HttpResponse.json({ items: ['GH_TOKEN'] })),
-      http.post(abs('/api/vault/kv/:mount/write'), () => HttpResponse.json({ mount: 'secret', path: 'github', key: 'GH_TOKEN', version: 1 })),
+      http.get(abs('/api/vault/kv/:mount/read'), ({ params }) => {
+        const mount = params.mount as string;
+        const value = vaultValues.get(`${mount}/github/GH_TOKEN`) ?? '';
+        return HttpResponse.json({ value });
+      }),
+      http.post(abs('/api/vault/kv/:mount/write'), async ({ request, params }) => {
+        const body = (await request.json()) as { path: string; key: string; value: string };
+        const mount = params.mount as string;
+        const keyPath = body.path ? `${mount}/${body.path}/${body.key}` : `${mount}/${body.key}`;
+        vaultValues.set(keyPath, body.value);
+        return HttpResponse.json({ mount: 'secret', path: body.path, key: body.key, version: 1 });
+      }),
     );
 
     render(
@@ -148,47 +173,60 @@ describe('Settings/Secrets page', () => {
     );
 
     await screen.findByText('secret/github/GH_TOKEN');
-    const editButton = await screen.findByRole('button', { name: 'Edit' });
+    const row = screen.getByText('secret/github/GH_TOKEN').closest('tr');
+    expect(row).not.toBeNull();
+    const secretRow = row as HTMLTableRowElement;
+
+    const maskedValue = '•'.repeat('existing-secret'.length);
+    expect(within(secretRow).getByText(maskedValue)).toBeInTheDocument();
+
+    const toggleButton = within(secretRow).getByRole('button', { name: 'Unmask' });
+    fireEvent.click(toggleButton);
+    await within(secretRow).findByText('existing-secret');
+
+    const maskButton = within(secretRow).getByRole('button', { name: 'Mask' });
+    fireEvent.click(maskButton);
+
+    const editButton = within(secretRow).getByRole('button', { name: 'Edit' });
     fireEvent.click(editButton);
 
-    const keyInput = await screen.findByDisplayValue('secret/github/GH_TOKEN');
-    const row = keyInput.closest('tr');
-    expect(row).not.toBeNull();
+    const keyInput = await within(secretRow).findByDisplayValue('secret/github/GH_TOKEN');
+    const valueInput = within(secretRow).getByDisplayValue('existing-secret');
+    expect(valueInput).toHaveValue('existing-secret');
 
-    const inputs = within(row as HTMLTableRowElement).getAllByRole('textbox');
-    const valueInput = inputs.find((input) => input !== keyInput) ?? inputs[inputs.length - 1];
-
-    fireEvent.change(valueInput, { target: { value: 'existing-secret' } });
+    fireEvent.change(valueInput, { target: { value: 'updated-secret' } });
     fireEvent.change(keyInput, { target: { value: 'secret/github/RENAMED' } });
 
     notifyMocks.error.mockClear();
     const notifyErrorSpy = notifyMocks.error;
 
-    const saveButton = within(row as HTMLTableRowElement).getByRole('button', { name: 'Save' });
+    const saveButton = within(secretRow).getByRole('button', { name: 'Save' });
     fireEvent.click(saveButton);
 
     await waitFor(() => expect(notifyErrorSpy).toHaveBeenCalledTimes(1));
     expect(notifyErrorSpy).toHaveBeenNthCalledWith(1, 'Renaming secrets is not supported yet');
 
-    const editButtonAfterError = await screen.findByRole('button', { name: 'Edit' });
+    const editButtonAfterError = await within(secretRow).findByRole('button', { name: 'Edit' });
     fireEvent.click(editButtonAfterError);
 
-    const keyInputAfter = await screen.findByDisplayValue('secret/github/GH_TOKEN');
-    const rowAfter = keyInputAfter.closest('tr');
-    expect(rowAfter).not.toBeNull();
-
-    const inputsAfter = within(rowAfter as HTMLTableRowElement).getAllByRole('textbox');
-    const valueInputAfter = inputsAfter.find((input) => input !== keyInputAfter) ?? inputsAfter[inputsAfter.length - 1];
-
-    const saveButtonAfter = within(rowAfter as HTMLTableRowElement).getByRole('button', { name: 'Save' });
-    expect(saveButtonAfter).toBeDisabled();
+    await within(secretRow).findByDisplayValue('secret/github/GH_TOKEN');
+    const valueInputAfter = within(secretRow).getByDisplayValue('existing-secret');
+    const saveButtonAfter = within(secretRow).getByRole('button', { name: 'Save' });
+    expect(saveButtonAfter).not.toBeDisabled();
     expect(notifyErrorSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(valueInputAfter, { target: { value: '' } });
+    expect(saveButtonAfter).toBeDisabled();
 
     fireEvent.change(valueInputAfter, { target: { value: 'new-value' } });
     expect(saveButtonAfter).not.toBeDisabled();
     fireEvent.click(saveButtonAfter);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument());
+    await within(secretRow).findByRole('button', { name: 'Edit' });
     expect(notifyErrorSpy).toHaveBeenCalledTimes(1);
+
+    const revealButton = within(secretRow).getByRole('button', { name: 'Unmask' });
+    fireEvent.click(revealButton);
+    await within(secretRow).findByText('new-value');
   });
 });
