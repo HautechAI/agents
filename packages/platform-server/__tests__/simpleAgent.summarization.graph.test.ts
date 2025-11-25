@@ -38,6 +38,7 @@ describe('Agent summarization graph', () => {
             beginRunThread: async () => ({ runId: 't' }),
             recordInjected: async () => ({ messageIds: [] }),
             completeRun: async () => {},
+            ensureThreadModel: async (_threadId: string, model: string) => model,
           },
         },
         { provide: RunEventsService, useValue: createRunEventsStub() },

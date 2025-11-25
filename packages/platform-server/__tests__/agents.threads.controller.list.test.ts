@@ -189,4 +189,5 @@ describe('AgentsThreadsController list endpoints', () => {
     const ctrl = await module.resolve(AgentsThreadsController);
     await expect(ctrl.getThread('missing', {} as any)).rejects.toThrowError('thread_not_found');
   });
+
 });

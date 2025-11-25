@@ -105,6 +105,7 @@ describe('AppModule bootstrap smoke test', () => {
       recordInjected: vi.fn().mockResolvedValue({ messageIds: [] }),
       completeRun: vi.fn(),
       resolveThreadId: vi.fn().mockResolvedValue('thread'),
+      ensureThreadModel: vi.fn(async (_threadId: string, model: string) => model),
     } satisfies Partial<AgentsPersistenceService>;
 
     const threadsMetricsStub = {

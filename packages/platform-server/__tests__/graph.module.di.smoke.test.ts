@@ -137,11 +137,12 @@ if (!shouldRunDbTests) {
         getOrCreateThreadByAlias: vi.fn().mockResolvedValue('thread'),
         updateThreadChannelDescriptor: vi.fn(),
         getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('thread-child'),
-      beginRunThread: vi.fn().mockResolvedValue({ runId: 'run' }),
-      recordInjected: vi.fn().mockResolvedValue({ messageIds: [] }),
-      completeRun: vi.fn(),
-      resolveThreadId: vi.fn().mockResolvedValue('thread'),
-    } satisfies Partial<AgentsPersistenceService>;
+        beginRunThread: vi.fn().mockResolvedValue({ runId: 'run' }),
+        recordInjected: vi.fn().mockResolvedValue({ messageIds: [] }),
+        completeRun: vi.fn(),
+        resolveThreadId: vi.fn().mockResolvedValue('thread'),
+        ensureThreadModel: vi.fn(async (_threadId: string, model: string) => model),
+      } satisfies Partial<AgentsPersistenceService>;
 
       const threadsMetricsStub = {
         getThreadsMetrics: vi.fn().mockResolvedValue({}),

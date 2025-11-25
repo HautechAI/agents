@@ -88,6 +88,7 @@ model Thread {
   channelNodeId String? @map("channel_node_id") @db.Uuid
   // Channel descriptor for replying to origin channel
   channel   Json?
+  modelUsed String? @map("model_used")
   createdAt DateTime     @default(now())
 
   runs       Run[]
