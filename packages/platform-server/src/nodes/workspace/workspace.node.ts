@@ -440,7 +440,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     await this.runWorkspaceDiagnosticCommand(container, 'getent hosts ncps', 'ncps host lookup');
     await this.runWorkspaceDiagnosticCommand(
       container,
-      'curl -sS --max-time 3 http://ncps:8501/nix-cache-info',
+      'curl -sSf --max-time 3 http://ncps:8501/nix-cache-info',
       'ncps cache probe',
       { logStdoutSnippet: true },
     );
