@@ -39,6 +39,7 @@ async function createWorkspaceNode(config: Partial<ContainerProviderStaticConfig
     dockerMirrorUrl: undefined,
     ncpsEnabled: false,
     ncpsUrl: undefined,
+    workspaceNetworkName: 'agents_net',
   } as unknown as ConfigService;
 
   const ncpsKeyService = {

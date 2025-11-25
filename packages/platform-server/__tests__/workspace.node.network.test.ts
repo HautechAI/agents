@@ -57,6 +57,7 @@ async function createWorkspaceNodeWithNetwork(
     dockerMirrorUrl: undefined,
     ncpsEnabled: false,
     ncpsUrl: undefined,
+    workspaceNetworkName: 'custom_net',
   } as unknown as ConfigService;
 
   const ncpsKeyService = {
@@ -84,7 +85,7 @@ async function createWorkspaceNodeWithNetwork(
 }
 
 describe('WorkspaceNode network configuration', () => {
-  it('attaches agents_net with sanitized alias', async () => {
+  it('attaches configured network with sanitized alias', async () => {
     const { node, startMock } = await createWorkspaceNodeWithNetwork({});
 
     await node.provide('Thread ABC/123');
@@ -92,7 +93,7 @@ describe('WorkspaceNode network configuration', () => {
     expect(startMock).toHaveBeenCalledTimes(1);
     const startArgs = startMock.mock.calls[0][0];
     expect(startArgs.networkMode).toBeUndefined();
-    expect(startArgs.createExtras?.NetworkingConfig?.EndpointsConfig?.agents_net?.Aliases).toEqual([
+    expect(startArgs.createExtras?.NetworkingConfig?.EndpointsConfig?.custom_net?.Aliases).toEqual([
       'thread-abc-123',
     ]);
   });
@@ -104,7 +105,7 @@ describe('WorkspaceNode network configuration', () => {
 
     expect(startMock).toHaveBeenCalledTimes(1);
     const startArgs = startMock.mock.calls[0][0];
-    const alias = startArgs.createExtras?.NetworkingConfig?.EndpointsConfig?.agents_net?.Aliases?.[0];
+    const alias = startArgs.createExtras?.NetworkingConfig?.EndpointsConfig?.custom_net?.Aliases?.[0];
     expect(alias).toBeDefined();
     expect(alias).toMatch(/^[a-z0-9][a-z0-9_.-]*$/);
   });
@@ -128,9 +129,10 @@ describe('WorkspaceNode network configuration', () => {
     expect(remove).toHaveBeenCalledTimes(1);
     expect(startMock).toHaveBeenCalledTimes(1);
     const shortId = existingHandle.id.substring(0, 12);
-    expect(logger.info).toHaveBeenCalledWith('Recreating workspace to enforce agents_net network', {
+    expect(logger.info).toHaveBeenCalledWith('Recreating workspace to enforce workspace network', {
       containerId: shortId,
       networks: ['bridge'],
+      requiredNetwork: 'custom_net',
     });
   });
 });

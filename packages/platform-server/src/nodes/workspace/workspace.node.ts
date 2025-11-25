@@ -143,6 +143,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       }
     }
     const enableDinD = this.config?.enableDinD ?? false;
+    const networkName = this.configService.workspaceNetworkName;
 
     // Enforce non-reuse on platform mismatch if a platform is requested now
     const requestedPlatform = this.config?.platform ?? DEFAULTS.platform;
@@ -172,11 +173,12 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
           error: err instanceof Error ? err.message : String(err),
         });
       }
-      const attachedToAgentsNet = Array.isArray(networks) && networks.includes('agents_net');
-      if (!attachedToAgentsNet) {
-        this.logger.info('Recreating workspace to enforce agents_net network', {
+      const attachedToNetwork = Array.isArray(networks) && networks.includes(networkName);
+      if (!attachedToNetwork) {
+        this.logger.info('Recreating workspace to enforce workspace network', {
           containerId: container.id.substring(0, 12),
           networks: Array.isArray(networks) ? networks : [],
+          requiredNetwork: networkName,
         });
         if (enableDinD) await this.cleanupDinDSidecars(labels, container.id).catch(() => {});
         await this.stopAndRemoveContainer(container);
@@ -239,7 +241,7 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       const createExtrasNetworking: ContainerOpts['createExtras'] = {
         NetworkingConfig: {
           EndpointsConfig: {
-            agents_net: {
+            [networkName]: {
               Aliases: [networkAlias],
             },
           },

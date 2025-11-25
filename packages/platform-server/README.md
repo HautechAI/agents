@@ -16,7 +16,7 @@ Graph persistence
 
 ## Networking and cache
 
-- Workspace containers automatically join the `agents_net` Docker network with an alias derived from the thread id. This enables name resolution for in-cluster services such as `ncps`—ensure `agents_net` exists on the host.
+- Workspace containers automatically join the Docker network specified by `WORKSPACE_NETWORK_NAME` (default `agents_net`) with an alias derived from the thread id. Ensure this network exists on the host so in-cluster services such as `ncps` resolve.
 - DinD sidecars keep `networkMode=container:<workspaceId>` so the workspace and sidecar share namespaces regardless of the workspace network.
 - Set `NCPS_URL_SERVER` (host-reachable) and `NCPS_URL_CONTAINER` (in-network, e.g., `http://ncps:8501`) together so Nix substituters resolve correctly inside workspaces.
 - When the server injects `NIX_CONFIG`, workspace startup logs the resolved substituters/trusted keys and runs `getent hosts ncps` plus `curl http://ncps:8501/nix-cache-info`, emitting warnings if connectivity fails.
