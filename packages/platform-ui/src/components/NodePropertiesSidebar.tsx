@@ -1,5 +1,5 @@
 import { Info, Play, Square, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { memo, useState, useCallback, useEffect, useMemo } from 'react';
 
 import { Input } from './Input';
 import { Textarea } from './Textarea';
@@ -68,6 +68,24 @@ interface McpToolDescriptor {
   title?: string | null;
   description?: string | null;
 }
+
+type SimpleOption = { value: string; label: string };
+
+const QUEUE_WHEN_BUSY_OPTIONS: SimpleOption[] = [
+  { value: 'wait', label: 'Wait' },
+  { value: 'injectAfterTools', label: 'Inject After Tools' },
+];
+
+const QUEUE_PROCESS_BUFFER_OPTIONS: SimpleOption[] = [
+  { value: 'allTogether', label: 'All Together' },
+  { value: 'oneByOne', label: 'One By One' },
+];
+
+const WORKSPACE_PLATFORM_OPTIONS: SimpleOption[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'linux/amd64', label: 'Linux AMD64' },
+  { value: 'linux/arm64', label: 'Linux ARM64' },
+];
 
 interface NodePropertiesSidebarProps {
   config: NodeConfig;
@@ -326,7 +344,7 @@ function toNumberOrUndefined(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-export default function NodePropertiesSidebar({
+function NodePropertiesSidebarComponent({
   config,
   state,
   onConfigChange,
@@ -429,8 +447,14 @@ export default function NodePropertiesSidebar({
     [setVersionLoading, setPackageResolving],
   );
 
-  const toolList = tools ?? [];
-  const enabledToolSet = enabledTools ? new Set(enabledTools) : new Set(toolList.map((tool) => tool.name));
+  const fallbackTools = useMemo<McpToolDescriptor[]>(() => [], []);
+  const toolList = tools ?? fallbackTools;
+  const enabledToolSet = useMemo(() => {
+    if (enabledTools) {
+      return new Set(enabledTools);
+    }
+    return new Set(toolList.map((tool) => tool.name));
+  }, [enabledTools, toolList]);
 
   const agentModel = typeof configRecord.model === 'string' ? (configRecord.model as string) : '';
   const agentSystemPrompt = typeof configRecord.systemPrompt === 'string' ? (configRecord.systemPrompt as string) : '';
@@ -627,10 +651,7 @@ export default function NodePropertiesSidebar({
                       hint="Behavior when a new message arrives while agent is processing"
                     />
                     <Dropdown
-                      options={[
-                        { value: 'wait', label: 'Wait' },
-                        { value: 'injectAfterTools', label: 'Inject After Tools' },
-                      ]}
+                      options={QUEUE_WHEN_BUSY_OPTIONS}
                       value={queueWhenBusyValue}
                       onValueChange={(value) =>
                         onConfigChange?.(applyQueueUpdate(config, { whenBusy: value as AgentQueueConfig['whenBusy'] }))
@@ -644,10 +665,7 @@ export default function NodePropertiesSidebar({
                       hint="How to process multiple queued messages"
                     />
                     <Dropdown
-                      options={[
-                        { value: 'allTogether', label: 'All Together' },
-                        { value: 'oneByOne', label: 'One By One' },
-                      ]}
+                      options={QUEUE_PROCESS_BUFFER_OPTIONS}
                       value={queueProcessBufferValue}
                       onValueChange={(value) =>
                         onConfigChange?.(
@@ -1024,11 +1042,7 @@ export default function NodePropertiesSidebar({
                   <div>
                     <FieldLabel label="Platform" hint="Target platform for the workspace" />
                     <Dropdown
-                      options={[
-                        { value: 'auto', label: 'Auto' },
-                        { value: 'linux/amd64', label: 'Linux AMD64' },
-                        { value: 'linux/arm64', label: 'Linux ARM64' },
-                      ]}
+                      options={WORKSPACE_PLATFORM_OPTIONS}
                       value={workspacePlatform || 'auto'}
                       onValueChange={(value) => onConfigChange?.({ platform: value })}
                       size="sm"
@@ -1333,3 +1347,5 @@ export default function NodePropertiesSidebar({
     </div>
   );
 }
+
+export default memo(NodePropertiesSidebarComponent);

@@ -165,6 +165,9 @@ export function GraphLayout({ services }: GraphLayoutProps) {
   const vaultMountsPromiseRef = useRef<Promise<string[]> | null>(null);
   const variableKeysRef = useRef<string[]>([]);
   const variableKeysPromiseRef = useRef<Promise<string[]> | null>(null);
+  const updateNodeRef = useRef(updateNode);
+  const setEdgesRef = useRef(setEdges);
+  const nodesRef = useRef(nodes);
 
   const ensureVaultMounts = useCallback(async (): Promise<string[]> => {
     if (vaultMountsRef.current) {
@@ -346,6 +349,18 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     [ensureVaultMounts, services],
   );
 
+  useEffect(() => {
+    updateNodeRef.current = updateNode;
+  }, [updateNode]);
+
+  useEffect(() => {
+    setEdgesRef.current = setEdges;
+  }, [setEdges]);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
   const nodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
 
   useGraphSocket({
@@ -366,7 +381,8 @@ export function GraphLayout({ services }: GraphLayoutProps) {
   const flowNodesRef = useRef<FlowNode[]>([]);
   const flowEdgesRef = useRef<FlowEdge[]>([]);
 
-  const edgeTypeMap = useMemo<EdgeTypes>(() => ({ gradient: GradientEdge }), []);
+  const edgeTypes = useMemo<EdgeTypes>(() => ({ gradient: GradientEdge }), []);
+  const fallbackEnabledTools = useMemo<string[]>(() => [], []);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -384,21 +400,74 @@ export function GraphLayout({ services }: GraphLayoutProps) {
   }, [nodes]);
 
   useEffect(() => {
-    setFlowNodes((prev) =>
-      nodes.map((node) => {
-        const existing = prev.find((item) => item.id === node.id);
-        const base = toFlowNode(node);
-        if (existing) {
-          base.position = existing.position;
-          base.selected = existing.selected;
+    setFlowNodes((prev) => {
+      const prevById = new Map(prev.map((item) => [item.id, item] as const));
+      let changed = prev.length !== nodes.length;
+      const next: FlowNode[] = nodes.map((node, index) => {
+        const existing = prevById.get(node.id);
+        if (!existing) {
+          changed = true;
+          return toFlowNode(node);
         }
-        return base;
-      }),
-    );
+        const basePosition = existing.position ?? { x: node.x, y: node.y };
+        const dataMatches =
+          existing.data.kind === node.kind &&
+          existing.data.title === node.title &&
+          existing.data.avatarSeed === node.avatarSeed &&
+          existing.data.inputs === node.ports.inputs &&
+          existing.data.outputs === node.ports.outputs;
+        const positionMatches =
+          existing.position?.x === basePosition.x && existing.position?.y === basePosition.y;
+        let nextNode = existing;
+        if (!dataMatches) {
+          nextNode = {
+            ...existing,
+            data: {
+              kind: node.kind,
+              title: node.title,
+              inputs: node.ports.inputs,
+              outputs: node.ports.outputs,
+              avatarSeed: node.avatarSeed,
+            },
+          } satisfies FlowNode;
+        }
+        if (!positionMatches) {
+          nextNode = {
+            ...nextNode,
+            position: basePosition,
+          } satisfies FlowNode;
+        }
+        if (nextNode !== existing) {
+          changed = true;
+        }
+        if (!changed && prev[index]?.id !== node.id) {
+          changed = true;
+        }
+        return nextNode;
+      });
+      if (!changed) {
+        return prev;
+      }
+      return next;
+    });
   }, [nodes]);
 
   useEffect(() => {
-    setFlowNodes((prev) => prev.map((node) => ({ ...node, selected: node.id === selectedNodeId })));
+    setFlowNodes((prev) => {
+      let changed = false;
+      const next = prev.map((node) => {
+        const shouldSelect = node.id === selectedNodeId;
+        if (node.selected === shouldSelect) {
+          return node;
+        }
+        changed = true;
+        return { ...node, selected: shouldSelect };
+      });
+      if (!changed) {
+        return prev;
+      }
+      return next;
+    });
   }, [selectedNodeId]);
 
   useEffect(() => {
@@ -406,14 +475,50 @@ export function GraphLayout({ services }: GraphLayoutProps) {
   }, [flowNodes]);
 
   useEffect(() => {
-    const nodeMap = new Map(nodes.map((node) => [node.id, node] as const));
-    const nextEdges = edges.map((edge) => {
-      const sourceNode = nodeMap.get(edge.source);
-      const targetNode = nodeMap.get(edge.target);
-      return toFlowEdge(edge, makeEdgeData(sourceNode, targetNode));
+    setFlowEdges((prev) => {
+      const nodeMap = new Map(nodes.map((node) => [node.id, node] as const));
+      const nextEdges = edges.map((edge) => {
+        const sourceNode = nodeMap.get(edge.source);
+        const targetNode = nodeMap.get(edge.target);
+        return toFlowEdge(edge, makeEdgeData(sourceNode, targetNode));
+      });
+      const prevLength = prev.length;
+      if (prevLength === nextEdges.length) {
+        let changed = false;
+        for (let index = 0; index < prevLength; index += 1) {
+          const prevEdge = prev[index];
+          const nextEdge = nextEdges[index];
+          if (prevEdge.id !== nextEdge.id) {
+            changed = true;
+            break;
+          }
+          const prevData = prevEdge.data;
+          const nextData = nextEdge.data;
+          if (prevData === nextData) {
+            continue;
+          }
+          if (!prevData || !nextData) {
+            changed = true;
+            break;
+          }
+          if (
+            prevData.sourceColor !== nextData.sourceColor ||
+            prevData.targetColor !== nextData.targetColor ||
+            prevData.sourceKind !== nextData.sourceKind ||
+            prevData.targetKind !== nextData.targetKind
+          ) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) {
+          flowEdgesRef.current = prev;
+          return prev;
+        }
+      }
+      flowEdgesRef.current = nextEdges;
+      return nextEdges;
     });
-    flowEdgesRef.current = nextEdges;
-    setFlowEdges(nextEdges);
   }, [edges, nodes]);
 
   const selectedNode = useMemo(
@@ -445,89 +550,81 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     [mcpEnabledTools, mcpNodeId, setMcpEnabledTools],
   );
 
-  const handleNodesChange = useCallback(
-    (changes: Parameters<typeof applyNodeChanges>[0]) => {
-      let nextSelectedId = selectedNodeIdRef.current;
-      for (const change of changes) {
-        if (change.type === 'select' && 'id' in change) {
-          if (change.selected) {
-            nextSelectedId = change.id;
-          } else if (nextSelectedId === change.id) {
-            nextSelectedId = null;
-          }
+  const handleNodesChange = useCallback((changes: Parameters<typeof applyNodeChanges>[0]) => {
+    let nextSelectedId = selectedNodeIdRef.current;
+    for (const change of changes) {
+      if (change.type === 'select' && 'id' in change) {
+        if (change.selected) {
+          nextSelectedId = change.id;
+        } else if (nextSelectedId === change.id) {
+          nextSelectedId = null;
         }
       }
+    }
 
-      setSelectedNodeId(nextSelectedId ?? null);
+    setSelectedNodeId(nextSelectedId ?? null);
 
-      const previousNodes = flowNodesRef.current;
-      const applied = applyNodeChanges(changes, previousNodes) as FlowNode[];
-      const withSelection = applied.map((node) => ({
-        ...node,
-        selected: node.id === (nextSelectedId ?? null),
-      }));
-      flowNodesRef.current = withSelection;
-      setFlowNodes(withSelection);
+    const previousNodes = flowNodesRef.current;
+    const applied = applyNodeChanges(changes, previousNodes) as FlowNode[];
+    if (applied !== previousNodes) {
+      flowNodesRef.current = applied;
+      setFlowNodes(applied);
+    }
 
-      for (const change of changes) {
-        if (change.type === 'position' && (change.dragging === false || change.dragging === undefined) && 'id' in change) {
-          const moved = applied.find((node) => node.id === change.id);
-          if (!moved) continue;
-          const { x, y } = moved.position ?? { x: 0, y: 0 };
-          updateNode(change.id, { x, y });
-        }
+    for (const change of changes) {
+      if (change.type === 'position' && (change.dragging === false || change.dragging === undefined) && 'id' in change) {
+        const moved = applied.find((node) => node.id === change.id);
+        if (!moved) continue;
+        const { x, y } = moved.position ?? { x: 0, y: 0 };
+        updateNodeRef.current(change.id, { x, y });
       }
-    },
-    [updateNode],
-  );
+    }
+  }, []);
 
-  const handleEdgesChange = useCallback(
-    (changes: Parameters<typeof applyEdgeChanges>[0]) => {
-      const current = flowEdgesRef.current;
-      const applied = applyEdgeChanges(changes, current) as FlowEdge[];
+  const handleEdgesChange = useCallback((changes: Parameters<typeof applyEdgeChanges>[0]) => {
+    const current = flowEdgesRef.current;
+    const applied = applyEdgeChanges(changes, current) as FlowEdge[];
+    if (applied !== current) {
       flowEdgesRef.current = applied;
       setFlowEdges(applied);
-      const shouldPersist = changes.some((change) =>
-        change.type === 'remove' || change.type === 'add' || change.type === 'replace',
-      );
-      if (!shouldPersist) {
-        return;
-      }
-      const nextPersisted = applied.map(fromFlowEdge);
-      setEdges(nextPersisted);
-    },
-    [setEdges],
-  );
+    }
+    const shouldPersist = changes.some((change) =>
+      change.type === 'remove' || change.type === 'add' || change.type === 'replace',
+    );
+    if (!shouldPersist) {
+      return;
+    }
+    const nextPersisted = applied.map(fromFlowEdge);
+    setEdgesRef.current(nextPersisted);
+  }, []);
 
-  const handleConnect = useCallback(
-    (connection: Parameters<typeof addEdge>[0]) => {
-      if (!connection?.source || !connection?.target) {
-        return;
-      }
-      const current = flowEdgesRef.current;
-      const edgeId = buildEdgeId(
-        connection.source,
-        connection.sourceHandle ?? null,
-        connection.target,
-        connection.targetHandle ?? null,
-      );
-      if (current.some((edge) => edge.id === edgeId)) {
-        return;
-      }
-      const sourceNode = nodes.find((node) => node.id === connection.source);
-      const targetNode = nodes.find((node) => node.id === connection.target);
-      const edgeData = makeEdgeData(sourceNode, targetNode);
-      const nextEdges = addEdge(
-        { ...connection, id: edgeId, type: 'gradient', data: edgeData },
-        current,
-      ) as FlowEdge[];
-      flowEdgesRef.current = nextEdges;
-      setFlowEdges(nextEdges);
-      const persisted = nextEdges.map(fromFlowEdge);
-      setEdges(persisted);
-    },
-    [nodes, setEdges],
-  );
+  const handleConnect = useCallback((connection: Parameters<typeof addEdge>[0]) => {
+    if (!connection?.source || !connection?.target) {
+      return;
+    }
+    const current = flowEdgesRef.current;
+    const edgeId = buildEdgeId(
+      connection.source,
+      connection.sourceHandle ?? null,
+      connection.target,
+      connection.targetHandle ?? null,
+    );
+    if (current.some((edge) => edge.id === edgeId)) {
+      return;
+    }
+    const nodeList = nodesRef.current;
+    const sourceNode = nodeList.find((node) => node.id === connection.source);
+    const targetNode = nodeList.find((node) => node.id === connection.target);
+    const edgeData = makeEdgeData(sourceNode, targetNode);
+    const nextEdges = addEdge(
+      { ...connection, id: edgeId, type: 'gradient', data: edgeData },
+      current,
+    ) as FlowEdge[];
+    flowEdgesRef.current = nextEdges;
+    setFlowEdges(nextEdges);
+    const persisted = nextEdges.map(fromFlowEdge);
+    setEdgesRef.current(persisted);
+  }, []);
 
   const sidebarStatus: GraphNodeStatus = useMemo(() => {
     const fromApi = mapProvisionState(statusQuery.data);
@@ -552,11 +649,13 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     } satisfies SidebarNodeConfig;
   }, [selectedNode]);
 
+  const sidebarState = useMemo(() => ({ status: sidebarStatus }), [sidebarStatus]);
+
   const handleConfigChange = useCallback(
     (nextConfig: Partial<SidebarNodeConfig>) => {
       const nodeId = selectedNodeIdRef.current;
       if (!nodeId) return;
-      const node = nodes.find((item) => item.id === nodeId);
+      const node = nodesRef.current.find((item) => item.id === nodeId);
       if (!node) return;
 
       const updatedConfig: Record<string, unknown> = {
@@ -570,12 +669,12 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       updatedConfig.kind = node.kind;
       updatedConfig.title = nextTitle;
 
-      updateNode(nodeId, {
+      updateNodeRef.current(nodeId, {
         config: updatedConfig,
         ...(nextTitle !== node.title ? { title: nextTitle } : {}),
       });
     },
-    [nodes, updateNode],
+    [],
   );
 
   if (loading && nodes.length === 0) {
@@ -595,7 +694,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           onNodesChange={handleNodesChange}
           onEdgesChange={handleEdgesChange}
           onConnect={handleConnect}
-          edgeTypes={edgeTypeMap}
+          edgeTypes={edgeTypes}
           savingStatus={savingState.status}
           savingErrorMessage={savingErrorMessage ?? undefined}
         />
@@ -603,10 +702,10 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       {selectedNode && sidebarConfig ? (
         <NodePropertiesSidebar
           config={sidebarConfig}
-          state={{ status: sidebarStatus }}
+          state={sidebarState}
           onConfigChange={handleConfigChange}
           tools={mcpTools}
-          enabledTools={mcpEnabledTools ?? []}
+          enabledTools={mcpEnabledTools ?? fallbackEnabledTools}
           onToggleTool={handleToggleMcpTool}
           toolsLoading={mcpToolsLoading}
           nixPackageSearch={handleNixPackageSearch}
