@@ -1,19 +1,8 @@
 import React from 'react';
 import { render, fireEvent, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { GraphNodeConfig } from '@/features/graph/types';
-
-const hookMocks = vi.hoisted(() => ({
-  useNodeAction: vi.fn(),
-  useMcpNodeState: vi.fn(),
-}));
 
 const getConfigViewMock = vi.hoisted(() => vi.fn());
-
-vi.mock('@/lib/graph/hooks', () => ({
-  useNodeAction: hookMocks.useNodeAction,
-  useMcpNodeState: hookMocks.useMcpNodeState,
-}));
 
 vi.mock('@/components/configViews/registry', () => ({
   getConfigView: getConfigViewMock,
@@ -21,82 +10,85 @@ vi.mock('@/components/configViews/registry', () => ({
 
 import NodePropertiesSidebar from '../NodePropertiesSidebar';
 
-function createNode(overrides: Partial<GraphNodeConfig> = {}): GraphNodeConfig {
-  return {
-    id: 'node-1',
-    kind: 'Agent',
-    template: 'agent-template',
-    title: 'Sample Node',
-    x: 0,
-    y: 0,
-    status: 'not_ready',
-    config: { title: 'Sample Node', foo: 'bar' },
-    state: {},
-    ports: { inputs: [], outputs: [] },
-    runtime: { provisionStatus: { state: 'not_ready' }, isPaused: false },
-    capabilities: { provisionable: true },
-    ...overrides,
-  };
-}
-
 describe('NodePropertiesSidebar', () => {
   beforeEach(() => {
-    hookMocks.useNodeAction.mockReset();
-    hookMocks.useMcpNodeState.mockReset();
     getConfigViewMock.mockReset();
-    hookMocks.useNodeAction.mockReturnValue({ mutate: vi.fn(), isPending: false });
-    hookMocks.useMcpNodeState.mockReturnValue({ tools: [], enabledTools: [], setEnabledTools: vi.fn(), isLoading: false });
-    getConfigViewMock.mockReturnValue(null);
   });
 
-  it('updates title and config when input changes', () => {
-    const onUpdate = vi.fn();
-    render(<NodePropertiesSidebar node={createNode()} onUpdate={onUpdate} />);
+  it('calls onTitleChange when the title input changes', () => {
+    const onTitleChange = vi.fn();
+    render(
+      <NodePropertiesSidebar
+        identity={{ id: 'node-1', title: 'Agent One', template: 'agent', kind: 'Agent' }}
+        status={{ status: 'not_ready' }}
+        config={{ title: 'Agent One' }}
+        onTitleChange={onTitleChange}
+      />,
+    );
 
     const input = screen.getByRole('textbox');
-    fireEvent.change(input, { target: { value: 'Updated Title' } });
+    fireEvent.change(input, { target: { value: 'Updated title' } });
 
-    expect(onUpdate).toHaveBeenCalledWith({ title: 'Updated Title', config: { title: 'Updated Title', foo: 'bar' } });
+    expect(onTitleChange).toHaveBeenCalledWith('Updated title');
   });
 
-  it('triggers provision action with optimistic update and revert on error', () => {
-    let capturedOptions: { onError?: () => void } | undefined;
-    const mutate = vi.fn((action: 'provision' | 'deprovision', options?: { onError?: () => void }) => {
-      capturedOptions = options;
-    });
-    hookMocks.useNodeAction.mockReturnValue({ mutate, isPending: false });
-    const onUpdate = vi.fn();
+  it('renders static config view when provided and forwards onChange', () => {
+    const onConfigChange = vi.fn();
+    const StaticView = vi.fn(({ onChange }: { onChange: (value: Record<string, unknown>) => void }) => (
+      <button type="button" onClick={() => onChange({ foo: 'bar' })}>
+        trigger change
+      </button>
+    ));
+    getConfigViewMock.mockReturnValue(StaticView);
 
-    render(<NodePropertiesSidebar node={createNode()} onUpdate={onUpdate} />);
+    render(
+      <NodePropertiesSidebar
+        identity={{ id: 'node-1', title: 'Agent One', template: 'agent', kind: 'Agent' }}
+        status={{ status: 'not_ready' }}
+        config={{ title: 'Agent One' }}
+        onConfigChange={onConfigChange}
+      />,
+    );
 
-    const provisionButton = screen.getByRole('button', { name: /^provision$/i });
-    fireEvent.click(provisionButton);
+    fireEvent.click(screen.getByText('trigger change'));
 
-    expect(mutate).toHaveBeenCalledWith('provision', expect.any(Object));
-    expect(onUpdate).toHaveBeenCalledTimes(1);
-    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'provisioning' }));
-
-    capturedOptions?.onError?.();
-
-    expect(onUpdate).toHaveBeenCalledTimes(2);
-    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'not_ready' }));
+    expect(onConfigChange).toHaveBeenCalledWith({ foo: 'bar' });
   });
 
-  it('renders MCP tools and toggles enabled state', () => {
-    const setEnabledTools = vi.fn();
-    hookMocks.useMcpNodeState.mockReturnValue({
-      tools: [{ name: 'toolA', title: 'Tool A', description: 'desc' }],
-      enabledTools: ['toolA'],
-      setEnabledTools,
-      isLoading: false,
-    });
-
-    const node = createNode({ kind: 'MCP', capabilities: { provisionable: true }, runtime: undefined });
-    render(<NodePropertiesSidebar node={node} onUpdate={vi.fn()} />);
+  it('renders tools section and toggles tool state via onToggleTool', () => {
+    const onToggleTool = vi.fn();
+    render(
+      <NodePropertiesSidebar
+        identity={{ id: 'node-mcp', title: 'MCP Node', template: 'mcp', kind: 'MCP' }}
+        status={{ status: 'not_ready' }}
+        tools={[{ name: 'toolA', title: 'Tool A', description: 'Example tool' }]}
+        enabledTools={['toolA']}
+        onToggleTool={onToggleTool}
+      />,
+    );
 
     const toggle = screen.getByRole('switch');
     fireEvent.click(toggle);
 
-    expect(setEnabledTools).toHaveBeenCalledWith([]);
+    expect(onToggleTool).toHaveBeenCalledWith('toolA', false);
+  });
+
+  it('renders active runs and wires terminate actions', () => {
+    const onTerminateRun = vi.fn();
+    const onTerminateThread = vi.fn();
+    render(
+      <NodePropertiesSidebar
+        identity={{ id: 'node-agent', title: 'Agent Node', template: 'agent', kind: 'Agent' }}
+        status={{ status: 'ready' }}
+        runs={[{ runId: 'run-1', threadId: 'thread-1', status: 'running', updatedAt: new Date().toISOString() }]}
+        actions={{ onTerminateRun, onTerminateThread, terminatingRunIds: new Set(), terminatingThreadIds: new Set() }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Terminate Run'));
+    fireEvent.click(screen.getByText('Terminate Thread'));
+
+    expect(onTerminateRun).toHaveBeenCalledWith('run-1');
+    expect(onTerminateThread).toHaveBeenCalledWith('thread-1');
   });
 });

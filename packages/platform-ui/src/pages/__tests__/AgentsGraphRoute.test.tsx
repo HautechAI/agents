@@ -1,20 +1,7 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-
-const graphHooksMocks = vi.hoisted(() => ({
-  useGraphData: vi.fn(() => ({
-    nodes: [],
-    loading: false,
-    savingState: { status: 'saved' as const, error: null },
-    savingErrorMessage: null,
-    updateNode: vi.fn(),
-    applyNodeStatus: vi.fn(),
-    applyNodeState: vi.fn(),
-  })),
-  useGraphSocket: vi.fn(),
-}));
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
 let getContextSpy: ReturnType<typeof vi.spyOn> | null = null;
 
@@ -39,14 +26,6 @@ async function renderGraphRoute() {
       return <div data-testid="graph-container">new graph layout</div>;
     },
   }));
-  vi.doMock('@/features/graph/hooks/useGraphData', () => ({
-    __esModule: true,
-    useGraphData: graphHooksMocks.useGraphData,
-  }));
-  vi.doMock('@/features/graph/hooks/useGraphSocket', () => ({
-    __esModule: true,
-    useGraphSocket: graphHooksMocks.useGraphSocket,
-  }));
   const { default: App } = await import('@/App');
   return render(
     <MemoryRouter initialEntries={['/agents/graph']}>
@@ -56,15 +35,8 @@ async function renderGraphRoute() {
 }
 
 describe('Agents graph routing', () => {
-  beforeEach(() => {
-    graphHooksMocks.useGraphData.mockClear();
-    graphHooksMocks.useGraphSocket.mockClear();
-  });
-
   it('renders the new graph layout for /agents/graph', async () => {
     await renderGraphRoute();
     await waitFor(() => expect((globalThis as { __graphMockHits?: number }).__graphMockHits ?? 0).toBeGreaterThan(0));
-    expect(graphHooksMocks.useGraphData).toHaveBeenCalled();
-    expect(graphHooksMocks.useGraphSocket).toHaveBeenCalled();
   });
 });
