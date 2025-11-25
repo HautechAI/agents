@@ -8,7 +8,6 @@ import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
 import { ContainerRegistry } from '../infra/container/container.registry';
 import { ContainerService } from '../infra/container/container.service';
-import { THREAD_CLEANUP_OPTIONS, type ThreadCleanupOptions } from './threadCleanup.config';
 
 type ThreadNode = {
   id: string;
@@ -18,6 +17,10 @@ type ThreadNode = {
 };
 
 type RunRecord = Prisma.RunGetPayload<{ select: { id: true; threadId: true; status: true } }>;
+
+const STOP_GRACE_SECONDS = 10;
+const FORCE_REMOVE_CONTAINERS = true;
+const DELETE_EPHEMERAL_VOLUMES = true;
 
 @Injectable()
 export class ThreadCleanupCoordinator {
@@ -30,105 +33,60 @@ export class ThreadCleanupCoordinator {
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(ContainerRegistry) private readonly registry: ContainerRegistry,
     @Inject(ContainerService) private readonly containerService: ContainerService,
-    @Inject(THREAD_CLEANUP_OPTIONS) private readonly options: ThreadCleanupOptions,
   ) {}
 
-  async closeThreadWithCascade(threadId: string, override?: Partial<ThreadCleanupOptions>): Promise<void> {
-    const opts = { ...this.options, ...(override ?? {}) } satisfies ThreadCleanupOptions;
+  async closeThreadWithCascade(threadId: string): Promise<void> {
     try {
-      const nodes = await this.collectThreadNodes(threadId, opts.cascade);
+      const nodes = await this.collectThreadNodes(threadId);
       if (!nodes.length) {
         this.logger.warn('ThreadCleanup: no threads found for cleanup', { threadId });
         return;
       }
 
       for (const node of nodes) {
-        await this.processThread(node, opts);
+        await this.processThread(node);
       }
     } catch (error) {
       this.logger.error('ThreadCleanup: fatal error during cascade', { threadId, error });
     }
   }
 
-  private async processThread(node: ThreadNode, opts: ThreadCleanupOptions): Promise<void> {
+  private async processThread(node: ThreadNode): Promise<void> {
     const { id: threadId } = node;
 
     try {
-      await this.ensureThreadClosed(node, opts);
+      await this.ensureThreadClosed(node);
 
       const activeRuns = await this.listRunningRuns(threadId);
       if (activeRuns.length > 0) {
-        const shouldContinue = await this.handleActiveRuns(threadId, activeRuns, opts);
-        if (!shouldContinue) return;
-      }
-
-      if (opts.dryRun) {
-        this.logger.info('ThreadCleanup: dry-run mode – skipping container cleanup', { threadId });
-        if (opts.deleteVolumes && !opts.keepVolumesForDebug) {
-          this.logger.info('ThreadCleanup: dry-run mode – would delete workspace volume', { threadId });
-        }
-        return;
+        this.handleActiveRuns(threadId, activeRuns);
       }
 
       await this.termination.terminateByThread(threadId);
       await this.cleanup.sweepSelective(threadId, {
-        graceSeconds: opts.graceSeconds,
-        force: opts.force,
-        deleteEphemeral: opts.deleteEphemeral,
+        graceSeconds: STOP_GRACE_SECONDS,
+        force: FORCE_REMOVE_CONTAINERS,
+        deleteEphemeral: DELETE_EPHEMERAL_VOLUMES,
       });
 
-      if (!opts.deleteVolumes) {
-        this.logger.info('ThreadCleanup: volume deletion disabled by configuration', { threadId });
-        return;
-      }
-      if (opts.keepVolumesForDebug) {
-        this.logger.info('ThreadCleanup: preserving workspace volume for debug', { threadId });
-        return;
-      }
-
-      await this.deleteWorkspaceVolume(threadId, opts);
+      await this.deleteWorkspaceVolume(threadId);
     } catch (error) {
       this.logger.error('ThreadCleanup: thread cleanup failed', { threadId, error });
     }
   }
 
-  private async handleActiveRuns(
-    threadId: string,
-    activeRuns: RunRecord[],
-    opts: ThreadCleanupOptions,
-  ): Promise<boolean> {
-    if (opts.skipActive) {
-      this.logger.warn('ThreadCleanup: skipping thread with active runs', {
-        threadId,
-        activeRuns: activeRuns.map((r) => r.id),
-      });
-      return false;
-    }
-
+  private handleActiveRuns(threadId: string, activeRuns: RunRecord[]): void {
     this.logger.info('ThreadCleanup: terminating active runs', { threadId, runCount: activeRuns.length });
-    if (opts.dryRun) {
-      this.logger.info('ThreadCleanup: dry-run mode – would send terminate signal to runs', {
-        threadId,
-        runs: activeRuns.map((r) => r.id),
-      });
-      return true;
-    }
-
     for (const run of activeRuns) this.runSignals.activateTerminate(run.id);
-    return true;
   }
 
-  private async ensureThreadClosed(node: ThreadNode, opts: ThreadCleanupOptions): Promise<void> {
+  private async ensureThreadClosed(node: ThreadNode): Promise<void> {
     if (node.status === 'closed') return;
-    if (opts.dryRun) {
-      this.logger.info('ThreadCleanup: dry-run – would close thread', { threadId: node.id });
-      return;
-    }
     const result = await this.persistence.updateThread(node.id, { status: 'closed' });
     node.status = result.status;
   }
 
-  private async collectThreadNodes(rootId: string, cascade: boolean): Promise<ThreadNode[]> {
+  private async collectThreadNodes(rootId: string): Promise<ThreadNode[]> {
     const prisma = this.prisma;
     const root = await prisma.thread.findUnique({
       where: { id: rootId },
@@ -143,8 +101,6 @@ export class ThreadCleanupCoordinator {
       status: root.status,
       createdAt: root.createdAt,
     });
-
-    if (!cascade) return [nodes.get(root.id)!];
 
     let frontier: string[] = [root.id];
     while (frontier.length > 0) {
@@ -200,15 +156,7 @@ export class ThreadCleanupCoordinator {
     });
   }
 
-  private async deleteWorkspaceVolume(threadId: string, opts: ThreadCleanupOptions): Promise<void> {
-    if (opts.volumeRetentionHours > 0) {
-      this.logger.info('ThreadCleanup: skipping volume deletion due to retention window', {
-        threadId,
-        retentionHours: opts.volumeRetentionHours,
-      });
-      return;
-    }
-
+  private async deleteWorkspaceVolume(threadId: string): Promise<void> {
     const volumeName = `ha_ws_${threadId}`;
     try {
       const dockerContainers = await this.containerService.listContainersByVolume(volumeName);

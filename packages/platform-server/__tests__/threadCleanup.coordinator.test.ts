@@ -1,18 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ThreadCleanupCoordinator } from '../src/agents/threadCleanup.coordinator';
-import type { ThreadCleanupOptions } from '../src/agents/threadCleanup.config';
-
-const baseOptions: ThreadCleanupOptions = {
-  cascade: true,
-  skipActive: false,
-  force: true,
-  graceSeconds: 10,
-  deleteEphemeral: true,
-  deleteVolumes: false,
-  keepVolumesForDebug: false,
-  volumeRetentionHours: 0,
-  dryRun: false,
-};
 
 const loggerStub = {
   info: vi.fn(),
@@ -31,7 +18,7 @@ const prismaStub = {
   },
 };
 
-const makeCoordinator = (opts?: Partial<ThreadCleanupOptions>) => {
+const makeCoordinator = () => {
   const persistence = {
     updateThread: vi.fn(async () => ({ previousStatus: 'open', status: 'closed' })),
   };
@@ -57,7 +44,6 @@ const makeCoordinator = (opts?: Partial<ThreadCleanupOptions>) => {
     prismaService as any,
     registry as any,
     containerService as any,
-    { ...baseOptions, ...(opts ?? {}) },
   );
 
   return { coordinator, persistence, termination, cleanup, runSignals, registry, containerService };
@@ -90,9 +76,11 @@ describe('ThreadCleanupCoordinator', () => {
       return [];
     });
 
-    const { coordinator, persistence, termination, cleanup, runSignals, registry } = makeCoordinator({ deleteVolumes: false });
+    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService } = makeCoordinator();
 
     registry.listByThread.mockImplementation(async (threadId: string) => [{ containerId: `${threadId}-c`, status: 'running' }]);
+    registry.findByVolume.mockResolvedValue([]);
+    containerService.listContainersByVolume.mockResolvedValue([]);
 
     await coordinator.closeThreadWithCascade('root');
 
@@ -101,39 +89,55 @@ describe('ThreadCleanupCoordinator', () => {
     expect(persistence.updateThread).toHaveBeenNthCalledWith(2, 'child', { status: 'closed' });
     expect(runSignals.activateTerminate).toHaveBeenCalledWith('run-leaf');
     expect(termination.terminateByThread.mock.calls.map(([tid]) => tid)).toEqual(['leaf', 'child', 'root']);
-    expect(cleanup.sweepSelective.mock.calls.map(([tid]) => tid)).toEqual(['leaf', 'child', 'root']);
+    expect(cleanup.sweepSelective.mock.calls).toEqual([
+      ['leaf', { graceSeconds: 10, force: true, deleteEphemeral: true }],
+      ['child', { graceSeconds: 10, force: true, deleteEphemeral: true }],
+      ['root', { graceSeconds: 10, force: true, deleteEphemeral: true }],
+    ]);
+    expect(containerService.removeVolume.mock.calls).toEqual([
+      ['ha_ws_leaf', { force: true }],
+      ['ha_ws_child', { force: true }],
+      ['ha_ws_root', { force: true }],
+    ]);
   });
 
-  it('skips cleanup when active runs exist and skipActive is enabled', async () => {
+  it('terminates active runs and proceeds with cleanup', async () => {
     const now = new Date();
     prismaStub.thread.findUnique.mockResolvedValue({ id: 'root', parentId: null, status: 'open', createdAt: now });
     prismaStub.thread.findMany.mockResolvedValue([]);
     prismaStub.run.findMany.mockResolvedValue([{ id: 'run-root', threadId: 'root', status: 'running' }]);
 
-    const { coordinator, persistence, termination, cleanup, runSignals, registry } = makeCoordinator({ skipActive: true });
-
-    await coordinator.closeThreadWithCascade('root');
-
-    expect(persistence.updateThread).toHaveBeenCalledWith('root', { status: 'closed' });
-    expect(runSignals.activateTerminate).not.toHaveBeenCalled();
-    expect(termination.terminateByThread).not.toHaveBeenCalled();
-    expect(cleanup.sweepSelective).not.toHaveBeenCalled();
-    expect(registry.listByThread).not.toHaveBeenCalled();
-  });
-
-  it('removes workspace volume when no references remain', async () => {
-    const now = new Date();
-    prismaStub.thread.findUnique.mockResolvedValue({ id: 'root', parentId: null, status: 'closed', createdAt: now });
-    prismaStub.thread.findMany.mockResolvedValue([]);
-    prismaStub.run.findMany.mockResolvedValue([]);
-
-    const { coordinator, containerService, registry } = makeCoordinator({ deleteVolumes: true });
-    registry.listByThread.mockResolvedValue([]);
+    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService } = makeCoordinator();
+    registry.listByThread.mockResolvedValue([{ containerId: 'root-c', status: 'running' }]);
     registry.findByVolume.mockResolvedValue([]);
     containerService.listContainersByVolume.mockResolvedValue([]);
 
     await coordinator.closeThreadWithCascade('root');
 
+    expect(persistence.updateThread).toHaveBeenCalledWith('root', { status: 'closed' });
+    expect(runSignals.activateTerminate).toHaveBeenCalledWith('run-root');
+    expect(termination.terminateByThread).toHaveBeenCalledWith('root');
+    expect(cleanup.sweepSelective).toHaveBeenCalledWith('root', {
+      graceSeconds: 10,
+      force: true,
+      deleteEphemeral: true,
+    });
     expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
+  });
+
+  it('skips workspace volume removal when references remain', async () => {
+    const now = new Date();
+    prismaStub.thread.findUnique.mockResolvedValue({ id: 'root', parentId: null, status: 'closed', createdAt: now });
+    prismaStub.thread.findMany.mockResolvedValue([]);
+    prismaStub.run.findMany.mockResolvedValue([]);
+
+    const { coordinator, containerService, registry } = makeCoordinator();
+    registry.listByThread.mockResolvedValue([]);
+    registry.findByVolume.mockResolvedValue([{ containerId: 'other', threadId: 'other-thread', status: 'running' }]);
+    containerService.listContainersByVolume.mockResolvedValue([]);
+
+    await coordinator.closeThreadWithCascade('root');
+
+    expect(containerService.removeVolume).not.toHaveBeenCalled();
   });
 });

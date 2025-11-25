@@ -16,7 +16,6 @@ import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 import { RunSignalsRegistry } from '../agents/run-signals.service';
 import { CallAgentLinkingService } from '../agents/call-agent-linking.service';
 import { ThreadCleanupCoordinator } from '../agents/threadCleanup.coordinator';
-import { THREAD_CLEANUP_OPTIONS, readThreadCleanupOptions } from '../agents/threadCleanup.config';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
 
 @Global()
@@ -26,10 +25,6 @@ import { TemplateRegistry } from '../graph-core/templateRegistry';
     ThreadsMetricsService,
     RunSignalsRegistry,
     CallAgentLinkingService,
-    {
-      provide: THREAD_CLEANUP_OPTIONS,
-      useFactory: () => readThreadCleanupOptions(process.env),
-    },
     ThreadCleanupCoordinator,
     {
       provide: GraphRepository,
@@ -56,7 +51,6 @@ import { TemplateRegistry } from '../graph-core/templateRegistry';
     ThreadsMetricsService,
     RunSignalsRegistry,
     CallAgentLinkingService,
-    THREAD_CLEANUP_OPTIONS,
   ],
 })
 export class GraphDomainModule {}

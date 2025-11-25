@@ -24,19 +24,10 @@ Lifecycle
 Thread closure cascade cleanup
 - Closing a thread (or any ancestor) triggers the thread cleanup coordinator.
   - Descendant threads are closed leaf-first so children finish before their parents.
-  - Active runs receive a terminate signal; after the Docker stop grace window, container removal is forced when `THREAD_CLEANUP_FORCE=true`.
+  - Active runs receive a terminate signal; after a short grace period the cleanup flow forces container shutdown.
   - Registry records for the thread are handed to `sweepSelective`, which removes associated workspace containers and DinD sidecars immediately.
-  - DinD sidecars are stopped first and removed with `v=true` so their anonymous `/var/lib/docker` volumes are deleted when `THREAD_CLEANUP_DELETE_EPHEMERAL=true`.
-  - After containers are gone, the coordinator removes the thread workspace volume (`ha_ws_<threadId>`) when `THREAD_CLEANUP_DELETE_VOLUMES=true`, no other containers (running or stopped) reference it, and `KEEP_VOLUMES_FOR_DEBUG=false`.
-- Configuration flags (defaults shown):
-  - `THREAD_CLEANUP_CASCADE=true` — traverse descendants when a parent closes.
-  - `THREAD_CLEANUP_SKIP_ACTIVE=false` — if set to `true`, cleanup is skipped when active runs remain.
-  - `THREAD_CLEANUP_GRACE_SECONDS=10` — Docker stop timeout before force-kill.
-  - `THREAD_CLEANUP_FORCE=true` — force container removal after the grace period.
-  - `THREAD_CLEANUP_DELETE_EPHEMERAL=true` — remove anonymous DinD volumes alongside sidecars.
-  - `THREAD_CLEANUP_DELETE_VOLUMES=true` — remove workspace volumes when safe.
-  - `KEEP_VOLUMES_FOR_DEBUG=false` and `VOLUME_RETENTION_HOURS=0` — keep or delay removal of workspace volumes for debugging.
-  - `DRY_RUN=false` — when `true`, log intended actions without performing cleanup.
+  - DinD sidecars are stopped first and removed with `v=true` so their anonymous `/var/lib/docker` volumes are deleted along with the sidecar.
+  - After containers are gone, the coordinator removes the thread workspace volume (`ha_ws_<threadId>`) once no other containers (running or stopped) reference it and no registry entries point at the volume.
 
 DinD and DOCKER_HOST
 - Optional sidecar Docker-in-Docker may be used for nested workloads. When enabled, set `DOCKER_HOST=tcp://localhost:2375` inside the workspace container.
