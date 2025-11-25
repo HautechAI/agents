@@ -3,8 +3,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { MessageKind, Prisma, PrismaClient, RunMessageType, RunStatus, ThreadStatus } from '@prisma/client';
 import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
-import { GraphRepository } from '../graph/graph.repository';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
+import { GraphRepository } from '../graph/graph.repository';
 import type { PersistedGraphNode } from '../shared/types/graph.types';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
 import { ChannelDescriptorSchema, type ChannelDescriptor } from '../messaging/types';
@@ -37,6 +37,28 @@ export class AgentsPersistenceService {
 
   private sanitizeSummary(summary: string | null | undefined): string {
     return (summary ?? '').trim().slice(0, 256);
+  }
+
+  async ensureThreadModel(threadId: string, model: string): Promise<string> {
+    if (!model || model.trim().length === 0) {
+      throw new Error('agent_model_required');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.thread.findUnique({ where: { id: threadId }, select: { modelUsed: true } });
+      if (!existing) throw new Error('thread_not_found');
+      if (existing.modelUsed && existing.modelUsed.trim().length > 0) {
+        return existing.modelUsed;
+      }
+
+      const updated = await tx.thread.update({
+        where: { id: threadId },
+        data: { modelUsed: model },
+        select: { modelUsed: true },
+      });
+
+      return updated.modelUsed ?? model;
+    });
   }
 
   /**

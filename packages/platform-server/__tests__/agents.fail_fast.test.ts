@@ -29,7 +29,10 @@ describe('Fail-fast behavior', () => {
         {
           provide: AgentsPersistenceService,
           useValue: {
-            beginRunThread: async () => { throw new Error('persistence_fail'); },
+            beginRunThread: async () => {
+              throw new Error('persistence_fail');
+            },
+            ensureThreadModel: async (_threadId: string, model: string) => model,
             recordInjected: async () => ({ messageIds: [] }),
             completeRun: async () => {},
           },

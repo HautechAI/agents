@@ -86,6 +86,7 @@ describe('LiveGraphRuntime -> Agent config propagation', () => {
             beginRunThread: async () => ({ runId: 't' }),
             recordInjected: async () => ({ messageIds: [] }),
             completeRun: async () => {},
+            ensureThreadModel: async (_threadId: string, model: string) => model,
           },
         },
         RunSignalsRegistry,
