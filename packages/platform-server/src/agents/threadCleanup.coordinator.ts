@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { PrismaClient, RunStatus, ThreadStatus } from '@prisma/client';
+import type { PrismaClient, Prisma, ThreadStatus } from '@prisma/client';
 import { AgentsPersistenceService } from './agents.persistence.service';
 import { ContainerThreadTerminationService } from '../infra/container/containerThreadTermination.service';
 import { ContainerCleanupService } from '../infra/container/containerCleanup.job';
@@ -17,11 +17,7 @@ type ThreadNode = {
   createdAt: Date;
 };
 
-type RunRecord = {
-  id: string;
-  threadId: string;
-  status: RunStatus;
-};
+type RunRecord = Prisma.RunGetPayload<{ select: { id: true; threadId: true; status: true } }>;
 
 @Injectable()
 export class ThreadCleanupCoordinator {
@@ -201,7 +197,7 @@ export class ThreadCleanupCoordinator {
     return prisma.run.findMany({
       where: { threadId, status: 'running' },
       select: { id: true, threadId: true, status: true },
-    }) as unknown as RunRecord[];
+    });
   }
 
   private async deleteWorkspaceVolume(threadId: string, opts: ThreadCleanupOptions): Promise<void> {
