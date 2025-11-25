@@ -52,12 +52,13 @@ interface UseGraphDataResult {
   updateNode: (nodeId: string, updates: GraphNodeUpdate) => void;
   applyNodeStatus: (nodeId: string, status: NodeStatus) => void;
   applyNodeState: (nodeId: string, state: Record<string, unknown>) => void;
+  setEdges: (next: GraphPersistedEdge[]) => void;
   refresh: () => Promise<void>;
 }
 
 export function useGraphData(): UseGraphDataResult {
   const [nodes, setNodes] = useState<GraphNodeConfig[]>([]);
-  const [edges, setEdges] = useState<GraphPersistedEdge[]>([]);
+  const [edges, setEdgeState] = useState<GraphPersistedEdge[]>([]);
   const nodesRef = useRef<GraphNodeConfig[]>([]);
   const metadataRef = useRef<Map<string, GraphNodeMetadata>>(new Map());
   const baseRef = useRef<GraphBaseState>({ name: 'agents', version: 0, edges: [] });
@@ -114,7 +115,7 @@ export function useGraphData(): UseGraphDataResult {
       };
 
       if (isMountedRef.current && !abortRef.current) {
-        setEdges((result.edges ?? []).map(cloneEdge));
+        setEdgeState((result.edges ?? []).map(cloneEdge));
         if (dirtyRef.current || pendingSaveRef.current) {
           setSavingState({ status: 'saving', error: null });
         } else {
@@ -220,6 +221,26 @@ export function useGraphData(): UseGraphDataResult {
           if (updates.runtime) {
             next.runtime = { ...(node.runtime ?? {}), ...updates.runtime };
           }
+
+          let positionUpdated = false;
+          let nextX = node.x;
+          let nextY = node.y;
+          if (typeof updates.x === 'number' && updates.x !== node.x) {
+            nextX = updates.x;
+            positionUpdated = true;
+          }
+          if (typeof updates.y === 'number' && updates.y !== node.y) {
+            nextY = updates.y;
+            positionUpdated = true;
+          }
+          if (positionUpdated) {
+            next.x = nextX;
+            next.y = nextY;
+            if (meta) {
+              meta.position = { x: nextX, y: nextY };
+            }
+            shouldSave = true;
+          }
           return next;
         });
 
@@ -228,6 +249,16 @@ export function useGraphData(): UseGraphDataResult {
         }
         return mapped;
       });
+    },
+    [scheduleSave],
+  );
+
+  const setEdges = useCallback(
+    (next: GraphPersistedEdge[]) => {
+      const cloned = next.map(cloneEdge);
+      baseRef.current.edges = cloned;
+      setEdgeState(cloned);
+      scheduleSave();
     },
     [scheduleSave],
   );
@@ -251,7 +282,7 @@ export function useGraphData(): UseGraphDataResult {
         version: graph.version,
         edges: nextEdges,
       };
-      setEdges(nextEdges);
+      setEdgeState(nextEdges);
       setNodes(mappedNodes);
 
       const statusPromises = graph.nodes.map(async (node) => {
@@ -310,6 +341,7 @@ export function useGraphData(): UseGraphDataResult {
     updateNode,
     applyNodeStatus,
     applyNodeState,
+    setEdges,
     refresh,
   };
 }

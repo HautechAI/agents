@@ -58,6 +58,8 @@ export interface GraphNodeUpdate {
   config?: Record<string, unknown>;
   state?: Record<string, unknown>;
   runtime?: Partial<GraphNodeRuntime>;
+  x?: number;
+  y?: number;
 }
 
 export type GraphSavingStatus = SavingStatus;

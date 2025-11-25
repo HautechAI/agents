@@ -29,15 +29,49 @@ function toFlowNode(node: GraphNodeConfig, selectedId: string | null): FlowNode 
   } satisfies FlowNode;
 }
 
+function encodeHandle(handle?: string | null): string {
+  if (typeof handle === 'string' && handle.length > 0 && handle !== '$') {
+    return handle;
+  }
+  return '$';
+}
+
+function decodeHandle(handle?: string | null): string | undefined {
+  if (!handle || handle === '$') {
+    return undefined;
+  }
+  return handle;
+}
+
+function buildEdgeId(
+  source: string,
+  sourceHandle: string | null | undefined,
+  target: string,
+  targetHandle: string | null | undefined,
+): string {
+  return `${source}-${encodeHandle(sourceHandle)}__${target}-${encodeHandle(targetHandle)}`;
+}
+
 function toFlowEdge(edge: GraphPersistedEdge): Edge {
-  const id = `${edge.source}-${edge.sourceHandle ?? '$'}__${edge.target}-${edge.targetHandle ?? '$'}`;
+  const sourceHandle = decodeHandle(edge.sourceHandle);
+  const targetHandle = decodeHandle(edge.targetHandle);
   return {
-    id,
+    id: buildEdgeId(edge.source, sourceHandle, edge.target, targetHandle),
     source: edge.source,
     target: edge.target,
-    sourceHandle: edge.sourceHandle ?? undefined,
-    targetHandle: edge.targetHandle ?? undefined,
+    sourceHandle,
+    targetHandle,
   } satisfies Edge;
+}
+
+function fromFlowEdge(edge: Edge): GraphPersistedEdge {
+  return {
+    id: buildEdgeId(edge.source, edge.sourceHandle, edge.target, edge.targetHandle),
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: encodeHandle(edge.sourceHandle),
+    targetHandle: encodeHandle(edge.targetHandle),
+  } satisfies GraphPersistedEdge;
 }
 
 function mapProvisionState(status?: ApiNodeStatus): GraphNodeStatus | undefined {
@@ -71,6 +105,7 @@ export function GraphLayout() {
     updateNode,
     applyNodeStatus,
     applyNodeState,
+    setEdges,
   } = useGraphData();
 
   const nodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
@@ -90,6 +125,8 @@ export function GraphLayout() {
   const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
+  const flowNodesRef = useRef<FlowNode[]>([]);
+  const flowEdgesRef = useRef<Edge[]>([]);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -123,7 +160,13 @@ export function GraphLayout() {
   }, [selectedNodeId]);
 
   useEffect(() => {
-    setFlowEdges(edges.map(toFlowEdge));
+    flowNodesRef.current = flowNodes;
+  }, [flowNodes]);
+
+  useEffect(() => {
+    const nextEdges = edges.map(toFlowEdge);
+    flowEdgesRef.current = nextEdges;
+    setFlowEdges(nextEdges);
   }, [edges]);
 
   const selectedNode = useMemo(
@@ -133,27 +176,79 @@ export function GraphLayout() {
 
   const statusQuery = useNodeStatus(selectedNodeId ?? '');
 
-  const handleNodesChange = useCallback((changes: Parameters<typeof applyNodeChanges>[0]) => {
-    let nextSelectedId = selectedNodeIdRef.current;
-    for (const change of changes) {
-      if (change.type === 'select' && 'id' in change) {
-        nextSelectedId = change.selected ? change.id : null;
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof applyNodeChanges>[0]) => {
+      let nextSelectedId = selectedNodeIdRef.current;
+      for (const change of changes) {
+        if (change.type === 'select' && 'id' in change) {
+          nextSelectedId = change.selected ? change.id : null;
+        }
       }
-    }
-    setSelectedNodeId(nextSelectedId ?? null);
-    setFlowNodes((prev) => {
-      const applied = applyNodeChanges(changes, prev) as FlowNode[];
-      return applied.map((node) => ({ ...node, selected: node.id === (nextSelectedId ?? null) }));
-    });
-  }, []);
 
-  const handleEdgesChange = useCallback((changes: Parameters<typeof applyEdgeChanges>[0]) => {
-    setFlowEdges((prev) => applyEdgeChanges(changes, prev));
-  }, []);
+      setSelectedNodeId(nextSelectedId ?? null);
 
-  const handleConnect = useCallback((connection: Parameters<typeof addEdge>[0]) => {
-    setFlowEdges((prev) => addEdge(connection, prev));
-  }, []);
+      const previousNodes = flowNodesRef.current;
+      const applied = applyNodeChanges(changes, previousNodes) as FlowNode[];
+      const withSelection = applied.map((node) => ({
+        ...node,
+        selected: node.id === (nextSelectedId ?? null),
+      }));
+      flowNodesRef.current = withSelection;
+      setFlowNodes(withSelection);
+
+      for (const change of changes) {
+        if (change.type === 'position' && (change.dragging === false || change.dragging === undefined) && 'id' in change) {
+          const moved = applied.find((node) => node.id === change.id);
+          if (!moved) continue;
+          const { x, y } = moved.position ?? { x: 0, y: 0 };
+          updateNode(change.id, { x, y });
+        }
+      }
+    },
+    [updateNode],
+  );
+
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof applyEdgeChanges>[0]) => {
+      const current = flowEdgesRef.current;
+      const applied = applyEdgeChanges(changes, current);
+      flowEdgesRef.current = applied;
+      setFlowEdges(applied);
+      const shouldPersist = changes.some((change) =>
+        change.type === 'remove' || change.type === 'add' || change.type === 'replace',
+      );
+      if (!shouldPersist) {
+        return;
+      }
+      const nextPersisted = applied.map(fromFlowEdge);
+      setEdges(nextPersisted);
+    },
+    [setEdges],
+  );
+
+  const handleConnect = useCallback(
+    (connection: Parameters<typeof addEdge>[0]) => {
+      if (!connection?.source || !connection?.target) {
+        return;
+      }
+      const current = flowEdgesRef.current;
+      const edgeId = buildEdgeId(
+        connection.source,
+        connection.sourceHandle ?? null,
+        connection.target,
+        connection.targetHandle ?? null,
+      );
+      if (current.some((edge) => edge.id === edgeId)) {
+        return;
+      }
+      const nextEdges = addEdge({ ...connection, id: edgeId }, current);
+      flowEdgesRef.current = nextEdges;
+      setFlowEdges(nextEdges);
+      const persisted = nextEdges.map(fromFlowEdge);
+      setEdges(persisted);
+    },
+    [setEdges],
+  );
 
   const sidebarStatus: GraphNodeStatus = useMemo(() => {
     const fromApi = mapProvisionState(statusQuery.data);

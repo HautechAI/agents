@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const sidebarProps: any[] = [];
@@ -51,6 +51,7 @@ describe('GraphLayout', () => {
     const updateNode = vi.fn();
     const applyNodeStatus = vi.fn();
     const applyNodeState = vi.fn();
+    const setEdges = vi.fn();
 
     hookMocks.useGraphData.mockReturnValue({
       nodes: [
@@ -73,6 +74,7 @@ describe('GraphLayout', () => {
       updateNode,
       applyNodeStatus,
       applyNodeState,
+      setEdges,
     });
 
     hookMocks.useGraphSocket.mockImplementation(({ onStatus, onState }) => {
@@ -129,5 +131,157 @@ describe('GraphLayout', () => {
     );
 
     unmount();
+  });
+
+  it('persists node position updates when drag ends', async () => {
+    const updateNode = vi.fn();
+    const setEdges = vi.fn();
+
+    hookMocks.useGraphData.mockReturnValue({
+      nodes: [
+        {
+          id: 'node-1',
+          template: 'agent-template',
+          kind: 'Agent',
+          title: 'Agent Node',
+          x: 0,
+          y: 0,
+          status: 'not_ready',
+          config: { title: 'Agent Node' },
+          ports: { inputs: [], outputs: [] },
+        },
+      ],
+      edges: [],
+      loading: false,
+      savingState: { status: 'saved', error: null },
+      savingErrorMessage: null,
+      updateNode,
+      applyNodeStatus: vi.fn(),
+      applyNodeState: vi.fn(),
+      setEdges,
+    });
+
+    hookMocks.useGraphSocket.mockReturnValue(undefined);
+    hookMocks.useNodeStatus.mockReturnValue({ data: null });
+
+    render(<GraphLayout />);
+
+    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
+    const props = canvasSpy.mock.calls.at(-1)?.[0] as {
+      onNodesChange?: (changes: any[]) => void;
+    };
+
+    expect(props.onNodesChange).toBeDefined();
+
+    act(() => {
+      props.onNodesChange?.([
+        {
+          id: 'node-1',
+          type: 'position',
+          position: { x: 120, y: 240 },
+          dragging: true,
+        },
+      ]);
+    });
+
+    expect(updateNode).not.toHaveBeenCalled();
+
+    act(() => {
+      props.onNodesChange?.([
+        {
+          id: 'node-1',
+          type: 'position',
+          position: { x: 150, y: 260 },
+          dragging: false,
+        },
+      ]);
+    });
+
+    await waitFor(() =>
+      expect(updateNode).toHaveBeenCalledWith('node-1', expect.objectContaining({ x: 150, y: 260 })),
+    );
+  });
+
+  it('persists edges when connecting and removing', async () => {
+    const updateNode = vi.fn();
+    const setEdges = vi.fn();
+
+    hookMocks.useGraphData.mockReturnValue({
+      nodes: [
+        {
+          id: 'node-1',
+          template: 'agent-template',
+          kind: 'Agent',
+          title: 'Agent Node',
+          x: 0,
+          y: 0,
+          status: 'not_ready',
+          config: { title: 'Agent Node' },
+          ports: { inputs: [], outputs: [] },
+        },
+        {
+          id: 'node-2',
+          template: 'tool-template',
+          kind: 'Tool',
+          title: 'Tool Node',
+          x: 200,
+          y: 200,
+          status: 'not_ready',
+          config: { title: 'Tool Node' },
+          ports: { inputs: [], outputs: [] },
+        },
+      ],
+      edges: [],
+      loading: false,
+      savingState: { status: 'saved', error: null },
+      savingErrorMessage: null,
+      updateNode,
+      applyNodeStatus: vi.fn(),
+      applyNodeState: vi.fn(),
+      setEdges,
+    });
+
+    hookMocks.useGraphSocket.mockReturnValue(undefined);
+    hookMocks.useNodeStatus.mockReturnValue({ data: null });
+
+    render(<GraphLayout />);
+
+    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
+    const props = canvasSpy.mock.calls.at(-1)?.[0] as {
+      onConnect?: (connection: any) => void;
+      onEdgesChange?: (changes: any[]) => void;
+    };
+
+    act(() => {
+      props.onConnect?.({
+        source: 'node-1',
+        target: 'node-2',
+        sourceHandle: 'out',
+        targetHandle: 'in',
+      });
+    });
+
+    await waitFor(() =>
+      expect(setEdges).toHaveBeenCalledWith([
+        expect.objectContaining({
+          id: 'node-1-out__node-2-in',
+          source: 'node-1',
+          target: 'node-2',
+          sourceHandle: 'out',
+          targetHandle: 'in',
+        }),
+      ]),
+    );
+
+    act(() => {
+      props.onEdgesChange?.([
+        {
+          id: 'node-1-out__node-2-in',
+          type: 'remove',
+        },
+      ]);
+    });
+
+    await waitFor(() => expect(setEdges).toHaveBeenCalledWith([]));
   });
 });
