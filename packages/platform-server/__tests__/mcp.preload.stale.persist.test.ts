@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
-import { LoggerService } from '../src/core/services/logger.service.js';
 import { ContainerService } from '../src/infra/container/container.service';
 import type { ContainerRegistry } from '../src/infra/container/container.registry';
 
@@ -9,7 +8,6 @@ describe('LocalMCPServer preload + staleness + persist', () => {
   let lastUpdate: { tools: any[]; updatedAt: number } | null = null;
 
   beforeEach(async () => {
-    const logger = new LoggerService();
     const registryStub = {
       registerStart: async () => {},
       updateLastUsed: async () => {},
@@ -23,7 +21,7 @@ describe('LocalMCPServer preload + staleness + persist', () => {
     } as unknown as ContainerRegistry;
     const cs = new ContainerService(registryStub);
     const envStub = { resolveEnvItems: async () => ({}), resolveProviderEnv: async () => ({}) } as any;
-    server = new LocalMCPServerNode(cs as any, logger as any, envStub, {} as any, undefined as any);
+    server = new LocalMCPServerNode(cs as any, envStub, {} as any, undefined as any);
     await server.setConfig({ namespace: 'x', command: 'echo' } as any);
     (server as any).setContainerProvider({ provide: async () => ({ id: 'cid', stop: async () => {}, remove: async () => {} }) });
     (server as any).on('mcp.tools_updated', (p: { tools: any[]; updatedAt: number }) => { lastUpdate = p; });

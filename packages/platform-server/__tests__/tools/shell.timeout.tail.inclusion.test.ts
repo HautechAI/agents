@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
-import { LoggerService } from '../../src/core/services/logger.service';
 import { ExecTimeoutError } from '../../src/utils/execTimeout';
 import { ContainerHandle } from '../../src/infra/container/container.handle';
 import { ContainerService } from '../../src/infra/container/container.service';
 import type { ContainerRegistry } from '../../src/infra/container/container.registry';
+import { RunEventsService } from '../../src/events/run-events.service';
+import { EventsBusService } from '../../src/events/events-bus.service';
+import { PrismaService } from '../../src/core/services/prisma.service';
 
 // ANSI colored output to verify stripping; include more than 10k and ensure we only keep tail
 const ANSI_RED = '\u001b[31m';
@@ -12,7 +14,6 @@ const ANSI_RESET = '\u001b[0m';
 
 describe('ShellTool timeout tail inclusion and ANSI stripping', () => {
   it('includes stripped tail up to 10k chars from combined stdout+stderr', async () => {
-    const logger = new LoggerService();
     const longPrefix = 'x'.repeat(12000); // longer than 10k to force tail
     const stdout = `${ANSI_RED}${longPrefix}${ANSI_RESET}`; // will be stripped to plain
     const stderr = `${ANSI_RED}ERR-SECTION${ANSI_RESET}`;
@@ -25,9 +26,31 @@ describe('ShellTool timeout tail inclusion and ANSI stripping', () => {
       }
     }
     const provider = new FakeProvider();
+    const envServiceStub = { resolveProviderEnv: async () => ({}) };
+    const moduleRefStub = {};
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
-    const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
-    const node = new ShellCommandNode(undefined as any, logger as any, moduleRefStub as any);
+    const runEventsStub: Pick<RunEventsService, 'appendToolOutputChunk' | 'finalizeToolOutputTerminal'> = {
+      appendToolOutputChunk: async (payload: unknown) => payload,
+      finalizeToolOutputTerminal: async (payload: unknown) => payload,
+    };
+    const eventsBusStub: Pick<EventsBusService, 'emitToolOutputChunk' | 'emitToolOutputTerminal'> = {
+      emitToolOutputChunk: () => undefined,
+      emitToolOutputTerminal: () => undefined,
+    };
+    const prismaStub: Pick<PrismaService, 'getClient'> = {
+      getClient: () => ({
+        container: { findUnique: async () => null },
+        containerEvent: { findFirst: async () => null },
+      }),
+    } as any;
+    const node = new ShellCommandNode(
+      envServiceStub as any,
+      moduleRefStub as any,
+      archiveStub as any,
+      runEventsStub as any,
+      eventsBusStub as any,
+      prismaStub as any,
+    );
     node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();

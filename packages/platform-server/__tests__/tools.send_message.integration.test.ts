@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { SendMessageFunctionTool } from '../src/nodes/tools/send_message/send_message.tool';
-import { LoggerService } from '../src/core/services/logger.service';
 // Avoid importing PrismaService to prevent prisma client load
 import { SlackTrigger } from '../src/nodes/slackTrigger/slackTrigger.node';
 import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
@@ -76,7 +75,7 @@ describe('send_message tool', () => {
     } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService;
     const slackSend = vi.fn(async () => sendResult);
     const slackAdapter = ({ sendText: slackSend } satisfies Pick<SlackAdapter, 'sendText'>) as SlackAdapter;
-    const trigger = new SlackTrigger(new LoggerService(), persistence, prismaService, slackAdapter);
+    const trigger = new SlackTrigger(undefined as any, persistence, prismaService, slackAdapter);
     trigger.init({ nodeId: 'channel-node' });
 
     // Override prisma behavior for descriptor lookup inside sendToChannel
@@ -95,7 +94,7 @@ describe('send_message tool', () => {
   it('returns error when thread channel mapping missing', async () => {
     const { prismaService } = makePrismaStub({ channelNodeId: null });
     const runtime = makeRuntimeStub(undefined);
-    const tool = new SendMessageFunctionTool(new LoggerService(), prismaService, runtime);
+    const tool = new SendMessageFunctionTool(prismaService, runtime);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     expect(JSON.parse(res)).toEqual({ ok: false, error: 'missing_channel_node' });
   });
@@ -103,7 +102,7 @@ describe('send_message tool', () => {
   it('returns error when runtime instance missing', async () => {
     const { prismaService } = makePrismaStub({ channelNodeId: 'node-x' });
     const runtime = makeRuntimeStub(undefined);
-    const tool = new SendMessageFunctionTool(new LoggerService(), prismaService, runtime);
+    const tool = new SendMessageFunctionTool(prismaService, runtime);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     expect(JSON.parse(res)).toEqual({ ok: false, error: 'channel_node_unavailable' });
   });
@@ -111,7 +110,7 @@ describe('send_message tool', () => {
   it('returns error when runtime node is not SlackTrigger', async () => {
     const { prismaService } = makePrismaStub({ channelNodeId: 'node-x' });
     const runtime = makeRuntimeStub({});
-    const tool = new SendMessageFunctionTool(new LoggerService(), prismaService, runtime);
+    const tool = new SendMessageFunctionTool(prismaService, runtime);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     expect(JSON.parse(res)).toEqual({ ok: false, error: 'invalid_channel_type' });
   });
@@ -123,10 +122,10 @@ describe('send_message tool', () => {
       updateThreadChannelDescriptor: async () => undefined,
     } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService;
     const slackAdapter = ({ sendText: vi.fn() } satisfies Pick<SlackAdapter, 'sendText'>) as SlackAdapter;
-    const trigger = new SlackTrigger(new LoggerService(), persistence, prismaService, slackAdapter);
+    const trigger = new SlackTrigger(undefined as any, persistence, prismaService, slackAdapter);
     trigger.init({ nodeId: 'channel-node' });
     const runtime = makeRuntimeStub(trigger);
-    const tool = new SendMessageFunctionTool(new LoggerService(), prismaService, runtime);
+    const tool = new SendMessageFunctionTool(prismaService, runtime);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     expect(JSON.parse(res)).toEqual({ ok: false, error: 'slacktrigger_unprovisioned' });
   });
@@ -139,7 +138,7 @@ describe('send_message tool', () => {
       sendResult: { ok: false, error: 'missing_channel_descriptor' },
     });
     const runtime = makeRuntimeStub(trigger);
-    const tool = new SendMessageFunctionTool(new LoggerService(), prismaService, runtime);
+    const tool = new SendMessageFunctionTool(prismaService, runtime);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     expect(JSON.parse(res)).toEqual({ ok: false, error: 'missing_channel_descriptor' });
   });
@@ -148,7 +147,7 @@ describe('send_message tool', () => {
     const { prismaService } = makePrismaStub({ channelNodeId: 'channel-node' });
     const { trigger, slackSend } = await makeTrigger(prismaService, {});
     const runtime = makeRuntimeStub(trigger);
-    const tool = new SendMessageFunctionTool(new LoggerService(), prismaService, runtime);
+    const tool = new SendMessageFunctionTool(prismaService, runtime);
     const res = await tool.execute({ message: 'hello' }, { threadId: 't1' });
     const obj = JSON.parse(res);
     expect(obj).toEqual({ ok: true, channelMessageId: '2001', threadId: '2001' });

@@ -1,12 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 import { McpServerConfig } from '../src/mcp/types.js';
-import { LoggerService } from '../src/core/services/logger.service.js';
 import { ContainerService } from '../src/infra/container/container.service';
 import type { ContainerRegistry } from '../src/infra/container/container.registry';
 
 describe('MCP Lifecycle Changes', () => {
-  const logger = new LoggerService();
   const createContainerService = () => {
     const registryStub = {
       registerStart: async () => {},
@@ -25,8 +23,7 @@ describe('MCP Lifecycle Changes', () => {
 
   it('supports threadId parameter in callTool method', async () => {
     const containerService = createContainerService();
-    const server = new LocalMCPServerNode(containerService as any, logger as any, envStub, {} as any, undefined as any);
-
+    const server = new LocalMCPServerNode(containerService as any, envStub, {} as any, undefined as any);
     const mockProvider = {
       provide: async (threadId: string) => ({
         id: `container-${threadId}`,
@@ -47,8 +44,7 @@ describe('MCP Lifecycle Changes', () => {
 
   it('has discoverTools method for initial tool discovery', async () => {
     const containerService = createContainerService();
-    const server = new LocalMCPServerNode(containerService as any, logger as any, envStub, {} as any, undefined as any);
-
+    const server = new LocalMCPServerNode(containerService as any, envStub, {} as any, undefined as any);
     expect(typeof server.discoverTools).toBe('function');
 
     try {
@@ -60,8 +56,7 @@ describe('MCP Lifecycle Changes', () => {
 
   it('demonstrates new vs old lifecycle pattern', () => {
     const containerService = createContainerService();
-    const server = new LocalMCPServerNode(containerService as any, logger as any, envStub, {} as any, undefined as any);
-
+    const server = new LocalMCPServerNode(containerService as any, envStub, {} as any, undefined as any);
     expect(typeof server.discoverTools).toBe('function');
     expect(server.callTool.length >= 2).toBe(true);
     expect((server as any).client).toBeUndefined();

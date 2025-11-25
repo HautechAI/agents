@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 import { McpServerConfig } from '../src/mcp/types.js';
-import { LoggerService } from '../src/core/services/logger.service.js';
 import { PassThrough } from 'node:stream';
 import { ContainerService } from '../src/infra/container/container.service';
 import type { ContainerRegistry } from '../src/infra/container/container.registry';
@@ -100,12 +99,26 @@ function createInProcessMock() {
 }
 
 describe('LocalMCPServer (mock)', () => {
-  const logger = new LoggerService();
   let server: LocalMCPServerNode;
   let containerService: ContainerService;
 
+  const createContainerService = () => {
+    const registryStub = {
+      registerStart: async () => {},
+      updateLastUsed: async () => {},
+      markStopped: async () => {},
+      markTerminating: async () => {},
+      claimForTermination: async () => true,
+      recordTerminationFailure: async () => {},
+      findByVolume: async () => null,
+      listByThread: async () => [],
+      ensureIndexes: async () => {},
+    } as unknown as ContainerRegistry;
+    return new ContainerService(registryStub);
+  };
+
   beforeAll(async () => {
-    containerService = new ContainerService(undefined as unknown as ContainerRegistry);
+    containerService = createContainerService();
     // Mock docker exec via getDocker override
     const docker: any = containerService.getDocker();
     const mock = createInProcessMock();
@@ -126,7 +139,7 @@ describe('LocalMCPServer (mock)', () => {
       }),
     });
     const envStub = { resolveEnvItems: async () => ({}), resolveProviderEnv: async () => ({}) } as any;
-    server = new LocalMCPServerNode(containerService as any, logger as any, envStub, {} as any, undefined as any);
+    server = new LocalMCPServerNode(containerService as any, envStub, {} as any, undefined as any);
     // Provide a dummy container provider to satisfy start precondition (reuse mocked docker above)
     const mockProvider = {
       provide: async (threadId: string) => ({ 

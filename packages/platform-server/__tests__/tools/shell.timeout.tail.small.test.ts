@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
-import { LoggerService } from '../../src/core/services/logger.service';
 import { ExecTimeoutError } from '../../src/utils/execTimeout';
 import { ContainerHandle } from '../../src/infra/container/container.handle';
 import { ContainerService } from '../../src/infra/container/container.service';
 import type { ContainerRegistry } from '../../src/infra/container/container.registry';
+import { RunEventsService } from '../../src/events/run-events.service';
+import { EventsBusService } from '../../src/events/events-bus.service';
+import { PrismaService } from '../../src/core/services/prisma.service';
 
 // ANSI sequences should be stripped, but otherwise content preserved when <=10k
 const ANSI_GREEN = '\u001b[32m';
@@ -24,9 +26,31 @@ describe('ShellTool timeout full inclusion when <=10k', () => {
       }
     }
     const provider = new FakeProvider();
+    const envServiceStub = { resolveProviderEnv: async () => ({}) };
+    const moduleRefStub = {};
     const archiveStub = { createSingleFileTar: async () => Buffer.from('tar') } as const;
-    const moduleRefStub = { create: (cls: any) => new (cls as any)(archiveStub) } as const;
-    const node = new ShellCommandNode(undefined as any, new LoggerService() as any, moduleRefStub as any);
+    const runEventsStub: Pick<RunEventsService, 'appendToolOutputChunk' | 'finalizeToolOutputTerminal'> = {
+      appendToolOutputChunk: async (payload: unknown) => payload,
+      finalizeToolOutputTerminal: async (payload: unknown) => payload,
+    };
+    const eventsBusStub: Pick<EventsBusService, 'emitToolOutputChunk' | 'emitToolOutputTerminal'> = {
+      emitToolOutputChunk: () => undefined,
+      emitToolOutputTerminal: () => undefined,
+    };
+    const prismaStub: Pick<PrismaService, 'getClient'> = {
+      getClient: () => ({
+        container: { findUnique: async () => null },
+        containerEvent: { findFirst: async () => null },
+      }),
+    } as any;
+    const node = new ShellCommandNode(
+      envServiceStub as any,
+      moduleRefStub as any,
+      archiveStub as any,
+      runEventsStub as any,
+      eventsBusStub as any,
+      prismaStub as any,
+    );
     node.setContainerProvider(provider as any);
     await node.setConfig({});
     const t = node.getTool();
