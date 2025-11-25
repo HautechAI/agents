@@ -1,8 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { useArgs } from '@storybook/preview-api';
 import ThreadsScreen from '../src/components/screens/ThreadsScreen';
 import type { Thread } from '../src/components/ThreadItem';
 import type { Run } from '../src/components/Conversation';
 import { withMainLayout } from './decorators/withMainLayout';
+
+type ThreadsScreenProps = React.ComponentProps<typeof ThreadsScreen>;
 
 const meta: Meta<typeof ThreadsScreen> = {
   title: 'Screens/Threads',
@@ -95,8 +98,7 @@ const runs: Run[] = [
       {
         id: 'msg-4',
         role: 'system',
-        content:
-          'Packages installed successfully. Ready to configure OAuth provider.',
+        content: 'Packages installed successfully. Ready to configure OAuth provider.',
         timestamp: '10:34 AM',
       },
       {
@@ -121,13 +123,113 @@ const reminders = [
   { id: 'r-2', title: 'Update documentation', time: 'Friday at 2:00 PM' },
 ];
 
-export const Default: Story = {
+const ControlledRender: Story['render'] = () => {
+  const [currentArgs, updateArgs] = useArgs<ThreadsScreenProps>();
+
+  return (
+    <ThreadsScreen
+      {...currentArgs}
+      onFilterModeChange={(mode) => {
+        updateArgs({ filterMode: mode });
+      }}
+      onSelectThread={(threadId) => {
+        updateArgs({ selectedThreadId: threadId });
+      }}
+      onToggleRunsInfoCollapsed={(collapsed) => {
+        updateArgs({ isRunsInfoCollapsed: collapsed });
+      }}
+      onInputValueChange={(value) => {
+        updateArgs({ inputValue: value });
+      }}
+      onSendMessage={(value, context) => {
+        updateArgs({ inputValue: '' });
+      }}
+      onThreadsLoadMore={() => {
+      }}
+    />
+  );
+};
+
+export const Populated: Story = {
   args: {
     threads,
     runs,
     containers,
     reminders,
+    filterMode: 'all',
+    selectedThreadId: threads[0].id,
+    inputValue: '',
+    isRunsInfoCollapsed: false,
+    threadsHasMore: true,
+    threadsIsLoading: false,
+    isLoading: false,
+    isEmpty: false,
   },
+  render: ControlledRender,
+  parameters: {
+    selectedMenuItem: 'threads',
+  },
+};
+
+export const Empty: Story = {
+  args: {
+    threads: [],
+    runs: [],
+    containers: [],
+    reminders: [],
+    filterMode: 'all',
+    selectedThreadId: null,
+    inputValue: '',
+    isRunsInfoCollapsed: false,
+    threadsHasMore: false,
+    threadsIsLoading: false,
+    isLoading: false,
+    isEmpty: true,
+  },
+  render: ControlledRender,
+  parameters: {
+    selectedMenuItem: 'threads',
+  },
+};
+
+export const Loading: Story = {
+  args: {
+    threads: [],
+    runs: [],
+    containers: [],
+    reminders: [],
+    filterMode: 'all',
+    selectedThreadId: null,
+    inputValue: '',
+    isRunsInfoCollapsed: false,
+    threadsHasMore: false,
+    threadsIsLoading: true,
+    isLoading: true,
+    isEmpty: false,
+  },
+  render: ControlledRender,
+  parameters: {
+    selectedMenuItem: 'threads',
+  },
+};
+
+export const Error: Story = {
+  args: {
+    threads: [],
+    runs: [],
+    containers: [],
+    reminders: [],
+    filterMode: 'all',
+    selectedThreadId: null,
+    inputValue: '',
+    isRunsInfoCollapsed: false,
+    threadsHasMore: false,
+    threadsIsLoading: false,
+    isLoading: false,
+    isEmpty: false,
+    error: 'Failed to load threads. Please try again.',
+  },
+  render: ControlledRender,
   parameters: {
     selectedMenuItem: 'threads',
   },
