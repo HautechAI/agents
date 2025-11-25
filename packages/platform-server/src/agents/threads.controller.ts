@@ -225,19 +225,6 @@ export class AgentsThreadsController {
     return { items: runs };
   }
 
-  @Get('threads/:threadId/model')
-  async getThreadModel(@Param('threadId') threadId: string) {
-    try {
-      const model = await this.persistence.getThreadModel(threadId);
-      return { model };
-    } catch (err) {
-      if (err instanceof Error && err.message === 'thread_not_found') {
-        throw new NotFoundException('thread_not_found');
-      }
-      throw err;
-    }
-  }
-
   @Get('runs/:runId/messages')
   async listRunMessages(@Param('runId') runId: string, @Query() query: ListRunMessagesQueryDto) {
     const items = await this.persistence.listRunMessages(runId, query.type);

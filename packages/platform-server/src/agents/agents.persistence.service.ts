@@ -71,10 +71,7 @@ export class AgentsPersistenceService {
 
       const updated = await tx.thread.update({
         where: { id: threadId },
-        data: {
-          modelUsed: model,
-          modelSnapshottedAt: new Date(),
-        },
+        data: { modelUsed: model },
         select: { modelUsed: true },
       });
 

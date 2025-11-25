@@ -190,47 +190,4 @@ describe('AgentsThreadsController list endpoints', () => {
     await expect(ctrl.getThread('missing', {} as any)).rejects.toThrowError('thread_not_found');
   });
 
-  it('getThreadModel returns persisted model payload', async () => {
-    const persistence = {
-      getThreadModel: vi.fn(async () => 'gpt-4'),
-    } as unknown as AgentsPersistenceService;
-
-    const module = await Test.createTestingModule({
-      controllers: [AgentsThreadsController],
-      providers: [
-        { provide: AgentsPersistenceService, useValue: persistence },
-        { provide: ContainerThreadTerminationService, useValue: { terminateByThread: vi.fn() } },
-        { provide: RunEventsService, useValue: runEventsStub },
-        { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
-      ],
-    }).compile();
-
-    const ctrl = await module.resolve(AgentsThreadsController);
-    const res = await ctrl.getThreadModel('thread-1');
-    expect(res).toEqual({ model: 'gpt-4' });
-  });
-
-  it('getThreadModel returns null when unset and throws when thread is missing', async () => {
-    const persistence = {
-      getThreadModel: vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockRejectedValueOnce(new Error('thread_not_found')),
-    } as unknown as AgentsPersistenceService;
-
-    const module = await Test.createTestingModule({
-      controllers: [AgentsThreadsController],
-      providers: [
-        { provide: AgentsPersistenceService, useValue: persistence },
-        { provide: ContainerThreadTerminationService, useValue: { terminateByThread: vi.fn() } },
-        { provide: RunEventsService, useValue: runEventsStub },
-        { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
-      ],
-    }).compile();
-
-    const ctrl = await module.resolve(AgentsThreadsController);
-    const first = await ctrl.getThreadModel('thread-1');
-    expect(first).toEqual({ model: null });
-    await expect(ctrl.getThreadModel('thread-1')).rejects.toThrowError('thread_not_found');
-  });
 });
