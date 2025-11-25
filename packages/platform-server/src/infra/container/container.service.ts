@@ -1,8 +1,7 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
 import { ContainerHandle } from './container.handle';
-import { LoggerService } from '../../core/services/logger.service';
 import { PLATFORM_LABEL, type Platform } from '../../core/constants';
 import {
   isExecTimeoutError,
@@ -49,7 +48,7 @@ export type ContainerOpts = {
  * used flexibly by tools/agents. All methods log their high-level actions.
  *
  * Usage example:
- * const svc = new ContainerService(logger);
+ * const svc = new ContainerService(containerRegistry);
  * const c = await svc.start({ image: "node:20-alpine", cmd: ["sleep", "3600"], autoRemove: true });
  * const result = await c.exec("node -v");
  * await c.stop();
@@ -58,9 +57,9 @@ export type ContainerOpts = {
 @Injectable()
 export class ContainerService {
   private docker: Docker;
+  private readonly logger = new Logger(ContainerService.name);
 
   constructor(
-    @Inject(LoggerService) private logger: LoggerService,
     @Inject(ContainerRegistry) private registry: ContainerRegistry,
   ) {
     this.docker = new Docker({
@@ -84,7 +83,7 @@ export class ContainerService {
 
   /** Pull an image; if platform is specified, pull even when image exists to ensure correct arch. */
   async ensureImage(image: string, platform?: Platform): Promise<void> {
-    this.logger.info(`Ensuring image '${image}' is available locally`);
+    this.logger.log(`Ensuring image '${image}' is available locally`);
     // Check if image exists
     try {
       await this.docker.getImage(image).inspect();
@@ -92,7 +91,7 @@ export class ContainerService {
       // When platform is provided, still pull to ensure the desired arch variant is present.
       if (!platform) return;
     } catch {
-      this.logger.info(`Image '${image}' not found locally. Pulling...`);
+      this.logger.log(`Image '${image}' not found locally. Pulling...`);
     }
 
     await new Promise<void>((resolve, reject) => {
@@ -104,7 +103,7 @@ export class ContainerService {
           stream,
           (doneErr?: unknown) => {
             if (doneErr) return reject(doneErr);
-            this.logger.info(`Finished pulling image '${image}'`);
+            this.logger.log(`Finished pulling image '${image}'`);
             resolve();
           },
           (event: { status?: string; id?: string }) => {
@@ -175,13 +174,13 @@ export class ContainerService {
       Object.assign(createOptions, rest);
     }
 
-    this.logger.info(
+    this.logger.log(
       `Creating container from '${optsWithDefaults.image}'${optsWithDefaults.name ? ` name=${optsWithDefaults.name}` : ''}`,
     );
     const container = await this.docker.createContainer(createOptions);
     await container.start();
     const inspect = await container.inspect();
-    this.logger.info(`Container started cid=${inspect.Id.substring(0, 12)} status=${inspect.State?.Status}`);
+    this.logger.log(`Container started cid=${inspect.Id.substring(0, 12)} status=${inspect.State?.Status}`);
     // Persist container start in registry (workspace and DinD)
     if (this.registry) {
       try {
@@ -273,7 +272,7 @@ export class ContainerService {
       if (isTimeout && options?.killOnTimeout) {
         // Gracefully stop the container to ensure process-tree cleanup.
         try {
-          this.logger.info('Exec timeout detected; stopping container', {
+          this.logger.log('Exec timeout detected; stopping container', {
             containerId,
             timeoutMs: options?.timeoutMs,
             idleTimeoutMs: options?.idleTimeoutMs,
@@ -678,7 +677,7 @@ export class ContainerService {
 
   /** Stop a container by docker id (gracefully). */
   async stopContainer(containerId: string, timeoutSec = 10): Promise<void> {
-    this.logger.info(`Stopping container cid=${containerId.substring(0, 12)} (timeout=${timeoutSec}s)`);
+    this.logger.log(`Stopping container cid=${containerId.substring(0, 12)} (timeout=${timeoutSec}s)`);
     const c = this.docker.getContainer(containerId);
     try {
       await c.stop({ t: timeoutSec });
@@ -688,7 +687,7 @@ export class ContainerService {
         this.logger.debug(`Container already stopped cid=${containerId.substring(0, 12)}`);
       } else if (sc === 409) {
         // Conflict typically indicates removal already in progress; treat as benign
-        this.logger.info(`Container stop conflict (likely removing) cid=${containerId.substring(0, 12)}`);
+        this.logger.log(`Container stop conflict (likely removing) cid=${containerId.substring(0, 12)}`);
       } else {
         throw e;
       }
@@ -703,7 +702,7 @@ export class ContainerService {
     const opts = typeof options === 'boolean' ? { force: options } : options;
     const force = opts?.force ?? false;
     const removeVolumes = opts?.removeVolumes ?? false;
-    this.logger.info(
+    this.logger.log(
       `Removing container cid=${containerId.substring(0, 12)} force=${force} removeVolumes=${removeVolumes}`,
     );
     const container = this.docker.getContainer(containerId);
@@ -714,7 +713,7 @@ export class ContainerService {
       if (sc === 404) {
         this.logger.debug(`Container already removed cid=${containerId.substring(0, 12)}`);
       } else if (sc === 409) {
-        this.logger.info(`Container removal conflict cid=${containerId.substring(0, 12)} (likely removing)`);
+        this.logger.log(`Container removal conflict cid=${containerId.substring(0, 12)} (likely removing)`);
       } else {
         throw e;
       }
@@ -748,7 +747,7 @@ export class ContainerService {
     options?: { all?: boolean },
   ): Promise<ContainerHandle[]> {
     const labelFilters = Object.entries(labels).map(([k, v]) => `${k}=${v}`);
-    this.logger.info(`Listing containers by labels all=${options?.all ?? false} filters=${labelFilters.join(',')}`);
+    this.logger.log(`Listing containers by labels all=${options?.all ?? false} filters=${labelFilters.join(',')}`);
     // dockerode returns Docker.ContainerInfo[]; type explicitly for comparator safety
     const list: Docker.ContainerInfo[] = await this.docker.listContainers({
       all: options?.all ?? false,

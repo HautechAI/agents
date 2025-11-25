@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { ContainerService } from '../src/infra/container/container.service';
+import type { ContainerRegistry } from '../src/infra/container/container.registry';
 import { PassThrough } from 'node:stream';
 
 function createBlockingMcpMock() {
@@ -70,7 +71,7 @@ describe('LocalMCPServer heartbeat behavior', () => {
 
   it('touches last_used during session and stops after completion', async () => {
     const logger = new LoggerService();
-    const containerService = new ContainerService(logger);
+    const containerService = new ContainerService(undefined as unknown as ContainerRegistry);
     const docker: any = containerService.getDocker();
     const mock = createBlockingMcpMock();
     if (docker.modem) docker.modem.demuxStream = (s: any, out: any) => s.pipe(out);

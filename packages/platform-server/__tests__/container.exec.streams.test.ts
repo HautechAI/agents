@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { LoggerService } from '../src/core/services/logger.service';
 import { ContainerService } from '../src/infra/container/container.service';
+import type { ContainerRegistry } from '../src/infra/container/container.registry';
+
+const createService = (): ContainerService => new ContainerService(undefined as unknown as ContainerRegistry);
 import { PassThrough } from 'node:stream';
 
 function makeFrame(type: number, payload: Buffer) {
@@ -13,8 +15,7 @@ function makeFrame(type: number, payload: Buffer) {
 
 describe('ContainerService.startAndCollectExec stream handling', () => {
   it('decodes UTF-8 split across chunk boundaries (TTY=true path)', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const out = new PassThrough();
 
     const docker: any = {
@@ -47,8 +48,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('demuxes multiplexed stream when TTY=false (stdout/stderr separation)', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const hijacked = new PassThrough();
 
     const stdoutPayload = Buffer.from('hello-');
@@ -103,8 +103,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('falls back safely when header invalid (treat raw as stdout)', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const hijacked = new PassThrough();
 
     const docker: any = {
@@ -131,8 +130,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('handles large output streams without garbling', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const out = new PassThrough();
 
     const docker: any = {
@@ -157,8 +155,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('preserves ANSI escape sequences (TTY=true)', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const out = new PassThrough();
 
     const ANSI = "\x1b[31mred\x1b[0m normal";
@@ -184,8 +181,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('flushes decoder on overall timeout with partial multibyte and destroys stream', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const out = new PassThrough();
 
     let hijacked: PassThrough | null = null;
@@ -217,8 +213,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('flushes decoder on idle timeout with partial multibyte and destroys stream', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const out = new PassThrough();
     let hijacked: PassThrough | null = null;
     const sushi = Buffer.from('🍣', 'utf8');
@@ -247,8 +242,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('manual demux handles header split across chunk boundaries', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const hijacked = new PassThrough();
 
     const payload = Buffer.from('hello');
@@ -283,8 +277,7 @@ describe('ContainerService.startAndCollectExec stream handling', () => {
   });
 
   it('invalid header switches to passthrough for subsequent chunks', async () => {
-    const logger = new LoggerService();
-    const svc = new ContainerService(logger);
+    const svc = createService();
     const hijacked = new PassThrough();
 
     const docker: any = {

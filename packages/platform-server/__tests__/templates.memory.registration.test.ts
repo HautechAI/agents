@@ -3,6 +3,7 @@ import { buildTemplateRegistry } from '../src/templates';
 import { ModuleRef } from '@nestjs/core';
 import { LoggerService } from '../src/core/services/logger.service';
 import { ContainerService } from '../src/infra/container/container.service';
+import type { ContainerRegistry } from '../src/infra/container/container.registry';
 import { ConfigService, configSchema } from '../src/core/services/config.service';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import { WorkspaceNode } from '../src/nodes/workspace/workspace.node';
@@ -29,12 +30,12 @@ describe('templates: memory registration and agent memory port', () => {
         agentsDatabaseUrl: process.env.AGENTS_DATABASE_URL || 'postgres://localhost/skip',
       }),
     );
-    const containerService = new ContainerService(logger);
+    const containerService = new ContainerService(undefined as unknown as ContainerRegistry);
     const provisioner = { getLLM: async () => ({ call: async () => ({ text: 'ok', output: [] }) }) } as unknown as LLMProvisioner;
     const resolver = { resolve: async (input: unknown) => ({ output: input, report: {} as unknown }) };
     const envService = new EnvService(resolver as any);
     const archiveService = new ArchiveService();
-    const ncpsKeyService = new NcpsKeyService(logger, configService);
+    const ncpsKeyService = new NcpsKeyService(configService);
     const prisma = new PrismaClient({ datasources: { db: { url: process.env.AGENTS_DATABASE_URL || 'postgres://localhost/skip' } } });
     const memoryService = new MemoryService(
       new PostgresMemoryEntitiesRepository({ getClient: () => prisma } as any),

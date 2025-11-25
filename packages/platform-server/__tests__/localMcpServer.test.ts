@@ -4,6 +4,7 @@ import { McpServerConfig } from '../src/mcp/types.js';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { PassThrough } from 'node:stream';
 import { ContainerService } from '../src/infra/container/container.service';
+import type { ContainerRegistry } from '../src/infra/container/container.registry';
 // no extra imports
 
 /**
@@ -104,7 +105,7 @@ describe('LocalMCPServer (mock)', () => {
   let containerService: ContainerService;
 
   beforeAll(async () => {
-    containerService = new ContainerService(logger);
+    containerService = new ContainerService(undefined as unknown as ContainerRegistry);
     // Mock docker exec via getDocker override
     const docker: any = containerService.getDocker();
     const mock = createInProcessMock();

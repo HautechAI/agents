@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 import { LoggerService } from '../src/core/services/logger.service.js';
 import { ContainerService } from '../src/infra/container/container.service';
+import type { ContainerRegistry } from '../src/infra/container/container.registry';
 
 describe('LocalMCPServer preload + staleness + persist', () => {
   let server: LocalMCPServerNode;
@@ -9,7 +10,18 @@ describe('LocalMCPServer preload + staleness + persist', () => {
 
   beforeEach(async () => {
     const logger = new LoggerService();
-    const cs = new ContainerService(logger);
+    const registryStub = {
+      registerStart: async () => {},
+      updateLastUsed: async () => {},
+      markStopped: async () => {},
+      markTerminating: async () => {},
+      claimForTermination: async () => true,
+      recordTerminationFailure: async () => {},
+      findByVolume: async () => null,
+      listByThread: async () => [],
+      ensureIndexes: async () => {},
+    } as unknown as ContainerRegistry;
+    const cs = new ContainerService(registryStub);
     const envStub = { resolveEnvItems: async () => ({}), resolveProviderEnv: async () => ({}) } as any;
     server = new LocalMCPServerNode(cs as any, logger as any, envStub, {} as any, undefined as any);
     await server.setConfig({ namespace: 'x', command: 'echo' } as any);
