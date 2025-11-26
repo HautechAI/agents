@@ -29,7 +29,7 @@ async function main(argv: string[]): Promise<number> {
     .option('--backup [ext]', 'Backup original JSON to <file>.json<ext> (defaults to .bak)')
     .option('--dry-run', 'Simulate conversion without writing outputs')
     .option('--output-ext <ext>', 'YAML extension', '.yaml')
-    .option('--atomic', 'Use atomic temp writes')
+    .option('--atomic', 'Enable atomic temp writes')
     .option('--validate-only', 'Validate without producing YAML output')
     .option('--schema-migrate', 'Apply schema migrations before validation')
     .option('--strict', 'Enable strict Ajv validation')
@@ -50,7 +50,7 @@ async function main(argv: string[]): Promise<number> {
     backupExt,
     dryRun: Boolean(opts.dryRun),
     outputExt: opts.outputExt ?? '.yaml',
-    atomic: opts.atomic !== undefined ? Boolean(opts.atomic) : true,
+    atomic: opts.atomic ?? false,
     validateOnly: Boolean(opts.validateOnly),
     schemaMigrate: Boolean(opts.schemaMigrate),
     strict: Boolean(opts.strict),

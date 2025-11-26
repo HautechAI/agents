@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm -r --filter ./packages/* run build",
     "test": "pnpm -r --workspace-concurrency=1 run test",
-    "convert-graphs": "pnpm --filter @agyn/graph-converter exec graph-converter",
+    "convert-graphs": "pnpm --filter @agyn/graph-converter exec graph-converter --atomic",
     "postinstall": "pnpm -r --if-present run prepare",
     "deps:up:podman": "podman compose up -d"
   },

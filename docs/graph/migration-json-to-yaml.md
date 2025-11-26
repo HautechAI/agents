@@ -29,7 +29,7 @@ Flags:
 - `--schema-migrate`: derive missing ids, normalize edge ids, coerce variable values
 - `--strict`: enable Ajv strict mode (`additionalProperties=false`)
 - `--output-ext`: emitted extension (default `.yaml`)
-- `--atomic`: toggle atomic temp-file writes (`--no-atomic` to disable)
+- `--atomic`: write via temp file + rename + fsync (default disabled)
 - `--verbose`: verbose logging
 
 Exit codes:

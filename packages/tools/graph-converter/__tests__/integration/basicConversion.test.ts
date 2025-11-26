@@ -44,7 +44,7 @@ describe('convertGraphs (integration)', () => {
       backupExt: null,
       dryRun: false,
       outputExt: '.yaml',
-      atomic: false,
+      atomic: true,
       validateOnly: false,
       schemaMigrate: false,
       strict: true,
