@@ -1,5 +1,5 @@
 import type { JSONSchema } from '@agyn/json-schema-to-zod';
-import type { Reference } from '@agyn/shared';
+import type { Reference } from '../../utils/references';
 
 // If upstream exports JSONRPCMessage directly later, replace this with that import.
 export type JSONRPCMessage = {
