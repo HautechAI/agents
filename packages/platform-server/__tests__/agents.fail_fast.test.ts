@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '../src/core/services/config.service';
-import { ModuleRef } from '@nestjs/core';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { AgentNode } from '../src/nodes/agent/agent.node';

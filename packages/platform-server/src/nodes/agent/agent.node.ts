@@ -119,6 +119,24 @@ type EffectiveAgentConfig = {
   memoryPlacement: 'after_system' | 'last_message' | 'none';
 };
 
+type ToolSource =
+  | {
+      sourceType: 'node';
+      nodeId?: string;
+      className?: string;
+    }
+  | {
+      sourceType: 'mcp';
+      nodeId?: string;
+      namespace?: string;
+      className?: string;
+    };
+
+type RegisteredTool = {
+  tool: FunctionTool;
+  source: ToolSource;
+};
+
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
 import { Inject, Injectable, Optional, Scope } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -131,8 +149,9 @@ import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
 export class AgentNode extends Node<AgentStaticConfig> {
   protected buffer = new MessagesBuffer({ debounceMs: 0 });
 
-  private mcpServerTools: Map<LocalMCPServerNode, FunctionTool[]> = new Map();
-  private tools: Set<FunctionTool> = new Set();
+  private mcpServerTools: Map<LocalMCPServerNode, Map<string, FunctionTool>> = new Map();
+  private toolsByName: Map<string, RegisteredTool> = new Map();
+  private toolNames: Set<string> = new Set();
   private runningThreads: Set<string> = new Set();
 
   constructor(
@@ -172,6 +191,88 @@ export class AgentNode extends Node<AgentStaticConfig> {
     return this._config;
   }
 
+  private getAgentLabel(): string {
+    const title = this.config?.title;
+    if (typeof title === 'string' && title.trim().length > 0) return title;
+    const nodeId = this.getAgentNodeId();
+    return nodeId ?? 'unknown';
+  }
+
+  private buildNodeToolSource(toolNode: BaseToolNode<unknown>): ToolSource {
+    let nodeId: string | undefined;
+    try {
+      nodeId = toolNode.nodeId;
+    } catch {
+      nodeId = undefined;
+    }
+    return { sourceType: 'node', nodeId, className: toolNode.constructor.name };
+  }
+
+  private buildMcpToolSource(server: LocalMCPServerNode): ToolSource {
+    let nodeId: string | undefined;
+    try {
+      nodeId = server.nodeId;
+    } catch {
+      nodeId = undefined;
+    }
+    return { sourceType: 'mcp', nodeId, namespace: server.namespace, className: server.constructor.name };
+  }
+
+  private formatToolSource(source: ToolSource): Record<string, unknown> {
+    if (source.sourceType === 'node') {
+      return {
+        sourceType: source.sourceType,
+        nodeId: source.nodeId,
+        className: source.className,
+      };
+    }
+    return {
+      sourceType: source.sourceType,
+      nodeId: source.nodeId,
+      namespace: source.namespace,
+      className: source.className,
+    };
+  }
+
+  private registerTool(tool: FunctionTool, source: ToolSource): boolean {
+    if (this.toolNames.has(tool.name)) {
+      const existing = this.toolsByName.get(tool.name);
+      const agentNodeId = this.getAgentNodeId();
+      const agentTitle = this.config?.title;
+      this.logger.error(
+        `[Agent:${this.getAgentLabel()}] Duplicate tool name detected: ${tool.name}. Skipping registration.`,
+        {
+          agentNodeId,
+          agentTitle,
+          toolName: tool.name,
+          skipped: this.formatToolSource(source),
+          kept: existing ? this.formatToolSource(existing.source) : undefined,
+        },
+      );
+      return false;
+    }
+
+    this.toolsByName.set(tool.name, { tool, source });
+    this.toolNames.add(tool.name);
+    return true;
+  }
+
+  private unregisterTool(name: string, tool: FunctionTool): boolean {
+    const existing = this.toolsByName.get(name);
+    if (!existing || existing.tool !== tool) return false;
+    this.toolsByName.delete(name);
+    this.toolNames.delete(name);
+    return true;
+  }
+
+  public get tools(): FunctionTool[] {
+    return this.getActiveTools();
+  }
+
+  private getActiveTools(): FunctionTool[] {
+    return Array.from(this.toolsByName.values()).map((entry) => entry.tool);
+  }
+
   private async injectBufferedMessages(
     behavior: EffectiveAgentConfig['behavior'],
     state: LLMState,
@@ -181,7 +282,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     const drained = this.buffer.tryDrain(ctx.threadId, mode);
     if (drained.length === 0) return;
 
-    this.logger.debug(
+    this.logger.debug?.(
       `[Agent: ${this.config.title ?? this.nodeId}] Injecting ${drained.length} buffered message(s) into active run for thread ${ctx.threadId}`,
     );
 
@@ -376,7 +477,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
       this.buffer.setDebounceMs(effective.behavior.debounceMs);
 
-      const activeTools = Array.from(this.tools);
+      const activeTools = this.getActiveTools();
 
       terminateSignal = new Signal();
       this.getRunSignals().register(ensuredRunId, terminateSignal);
@@ -440,23 +541,30 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
   addTool(toolNode: BaseToolNode<unknown>): void {
     const tool: FunctionTool = toolNode.getTool();
-    this.tools.add(tool);
-    this.logger.debug(`[Agent: ${this.config.title}] Tool added: ${tool.name} (${toolNode.constructor.name})`);
+    const added = this.registerTool(tool, this.buildNodeToolSource(toolNode));
+    if (added) {
+      this.logger.debug(
+        `[Agent:${this.getAgentLabel()}] Tool added: ${tool.name} (${toolNode.constructor.name})`,
+      );
+    }
   }
   removeTool(toolNode: BaseToolNode<unknown>): void {
     const tool: FunctionTool = toolNode.getTool();
-    this.tools.delete(tool);
-    this.logger.debug(`[Agent: ${this.config.title}] Tool removed: ${tool.name} (${toolNode.constructor.name})`);
+    if (this.unregisterTool(tool.name, tool)) {
+      this.logger.debug(
+        `[Agent:${this.getAgentLabel()}] Tool removed: ${tool.name} (${toolNode.constructor.name})`,
+      );
+    }
   }
 
   async addMcpServer(server: LocalMCPServerNode): Promise<void> {
     const namespace = server.namespace;
     if (this.mcpServerTools.has(server)) {
-      this.logger.debug(`MCP server ${namespace} already added; skipping duplicate add.`);
+      this.logger.debug?.(`MCP server ${namespace} already added; skipping duplicate add.`);
       return;
     }
     // Track server with empty tools initially; sync on events
-    this.mcpServerTools.set(server, []);
+    this.mcpServerTools.set(server, new Map());
 
     const sync = (): void => {
       void this.syncMcpToolsFromServer(server);
@@ -473,7 +581,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
   async removeMcpServer(server: LocalMCPServerNode): Promise<void> {
     const tools = this.mcpServerTools.get(server);
-    if (tools && tools.length) for (const tool of tools) this.tools.delete(tool);
+    if (tools) for (const [name, tool] of tools) this.unregisterTool(name, tool);
     this.mcpServerTools.delete(server);
   }
 
@@ -481,29 +589,52 @@ export class AgentNode extends Node<AgentStaticConfig> {
   private syncMcpToolsFromServer(server: LocalMCPServerNode): void {
     try {
       const namespace = server.namespace;
-      const latest: FunctionTool[] = server.listTools();
-      const prev: FunctionTool[] = this.mcpServerTools.get(server) || [];
+      const latestTools: FunctionTool[] = server.listTools();
+      const prev = this.mcpServerTools.get(server) ?? new Map<string, FunctionTool>();
 
-      const latestNames = new Set(latest.map((t) => t.name));
-      // Remove tools no longer present
-      for (const t of prev) {
-        if (!latestNames.has(t.name)) {
-          this.tools.delete(t);
-          this.logger.debug(`[Agent: ${this.config.title}] MCP tool removed (${namespace}/${t.name})`);
+      const uniqueLatest = new Map<string, FunctionTool>();
+      const duplicates: FunctionTool[] = [];
+      for (const tool of latestTools) {
+        if (!uniqueLatest.has(tool.name)) {
+          uniqueLatest.set(tool.name, tool);
+        } else {
+          duplicates.push(tool);
         }
       }
 
-      const prevNames = new Set(prev.map((t) => t.name));
-      // Add new tools
-      for (const t of latest) {
-        if (!prevNames.has(t.name)) {
-          this.tools.add(t);
-          this.logger.debug(`[Agent: ${this.config.title}] MCP tool added ${t.name}`);
+      for (const [name, prevTool] of prev) {
+        const latestTool = uniqueLatest.get(name);
+        if (latestTool && latestTool === prevTool) continue;
+        if (this.unregisterTool(name, prevTool)) {
+          this.logger.debug?.(`[Agent:${this.getAgentLabel()}] MCP tool removed (${namespace}/${name})`);
         }
       }
 
-      // Update snapshot
-      this.mcpServerTools.set(server, latest);
+      const next = new Map<string, FunctionTool>();
+      const source = this.buildMcpToolSource(server);
+
+      for (const [name, tool] of uniqueLatest) {
+        const existing = this.toolsByName.get(name)?.tool;
+        if (existing === tool) {
+          next.set(name, tool);
+          continue;
+        }
+
+        const added = this.registerTool(tool, source);
+        const isRegistered = this.toolsByName.get(name)?.tool === tool;
+        if (!isRegistered) continue;
+
+        next.set(name, tool);
+        if (added) {
+          this.logger.debug(`[Agent:${this.getAgentLabel()}] MCP tool added ${tool.name}`);
+        }
+      }
+
+      for (const duplicate of duplicates) {
+        this.registerTool(duplicate, source);
+      }
+
+      this.mcpServerTools.set(server, next);
     } catch (e: unknown) {
       this.logger.error?.('Agent: syncMcpToolsFromServer error', e);
     }
