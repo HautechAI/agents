@@ -3,7 +3,6 @@ import { EventEmitter } from 'events';
 import { z } from 'zod';
 
 import { AgentNode, type AgentStaticConfig } from '../src/nodes/agent/agent.node';
-import { LoggerService } from '../src/core/services/logger.service';
 import { ConfigService } from '../src/core/services/config.service';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import type { ModuleRef } from '@nestjs/core';
@@ -39,11 +38,19 @@ class TestFunctionTool extends FunctionTool<z.ZodObject<z.ZodRawShape>> {
   }
 }
 
+type LoggerStub = {
+  error: ReturnType<typeof vi.fn>;
+  warn: ReturnType<typeof vi.fn>;
+  log: ReturnType<typeof vi.fn>;
+  debug: ReturnType<typeof vi.fn>;
+};
+
 class TestToolNode extends BaseToolNode<unknown> {
   private readonly tool: FunctionTool;
 
-  constructor(logger: LoggerService, tool: FunctionTool, nodeId: string) {
-    super(logger);
+  constructor(logger: LoggerStub, tool: FunctionTool, nodeId: string) {
+    super();
+    (this as unknown as { logger: LoggerStub }).logger = logger;
     this.tool = tool;
     this.init({ nodeId });
   }
@@ -72,8 +79,10 @@ class StubMcpServer extends EventEmitter {
   }
 }
 
+const makeLoggerStub = (): LoggerStub => ({ error: vi.fn(), warn: vi.fn(), log: vi.fn(), debug: vi.fn() });
+
 const createAgent = async () => {
-  const logger = new LoggerService();
+  const logger = makeLoggerStub();
   const configService = {} as ConfigService;
   const provisioner = new StubProvisioner();
   const moduleRef = {
@@ -81,7 +90,8 @@ const createAgent = async () => {
     create: vi.fn(async () => undefined),
   } as unknown as ModuleRef;
 
-  const agent = new AgentNode(configService, logger, provisioner, moduleRef);
+  const agent = new AgentNode(configService, provisioner, moduleRef);
+  (agent as unknown as { logger: LoggerStub }).logger = logger;
   agent.init({ nodeId: 'agent-node' });
   await agent.setConfig({ title: 'Test Agent' } as AgentStaticConfig);
 

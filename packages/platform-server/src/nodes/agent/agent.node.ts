@@ -1,7 +1,6 @@
 import { LocalMCPServerNode } from '../mcp';
 
 import { ConfigService } from '../../core/services/config.service';
-import { LoggerService } from '../../core/services/logger.service';
 
 import { z } from 'zod';
 
@@ -157,13 +156,12 @@ export class AgentNode extends Node<AgentStaticConfig> {
 
   constructor(
     @Inject(ConfigService) protected configService: ConfigService,
-    @Inject(LoggerService) protected logger: LoggerService,
     @Inject(LLMProvisioner) protected llmProvisioner: LLMProvisioner,
     @Inject(ModuleRef) protected readonly moduleRef: ModuleRef,
     @Optional() @Inject(AgentsPersistenceService) private persistence?: AgentsPersistenceService,
     @Optional() @Inject(RunSignalsRegistry) private runSignals?: RunSignalsRegistry,
   ) {
-    super(logger);
+    super();
   }
 
   private getPersistence(): AgentsPersistenceService {
@@ -513,7 +511,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
           throw new Error('Agent did not produce a valid response message.');
         }
 
-        this.logger.info(`Agent response in thread ${thread}: ${last?.text}`);
+        this.logger.log(`Agent response in thread ${thread}: ${last?.text}`);
         if (last instanceof ResponseMessage) {
           const outputs: Array<AIMessage | ToolCallMessage> = last.output.filter(
             (o) => o instanceof AIMessage || o instanceof ToolCallMessage,
