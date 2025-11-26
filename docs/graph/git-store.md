@@ -62,3 +62,7 @@ Related behavior
 Configuration flags
 - `GRAPH_STORE_WRITE_JSON` (default `false`): write JSON mirrors alongside YAML for one release cycle.
 - `GRAPH_AUTO_CONVERT_JSON` (default `false`): auto-create YAML files when only JSON is available in the working tree.
+
+Conversion tooling
+- Use `pnpm convert-graphs` (wrapping `packages/tools/graph-converter`) to generate YAML snapshots locally.
+- Atomic writes are enabled by default; pass `--no-atomic` if the filesystem cannot support the temp-file + rename flow.
