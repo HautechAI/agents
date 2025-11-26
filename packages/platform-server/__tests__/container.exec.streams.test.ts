@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ContainerService } from '../src/infra/container/container.service';
+import { LoggerService } from '../src/core/services/logger.service';
 import type { ContainerRegistry } from '../src/infra/container/container.registry';
 
 const makeRegistry = () => ({
@@ -14,7 +15,7 @@ const makeRegistry = () => ({
   ensureIndexes: vi.fn(async () => undefined),
 } satisfies Partial<ContainerRegistry>) as ContainerRegistry;
 
-const createService = (): ContainerService => new ContainerService(makeRegistry());
+const createService = (): ContainerService => new ContainerService(makeRegistry(), new LoggerService());
 import { PassThrough } from 'node:stream';
 
 function makeFrame(type: number, payload: Buffer) {

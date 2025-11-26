@@ -3,6 +3,7 @@ import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_comm
 import { ExecTimeoutError } from '../../src/utils/execTimeout';
 import { ContainerHandle } from '../../src/infra/container/container.handle';
 import { ContainerService } from '../../src/infra/container/container.service';
+import { LoggerService } from '../../src/core/services/logger.service';
 import type { ContainerRegistry } from '../../src/infra/container/container.registry';
 
 const makeRegistry = () => ({
@@ -34,7 +35,7 @@ describe('ShellTool timeout full inclusion when <=10k', () => {
     class FakeContainer extends ContainerHandle { override async exec(): Promise<never> { throw err; } }
     class FakeProvider {
       async provide(): Promise<ContainerHandle> {
-        return new FakeContainer(new ContainerService(makeRegistry()), 'fake');
+        return new FakeContainer(new ContainerService(makeRegistry(), new LoggerService()), 'fake');
       }
     }
     const provider = new FakeProvider();

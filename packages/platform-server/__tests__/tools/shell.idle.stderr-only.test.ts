@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ContainerService } from '../../src/infra/container/container.service';
+import { LoggerService } from '../../src/core/services/logger.service';
 import type { ContainerRegistry } from '../../src/infra/container/container.registry';
 
 const makeRegistry = () => ({
@@ -16,7 +17,7 @@ const makeRegistry = () => ({
 
 describe('ContainerService idle timer resets on stderr-only output', () => {
   it('should reset idle timer when only stderr produces data', async () => {
-    const svc = new ContainerService(makeRegistry());
+    const svc = new ContainerService(makeRegistry(), new LoggerService());
 
     const fakeStream: any = {
       on: vi.fn((evt: string, cb: (...args: unknown[]) => unknown) => {

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import Docker, { ContainerCreateOptions, Exec } from 'dockerode';
 import { PassThrough, Writable } from 'node:stream';
 import { ContainerHandle } from './container.handle';
@@ -49,7 +49,7 @@ export type ContainerOpts = {
  * used flexibly by tools/agents. All methods log their high-level actions.
  *
  * Usage example:
- * const svc = new ContainerService(containerRegistry);
+ * const svc = new ContainerService(containerRegistry, logger);
  * const c = await svc.start({ image: "node:20-alpine", cmd: ["sleep", "3600"], autoRemove: true });
  * const result = await c.exec("node -v");
  * await c.stop();
@@ -58,13 +58,10 @@ export type ContainerOpts = {
 @Injectable()
 export class ContainerService {
   private docker: Docker;
-  private readonly logger: LoggerService;
-
   constructor(
     @Inject(ContainerRegistry) private registry: ContainerRegistry,
-    @Inject(LoggerService) @Optional() logger?: LoggerService,
+    @Inject(LoggerService) private readonly logger: LoggerService,
   ) {
-    this.logger = logger ?? new LoggerService();
     this.docker = new Docker({
       ...(process.env.DOCKER_SOCKET
         ? {

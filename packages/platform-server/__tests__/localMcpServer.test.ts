@@ -3,6 +3,7 @@ import { LocalMCPServerNode } from '../src/nodes/mcp/localMcpServer.node';
 import { McpServerConfig } from '../src/mcp/types.js';
 import { PassThrough } from 'node:stream';
 import { ContainerService } from '../src/infra/container/container.service';
+import { LoggerService } from '../src/core/services/logger.service';
 import type { ContainerRegistry } from '../src/infra/container/container.registry';
 // no extra imports
 
@@ -114,7 +115,7 @@ describe('LocalMCPServer (mock)', () => {
       listByThread: async () => [],
       ensureIndexes: async () => {},
     } as unknown as ContainerRegistry;
-    return new ContainerService(registryStub);
+    return new ContainerService(registryStub, new LoggerService());
   };
 
   beforeAll(async () => {
