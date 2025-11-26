@@ -231,6 +231,19 @@ async function resolveSecretRef(
     recordEvent(state, { path: pointer, source: 'secret', cacheHit: false, resolved: true });
     return resolved;
   } catch (err: unknown) {
+    if (err instanceof ResolveError) {
+      state.report.counts.errors += 1;
+      recordEvent(state, {
+        path: pointer,
+        source: 'secret',
+        cacheHit: false,
+        error: { code: err.code, message: err.message },
+      });
+      if (state.options.strict) throw err;
+      state.report.counts.unresolved += 1;
+      return lenientFallback('secret', ref, state.options);
+    }
+
     const code: ResolutionErrorCode =
       typeof err === 'object' && err && 'statusCode' in err && (err as { statusCode?: number }).statusCode === 403
         ? 'permission_denied'
@@ -312,6 +325,19 @@ async function resolveVariableRef(
     recordEvent(state, { path: pointer, source: 'variable', cacheHit: false, resolved: true });
     return resolved;
   } catch (err: unknown) {
+    if (err instanceof ResolveError) {
+      state.report.counts.errors += 1;
+      recordEvent(state, {
+        path: pointer,
+        source: 'variable',
+        cacheHit: false,
+        error: { code: err.code, message: err.message },
+      });
+      if (state.options.strict) throw err;
+      state.report.counts.unresolved += 1;
+      return lenientFallback('variable', ref, state.options);
+    }
+
     const message = err instanceof Error ? err.message : 'Variable provider error';
     const resolveErr = new ResolveError('invalid_reference', message, { path: pointer, source: 'variable', cause: err });
     state.report.counts.errors += 1;

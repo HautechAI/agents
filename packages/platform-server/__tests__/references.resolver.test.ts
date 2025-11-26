@@ -102,6 +102,20 @@ describe('resolveReferences', () => {
     });
   });
 
+  it('preserves ResolveError instances thrown by secret provider', async () => {
+    const providerError = new ResolveError('provider_missing', 'Vault offline', {
+      path: '/vault/token',
+      source: 'secret',
+    });
+    const providers = {
+      secret: vi.fn(async () => {
+        throw providerError;
+      }),
+    };
+
+    await expect(resolveReferences(secretRef(), providers)).rejects.toBe(providerError);
+  });
+
   it('detects cycles when enabled', async () => {
     const providers = {
       secret: vi.fn(async () => 'value'),
@@ -129,6 +143,20 @@ describe('resolveReferences', () => {
       lenientUnresolvedValue: 'null',
     });
     expect(output.token).toBeNull();
+  });
+
+  it('preserves ResolveError instances thrown by variable provider', async () => {
+    const providerError = new ResolveError('provider_missing', 'Env resolver offline', {
+      path: '/vars/SLACK_CHANNEL',
+      source: 'variable',
+    });
+    const providers = {
+      variable: vi.fn(async () => {
+        throw providerError;
+      }),
+    };
+
+    await expect(resolveReferences(variableRef(), providers)).rejects.toBe(providerError);
   });
 
   it('does not treat legacy {value, source} objects as references', async () => {
