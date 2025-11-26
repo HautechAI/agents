@@ -105,16 +105,12 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
     const workspaceLabels = { ...labels, 'hautech.ai/role': 'workspace' } as Record<string, string>;
     // Primary lookup: thread-scoped workspace container only
     // Debug note: ContainerService logs the exact filters as well.
-    this.logger.debug(
-      `[ContainerProviderEntity] lookup labels (workspace) labels=${JSON.stringify(workspaceLabels)}`,
-    );
+    this.logger.debug(`[ContainerProviderEntity] lookup labels (workspace) labels=${JSON.stringify(workspaceLabels)}`);
     let container: ContainerHandle | undefined = await this.containerService.findContainerByLabels(workspaceLabels);
 
     // Typed fallback: retry by thread_id only and exclude DinD sidecars.
     if (!container) {
-      this.logger.debug(
-        `[ContainerProviderEntity] fallback lookup by thread_id only labels=${JSON.stringify(labels)}`,
-      );
+      this.logger.debug(`[ContainerProviderEntity] fallback lookup by thread_id only labels=${JSON.stringify(labels)}`);
       const candidates = await this.containerService.findContainersByLabels(labels);
       if (Array.isArray(candidates) && candidates.length) {
         const results = await Promise.all(
@@ -179,7 +175,9 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       const enableDinD = this.config?.enableDinD ?? false;
       const volumeConfig: VolumeConfig | undefined = this.config?.volumes;
       const volumesEnabled = volumeConfig?.enabled ?? false;
-      const normalizedMountPath = volumesEnabled ? volumeConfig?.mountPath ?? DEFAULTS.workingDir : DEFAULTS.workingDir;
+      const normalizedMountPath = volumesEnabled
+        ? (volumeConfig?.mountPath ?? DEFAULTS.workingDir)
+        : DEFAULTS.workingDir;
       const volumeName = `ha_ws_${threadId}`;
       const binds = volumesEnabled ? [`${volumeName}:${normalizedMountPath}`] : undefined;
       let envMerged: Record<string, string> | undefined = await (async () => {
@@ -224,13 +222,12 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
           },
         },
       };
-      const createExtras: ContainerOpts['createExtras'] | undefined =
-        createExtrasHostConfig
-          ? {
-              ...createExtrasHostConfig,
-              ...createExtrasNetworking,
-            }
-          : createExtrasNetworking;
+      const createExtras: ContainerOpts['createExtras'] | undefined = createExtrasHostConfig
+        ? {
+            ...createExtrasHostConfig,
+            ...createExtrasNetworking,
+          }
+        : createExtrasNetworking;
       const started = await this.containerService.start({
         ...DEFAULTS,
         workingDir: normalizedMountPath,

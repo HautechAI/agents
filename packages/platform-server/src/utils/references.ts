@@ -88,7 +88,11 @@ export class ResolveError extends Error {
   readonly source: ResolutionEventSource;
   readonly cause?: unknown;
 
-  constructor(code: ResolutionErrorCode, message: string, opts: { path: string; source: ResolutionEventSource; cause?: unknown }) {
+  constructor(
+    code: ResolutionErrorCode,
+    message: string,
+    opts: { path: string; source: ResolutionEventSource; cause?: unknown },
+  ) {
     super(message);
     this.name = 'ResolveError';
     this.code = code;
@@ -177,7 +181,12 @@ async function resolveSecretRef(
       path: pointer,
       source: 'secret',
     });
-    recordEvent(state, { path: pointer, source: 'secret', cacheHit: false, error: { code: err.code, message: err.message } });
+    recordEvent(state, {
+      path: pointer,
+      source: 'secret',
+      cacheHit: false,
+      error: { code: err.code, message: err.message },
+    });
     state.report.counts.errors += 1;
     if (state.options.strict) throw err;
     state.report.counts.unresolved += 1;
@@ -195,10 +204,11 @@ async function resolveSecretRef(
         cacheHit: true,
         error: { code: 'unresolved_reference', message: 'Secret reference unresolved (cached)' },
       });
-      if (state.options.strict) throw new ResolveError('unresolved_reference', 'Secret reference unresolved', {
-        path: pointer,
-        source: 'secret',
-      });
+      if (state.options.strict)
+        throw new ResolveError('unresolved_reference', 'Secret reference unresolved', {
+          path: pointer,
+          source: 'secret',
+        });
       return lenientFallback('secret', ref, state.options);
     }
     state.report.counts.resolved += 1;
@@ -274,7 +284,12 @@ async function resolveVariableRef(
       path: pointer,
       source: 'variable',
     });
-    recordEvent(state, { path: pointer, source: 'variable', cacheHit: false, error: { code: err.code, message: err.message } });
+    recordEvent(state, {
+      path: pointer,
+      source: 'variable',
+      cacheHit: false,
+      error: { code: err.code, message: err.message },
+    });
     state.report.counts.errors += 1;
     if (state.options.strict) throw err;
     state.report.counts.unresolved += 1;
@@ -292,7 +307,11 @@ async function resolveVariableRef(
         cacheHit: true,
         error: { code: 'unresolved_reference', message: 'Variable reference unresolved (cached)' },
       });
-      if (state.options.strict) throw new ResolveError('unresolved_reference', 'Variable reference unresolved', { path: pointer, source: 'variable' });
+      if (state.options.strict)
+        throw new ResolveError('unresolved_reference', 'Variable reference unresolved', {
+          path: pointer,
+          source: 'variable',
+        });
       return lenientFallback('variable', ref, state.options);
     }
     state.report.counts.resolved += 1;
@@ -339,16 +358,29 @@ async function resolveVariableRef(
     }
 
     const message = err instanceof Error ? err.message : 'Variable provider error';
-    const resolveErr = new ResolveError('invalid_reference', message, { path: pointer, source: 'variable', cause: err });
+    const resolveErr = new ResolveError('invalid_reference', message, {
+      path: pointer,
+      source: 'variable',
+      cause: err,
+    });
     state.report.counts.errors += 1;
-    recordEvent(state, { path: pointer, source: 'variable', cacheHit: false, error: { code: 'invalid_reference', message } });
+    recordEvent(state, {
+      path: pointer,
+      source: 'variable',
+      cacheHit: false,
+      error: { code: 'invalid_reference', message },
+    });
     if (state.options.strict) throw resolveErr;
     state.report.counts.unresolved += 1;
     return lenientFallback('variable', ref, state.options);
   }
 }
 
-function lenientFallback(kind: 'secret' | 'variable', ref: Reference, options: TraverseState['options']): Reference | null | undefined | string {
+function lenientFallback(
+  kind: 'secret' | 'variable',
+  ref: Reference,
+  options: TraverseState['options'],
+): Reference | null | undefined | string {
   switch (options.lenientUnresolvedValue) {
     case 'null':
       return null;

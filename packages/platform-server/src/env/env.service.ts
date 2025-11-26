@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Reference } from '../utils/references';
 import { ReferenceResolverService } from '../utils/reference-resolver.service';
 import { ResolveError } from '../utils/references';
@@ -36,35 +36,38 @@ export class EnvError extends Error {
 }
 
 export type EnvValue = string | Reference;
-export type EnvItem = { key: string; value: EnvValue };
+export type EnvItem = { name: string; value: EnvValue };
 
 @Injectable()
 export class EnvService {
-  constructor(@Optional() @Inject(ReferenceResolverService) private readonly referenceResolver?: ReferenceResolverService) {}
+  constructor(@Inject(ReferenceResolverService) private readonly referenceResolver?: ReferenceResolverService) {}
 
   mergeEnv(base?: Record<string, string>, overlay?: Record<string, string>): Record<string, string> {
     return { ...(base || {}), ...(overlay || {}) };
   }
 
-  async resolveEnvItems(items: EnvItem[], opts?: { graphName?: string; strict?: boolean }): Promise<Record<string, string>> {
+  async resolveEnvItems(
+    items: EnvItem[],
+    opts?: { graphName?: string; strict?: boolean },
+  ): Promise<Record<string, string>> {
     if (!Array.isArray(items)) throw new EnvError('env items must be an array', 'env_items_invalid');
     const seen = new Set<string>();
     const normalized: EnvItem[] = [];
     for (const it of items) {
-      const key = typeof it?.key === 'string' ? it.key.trim() : '';
-      if (!key) throw new EnvError('env key must be non-empty', 'env_key_invalid', { item: it });
-      if (seen.has(key)) throw new EnvError(`duplicate env key: ${key}`, 'env_key_duplicate', { key });
-      seen.add(key);
-      normalized.push({ key, value: it?.value ?? '' });
+      const name = typeof it?.name === 'string' ? it.name.trim() : '';
+      if (!name) throw new EnvError('env name must be non-empty', 'env_name_invalid', { item: it });
+      if (seen.has(name)) throw new EnvError(`duplicate env name: ${name}`, 'env_name_duplicate', { name });
+      seen.add(name);
+      normalized.push({ name, value: it?.value ?? '' });
     }
 
     if (!this.referenceResolver) {
       const result: Record<string, string> = {};
       for (const item of normalized) {
         if (typeof item.value === 'object' && item.value !== null) {
-          throw new EnvError('env provider missing for references', 'env_provider_missing', { key: item.key });
+          throw new EnvError('env provider missing for references', 'env_provider_missing', { name: item.name });
         }
-        result[item.key] = typeof item.value === 'string' ? item.value : String(item.value ?? '');
+        result[item.name] = typeof item.value === 'string' ? item.value : String(item.value ?? '');
       }
       return result;
     }
@@ -80,9 +83,9 @@ export class EnvService {
       for (const item of output) {
         const val = item.value;
         if (val === null || (typeof val === 'object' && val !== null)) {
-          throw new EnvError('env reference unresolved', 'env_reference_unresolved', { key: item.key, value: val });
+          throw new EnvError('env reference unresolved', 'env_reference_unresolved', { name: item.name, value: val });
         }
-        result[item.key] = typeof val === 'string' ? val : String(val);
+        result[item.name] = typeof val === 'string' ? val : String(val);
       }
       return result;
     } catch (err: unknown) {
@@ -90,10 +93,7 @@ export class EnvService {
       if (err instanceof ResolveError) {
         throw new EnvError(err.message, mapResolveErrorCode(err.code), { path: err.path, source: err.source });
       }
-      const details =
-        err instanceof Error
-          ? { message: err.message, name: err.name }
-          : { value: err };
+      const details = err instanceof Error ? { message: err.message, name: err.name } : { value: err };
       throw new EnvError('env resolution failed', 'env_resolution_failed', details);
     }
   }

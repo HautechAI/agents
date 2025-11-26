@@ -20,7 +20,7 @@ import { SecretReferenceSchema, VariableReferenceSchema } from '../../utils/refe
 
 const EnvItemSchema = z
   .object({
-    key: z.string().min(1),
+    name: z.string().min(1),
     value: z.union([z.string(), SecretReferenceSchema, VariableReferenceSchema]),
   })
   .strict()
@@ -180,9 +180,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
       try {
         this.preloadCachedTools(summaries, updatedAt);
       } catch (e) {
-        this.logger.error(
-          `Error during MCP cache preload for node ${this.nodeId}: ${this.formatError(e)}`,
-        );
+        this.logger.error(`Error during MCP cache preload for node ${this.nodeId}: ${this.formatError(e)}`);
       }
     }
     // Detect enabledTools changes in state.mcp (optional field)
@@ -212,9 +210,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     }
 
     const t0 = Date.now();
-    this.logger.log(
-      `[MCP:${this.config.namespace}] Starting tool discovery (toolsDiscovered=${this.toolsDiscovered})`,
-    );
+    this.logger.log(`[MCP:${this.config.namespace}] Starting tool discovery (toolsDiscovered=${this.toolsDiscovered})`);
 
     // Use temporary container for tool discovery
     const tempContainer = await this.containerProvider.provide(`_discovery_temp_${uuidv4()}`);
@@ -298,34 +294,26 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
           await nodeStateService.upsertNodeState(this.nodeId, state as Record<string, unknown>);
         }
       } catch (e) {
-        this.logger.error(
-          `[MCP:${this.config.namespace}] Failed to persist state error=${this.formatError(e)}`,
-        );
+        this.logger.error(`[MCP:${this.config.namespace}] Failed to persist state error=${this.formatError(e)}`);
       }
       // Notify listeners with unified tools update event
       this.notifyToolsUpdated(this.lastToolsUpdatedAt || Date.now());
     } catch (err) {
-      this.logger.error(
-        `[MCP:${this.config.namespace}] Tool discovery failed error=${this.formatError(err)}`,
-      );
+      this.logger.error(`[MCP:${this.config.namespace}] Tool discovery failed error=${this.formatError(err)}`);
     } finally {
       // Clean up temporary resources
       if (tempClient) {
         try {
           await tempClient.close();
         } catch (e) {
-          this.logger.error(
-            `[MCP:${this.config.namespace}] Error closing temp client error=${this.formatError(e)}`,
-          );
+          this.logger.error(`[MCP:${this.config.namespace}] Error closing temp client error=${this.formatError(e)}`);
         }
       }
       if (tempTransport) {
         try {
           await tempTransport.close();
         } catch (e) {
-          this.logger.error(
-            `[MCP:${this.config.namespace}] Error closing temp transport error=${this.formatError(e)}`,
-          );
+          this.logger.error(`[MCP:${this.config.namespace}] Error closing temp transport error=${this.formatError(e)}`);
         }
       }
       // Stop the temporary container
@@ -374,7 +362,9 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     // Prefer NodeStateService snapshot
     let enabledList: string[] | undefined;
     try {
-      const snap = this.getNodeStateService()?.getSnapshot(this.nodeId) as { mcp?: { enabledTools?: string[] } } | undefined;
+      const snap = this.getNodeStateService()?.getSnapshot(this.nodeId) as
+        | { mcp?: { enabledTools?: string[] } }
+        | undefined;
       if (snap && snap.mcp && Array.isArray(snap.mcp.enabledTools)) {
         enabledList = [...snap.mcp.enabledTools];
       }
@@ -582,9 +572,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
         await this.startOnce();
         if (this.started) this.setStatus('ready');
       } catch (err) {
-        this.logger.log(
-          `[MCP:${this.config.namespace}] Provisioning failed error=${this.formatError(err)}`,
-        );
+        this.logger.log(`[MCP:${this.config.namespace}] Provisioning failed error=${this.formatError(err)}`);
         this.setStatus('provisioning_error');
       } finally {
         this._provInFlight = null;
@@ -616,9 +604,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
     try {
       this.emitter.emit('mcp.tools_updated', { tools, updatedAt: ts });
     } catch (e) {
-      this.logger.error(
-        `[MCP:${this.config.namespace}] Error emitting tools_updated error=${this.formatError(e)}`,
-      );
+      this.logger.error(`[MCP:${this.config.namespace}] Error emitting tools_updated error=${this.formatError(e)}`);
     }
   }
 
@@ -637,13 +623,9 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
         this.logger.debug(`[MCP:${this.config.namespace}] Discovery phase duration ${tDiscMs}ms`);
       }
       this.started = true;
-      this.logger.log(
-        `[MCP:${this.config.namespace}] Started successfully with ${this.toolsCache?.length || 0} tools`,
-      );
+      this.logger.log(`[MCP:${this.config.namespace}] Started successfully with ${this.toolsCache?.length || 0} tools`);
     } catch (e: unknown) {
-      this.logger.error(
-        `[MCP:${this.config.namespace}] Start attempt failed error=${this.formatError(e)}`,
-      );
+      this.logger.error(`[MCP:${this.config.namespace}] Start attempt failed error=${this.formatError(e)}`);
     }
   }
   private async cleanTempDinDSidecars(tempContainerId: string): Promise<void> {
@@ -701,6 +683,10 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
       );
     }
     const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
-    if (rejected.length) throw new AggregateError(rejected.map((r) => r.reason), 'One or more temp DinD cleanup tasks failed');
+    if (rejected.length)
+      throw new AggregateError(
+        rejected.map((r) => r.reason),
+        'One or more temp DinD cleanup tasks failed',
+      );
   }
 }
