@@ -1,10 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ContainerService } from '../src/infra/container/container.service';
 import type { ContainerRegistry } from '../src/infra/container/container.registry';
-import { LoggerService } from '../src/core/services/logger.service.js';
 
-const createService = (): ContainerService =>
-  new ContainerService(new LoggerService(), undefined as unknown as ContainerRegistry);
+const makeRegistry = () => ({
+  registerStart: vi.fn(async () => undefined),
+  updateLastUsed: vi.fn(async () => undefined),
+  markStopped: vi.fn(async () => undefined),
+  markTerminating: vi.fn(async () => undefined),
+  claimForTermination: vi.fn(async () => true),
+  recordTerminationFailure: vi.fn(async () => undefined),
+  findByVolume: vi.fn(async () => null),
+  listByThread: vi.fn(async () => []),
+  ensureIndexes: vi.fn(async () => undefined),
+} satisfies Partial<ContainerRegistry>) as ContainerRegistry;
+
+const createService = (): ContainerService => new ContainerService(makeRegistry());
 import { PassThrough } from 'node:stream';
 
 function makeFrame(type: number, payload: Buffer) {

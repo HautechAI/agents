@@ -87,7 +87,7 @@ export class ContainerCleanupService {
   async sweepSelective(threadId: string, opts: SweepSelectiveOptions): Promise<void> {
     const records = await this.registry.listByThread(threadId);
     if (!records.length) {
-      this.logger.info('ContainerCleanup: no containers found for selective sweep', { threadId });
+      this.logger.log('ContainerCleanup: no containers found for selective sweep', { threadId });
       return;
     }
 

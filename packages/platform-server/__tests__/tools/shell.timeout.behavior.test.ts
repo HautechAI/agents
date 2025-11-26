@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ShellCommandNode } from '../../src/nodes/tools/shell_command/shell_command.node';
 import { ContainerService } from '../../src/infra/container/container.service';
 import type { ContainerRegistry } from '../../src/infra/container/container.registry';
-import { LoggerService } from '../../src/core/services/logger.service.js';
 import { isExecTimeoutError, ExecIdleTimeoutError } from '../../src/utils/execTimeout';
 import { ContainerHandle } from '../../src/infra/container/container.handle';
 import type { Mock } from 'vitest';
@@ -10,7 +9,17 @@ import { RunEventsService } from '../../src/events/run-events.service';
 import { EventsBusService } from '../../src/events/events-bus.service';
 import { PrismaService } from '../../src/core/services/prisma.service';
 
-const registryStub = undefined as unknown as ContainerRegistry;
+const makeRegistry = () => ({
+  registerStart: vi.fn(async () => undefined),
+  updateLastUsed: vi.fn(async () => undefined),
+  markStopped: vi.fn(async () => undefined),
+  markTerminating: vi.fn(async () => undefined),
+  claimForTermination: vi.fn(async () => true),
+  recordTerminationFailure: vi.fn(async () => undefined),
+  findByVolume: vi.fn(async () => null),
+  listByThread: vi.fn(async () => []),
+  ensureIndexes: vi.fn(async () => undefined),
+} satisfies Partial<ContainerRegistry>) as ContainerRegistry;
 
 const createShellNode = () => {
   const envServiceStub = { resolveProviderEnv: async () => ({}) };
@@ -47,7 +56,7 @@ describe('ShellTool timeout error message', () => {
     class FakeContainer extends ContainerHandle { override async exec(_cmd: string | string[], _opts?: unknown): Promise<never> { throw timeoutErr; } }
     class FakeProvider {
       async provide(_t: string): Promise<ContainerHandle> {
-        return new FakeContainer(new ContainerService(new LoggerService(), registryStub), 'fake');
+        return new FakeContainer(new ContainerService(makeRegistry()), 'fake');
       }
     }
     const provider = new FakeProvider();
@@ -71,7 +80,7 @@ describe('ShellTool timeout error message', () => {
     class FakeContainer extends ContainerHandle { override async exec(): Promise<never> { throw idleErr; } }
     class FakeProvider {
       async provide(): Promise<ContainerHandle> {
-        return new FakeContainer(new ContainerService(new LoggerService(), registryStub), 'fake');
+        return new FakeContainer(new ContainerService(makeRegistry()), 'fake');
       }
     }
     const provider = new FakeProvider();
@@ -90,7 +99,7 @@ describe('ShellTool timeout error message', () => {
     class FakeContainer extends ContainerHandle { override async exec(): Promise<never> { throw idleErr; } }
     class FakeProvider {
       async provide(): Promise<ContainerHandle> {
-        return new FakeContainer(new ContainerService(new LoggerService(), registryStub), 'fake');
+        return new FakeContainer(new ContainerService(makeRegistry()), 'fake');
       }
     }
     const provider = new FakeProvider();
@@ -108,7 +117,7 @@ describe('ShellTool timeout error message', () => {
 describe('ContainerService.execContainer killOnTimeout behavior', () => {
   let svc: ContainerService;
   beforeEach(() => {
-    svc = new ContainerService(new LoggerService(), registryStub);
+    svc = new ContainerService(makeRegistry());
   });
 
   it('stops container on timeout when killOnTimeout=true', async () => {
@@ -224,7 +233,7 @@ describe('ShellTool non-timeout error propagation', () => {
     }
     class FakeProvider {
       async provide(): Promise<ContainerHandle> {
-        return new FakeContainer(new ContainerService(new LoggerService(), registryStub), 'fake');
+        return new FakeContainer(new ContainerService(makeRegistry()), 'fake');
       }
     }
     const provider = new FakeProvider();

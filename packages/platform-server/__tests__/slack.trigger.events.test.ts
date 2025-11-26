@@ -318,9 +318,9 @@ describe('SlackTrigger events', () => {
     const prismaStub = ({ getClient: () => ({ thread: { findUnique: async () => ({ channel: null }) } }) } satisfies Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>) as import('../src/core/services/prisma.service').PrismaService;
     const slackAdapterStub = ({ sendText: vi.fn() } satisfies Pick<SlackAdapter, 'sendText'>) as SlackAdapter;
     const trig = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapterStub);
-    await trig.setConfig({ app_token: 'xapp-valid', bot_token: 'bot-invalid' });
-    await trig.provision();
-    expect(trig.status).toBe('provisioning_error');
+    await expect(trig.setConfig({ app_token: 'xapp-valid', bot_token: 'bot-invalid' })).rejects.toThrow(
+      /Slack bot token must start with xoxb-/,
+    );
   });
 
   it('resolves tokens via reference resolver', async () => {
