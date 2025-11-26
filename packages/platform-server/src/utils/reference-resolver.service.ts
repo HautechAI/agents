@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { ResolveOptions, ResolveResult, Providers } from './references';
 import { resolveReferences, ResolveError } from './references';
@@ -8,8 +8,8 @@ import { GraphVariablesService } from '../graph/services/graphVariables.service'
 @Injectable()
 export class ReferenceResolverService {
   constructor(
-    private readonly moduleRef: ModuleRef,
-    @Optional() private readonly vaultService?: VaultService,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
+    @Inject(VaultService) private readonly vaultService: VaultService,
   ) {}
 
   private getVariablesService(): GraphVariablesService | undefined {
@@ -20,7 +20,11 @@ export class ReferenceResolverService {
     }
   }
 
-  private buildProviders(graphName: string | undefined, overrides: Partial<Providers> | undefined, basePath?: string): Providers {
+  private buildProviders(
+    graphName: string | undefined,
+    overrides: Partial<Providers> | undefined,
+    basePath?: string,
+  ): Providers {
     const secret = async (ref: { mount?: string | null; path: string; key: string }) => {
       if (!this.vaultService) {
         throw new ResolveError('provider_missing', 'VaultService not available to resolve secret', {
