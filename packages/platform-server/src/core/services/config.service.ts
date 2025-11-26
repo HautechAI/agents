@@ -30,6 +30,14 @@ export const configSchema = z.object({
       const n = typeof v === 'number' ? v : Number(v);
       return Number.isFinite(n) ? n : 5000;
     }),
+  graphStoreWriteJson: z
+    .union([z.boolean(), z.string()])
+    .default('false')
+    .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
+  graphAutoConvertJson: z
+    .union([z.boolean(), z.string()])
+    .default('false')
+    .transform((v) => (typeof v === 'string' ? v.toLowerCase() === 'true' : !!v)),
   // Optional Vault flags (disabled by default)
   vaultEnabled: z
     .union([z.boolean(), z.string()])
@@ -218,6 +226,14 @@ export class ConfigService implements Config {
     return this.params.graphLockTimeoutMs;
   }
 
+  get graphStoreWriteJson(): boolean {
+    return this.params.graphStoreWriteJson;
+  }
+
+  get graphAutoConvertJson(): boolean {
+    return this.params.graphAutoConvertJson;
+  }
+
   // Vault getters (optional)
   get vaultEnabled(): boolean {
     return !!this.params.vaultEnabled;
@@ -336,6 +352,8 @@ export class ConfigService implements Config {
       graphAuthorName: process.env.GRAPH_AUTHOR_NAME,
       graphAuthorEmail: process.env.GRAPH_AUTHOR_EMAIL,
       graphLockTimeoutMs: process.env.GRAPH_LOCK_TIMEOUT_MS,
+      graphStoreWriteJson: process.env.GRAPH_STORE_WRITE_JSON,
+      graphAutoConvertJson: process.env.GRAPH_AUTO_CONVERT_JSON,
       vaultEnabled: process.env.VAULT_ENABLED,
       vaultAddr: process.env.VAULT_ADDR,
       vaultToken: process.env.VAULT_TOKEN,

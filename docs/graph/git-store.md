@@ -5,9 +5,15 @@ Overview
 - Deterministic edge IDs, advisory file lock, and serial, idempotent upserts.
 
 Repository layout (root)
-- graph.meta.json: `{ name, version, updatedAt, format: 2 }`
-- nodes/: one JSON per node — `nodes/<urlencoded nodeId>.json`
-- edges/: one JSON per edge — `edges/<urlencoded edgeId>.json`
+- graph.meta.yaml: `{ name, version, updatedAt, format: 2 }`
+- nodes/: one YAML per node — `nodes/<urlencoded nodeId>.yaml`
+- edges/: one YAML per edge — `edges/<urlencoded edgeId>.yaml`
+- variables.yaml (optional): list of `{ key, value }`
+
+Legacy JSON mirrors
+- A transitional `GRAPH_STORE_WRITE_JSON=true` flag writes JSON alongside YAML.
+- `GRAPH_AUTO_CONVERT_JSON=true` converts existing JSON files to YAML on read.
+- JSON files remain readable for backward compatibility during the migration window.
 
 Deterministic edge IDs
 - ID = `${source}-${sourceHandle}__${target}-${targetHandle}`
@@ -52,3 +58,7 @@ curl -X POST http://localhost:3010/api/graph \
 
 Related behavior
 - Server manages persistence, routing, and error handling for the Git-backed store.
+
+Configuration flags
+- `GRAPH_STORE_WRITE_JSON` (default `false`): write JSON mirrors alongside YAML for one release cycle.
+- `GRAPH_AUTO_CONVERT_JSON` (default `false`): auto-create YAML files when only JSON is available in the working tree.

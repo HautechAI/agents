@@ -13,6 +13,7 @@ import type {
 import { validatePersistedGraph } from './graphSchema.validator';
 import { GraphRepository } from './graph.repository';
 import { ConfigService } from '../core/services/config.service';
+import { parseYaml, stringifyYaml } from './yaml.util';
 
 // Narrow meta persisted at repo root
 interface GraphMeta {
@@ -21,6 +22,12 @@ interface GraphMeta {
   updatedAt: string;
   format: 2;
 }
+
+type TouchedSets = {
+  added: Set<string>;
+  updated: Set<string>;
+  deleted: Set<string>;
+};
 
 // Typed error helper to avoid any
 type CodeError<T = unknown> = Error & { code: string; current?: T };
@@ -58,10 +65,14 @@ export class GitGraphRepository extends GraphRepository {
       await fs.mkdir(path.join(this.config.graphRepoPath, 'nodes'), { recursive: true });
       await fs.mkdir(path.join(this.config.graphRepoPath, 'edges'), { recursive: true });
       const meta = { name: 'main', version: 0, updatedAt: new Date().toISOString(), format: 2 };
-      await this.atomicWriteFile(
-        path.join(this.config.graphRepoPath, 'graph.meta.json'),
-        JSON.stringify(meta, null, 2),
-      );
+      const metaPaths = this.metaPaths();
+      await this.atomicWriteFile(path.join(this.config.graphRepoPath, metaPaths.yaml), stringifyYaml(meta));
+      if (this.config.graphStoreWriteJson) {
+        await this.atomicWriteFile(
+          path.join(this.config.graphRepoPath, metaPaths.json),
+          JSON.stringify(meta, null, 2),
+        );
+      }
       await this.runGit(['add', '.'], this.config.graphRepoPath);
       await this.commit('chore(graph): init repository (format:2)', this.defaultAuthor());
     } else {
@@ -156,63 +167,65 @@ export class GitGraphRepository extends GraphRepository {
       const root = this.config.graphRepoPath;
       const nodesDir = path.join(root, 'nodes');
       const edgesDir = path.join(root, 'edges');
-      const variablesPath = path.join(root, 'variables.json');
       await fs.mkdir(nodesDir, { recursive: true });
       await fs.mkdir(edgesDir, { recursive: true });
 
-      const touched: { added: string[]; updated: string[]; deleted: string[] } = {
-        added: [],
-        updated: [],
-        deleted: [],
+      const touched: TouchedSets = {
+        added: new Set<string>(),
+        updated: new Set<string>(),
+        deleted: new Set<string>(),
       };
 
       const writeNode = async (n: PersistedGraphNode, isNew: boolean) => {
-        const rel = path.posix.join('nodes', `${encodeURIComponent(n.id)}.json`);
-        await this.atomicWriteFile(path.join(root, rel), JSON.stringify(n, null, 2));
-        (isNew ? touched.added : touched.updated).push(rel);
-      };
-      const writeEdge = async (e: PersistedGraphEdge, isNew: boolean) => {
-        const id = e.id!;
-        const rel = path.posix.join('edges', `${encodeURIComponent(id)}.json`);
-        await this.atomicWriteFile(path.join(root, rel), JSON.stringify({ ...e, id }, null, 2));
-        (isNew ? touched.added : touched.updated).push(rel);
-      };
-      const delRel = async (rel: string) => {
-        try {
-          await fs.unlink(path.join(root, rel));
-        } catch {
-          // ignore missing file during cleanup
-        }
-        touched.deleted.push(rel);
+        const paths = this.nodePaths(n.id);
+        await this.writeGraphEntity(paths, n, JSON.stringify(n, null, 2), isNew, touched);
       };
 
-      // Parallelize IO per batch
+      const writeEdge = async (e: PersistedGraphEdge, isNew: boolean) => {
+        const id = e.id!;
+        const payload = { ...e, id };
+        const paths = this.edgePaths(id);
+        await this.writeGraphEntity(paths, payload, JSON.stringify(payload, null, 2), isNew, touched);
+      };
+
+      const deleteNodeFiles = async (id: string) => {
+        const paths = this.nodePaths(id);
+        await this.removeGraphPath(paths.yaml, touched);
+        await this.removeGraphPath(paths.json, touched);
+      };
+
+      const deleteEdgeFiles = async (id: string) => {
+        const paths = this.edgePaths(id);
+        await this.removeGraphPath(paths.yaml, touched);
+        await this.removeGraphPath(paths.json, touched);
+      };
+
       await Promise.all(nodeAdds.map((id) => writeNode(target.nodes.find((n) => n.id === id)!, true)));
       await Promise.all(nodeUpdates.map((id) => writeNode(target.nodes.find((n) => n.id === id)!, false)));
-      await Promise.all(nodeDeletes.map((id) => delRel(path.posix.join('nodes', `${encodeURIComponent(id)}.json`))));
+      await Promise.all(nodeDeletes.map((id) => deleteNodeFiles(id)));
 
       await Promise.all(edgeAdds.map((id) => writeEdge(target.edges.find((e) => e.id === id)!, true)));
       await Promise.all(edgeUpdates.map((id) => writeEdge(target.edges.find((e) => e.id === id)!, false)));
-      await Promise.all(edgeDeletes.map((id) => delRel(path.posix.join('edges', `${encodeURIComponent(id)}.json`))));
+      await Promise.all(edgeDeletes.map((id) => deleteEdgeFiles(id)));
 
-      // Write variables.json (root-level); compare previous vs next JSON to avoid unnecessary writes
+      // Write variables (root-level); compare previous vs next JSON to avoid unnecessary writes
       const prevVarsJson = JSON.stringify(current.variables ?? [], null, 2);
       const nextVarsJson = JSON.stringify(target.variables ?? [], null, 2);
       if (prevVarsJson !== nextVarsJson) {
-        await this.atomicWriteFile(variablesPath, nextVarsJson + '\n');
-        // treat as updated; file always exists once variables feature used
-        touched.updated.push('variables.json');
+        const varsPaths = this.variablesPaths();
+        const varsIsNew = !(await this.graphPathsExist(varsPaths));
+        await this.writeGraphEntity(varsPaths, target.variables ?? [], `${nextVarsJson}\n`, varsIsNew, touched);
       }
 
       // Update meta last
       const meta = { name, version: target.version, updatedAt: target.updatedAt, format: 2 } as const;
-      await this.atomicWriteFile(path.join(root, 'graph.meta.json'), JSON.stringify(meta, null, 2));
+      await this.writeGraphEntity(this.metaPaths(), meta, JSON.stringify(meta, null, 2), false, touched);
 
-      // Stage changes
-      const toStage = Array.from(
-        new Set([...touched.added, ...touched.updated, ...touched.deleted, 'graph.meta.json']),
-      );
-      if (toStage.length) await this.runGit(['add', '--all', ...toStage], root);
+      const toStage = new Set<string>();
+      for (const rel of touched.added) toStage.add(rel);
+      for (const rel of touched.updated) toStage.add(rel);
+      for (const rel of touched.deleted) toStage.add(rel);
+      if (toStage.size) await this.runGit(['add', '--all', ...toStage], root);
 
       // Remove legacy graphs/ directory if exists
       if (await this.pathExists(path.join(root, 'graphs'))) {
@@ -410,8 +423,11 @@ export class GitGraphRepository extends GraphRepository {
     return `(+${nd.nodeAdds.length}/-${nd.nodeDeletes.length} nodes, +${ed.edgeAdds.length}/-${ed.edgeDeletes.length} edges; changed: nodes=[${fmt(nd.nodeAdds, nd.nodeUpdates, nd.nodeDeletes)}], edges=[${fmt(ed.edgeAdds, ed.edgeUpdates, ed.edgeDeletes)}])`;
   }
 
-  private async rollbackPaths(touched: { added: string[]; updated: string[]; deleted: string[] }) {
-    const toRestore = [...touched.updated, ...touched.deleted, 'graph.meta.json'];
+  private async rollbackPaths(touched: TouchedSets) {
+    const updated = Array.from(touched.updated);
+    const deleted = Array.from(touched.deleted);
+    const added = Array.from(touched.added);
+    const toRestore = [...updated, ...deleted];
     await Promise.all(
       toRestore.map(async (rel) => {
         try {
@@ -427,7 +443,7 @@ export class GitGraphRepository extends GraphRepository {
       }),
     );
     await Promise.all(
-      touched.added.map(async (rel) => {
+      added.map(async (rel) => {
         try {
           await this.runGit(['restore', '--staged', '--source', 'HEAD', rel], this.config.graphRepoPath);
         } catch {
@@ -475,30 +491,15 @@ export class GitGraphRepository extends GraphRepository {
 
   // Root-level readers and fallbacks
   private async readFromWorkingTreeRoot(name: string): Promise<PersistedGraph> {
-    const metaPath = path.join(this.config.graphRepoPath, 'graph.meta.json');
     try {
-      const parsed = JSON.parse(await fs.readFile(metaPath, 'utf8')) as Partial<GraphMeta>;
-      const meta: GraphMeta = {
-        name: (parsed.name ?? name) as string,
-        version: Number(parsed.version ?? 0),
-        updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string,
-        format: 2,
-      };
+      const meta = await this.readMetaFromWorkingTree(name);
       const nodesRes = await this.readEntitiesFromDir<PersistedGraphNode>(
         path.join(this.config.graphRepoPath, 'nodes'),
       );
       const edgesRes = await this.readEntitiesFromDir<PersistedGraphEdge>(
         path.join(this.config.graphRepoPath, 'edges'),
       );
-      // variables.json at root (optional)
-      let variables: Array<{ key: string; value: string }> | undefined = undefined;
-      try {
-        const raw = await fs.readFile(path.join(this.config.graphRepoPath, 'variables.json'), 'utf8');
-        const parsedVars = JSON.parse(raw) as Array<{ key: string; value: string }>;
-        if (Array.isArray(parsedVars)) variables = parsedVars.map((v) => ({ key: String(v.key), value: String(v.value) }));
-      } catch {
-        // ignore variables read errors
-      }
+      const variables = await this.readVariablesFromWorkingTree();
       if (nodesRes.hadError || edgesRes.hadError) {
         // Prefer lastCommitted snapshot if available; otherwise fall back to HEAD
         if (this.lastCommitted) return this.lastCommitted;
@@ -506,9 +507,9 @@ export class GitGraphRepository extends GraphRepository {
         if (head) return head;
       }
       return {
-        name: meta.name ?? name,
-        version: meta.version ?? 0,
-        updatedAt: meta.updatedAt ?? new Date().toISOString(),
+        name: meta.name,
+        version: meta.version,
+        updatedAt: meta.updatedAt,
         nodes: nodesRes.items,
         edges: edgesRes.items,
         variables,
@@ -525,25 +526,54 @@ export class GitGraphRepository extends GraphRepository {
   ): Promise<{ items: T[]; hadError: boolean }> {
     let hadError = false;
     const items: T[] = [];
+    const root = this.config.graphRepoPath;
     try {
       const files = await fs.readdir(dir);
-      const jsonFiles = files.filter((f) => f.endsWith('.json'));
-      const reads = await Promise.all(
-        jsonFiles.map(async (f) => {
-          const p = path.join(dir, f);
-          try {
-            const raw = JSON.parse(await fs.readFile(p, 'utf8')) as Partial<T>;
-            const decodedId = decodeURIComponent(f.replace(/\.json$/, ''));
-            const idCandidate = (raw as { id?: unknown }).id;
-            const obj = { id: String(idCandidate ?? decodedId), ...(raw as object) } as T;
-            return obj;
-          } catch {
-            hadError = true; // ignore malformed files
-            return null;
-          }
-        }),
-      );
-      for (const r of reads) if (r) items.push(r);
+      const relevant = files.filter((f) => f.endsWith('.json') || f.endsWith('.yaml'));
+      const prefer = new Map<
+        string,
+        {
+          file: string;
+          ext: 'json' | 'yaml';
+        }
+      >();
+      for (const file of relevant) {
+        const base = file.replace(/\.(json|yaml)$/i, '');
+        const ext = file.endsWith('.yaml') ? 'yaml' : 'json';
+        const current = prefer.get(base);
+        if (!current || ext === 'yaml') {
+          prefer.set(base, { file, ext });
+        }
+      }
+      const relDir = path
+        .relative(root, dir)
+        .split(path.sep)
+        .filter(Boolean)
+        .join(path.posix.sep);
+      for (const [base, info] of prefer.entries()) {
+        const full = path.join(dir, info.file);
+        try {
+          const rawText = await fs.readFile(full, 'utf8');
+          const decodedId = decodeURIComponent(base);
+          const relPaths = {
+            yaml: (relDir ? path.posix.join(relDir, `${base}.yaml`) : `${base}.yaml`).replace(/^\.\//, ''),
+            json: (relDir ? path.posix.join(relDir, `${base}.json`) : `${base}.json`).replace(/^\.\//, ''),
+          };
+          const parsedUnknown =
+            info.ext === 'yaml' ? parseYaml<unknown>(rawText) : (JSON.parse(rawText) as unknown);
+          const record =
+            parsedUnknown && typeof parsedUnknown === 'object'
+              ? (parsedUnknown as Record<string, unknown>)
+              : ({} as Record<string, unknown>);
+          const candidateId = record.id;
+          record.id = typeof candidateId === 'string' && candidateId.length > 0 ? candidateId : decodedId;
+          const casted = record as unknown as T;
+          items.push(casted);
+          await this.maybeAutoConvertJson(info.ext, relPaths, record);
+        } catch {
+          hadError = true;
+        }
+      }
     } catch {
       // directory may not exist
     }
@@ -552,126 +582,299 @@ export class GitGraphRepository extends GraphRepository {
 
   private async readFromHeadRoot(name: string): Promise<PersistedGraph | null> {
     try {
-      const metaRaw = await this.runGitCapture(['show', 'HEAD:graph.meta.json'], this.config.graphRepoPath);
-      const parsed = JSON.parse(metaRaw) as Partial<GraphMeta>;
-      const meta: GraphMeta = {
-        name: (parsed.name ?? name) as string,
-        version: Number(parsed.version ?? 0),
-        updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string,
-        format: 2,
-      };
+      const meta = await this.readHeadGraphMeta('graph.meta', name);
       const list = await this.runGitCapture(['ls-tree', '-r', '--name-only', 'HEAD'], this.config.graphRepoPath);
       const paths = list.split('\n').filter(Boolean);
-      const nodePaths = paths.filter((p) => p.startsWith('nodes/') && p.endsWith('.json'));
-      const edgePaths = paths.filter((p) => p.startsWith('edges/') && p.endsWith('.json'));
-      const hasVariables = paths.includes('variables.json');
+      const nodeMap = this.collectPreferredEntries(paths, 'nodes/');
+      const edgeMap = this.collectPreferredEntries(paths, 'edges/');
+
       const nodes = await Promise.all(
-        nodePaths.map(async (p) => {
-          const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-          const parsedUnknown = JSON.parse(raw) as unknown;
-          const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
-          const hasId = 'id' in o && typeof o.id === 'string' && o.id.length > 0;
-          if (!hasId) o.id = decodeURIComponent(path.basename(p, '.json'));
-          o.id = String(o.id);
-          return o as unknown as PersistedGraphNode;
+        Array.from(nodeMap.entries()).map(async ([encoded, info]) => {
+          const record = await this.loadRecordFromHead(info, decodeURIComponent(encoded));
+          return record as unknown as PersistedGraphNode;
         }),
       );
+
       const edges = await Promise.all(
-        edgePaths.map(async (p) => {
-          const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-          const parsedUnknown = JSON.parse(raw) as unknown;
-          const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
-          const hasId = 'id' in o && typeof o.id === 'string' && o.id.length > 0;
-          if (!hasId) o.id = decodeURIComponent(path.basename(p, '.json'));
-          o.id = String(o.id);
-          return o as unknown as PersistedGraphEdge;
+        Array.from(edgeMap.entries()).map(async ([encoded, info]) => {
+          const record = await this.loadRecordFromHead(info, decodeURIComponent(encoded));
+          return record as unknown as PersistedGraphEdge;
         }),
       );
-      const variables = hasVariables ? await this.readHeadVariables() : undefined;
+
+      const variables = await this.loadHeadVariables(paths);
       return {
-        name: meta.name ?? name,
-        version: meta.version ?? 0,
-        updatedAt: meta.updatedAt ?? new Date().toISOString(),
+        name: meta.name,
+        version: meta.version,
+        updatedAt: meta.updatedAt,
         nodes,
         edges,
         variables,
       };
-      } catch {
-        return null;
-      }
-  }
-
-  private async readHeadVariables(): Promise<Array<{ key: string; value: string }> | undefined> {
-    try {
-      const rawVars = await this.runGitCapture(['show', 'HEAD:variables.json'], this.config.graphRepoPath);
-      const parsedVars = JSON.parse(rawVars) as Array<{ key: string; value: string }>;
-      if (!Array.isArray(parsedVars)) return undefined;
-      return parsedVars.map((v) => ({ key: String(v.key), value: String(v.value) }));
     } catch {
-      return undefined;
+      return null;
     }
   }
 
   private async readFromHeadPerGraph(name: string): Promise<PersistedGraph | null> {
     try {
-      const relMeta = path.posix.join('graphs', name, 'graph.meta.json');
-      const rawMeta = await this.runGitCapture(['show', `HEAD:${relMeta}`], this.config.graphRepoPath);
-      const parsed = JSON.parse(rawMeta) as Partial<GraphMeta>;
-      const meta: GraphMeta = {
-        name: (parsed.name ?? name) as string,
-        version: Number(parsed.version ?? 0),
-        updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string,
-        format: 2,
-      };
       const base = path.posix.join('graphs', name);
+      const metaBase = path.posix.join(base, 'graph.meta');
+      const meta = await this.readHeadGraphMeta(metaBase, name);
       const list = await this.runGitCapture(['ls-tree', '-r', '--name-only', 'HEAD', base], this.config.graphRepoPath);
       const paths = list.split('\n').filter(Boolean);
+      const nodeMap = this.collectPreferredEntries(paths, `${base}/nodes/`);
+      const edgeMap = this.collectPreferredEntries(paths, `${base}/edges/`);
+
       const nodes = await Promise.all(
-        paths
-          .filter((p) => p.startsWith(`${base}/nodes/`) && p.endsWith('.json'))
-          .map(async (p) => {
-            const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-            const parsedUnknown = JSON.parse(raw) as unknown;
-            const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
-            const curId = 'id' in o ? (o as { id?: unknown }).id : undefined;
-            const idStr = typeof curId === 'string' && curId.length > 0 ? curId : decodeURIComponent(path.basename(p, '.json'));
-            (o as { id: string }).id = String(idStr);
-            return o as unknown as PersistedGraphNode;
-          }),
+        Array.from(nodeMap.entries()).map(async ([encoded, info]) => {
+          const record = await this.loadRecordFromHead(info, decodeURIComponent(encoded));
+          return record as unknown as PersistedGraphNode;
+        }),
       );
+
       const edges = await Promise.all(
-        paths
-          .filter((p) => p.startsWith(`${base}/edges/`) && p.endsWith('.json'))
-          .map(async (p) => {
-            const raw = await this.runGitCapture(['show', `HEAD:${p}`], this.config.graphRepoPath);
-            const parsedUnknown = JSON.parse(raw) as unknown;
-            const o = (parsedUnknown && typeof parsedUnknown === 'object' ? parsedUnknown : {}) as Record<string, unknown>;
-            const curId = 'id' in o ? (o as { id?: unknown }).id : undefined;
-            const idStr = typeof curId === 'string' && curId.length > 0 ? curId : decodeURIComponent(path.basename(p, '.json'));
-            (o as { id: string }).id = String(idStr);
-            return o as unknown as PersistedGraphEdge;
-          }),
+        Array.from(edgeMap.entries()).map(async ([encoded, info]) => {
+          const record = await this.loadRecordFromHead(info, decodeURIComponent(encoded));
+          return record as unknown as PersistedGraphEdge;
+        }),
       );
+
       return {
-        name: meta.name ?? name,
-        version: meta.version ?? 0,
-        updatedAt: meta.updatedAt ?? new Date().toISOString(),
+        name: meta.name,
+        version: meta.version,
+        updatedAt: meta.updatedAt,
         nodes,
         edges,
       };
-      } catch {
-        return null;
-      }
+    } catch {
+      return null;
+    }
   }
 
   private async readFromHeadMonolith(name: string): Promise<PersistedGraph | null> {
     try {
-      const rel = path.posix.join('graphs', name, 'graph.json');
-      const out = await this.runGitCapture(['show', `HEAD:${rel}`], this.config.graphRepoPath);
-      return JSON.parse(out) as PersistedGraph;
+      const relYaml = path.posix.join('graphs', name, 'graph.yaml');
+      try {
+        const outYaml = await this.runGitCapture(['show', `HEAD:${relYaml}`], this.config.graphRepoPath);
+        return parseYaml<PersistedGraph>(outYaml);
+      } catch {
+        const relJson = path.posix.join('graphs', name, 'graph.json');
+        const outJson = await this.runGitCapture(['show', `HEAD:${relJson}`], this.config.graphRepoPath);
+        return JSON.parse(outJson) as PersistedGraph;
+      }
     } catch {
       return null;
     }
+  }
+
+  private nodePaths(id: string): { yaml: string; json: string } {
+    const encoded = encodeURIComponent(id);
+    return {
+      yaml: path.posix.join('nodes', `${encoded}.yaml`),
+      json: path.posix.join('nodes', `${encoded}.json`),
+    };
+  }
+
+  private edgePaths(id: string): { yaml: string; json: string } {
+    const encoded = encodeURIComponent(id);
+    return {
+      yaml: path.posix.join('edges', `${encoded}.yaml`),
+      json: path.posix.join('edges', `${encoded}.json`),
+    };
+  }
+
+  private variablesPaths(): { yaml: string; json: string } {
+    return { yaml: 'variables.yaml', json: 'variables.json' };
+  }
+
+  private metaPaths(): { yaml: string; json: string } {
+    return { yaml: 'graph.meta.yaml', json: 'graph.meta.json' };
+  }
+
+  private async writeGraphEntity(
+    paths: { yaml: string; json: string },
+    data: unknown,
+    jsonString: string | null,
+    isNew: boolean,
+    touched: TouchedSets,
+  ): Promise<void> {
+    const root = this.config.graphRepoPath;
+    await this.atomicWriteFile(path.join(root, paths.yaml), stringifyYaml(data));
+    (isNew ? touched.added : touched.updated).add(paths.yaml);
+    if (this.config.graphStoreWriteJson) {
+      const payload = jsonString ?? JSON.stringify(data, null, 2);
+      await this.atomicWriteFile(path.join(root, paths.json), payload);
+      (isNew ? touched.added : touched.updated).add(paths.json);
+    } else {
+      await this.removeGraphPath(paths.json, touched);
+    }
+  }
+
+  private async removeGraphPath(relPath: string, touched: TouchedSets): Promise<void> {
+    const full = path.join(this.config.graphRepoPath, relPath);
+    try {
+      await fs.unlink(full);
+      touched.deleted.add(relPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+        throw err;
+      }
+    }
+  }
+
+  private async autoConvertJsonToYaml(relPaths: { yaml: string; json: string }, data: unknown): Promise<void> {
+    if (!this.config.graphAutoConvertJson) return;
+    const yamlAbs = path.join(this.config.graphRepoPath, relPaths.yaml);
+    if (await this.pathExists(yamlAbs)) return;
+    try {
+      await this.atomicWriteFile(yamlAbs, stringifyYaml(data));
+    } catch (err) {
+      this.logger.warn('Failed to auto-convert graph JSON to YAML', {
+        file: relPaths.json,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private async maybeAutoConvertJson(
+    ext: 'yaml' | 'json',
+    relPaths: { yaml: string; json: string },
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    if (ext === 'json') {
+      await this.autoConvertJsonToYaml(relPaths, data);
+    }
+  }
+
+  private async graphPathsExist(paths: { yaml: string; json: string }): Promise<boolean> {
+    const root = this.config.graphRepoPath;
+    if (await this.pathExists(path.join(root, paths.yaml))) return true;
+    if (await this.pathExists(path.join(root, paths.json))) return true;
+    return false;
+  }
+
+  private normalizeMeta(parsed: Partial<GraphMeta>, fallbackName: string): GraphMeta {
+    return {
+      name: (parsed.name ?? fallbackName) as string,
+      version: Number(parsed.version ?? 0),
+      updatedAt: (parsed.updatedAt ?? new Date().toISOString()) as string,
+      format: 2,
+    };
+  }
+
+  private async readMetaFromWorkingTree(name: string): Promise<GraphMeta> {
+    const paths = this.metaPaths();
+    const root = this.config.graphRepoPath;
+    const yamlAbs = path.join(root, paths.yaml);
+    if (await this.pathExists(yamlAbs)) {
+      const parsed = parseYaml<Partial<GraphMeta>>(await fs.readFile(yamlAbs, 'utf8'));
+      return this.normalizeMeta(parsed, name);
+    }
+    const jsonAbs = path.join(root, paths.json);
+    if (await this.pathExists(jsonAbs)) {
+      const parsed = JSON.parse(await fs.readFile(jsonAbs, 'utf8')) as Partial<GraphMeta>;
+      await this.autoConvertJsonToYaml(paths, parsed);
+      return this.normalizeMeta(parsed, name);
+    }
+    throw new Error('Graph meta not found');
+  }
+
+  private normalizeVariables(raw: unknown): Array<{ key: string; value: string }> | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    const out: Array<{ key: string; value: string }> = [];
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') continue;
+      const key = 'key' in entry ? String((entry as { key?: unknown }).key ?? '') : '';
+      const value = 'value' in entry ? String((entry as { value?: unknown }).value ?? '') : '';
+      if (!key) continue;
+      out.push({ key, value });
+    }
+    return out.length ? out : undefined;
+  }
+
+  private async readVariablesFromWorkingTree(): Promise<Array<{ key: string; value: string }> | undefined> {
+    const paths = this.variablesPaths();
+    const root = this.config.graphRepoPath;
+    const yamlAbs = path.join(root, paths.yaml);
+    try {
+      if (await this.pathExists(yamlAbs)) {
+        const parsed = parseYaml<unknown>(await fs.readFile(yamlAbs, 'utf8'));
+        return this.normalizeVariables(parsed);
+      }
+      const jsonAbs = path.join(root, paths.json);
+      if (await this.pathExists(jsonAbs)) {
+        const parsed = JSON.parse(await fs.readFile(jsonAbs, 'utf8')) as unknown;
+        await this.autoConvertJsonToYaml(paths, parsed);
+        return this.normalizeVariables(parsed);
+      }
+    } catch {
+      return undefined;
+    }
+    return undefined;
+  }
+
+  private collectPreferredEntries(
+    paths: string[],
+    prefix: string,
+  ): Map<string, { path: string; ext: 'yaml' | 'json' }> {
+    const normalizedPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
+    const result = new Map<string, { path: string; ext: 'yaml' | 'json' }>();
+    for (const filePath of paths) {
+      if (!filePath.startsWith(normalizedPrefix)) continue;
+      if (!filePath.endsWith('.yaml') && !filePath.endsWith('.json')) continue;
+      const encoded = filePath.slice(normalizedPrefix.length).replace(/\.(yaml|json)$/i, '');
+      const ext = filePath.endsWith('.yaml') ? 'yaml' : 'json';
+      const current = result.get(encoded);
+      if (!current || ext === 'yaml') {
+        result.set(encoded, { path: filePath, ext });
+      }
+    }
+    return result;
+  }
+
+  private async loadRecordFromHead(
+    info: { path: string; ext: 'yaml' | 'json' },
+    fallbackId?: string,
+  ): Promise<Record<string, unknown>> {
+    const raw = await this.runGitCapture(['show', `HEAD:${info.path}`], this.config.graphRepoPath);
+    const parsed =
+      info.ext === 'yaml' ? (parseYaml<unknown>(raw) as unknown) : (JSON.parse(raw) as unknown);
+    const record =
+      parsed && typeof parsed === 'object'
+        ? (parsed as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+    if (fallbackId) {
+      const candidate = record.id;
+      record.id = typeof candidate === 'string' && candidate.length > 0 ? candidate : fallbackId;
+    }
+    return record;
+  }
+
+  private async readHeadGraphMeta(metaBase: string, fallbackName: string): Promise<GraphMeta> {
+    const yamlRef = `${metaBase}.yaml`;
+    const jsonRef = `${metaBase}.json`;
+    let parsed: Partial<GraphMeta> | undefined;
+    try {
+      const rawYaml = await this.runGitCapture(['show', `HEAD:${yamlRef}`], this.config.graphRepoPath);
+      parsed = parseYaml<Partial<GraphMeta>>(rawYaml);
+    } catch {
+      const rawJson = await this.runGitCapture(['show', `HEAD:${jsonRef}`], this.config.graphRepoPath);
+      parsed = JSON.parse(rawJson) as Partial<GraphMeta>;
+    }
+    return this.normalizeMeta(parsed ?? {}, fallbackName);
+  }
+
+  private async loadHeadVariables(paths: string[]): Promise<Array<{ key: string; value: string }> | undefined> {
+    if (paths.includes('variables.yaml')) {
+      const raw = await this.runGitCapture(['show', 'HEAD:variables.yaml'], this.config.graphRepoPath);
+      return this.normalizeVariables(parseYaml<unknown>(raw));
+    }
+    if (paths.includes('variables.json')) {
+      const raw = await this.runGitCapture(['show', 'HEAD:variables.json'], this.config.graphRepoPath);
+      return this.normalizeVariables(JSON.parse(raw) as unknown);
+    }
+    return undefined;
   }
 
   private edgeId(e: PersistedGraphEdge): string {
