@@ -5,9 +5,14 @@ Overview
 - Deterministic edge IDs, advisory file lock, and serial, idempotent upserts.
 
 Repository layout (root)
-- graph.meta.json: `{ name, version, updatedAt, format: 2 }`
-- nodes/: one JSON per node — `nodes/<urlencoded nodeId>.json`
-- edges/: one JSON per edge — `edges/<urlencoded edgeId>.json`
+- graph.meta.yaml: `{ name, version, updatedAt, format: 2 }`
+- nodes/: one YAML per node — `nodes/<urlencoded nodeId>.yaml`
+- edges/: one YAML per edge — `edges/<urlencoded edgeId>.yaml`
+- variables.yaml (optional): list of `{ key, value }`
+
+Format expectations
+- The runtime reads and writes YAML exclusively. JSON snapshots are no longer supported at runtime.
+- Convert any legacy JSON repositories offline before pointing the server at them.
 
 Deterministic edge IDs
 - ID = `${source}-${sourceHandle}__${target}-${targetHandle}`
@@ -52,3 +57,10 @@ curl -X POST http://localhost:3010/api/graph \
 
 Related behavior
 - Server manages persistence, routing, and error handling for the Git-backed store.
+
+Configuration notes
+- The former JSON compatibility flags have been removed; YAML is required everywhere the server interacts with the graph store.
+
+Conversion tooling
+- Use `pnpm convert-graphs` (wrapping `packages/tools/graph-converter`) offline to migrate legacy JSON files into YAML before deploying.
+- Atomic writes are enabled by default; pass `--no-atomic` if the filesystem cannot support the temp-file + rename flow.
