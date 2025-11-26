@@ -45,11 +45,10 @@ import { LoggerService } from '../core/services/logger.service';
     },
     {
       provide: ContainerService,
-      useFactory: (logger: LoggerService, containerRegistry: ContainerRegistry) => {
-        const svc = new ContainerService(logger, containerRegistry);
-        return svc;
+      useFactory: (containerRegistry: ContainerRegistry, logger: LoggerService) => {
+        return new ContainerService(containerRegistry, logger);
       },
-      inject: [LoggerService, ContainerRegistry],
+      inject: [ContainerRegistry, LoggerService],
     },
     TerminalSessionsService,
     ContainerTerminalGateway,

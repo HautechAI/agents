@@ -56,7 +56,9 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
   private resolvedTokens: { app: string; bot: string } | null = null;
 
   constructor(
-    @Inject(ReferenceResolverService) @Optional() private readonly referenceResolver?: ReferenceResolverService,
+    @Inject(ReferenceResolverService)
+    @Optional()
+    private readonly referenceResolver: ReferenceResolverService | null = null,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
