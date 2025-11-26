@@ -1,0 +1,126 @@
+import { describe, expect, it } from 'vitest';
+
+import { migrateValue } from '../../tools/graph-ref-migrate/transform';
+
+const migrate = (value: unknown) => migrateValue(value, { defaultMount: 'secret' }, { validate: true });
+
+describe('migrateValue', () => {
+  it('converts legacy vault references with explicit mount', () => {
+    const input = {
+      config: {
+        auth: {
+          bot: { source: 'vault', value: 'secret/slack/apps/bot-token' },
+        },
+      },
+    };
+
+    const result = migrate(input);
+
+    expect(result.errors).toEqual([]);
+    expect(result.conversions.map((c) => c.pointer)).toEqual(['/config/auth/bot']);
+    expect(result.value).toEqual({
+      config: {
+        auth: {
+          bot: { kind: 'vault', mount: 'secret', path: 'slack/apps', key: 'bot-token' },
+        },
+      },
+    });
+  });
+
+  it('uses default mount when legacy vault omits mount segment', () => {
+    const input = { token: { source: 'vault', value: 'workflows/token' } };
+
+    const result = migrate(input);
+
+    expect(result.errors).toEqual([]);
+    expect(result.conversions).toEqual([
+      { pointer: '/token', kind: 'vault', legacy: 'vault', usedDefaultMount: true },
+    ]);
+    expect(result.value).toEqual({
+      token: { kind: 'vault', mount: 'secret', path: 'workflows', key: 'token' },
+    });
+  });
+
+  it('converts legacy env and static references and recurses through arrays', () => {
+    const input = {
+      env: { source: 'env', envVar: 'GH_TOKEN', default: 'fallback' },
+      tags: [
+        { source: 'static', value: 'alpha' },
+        { source: 'env', envVar: 'SECONDARY' },
+      ],
+    };
+
+    const result = migrate(input);
+
+    expect(result.errors).toEqual([]);
+    expect(result.changed).toBe(true);
+    expect(
+      result.conversions.map(({ pointer, kind, legacy }) => ({ pointer, kind, legacy })),
+    ).toEqual([
+      { pointer: '/env', kind: 'var', legacy: 'env' },
+      { pointer: '/tags/0', kind: 'static', legacy: 'static' },
+      { pointer: '/tags/1', kind: 'var', legacy: 'env' },
+    ]);
+    expect(result.value).toEqual({
+      env: { kind: 'var', name: 'GH_TOKEN', default: 'fallback' },
+      tags: ['alpha', { kind: 'var', name: 'SECONDARY' }],
+    });
+  });
+
+  it('leaves canonical references untouched', () => {
+    const input = {
+      token: { kind: 'vault', mount: 'secret', path: 'services/github', key: 'token' },
+      env: { kind: 'var', name: 'SLACK_TOKEN' },
+    };
+
+    const result = migrate(input);
+
+    expect(result.changed).toBe(false);
+    expect(result.conversions).toEqual([]);
+    expect(result.errors).toEqual([]);
+    expect(result.value).toEqual(input);
+  });
+
+  it('reports errors for unconvertible legacy vault references', () => {
+    const input = { secret: { source: 'vault', value: 'onlykey' } };
+
+    const result = migrate(input);
+
+    expect(result.changed).toBe(false);
+    expect(result.conversions).toEqual([]);
+    expect(result.errors).toContainEqual({
+      pointer: '/secret',
+      message: 'Legacy vault reference path must have at least key and one segment',
+    });
+    expect(result.errors).toContainEqual({ pointer: '/secret', message: 'Legacy reference remains after migration' });
+  });
+
+  it('reports errors when legacy static value is not primitive', () => {
+    const input = { ref: { source: 'static', value: { nested: true } } };
+
+    const result = migrate(input);
+
+    expect(result.changed).toBe(false);
+    expect(result.conversions).toEqual([]);
+    expect(result.errors).toContainEqual({
+      pointer: '/ref',
+      message: 'Legacy static reference must resolve to a primitive value',
+    });
+    expect(result.errors).toContainEqual({ pointer: '/ref', message: 'Legacy reference remains after migration' });
+  });
+
+  it('validates persisted graph node config schema', () => {
+    const input = {
+      id: 'node-1',
+      template: 'example.node',
+      config: 'not-an-object',
+    };
+
+    const result = migrate(input);
+
+    expect(result.errors).toContainEqual({
+      pointer: '/config',
+      message: 'PersistedGraphNode.config must be an object when provided',
+    });
+  });
+});
