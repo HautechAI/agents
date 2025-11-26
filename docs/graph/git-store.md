@@ -48,6 +48,9 @@ curl -X POST http://localhost:3010/api/graph \
   -H 'x-graph-author-email: jane@example.com' \
   -d '{"name":"main","version":1,"nodes":[],"edges":[]}'
 
+# Convert persisted JSON entities to YAML using the local CLI
+pnpm convert-graphs -- --root ./graph --in-place --schema-migrate --strict
+
 ```
 
 Related behavior
