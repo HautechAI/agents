@@ -492,18 +492,22 @@ export class AgentsPersistenceService {
     filter: 'active' | 'completed' | 'all' = 'active',
     take: number = 100,
     threadId?: string,
-  ): Promise<Array<{ id: string; threadId: string; note: string; at: Date; createdAt: Date; completedAt: Date | null }>> {
+  ): Promise<Array<{ id: string; threadId: string; note: string; at: Date; createdAt: Date; completedAt: Date | null; cancelledAt: Date | null }>> {
     const limit = Number.isFinite(take) ? Math.min(1000, Math.max(1, Math.trunc(take))) : 100;
     const where: Prisma.ReminderWhereInput = {};
-    if (filter === 'active') where.completedAt = null;
-    else if (filter === 'completed') where.NOT = { completedAt: null };
+    if (filter === 'active') {
+      where.completedAt = null;
+      where.cancelledAt = null;
+    } else if (filter === 'completed') {
+      where.NOT = { completedAt: null };
+    }
     if (threadId) where.threadId = threadId;
 
     try {
       return await this.prisma.reminder.findMany({
         where: Object.keys(where).length === 0 ? undefined : where,
         orderBy: { at: 'asc' },
-        select: { id: true, threadId: true, note: true, at: true, createdAt: true, completedAt: true },
+        select: { id: true, threadId: true, note: true, at: true, createdAt: true, completedAt: true, cancelledAt: true },
         take: limit,
       });
     } catch (error) {

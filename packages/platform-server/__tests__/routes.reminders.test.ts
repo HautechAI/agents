@@ -17,8 +17,12 @@ describe('GET /graph/nodes/:nodeId/reminders', () => {
       getClient() {
         return {
           reminder: {
-          create: vi.fn(async (args: any) => ({ ...args.data, createdAt: new Date() })),
+            create: vi.fn(async (args: any) => ({ ...args.data, createdAt: new Date(), cancelledAt: null })),
             update: vi.fn(async () => ({})),
+            updateMany: vi.fn(async () => ({ count: 0 })),
+          },
+          thread: {
+            findUnique: vi.fn(async () => ({ status: 'open' })),
           },
         } as any;
       },

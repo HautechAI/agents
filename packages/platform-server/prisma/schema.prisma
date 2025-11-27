@@ -460,6 +460,7 @@ model Reminder {
   at          DateTime
   createdAt   DateTime  @default(now())
   completedAt DateTime?
+  cancelledAt DateTime?
 
   @@index([threadId])
 }

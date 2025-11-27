@@ -36,6 +36,7 @@ export class ThreadsMetricsService {
             select rem."threadId" as thread_id
             from "Reminder" rem
             where rem."completedAt" is null
+              and rem."cancelledAt" is null
           ), containers as (
             select cont."threadId" as thread_id
             from "Container" cont

@@ -8,6 +8,8 @@ import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
 import { ContainerRegistry } from '../infra/container/container.registry';
 import { ContainerService } from '../infra/container/container.service';
+import { RemindersService } from './reminders.service';
+import { EventsBusService } from '../events/events-bus.service';
 
 type ThreadNode = {
   id: string;
@@ -33,6 +35,8 @@ export class ThreadCleanupCoordinator {
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(ContainerRegistry) private readonly registry: ContainerRegistry,
     @Inject(ContainerService) private readonly containerService: ContainerService,
+    @Inject(RemindersService) private readonly reminders: RemindersService,
+    @Inject(EventsBusService) private readonly eventsBus: EventsBusService,
   ) {}
 
   async closeThreadWithCascade(threadId: string): Promise<void> {
@@ -43,36 +47,40 @@ export class ThreadCleanupCoordinator {
         return;
       }
 
+      this.logger.info('ThreadCleanup: collected subtree for closure', {
+        threadId,
+        threadCount: nodes.length,
+      });
+
       for (const node of nodes) {
-        await this.processThread(node);
+        await this.ensureThreadClosed(node);
+      }
+
+      for (const node of nodes) {
+        await this.runCleanupPipeline(node);
       }
     } catch (error) {
       this.logger.error('ThreadCleanup: fatal error during cascade', { threadId, error });
     }
   }
 
-  private async processThread(node: ThreadNode): Promise<void> {
+  private async runCleanupPipeline(node: ThreadNode): Promise<void> {
     const { id: threadId } = node;
 
-    try {
-      await this.ensureThreadClosed(node);
+    this.logger.info('ThreadCleanup: pipeline start', { threadId });
 
-      const activeRuns = await this.listRunningRuns(threadId);
-      if (activeRuns.length > 0) {
-        this.handleActiveRuns(threadId, activeRuns);
-      }
+    const reminderResult = await this.cancelThreadReminders(threadId);
+    await this.terminateActiveRuns(threadId);
+    await this.terminateThreadContainers(threadId);
+    await this.sweepThreadArtifacts(threadId);
 
-      await this.termination.terminateByThread(threadId);
-      await this.cleanup.sweepSelective(threadId, {
-        graceSeconds: STOP_GRACE_SECONDS,
-        force: FORCE_REMOVE_CONTAINERS,
-        deleteEphemeral: DELETE_EPHEMERAL_VOLUMES,
-      });
+    await this.emitThreadMetrics(threadId);
 
-      await this.deleteWorkspaceVolume(threadId);
-    } catch (error) {
-      this.logger.error('ThreadCleanup: thread cleanup failed', { threadId, error });
-    }
+    this.logger.info('ThreadCleanup: pipeline complete', {
+      threadId,
+      cancelledRemindersDb: reminderResult.cancelledDb,
+      clearedReminderTimers: reminderResult.clearedRuntime,
+    });
   }
 
   private handleActiveRuns(threadId: string, activeRuns: RunRecord[]): void {
@@ -185,6 +193,57 @@ export class ThreadCleanupCoordinator {
       this.logger.info('ThreadCleanup: workspace volume removed', { threadId, volumeName });
     } catch (error) {
       this.logger.error('ThreadCleanup: failed to remove workspace volume', { threadId, volumeName, error });
+    }
+  }
+
+  private async terminateActiveRuns(threadId: string): Promise<void> {
+    try {
+      const activeRuns = await this.listRunningRuns(threadId);
+      if (activeRuns.length > 0) {
+        this.handleActiveRuns(threadId, activeRuns);
+      }
+    } catch (error) {
+      this.logger.warn('ThreadCleanup: failed to enumerate active runs', { threadId, error });
+    }
+  }
+
+  private async terminateThreadContainers(threadId: string): Promise<void> {
+    try {
+      await this.termination.terminateByThread(threadId);
+    } catch (error) {
+      this.logger.error('ThreadCleanup: container termination failed', { threadId, error });
+    }
+  }
+
+  private async sweepThreadArtifacts(threadId: string): Promise<void> {
+    try {
+      await this.cleanup.sweepSelective(threadId, {
+        graceSeconds: STOP_GRACE_SECONDS,
+        force: FORCE_REMOVE_CONTAINERS,
+        deleteEphemeral: DELETE_EPHEMERAL_VOLUMES,
+      });
+    } catch (error) {
+      this.logger.error('ThreadCleanup: selective cleanup failed', { threadId, error });
+    }
+
+    await this.deleteWorkspaceVolume(threadId);
+  }
+
+  private async cancelThreadReminders(threadId: string): Promise<{ cancelledDb: number; clearedRuntime: number }> {
+    try {
+      return await this.reminders.cancelThreadReminders({ threadId });
+    } catch (error) {
+      this.logger.warn('ThreadCleanup: reminder cancellation failed', { threadId, error });
+      return { cancelledDb: 0, clearedRuntime: 0 };
+    }
+  }
+
+  private async emitThreadMetrics(threadId: string): Promise<void> {
+    try {
+      this.eventsBus.emitThreadMetrics({ threadId });
+      this.eventsBus.emitThreadMetricsAncestors({ threadId });
+    } catch (error) {
+      this.logger.warn('ThreadCleanup: metrics emission failed', { threadId, error });
     }
   }
 

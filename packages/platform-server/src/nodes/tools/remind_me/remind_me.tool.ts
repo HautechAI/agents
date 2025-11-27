@@ -66,9 +66,15 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     const etaDate = new Date(Date.now() + delayMs);
     const eta = etaDate.toISOString();
     const prisma = this.prismaService.getClient();
+
+    if (threadId) {
+      const thread = await prisma.thread.findUnique({ where: { id: threadId }, select: { status: true } });
+      if (!thread) throw new Error('Thread not found');
+      if (thread.status === 'closed') throw new Error('Cannot schedule reminder on a closed thread');
+    }
     // Create DB row first; id is UUID
     const created = await prisma.reminder.create({
-      data: { id: uuidv4(), threadId, note, at: etaDate, completedAt: null },
+      data: { id: uuidv4(), threadId, note, at: etaDate, completedAt: null, cancelledAt: null },
     });
     const timer = setTimeout(async () => {
       const exists = this.active.has(created.id);
@@ -98,5 +104,20 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     this.onRegistryChanged?.(this.active.size, undefined, threadId);
     // Return ack including DB id
     return JSON.stringify({ status: 'scheduled', etaMs: delayMs, at: eta, id: created.id });
+  }
+
+  clearTimersByThread(threadId: string): string[] {
+    const entries = Array.from(this.active.entries()).filter(([, { reminder }]) => reminder.threadId === threadId);
+    if (entries.length === 0) return [];
+
+    const clearedIds: string[] = [];
+    for (const [id, { timer }] of entries) {
+      clearTimeout(timer);
+      this.active.delete(id);
+      clearedIds.push(id);
+    }
+
+    this.onRegistryChanged?.(this.active.size, Date.now(), threadId);
+    return clearedIds;
   }
 }
