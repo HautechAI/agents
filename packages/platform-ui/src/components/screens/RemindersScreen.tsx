@@ -139,7 +139,7 @@ export default function RemindersScreen({
   const scheduledCount = countsByStatus.scheduled;
   const executedCount = countsByStatus.executed;
   const cancelledCount = countsByStatus.cancelled;
-  const allCount = total;
+  const allCount = scheduledCount + executedCount + cancelledCount;
 
   const handleStatusFilterChange = (next: ReminderStatusFilter) => {
     onStatusFilterChange?.(next);

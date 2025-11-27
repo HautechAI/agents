@@ -144,9 +144,11 @@ describe('AgentsReminders page', () => {
     fireEvent.click(screen.getByRole('button', { name: /Executed \(1\)/i }));
     await waitFor(() => expect(screen.getByText('Done')).toBeInTheDocument());
     expect(within(table).queryByText('Soon')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /All \(2\)/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Scheduled \(1\)/i }));
     await waitFor(() => expect(screen.getByText('Soon')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /All \(2\)/i })).toBeInTheDocument();
   });
 
   it('shows error overlay and retries successfully', async () => {
