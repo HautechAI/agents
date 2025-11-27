@@ -1,0 +1,102 @@
+import { describe, expect, it } from 'vitest';
+import type { Response } from 'openai/resources/responses/responses.mjs';
+import { LLM, ReasoningOnlyZeroUsageError } from '../src/llm';
+import { HumanMessage } from '../src/messages/humanMessage';
+import { AIMessage } from '../src/messages/aiMessage';
+
+function createReasoningOnlyResponse(usage: Response['usage']): Response {
+  return {
+    id: 'resp_123',
+    created_at: 0,
+    output_text: '',
+    error: null,
+    incomplete_details: null,
+    instructions: null,
+    metadata: null,
+    model: 'gpt-4o-mini',
+    object: 'response',
+    output: [
+      {
+        id: 'reasoning_1',
+        type: 'reasoning',
+        summary: [{ type: 'summary_text', text: 'thinking' }],
+        content: [{ type: 'reasoning_text', text: 'step-by-step' }],
+        status: 'completed',
+      },
+    ],
+    usage,
+  } as unknown as Response;
+}
+
+function createMessageResponse(usage: Response['usage']): Response {
+  return {
+    id: 'resp_456',
+    created_at: 0,
+    output_text: 'hello',
+    error: null,
+    incomplete_details: null,
+    instructions: null,
+    metadata: null,
+    model: 'gpt-4o-mini',
+    object: 'response',
+    output: [AIMessage.fromText('hello world').toPlain()],
+    usage,
+  } as unknown as Response;
+}
+
+function buildUsage(tokens: { input: number; output: number; total: number; cached?: number; reasoning?: number }): Response['usage'] {
+  return {
+    input_tokens: tokens.input,
+    input_tokens_details: { cached_tokens: tokens.cached ?? 0 },
+    output_tokens: tokens.output,
+    output_tokens_details: { reasoning_tokens: tokens.reasoning ?? 0 },
+    total_tokens: tokens.total,
+  };
+}
+
+describe('LLM reasoning-only zero usage validation', () => {
+  const baseInput = [HumanMessage.fromText('Hello there')];
+
+  function createLLMFor(response: Response): LLM {
+    return new LLM({
+      responses: {
+        create: async () => response,
+      },
+    } as unknown as Parameters<typeof LLM.prototype.constructor>[0]);
+  }
+
+  it('throws ReasoningOnlyZeroUsageError with raw response preserved', async () => {
+    const rawResponse = createReasoningOnlyResponse(
+      buildUsage({ input: 0, output: 0, total: 0, cached: 0, reasoning: 0 }),
+    );
+
+    const llm = createLLMFor(rawResponse);
+
+    const promise = llm.call({ model: 'gpt-4o', input: baseInput });
+
+    await expect(promise).rejects.toBeInstanceOf(ReasoningOnlyZeroUsageError);
+    const error = await promise.catch((err) => err as ReasoningOnlyZeroUsageError);
+    expect(error.rawResponse).toBe(rawResponse);
+    expect(error.message).toContain('reasoning-only response');
+  });
+
+  it('does not throw when assistant message is present even if usage totals zero', async () => {
+    const rawResponse = createMessageResponse(buildUsage({ input: 0, output: 0, total: 0 }));
+
+    const llm = createLLMFor(rawResponse);
+
+    const result = await llm.call({ model: 'gpt-4o', input: baseInput });
+    expect(result.text).toBe('hello world');
+  });
+
+  it('does not throw when usage includes non-zero tokens for reasoning output', async () => {
+    const rawResponse = createReasoningOnlyResponse(
+      buildUsage({ input: 1, output: 0, total: 1, reasoning: 0 }),
+    );
+
+    const llm = createLLMFor(rawResponse);
+
+    const result = await llm.call({ model: 'gpt-4o', input: baseInput });
+    expect(result.text).toBe('');
+  });
+});
