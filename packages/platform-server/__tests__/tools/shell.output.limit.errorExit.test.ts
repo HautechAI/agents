@@ -9,12 +9,13 @@ import type { EnvService } from '../../src/env/env.service';
 import type { ArchiveService } from '../../src/infra/archive/archive.service';
 import type { ContainerHandle } from '../../src/infra/container/container.handle';
 
+const STDOUT_PREFIX = 'A'.repeat(2000);
+const STDERR_TAIL = 'B'.repeat(10_000);
+
 class FakeContainer implements ContainerHandle {
   public lastPut?: { data: Buffer; options: { path: string } };
   async exec(_cmd: string, _opts?: { env?: Record<string,string>, workdir?: string, timeoutMs?: number, idleTimeoutMs?: number, killOnTimeout?: boolean }): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    const out = 'X'.repeat(800);
-    const err = 'Y'.repeat(800);
-    return { stdout: out, stderr: err, exitCode: 123 };
+    return { stdout: STDOUT_PREFIX, stderr: STDERR_TAIL, exitCode: 123 };
   }
   async putArchive(data: Buffer, options: { path: string }): Promise<void> { this.lastPut = { data, options }; }
 }
@@ -71,12 +72,26 @@ describe('ShellTool output limit - non-zero exit oversized', () => {
     await node.setConfig({ outputLimitChars: 1000 });
     const t = node.getTool();
 
-    const msg = await t.execute({ command: 'fail' }, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false }, callerAgent: {} } as any);
-    const lines = msg.split('\n');
-    expect(lines[0]).toBe('[exit code 123]');
-    expect(msg).toContain('Output exceeded 1000 characters.');
-    expect(msg).toMatch(/Full output saved to: \/tmp\/.+\.txt/);
-    expect(msg).toContain('--- output tail ---');
+    let error: Error | null = null;
+    try {
+      await t.execute(
+        { command: 'fail' },
+        { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false }, callerAgent: {} } as any,
+      );
+    } catch (err) {
+      error = err as Error;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message.split('\n')[0]).toBe('[exit code 123]');
+    expect(message).toContain('Output exceeded 1000 characters.');
+    expect(message).toMatch(/Full output saved to: \/tmp\/.+\.txt/);
+    expect(message.toLowerCase()).toContain('output tail');
+    const tailMatch = message.match(/--- output tail ---\n([\s\S]+)$/);
+    expect(tailMatch).not.toBeNull();
+    expect(tailMatch?.[1].length).toBe(10_000);
+    expect(tailMatch?.[1]).toBe(STDERR_TAIL);
     expect((provider.c as FakeContainer).lastPut?.options.path).toBe('/tmp');
     expect((provider.c as FakeContainer).lastPut?.data instanceof Buffer).toBe(true);
   });
