@@ -542,6 +542,35 @@ describe('AgentsThreads page', () => {
       expect(screen.getByText(/Select a thread to view details/i)).toBeInTheDocument();
     });
 
+    it('filters recipients by visible name when searching', async () => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([
+        { id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' },
+        { id: 'agent-2', template: 'agent.template.two', title: 'Agent Cirrus' },
+      ]);
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+
+      const selectorButton = await screen.findByRole('button', { name: 'Select agent' });
+      await user.click(selectorButton);
+
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      await user.type(searchInput, 'Cirrus');
+
+      await waitFor(() => {
+        expect(screen.queryByText('Agent Nimbus')).not.toBeInTheDocument();
+      });
+
+      const visibleOption = await screen.findByText('Agent Cirrus');
+      await user.click(visibleOption);
+
+      expect(await screen.findByRole('button', { name: 'Agent Cirrus' })).toBeInTheDocument();
+    });
+
     it('disables Send until a recipient is chosen and message entered', async () => {
       const user = userEvent.setup();
       const thread = makeThread();

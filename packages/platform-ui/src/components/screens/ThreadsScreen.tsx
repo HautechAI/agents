@@ -38,7 +38,7 @@ interface ThreadsScreenProps {
   draftRecipientId?: string | null;
   draftRecipientLabel?: string | null;
   draftRecipients?: Array<{ id: string; title: string }>;
-  onDraftRecipientChange?: (agentId: string | null) => void;
+  onDraftRecipientChange?: (agentId: string | null, agentTitle: string | null) => void;
   onDraftCancel?: () => void;
   className?: string;
 }
@@ -196,9 +196,10 @@ export default function ThreadsScreen({
                           {draftRecipients.map((recipient) => (
                             <CommandItem
                               key={recipient.id}
-                              value={recipient.id}
+                              value={recipient.title}
+                              keywords={[recipient.title, recipient.id]}
                               onSelect={() => {
-                                onDraftRecipientChange?.(recipient.id);
+                                onDraftRecipientChange?.(recipient.id, recipient.title);
                                 setRecipientSelectorOpen(false);
                               }}
                             >
@@ -211,7 +212,7 @@ export default function ThreadsScreen({
                         <CommandItem
                           value="__clear__"
                           onSelect={() => {
-                            onDraftRecipientChange?.(null);
+                            onDraftRecipientChange?.(null, null);
                             setRecipientSelectorOpen(false);
                           }}
                         >
