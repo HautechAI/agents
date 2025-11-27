@@ -31,7 +31,7 @@ describe('CallModelLLMReducer usage metrics', () => {
     const llm = { call: vi.fn(async () => response) };
 
     const eventsBus = { publishEvent: vi.fn(async () => {}), subscribeToRunEvents: vi.fn(() => vi.fn()) };
-    const reducer = new CallModelLLMReducer(runEvents as any, eventsBus as any).init({
+    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any, eventsBus as any).init({
       llm: llm as any,
       model: 'gpt-usage',
       systemPrompt: 'SYS',
@@ -78,7 +78,7 @@ describe('CallModelLLMReducer usage metrics', () => {
     const llm = { call: vi.fn(async () => response) };
 
     const eventsBus = { publishEvent: vi.fn(async () => {}), subscribeToRunEvents: vi.fn(() => vi.fn()) };
-    const reducer = new CallModelLLMReducer(runEvents as any, eventsBus as any).init({
+    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any, eventsBus as any).init({
       llm: llm as any,
       model: 'gpt-context',
       systemPrompt: 'SYS',
@@ -128,7 +128,7 @@ describe('CallModelLLMReducer usage metrics', () => {
     }));
 
     const eventsBus = { publishEvent: vi.fn(async () => {}), subscribeToRunEvents: vi.fn(() => vi.fn()) };
-    const reducer = new CallModelLLMReducer(runEvents as any, eventsBus as any).init({
+    const reducer = new CallModelLLMReducer(new LoggerService(), runEvents as any, eventsBus as any).init({
       llm: llm as any,
       model: 'gpt-context-tail',
       systemPrompt: 'SYS',

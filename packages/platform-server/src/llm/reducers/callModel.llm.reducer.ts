@@ -9,7 +9,7 @@ import {
   SystemMessage,
   ToolCallMessage,
 } from '@agyn/llm';
-import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
 import { LLMContext, LLMContextState, LLMMessage, LLMState } from '../types';
 import type { LLMCallUsageMetrics, ToolCallRecord } from '../../events/run-events.service';
 import { RunEventsService } from '../../events/run-events.service';
@@ -24,6 +24,7 @@ import {
 } from '../services/context-items.utils';
 import { normalizeInstructionMessage } from '../services/messages.normalization';
 import type { ContextItemInput } from '../services/context-items.utils';
+import { LoggerService } from '../../core/services/logger.service';
 
 type SequenceEntry =
   | { kind: 'system'; message: DeveloperMessage }
@@ -33,15 +34,17 @@ type SequenceEntry =
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
-  private readonly logger = new Logger(CallModelLLMReducer.name);
+  protected logger: LoggerService;
   private readonly runEvents: RunEventsService;
   private readonly eventsBus: EventsBusService;
 
   constructor(
+    @Inject(LoggerService) logger: LoggerService,
     @Inject(RunEventsService) runEvents: RunEventsService,
     @Inject(EventsBusService) eventsBus: EventsBusService,
   ) {
     super();
+    this.logger = logger;
     this.runEvents = runEvents;
     this.eventsBus = eventsBus;
   }
