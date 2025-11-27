@@ -97,7 +97,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
   // Node lifecycle state driven by base Node
   private _provInFlight: Promise<void> | null = null;
 
-  // Dynamic config: enabled tools (if undefined => all enabled by default)
+  // Dynamic config: enabled tools (undefined => disabled by default)
   // Dynamic tool filtering removed per strictness spec; always expose all cached tools
   private _globalStaleTimeoutMs = 0;
   // Last seen enabled tools from state for change detection
@@ -376,22 +376,21 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
       enabledList = [...this._lastEnabledTools];
     }
 
-    // If enabledTools present (including empty array), filter accordingly
-    if (enabledList) {
-      const wantedRuntimeNames = new Set<string>(enabledList.map((n) => toRuntimeName(String(n))));
-      const availableNames = new Set(allTools.map((t) => t.name));
-      // Log and ignore unknown names
-      const unknown: string[] = Array.from(wantedRuntimeNames).filter((n) => !availableNames.has(n));
-      if (unknown.length) {
-        const availableList = Array.from(availableNames).join(',');
-        this.logger.log(
-          `[MCP:${ns}] enabledTools contains unknown tool(s); ignoring unknown=${unknown.join(',')} available=${availableList}`,
-        );
-      }
-      return allTools.filter((t) => wantedRuntimeNames.has(t.name));
+    if (enabledList === undefined) {
+      return [];
     }
 
-    return [];
+    const wantedRuntimeNames = new Set<string>(enabledList.map((n) => toRuntimeName(String(n))));
+    const availableNames = new Set(allTools.map((t) => t.name));
+    // Log and ignore unknown names
+    const unknown: string[] = Array.from(wantedRuntimeNames).filter((n) => !availableNames.has(n));
+    if (unknown.length) {
+      const availableList = Array.from(availableNames).join(',');
+      this.logger.log(
+        `[MCP:${ns}] enabledTools contains unknown tool(s); ignoring unknown=${unknown.join(',')} available=${availableList}`,
+      );
+    }
+    return allTools.filter((t) => wantedRuntimeNames.has(t.name));
   }
 
   async callTool(
