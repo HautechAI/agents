@@ -6,7 +6,7 @@ import { TestProviders } from './integration/testUtils';
 import { MemoryRouter } from 'react-router-dom';
 
 describe('AgentsThreads layout', () => {
-  it('renders filters, threads list, and conversation panels', async () => {
+  it('renders header, threads list, and conversation panels', async () => {
     render(
       <TestProviders>
         <MemoryRouter>
