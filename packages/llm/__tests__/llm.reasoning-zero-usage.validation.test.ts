@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Response } from 'openai/resources/responses/responses.mjs';
-import { LLM, ReasoningOnlyZeroUsageError } from '../src/llm';
+import { LLM } from '../src/llm';
 import { HumanMessage } from '../src/messages/humanMessage';
 import { AIMessage } from '../src/messages/aiMessage';
 import { ResponseMessage } from '../src/messages/responseMessage';
+import {
+  ReasoningOnlyZeroUsageError,
+  validateReasoningOnlyZeroUsage,
+} from '../src/validation/reasoningOnlyZeroUsage';
 
 function createReasoningOnlyResponse(usage: Response['usage']): Response {
   return {
@@ -79,6 +83,28 @@ function buildUsage(tokens: { input: number; output: number; total: number; cach
     total_tokens: tokens.total,
   };
 }
+
+describe('validateReasoningOnlyZeroUsage', () => {
+  it('throws ReasoningOnlyZeroUsageError when reasoning-only with zero usage', () => {
+    const rawResponse = createReasoningOnlyResponse(
+      buildUsage({ input: 0, output: 0, total: 0, cached: 0, reasoning: 0 }),
+    );
+
+    expect(() => validateReasoningOnlyZeroUsage(rawResponse)).toThrowError(ReasoningOnlyZeroUsageError);
+    try {
+      validateReasoningOnlyZeroUsage(rawResponse);
+    } catch (error) {
+      const typedError = error as ReasoningOnlyZeroUsageError;
+      expect(typedError.rawResponse).toBe(rawResponse);
+    }
+  });
+
+  it('does not throw when output contains assistant message', () => {
+    const rawResponse = createMessageResponse(buildUsage({ input: 0, output: 0, total: 0 }));
+
+    expect(() => validateReasoningOnlyZeroUsage(rawResponse)).not.toThrow();
+  });
+});
 
 describe('LLM reasoning-only zero usage validation', () => {
   const baseInput = [HumanMessage.fromText('Hello there')];
