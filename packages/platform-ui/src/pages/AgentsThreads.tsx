@@ -276,10 +276,10 @@ export function AgentsThreads() {
   const limitKey = useMemo(() => ({ limit: threadLimit }), [threadLimit]);
   const threadsQueryKey = useMemo(() => ['agents', 'threads', 'roots', filterMode, limitKey] as const, [filterMode, limitKey]);
 
-  const threadsQuery = useQuery({
+  const threadsQuery = useQuery<{ items: ThreadNode[] }, Error>({
     queryKey: threadsQueryKey,
     queryFn: () => threads.roots(filterMode, threadLimit),
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 
   const rootNodes = useMemo<ThreadNode[]>(() => {
@@ -727,7 +727,7 @@ export function AgentsThreads() {
     setInputValue(value);
   }, []);
 
-  const handleSendMessage = useCallback((value: string, context: { threadId: string | null }) => {
+  const handleSendMessage = useCallback((_value: string, context: { threadId: string | null }) => {
     if (!context.threadId) return;
     notifyError('Sending messages is not supported yet.');
   }, []);
