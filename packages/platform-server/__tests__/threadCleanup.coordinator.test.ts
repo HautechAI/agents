@@ -34,7 +34,11 @@ const makeCoordinator = () => {
     removeVolume: vi.fn(async () => undefined),
   };
   const prismaService = { getClient: () => prismaStub };
-  const reminders = { cancelByThread: vi.fn(async () => ({ cancelledDb: 0, clearedRuntime: 0, threadIds: [] })) };
+  const reminders = { cancelThreadReminders: vi.fn(async () => ({ cancelledDb: 0, clearedRuntime: 0 })) };
+  const eventsBus = {
+    emitThreadMetrics: vi.fn(),
+    emitThreadMetricsAncestors: vi.fn(),
+  };
 
   const coordinator = new ThreadCleanupCoordinator(
     persistence as any,
@@ -46,9 +50,10 @@ const makeCoordinator = () => {
     registry as any,
     containerService as any,
     reminders as any,
+    eventsBus as any,
   );
 
-  return { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders };
+  return { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders, eventsBus };
 };
 
 describe('ThreadCleanupCoordinator', () => {
@@ -78,7 +83,7 @@ describe('ThreadCleanupCoordinator', () => {
       return [];
     });
 
-    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders } = makeCoordinator();
+    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders, eventsBus } = makeCoordinator();
 
     registry.listByThread.mockImplementation(async (threadId: string) => [{ containerId: `${threadId}-c`, status: 'running' }]);
     registry.findByVolume.mockResolvedValue([]);
@@ -101,7 +106,17 @@ describe('ThreadCleanupCoordinator', () => {
       ['ha_ws_child', { force: true }],
       ['ha_ws_root', { force: true }],
     ]);
-    expect(reminders.cancelByThread.mock.calls.map(([args]) => args)).toEqual([
+    expect(reminders.cancelThreadReminders.mock.calls.map(([args]) => args)).toEqual([
+      { threadId: 'leaf' },
+      { threadId: 'child' },
+      { threadId: 'root' },
+    ]);
+    expect(eventsBus.emitThreadMetrics.mock.calls.map(([payload]) => payload)).toEqual([
+      { threadId: 'leaf' },
+      { threadId: 'child' },
+      { threadId: 'root' },
+    ]);
+    expect(eventsBus.emitThreadMetricsAncestors.mock.calls.map(([payload]) => payload)).toEqual([
       { threadId: 'leaf' },
       { threadId: 'child' },
       { threadId: 'root' },
@@ -114,7 +129,7 @@ describe('ThreadCleanupCoordinator', () => {
     prismaStub.thread.findMany.mockResolvedValue([]);
     prismaStub.run.findMany.mockResolvedValue([{ id: 'run-root', threadId: 'root', status: 'running' }]);
 
-    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders } = makeCoordinator();
+    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders, eventsBus } = makeCoordinator();
     registry.listByThread.mockResolvedValue([{ containerId: 'root-c', status: 'running' }]);
     registry.findByVolume.mockResolvedValue([]);
     containerService.listContainersByVolume.mockResolvedValue([]);
@@ -130,7 +145,9 @@ describe('ThreadCleanupCoordinator', () => {
       deleteEphemeral: true,
     });
     expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
-    expect(reminders.cancelByThread).toHaveBeenCalledWith({ threadId: 'root' });
+    expect(reminders.cancelThreadReminders).toHaveBeenCalledWith({ threadId: 'root' });
+    expect(eventsBus.emitThreadMetrics).toHaveBeenCalledWith({ threadId: 'root' });
+    expect(eventsBus.emitThreadMetricsAncestors).toHaveBeenCalledWith({ threadId: 'root' });
   });
 
   it('skips workspace volume removal when references remain', async () => {
@@ -139,7 +156,7 @@ describe('ThreadCleanupCoordinator', () => {
     prismaStub.thread.findMany.mockResolvedValue([]);
     prismaStub.run.findMany.mockResolvedValue([]);
 
-    const { coordinator, containerService, registry, reminders } = makeCoordinator();
+    const { coordinator, containerService, registry, reminders, eventsBus } = makeCoordinator();
     registry.listByThread.mockResolvedValue([]);
     registry.findByVolume.mockResolvedValue([{ containerId: 'other', threadId: 'other-thread', status: 'running' }]);
     containerService.listContainersByVolume.mockResolvedValue([]);
@@ -147,6 +164,8 @@ describe('ThreadCleanupCoordinator', () => {
     await coordinator.closeThreadWithCascade('root');
 
     expect(containerService.removeVolume).not.toHaveBeenCalled();
-    expect(reminders.cancelByThread).toHaveBeenCalledWith({ threadId: 'root' });
+    expect(reminders.cancelThreadReminders).toHaveBeenCalledWith({ threadId: 'root' });
+    expect(eventsBus.emitThreadMetrics).toHaveBeenCalledWith({ threadId: 'root' });
+    expect(eventsBus.emitThreadMetricsAncestors).toHaveBeenCalledWith({ threadId: 'root' });
   });
 });
