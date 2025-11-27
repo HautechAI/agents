@@ -243,6 +243,7 @@ describe('GraphLayout', () => {
     expect(sidebar.config).toEqual({
       kind: 'Agent',
       title: 'Agent Node',
+      template: 'agent-template',
       systemPrompt: 'You are helpful.',
     });
 
