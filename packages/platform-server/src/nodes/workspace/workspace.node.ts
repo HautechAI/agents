@@ -5,9 +5,10 @@ import { z } from 'zod';
 import { PLATFORM_LABEL, SUPPORTED_PLATFORMS } from '../../core/constants';
 import { ConfigService } from '../../core/services/config.service';
 import { NcpsKeyService } from '../../infra/ncps/ncpsKey.service';
-import { EnvService, type EnvItem } from '../../env/env.service';
+import { EnvService } from '../../env/env.service';
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { SecretReferenceSchema, VariableReferenceSchema } from '../../utils/reference-schemas';
+import { normalizeEnvItems } from '../../env/env.helpers';
 
 // Static configuration schema for ContainerProviderEntity
 // Allows overriding the base image and supplying environment variables.
@@ -181,8 +182,15 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
       const volumeName = `ha_ws_${threadId}`;
       const binds = volumesEnabled ? [`${volumeName}:${normalizedMountPath}`] : undefined;
       let envMerged: Record<string, string> | undefined = await (async () => {
-        const cfgEnv = this.config?.env as Record<string, string> | EnvItem[] | undefined;
+        const cfgEnv = this.config?.env as
+          | Record<string, string>
+          | Array<{ key?: string; name?: string; value: unknown }>
+          | undefined;
         const base: Record<string, string> = !Array.isArray(cfgEnv) && cfgEnv ? { ...cfgEnv } : {};
+        if (Array.isArray(cfgEnv)) {
+          const items = normalizeEnvItems(cfgEnv);
+          return this.envService.resolveProviderEnv(items, undefined, base);
+        }
         return this.envService.resolveProviderEnv(cfgEnv, undefined, base);
       })();
       // Inject NIX_CONFIG only when not present and ncps is explicitly enabled and fully configured

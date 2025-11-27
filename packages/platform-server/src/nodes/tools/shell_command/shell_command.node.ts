@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { WorkspaceNode } from '../../workspace/workspace.node';
-import { EnvService, type EnvItem } from '../../../env/env.service';
+import { EnvService } from '../../../env/env.service';
 import { BaseToolNode } from '../baseToolNode';
 import { ShellCommandTool } from './shell_command.tool';
 import { Inject, Injectable, Scope } from '@nestjs/common';
@@ -10,6 +10,7 @@ import { RunEventsService } from '../../../events/run-events.service';
 import { EventsBusService } from '../../../events/events-bus.service';
 import { PrismaService } from '../../../core/services/prisma.service';
 import { SecretReferenceSchema, VariableReferenceSchema } from '../../../utils/reference-schemas';
+import { normalizeEnvItems } from '../../../env/env.helpers';
 
 // NOTE: ANSI stripping now handled in ShellCommandTool; keep schema exports here only.
 
@@ -109,7 +110,8 @@ export class ShellCommandNode extends BaseToolNode<z.infer<typeof ShellToolStati
   }
 
   async resolveEnv(base?: Record<string, string>): Promise<Record<string, string> | undefined> {
-    const items: EnvItem[] = (this.config?.env || []) as EnvItem[];
+    const raw = (this.config?.env || []) as Array<{ key?: string; name?: string; value: unknown }>;
+    const items = normalizeEnvItems(raw);
     try {
       return await this.envService.resolveProviderEnv(items, undefined, base);
     } catch {
