@@ -38,11 +38,18 @@ const DEFAULT_TOKEN_FACTORIES = new Map<InjectionToken, () => unknown>([
           ...base,
           ...overlay,
         })),
-        resolveEnvItems: vi.fn(async (items: Array<{ key: string; value: string }>) => {
+        resolveEnvItems: vi.fn(async (
+          items: Array<{ name?: string; key?: string; value: unknown }> | undefined,
+        ) => {
           const out: Record<string, string> = {};
           for (const item of items ?? []) {
-            if (!item || typeof item.key !== 'string') continue;
-            out[item.key] = item.value ?? '';
+            if (!item) continue;
+            const candidate = typeof item.name === 'string' && item.name.trim().length ? item.name : item.key;
+            if (typeof candidate !== 'string' || !candidate.trim().length) continue;
+            const normalizedName = candidate.trim();
+            const rawValue = item.value;
+            out[normalizedName] =
+              typeof rawValue === 'string' ? rawValue : rawValue === undefined || rawValue === null ? '' : String(rawValue);
           }
           return out;
         }),

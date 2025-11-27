@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { buildTemplateRegistry } from '../src/templates';
 import { LoggerService } from '../src/core/services/logger.service.js';
@@ -21,6 +21,7 @@ import { AgentsPersistenceService } from '../src/agents/agents.persistence.servi
 import { RunSignalsRegistry } from '../src/agents/run-signals.service';
 import { EventsBusService } from '../src/events/events-bus.service';
 import { createEventsBusStub } from './helpers/eventsBus.stub';
+import { ReferenceResolverService } from '../src/utils/reference-resolver.service';
 
 class StubContainerService extends ContainerService {
   constructor(registry: ContainerRegistry, logger: LoggerService) {
@@ -125,12 +126,29 @@ class StubLLMProvisioner extends LLMProvisioner {
 
 describe('Boot respects MCP enabledTools from persisted state', () => {
   it('agent registers only enabled MCP tools on load', async () => {
+    const referenceResolverStub = {
+      resolve: vi.fn(async (input: unknown) => ({
+        output: input,
+        report: {
+          events: [],
+          counts: {
+            total: Array.isArray(input) ? input.length : 0,
+            resolved: Array.isArray(input) ? input.length : 0,
+            unresolved: 0,
+            cacheHits: 0,
+            errors: 0,
+          },
+        },
+      })),
+    } satisfies Pick<ReferenceResolverService, 'resolve'>;
+
     const module = await Test.createTestingModule({
       providers: [
         LoggerService,
         { provide: ContainerService, useClass: StubContainerService },
         { provide: ConfigService, useClass: StubConfigService },
         EnvService,
+        { provide: ReferenceResolverService, useValue: referenceResolverStub },
         { provide: VaultService, useClass: StubVaultService },
         { provide: LLMProvisioner, useClass: StubLLMProvisioner },
         { provide: NcpsKeyService, useValue: { getKeysForInjection: () => [] } },

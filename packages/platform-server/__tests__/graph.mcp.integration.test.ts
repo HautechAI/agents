@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { buildTemplateRegistry } from '../src/templates';
 import { LoggerService } from '../src/core/services/logger.service.js';
@@ -18,6 +18,7 @@ import { GraphRepository } from '../src/graph/graph.repository';
 import type { GraphDefinition } from '../src/shared/types/graph.types';
 import { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import { RunSignalsRegistry } from '../src/agents/run-signals.service';
+import { ReferenceResolverService } from '../src/utils/reference-resolver.service';
 
 class StubContainerService extends ContainerService {
   constructor(registry: ContainerRegistry, logger: LoggerService) {
@@ -123,12 +124,29 @@ class StubLLMProvisioner extends LLMProvisioner {
 
 describe('Graph MCP integration', () => {
   it('constructs graph with mcpServer template without error (deferred start)', async () => {
+    const referenceResolverStub = {
+      resolve: vi.fn(async (input: unknown) => ({
+        output: input,
+        report: {
+          events: [],
+          counts: {
+            total: Array.isArray(input) ? input.length : 0,
+            resolved: Array.isArray(input) ? input.length : 0,
+            unresolved: 0,
+            cacheHits: 0,
+            errors: 0,
+          },
+        },
+      })),
+    } satisfies Pick<ReferenceResolverService, 'resolve'>;
+
     const module = await Test.createTestingModule({
       providers: [
         LoggerService,
         { provide: ContainerService, useClass: StubContainerService },
         { provide: ConfigService, useClass: StubConfigService },
         EnvService,
+        { provide: ReferenceResolverService, useValue: referenceResolverStub },
         { provide: VaultService, useClass: StubVaultService },
         { provide: LLMProvisioner, useClass: StubLLMProvisioner },
         { provide: NcpsKeyService, useValue: { getKeysForInjection: () => [] } },
@@ -164,8 +182,13 @@ describe('Graph MCP integration', () => {
       async upsertNodeState(): Promise<void> {}
     }
 
-    const resolver = { resolve: async (input: unknown) => ({ output: input, report: {} as unknown }) };
-    const runtime = new LiveGraphRuntime(logger, templateRegistry, new GraphRepoStub(), moduleRef, resolver as any);
+    const runtime = new LiveGraphRuntime(
+      logger,
+      templateRegistry,
+      new GraphRepoStub(),
+      moduleRef,
+      referenceResolverStub as unknown as ReferenceResolverService,
+    );
 
     const graph: GraphDefinition = {
       nodes: [
