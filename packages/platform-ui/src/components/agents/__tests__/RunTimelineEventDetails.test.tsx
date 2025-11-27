@@ -1283,7 +1283,7 @@ describe('RunTimelineEventDetails', () => {
 
     const group = screen.getByTestId('call-agent-link-group');
     const runLink = within(group).getByRole('link', { name: 'Run timeline' });
-    expect(runLink).toHaveAttribute('href', '/agents/threads/child-123/runs/run-xyz/timeline');
+    expect(runLink).toHaveAttribute('href', '/agents/threads/child-123/runs/run-xyz');
     const statusBadge = within(group).getByText('Running');
     expect(statusBadge).toHaveClass('bg-sky-500');
   });

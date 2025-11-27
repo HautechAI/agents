@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
-import { AgentsRunTimeline } from '../../src/pages/AgentsRunTimeline';
+import { AgentsRunScreen } from '../../src/pages/AgentsRunScreen';
 import type { RunEventStatus, RunEventType, RunTimelineEvent, RunTimelineSummary } from '../../src/api/types/agents';
 import { abs, server, TestProviders } from './testUtils';
 
@@ -23,6 +23,14 @@ type RequestLog = {
 const THREAD_ID = 'thread-integration';
 const RUN_ID = 'run-integration';
 const BASE_TIME = Date.parse('2024-06-01T12:00:00.000Z');
+
+beforeAll(() => {
+  Object.defineProperty(window.HTMLElement.prototype, 'scrollBy', {
+    configurable: true,
+    value: vi.fn(),
+    writable: true,
+  });
+});
 
 function buildTimelineDataset(total: number): {
   events: RunTimelineEvent[];
@@ -312,16 +320,16 @@ function registerTimelineHandlers(events: RunTimelineEvent[], summary: RunTimeli
 function renderTimeline() {
   render(
     <TestProviders>
-      <MemoryRouter initialEntries={[`/agents/threads/${THREAD_ID}/runs/${RUN_ID}/timeline`]}>
+      <MemoryRouter initialEntries={[`/agents/threads/${THREAD_ID}/runs/${RUN_ID}`]}>
         <Routes>
-          <Route path="/agents/threads/:threadId/runs/:runId/timeline" element={<AgentsRunTimeline />} />
+          <Route path="/agents/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
         </Routes>
       </MemoryRouter>
     </TestProviders>,
   );
 }
 
-describe('AgentsRunTimeline integration (MSW)', () => {
+describe('AgentsRunScreen integration (MSW)', () => {
   beforeAll(() => server.listen());
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());

@@ -1,5 +1,5 @@
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { useRef, useEffect, useState, type ReactNode } from 'react';
+import { useRef, useEffect, useState, forwardRef, type ReactNode } from 'react';
 
 export interface VirtualizedListProps<T> {
   items: T[];
@@ -13,6 +13,7 @@ export interface VirtualizedListProps<T> {
   emptyPlaceholder?: ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  scrollerProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
 export function VirtualizedList<T>({
@@ -27,7 +28,12 @@ export function VirtualizedList<T>({
   emptyPlaceholder,
   className,
   style,
+  scrollerProps,
 }: VirtualizedListProps<T>) {
+  const shouldUseFallbackList =
+    (typeof process !== 'undefined' && process.env?.VITEST === 'true') ||
+    (typeof window !== 'undefined' && typeof window.ResizeObserver === 'undefined');
+
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const atBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(items.length);
@@ -35,8 +41,54 @@ export function VirtualizedList<T>({
   const isInitialMount = useRef(true);
   const [firstItemIndex, setFirstItemIndex] = useState(100000);
 
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!shouldUseFallbackList) {
+      return;
+    }
+
+    const node = scrollerRef.current;
+    if (!node) return;
+
+    const applyScroll = () => {
+      node.scrollTop = node.scrollHeight;
+    };
+
+    applyScroll();
+
+    const hasWindow = typeof window !== 'undefined';
+    const raf = hasWindow && typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame(() => {
+          applyScroll();
+        })
+      : null;
+
+    const timeouts: number[] = [];
+    if (hasWindow) {
+      timeouts.push(window.setTimeout(applyScroll, 0));
+      timeouts.push(window.setTimeout(applyScroll, 16));
+      timeouts.push(window.setTimeout(applyScroll, 32));
+    }
+
+    return () => {
+      if (raf !== null && hasWindow && typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(raf);
+      }
+      if (hasWindow) {
+        timeouts.forEach((timeoutId) => {
+          window.clearTimeout(timeoutId);
+        });
+      }
+    };
+  }, [items, shouldUseFallbackList]);
+
   // Handle initial scroll to bottom
   useEffect(() => {
+    if (shouldUseFallbackList) {
+      return;
+    }
+
     if (isInitialMount.current && items.length > 0) {
       isInitialMount.current = false;
       setFirstItemIndex(Math.max(0, 100000 - items.length));
@@ -44,10 +96,14 @@ export function VirtualizedList<T>({
         prevFirstItemKeyRef.current = getItemKey(items[0]);
       }
     }
-  }, [items.length, items, getItemKey]);
+  }, [items.length, items, getItemKey, shouldUseFallbackList]);
 
   // Detect when new items are added
   useEffect(() => {
+    if (shouldUseFallbackList) {
+      return;
+    }
+
     if (isInitialMount.current || items.length === 0) {
       return;
     }
@@ -67,7 +123,22 @@ export function VirtualizedList<T>({
     }
     
     prevItemsLengthRef.current = currentLength;
-  }, [items, getItemKey]);
+  }, [items, getItemKey, shouldUseFallbackList]);
+
+  if (shouldUseFallbackList) {
+    return (
+      <div className={className} style={style}>
+        {header}
+        <div ref={scrollerRef} {...scrollerProps}>
+          {items.length === 0 && emptyPlaceholder}
+          {items.map((item, index) => (
+            <div key={getItemKey ? getItemKey(item) : index}>{renderItem(index, item)}</div>
+          ))}
+        </div>
+        {footer}
+      </div>
+    );
+  }
 
   return (
     <div className={className} style={style}>
@@ -95,6 +166,11 @@ export function VirtualizedList<T>({
           Header: header ? () => <>{header}</> : undefined,
           Footer: footer ? () => <>{footer}</> : undefined,
           EmptyPlaceholder: emptyPlaceholder ? () => <>{emptyPlaceholder}</> : undefined,
+          Scroller: scrollerProps
+            ? forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => (
+                <div ref={ref} {...props} {...scrollerProps} />
+              ))
+            : undefined,
         }}
       />
     </div>

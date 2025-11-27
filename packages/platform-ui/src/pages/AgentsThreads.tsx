@@ -839,7 +839,7 @@ export function AgentsThreads() {
     (runId: string) => {
       if (!selectedThreadId) return;
       navigate(
-        `/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(runId)}/timeline`,
+        `/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(runId)}`,
       );
     },
     [navigate, selectedThreadId],
@@ -849,7 +849,7 @@ export function AgentsThreads() {
     () =>
       runList.map((run) => {
         const timelineHref = selectedThreadId
-          ? `/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(run.id)}/timeline`
+          ? `/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(run.id)}`
           : undefined;
         return {
           id: run.id,

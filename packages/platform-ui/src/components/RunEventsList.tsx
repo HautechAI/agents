@@ -98,6 +98,9 @@ export function RunEventsList({
     
     return (
       <button
+        role="option"
+        aria-selected={isSelected}
+        data-event-id={event.id}
         onClick={() => onSelectEvent(event.id)}
         className={`w-full px-4 py-3 border-b border-[var(--agyn-border-subtle)] hover:bg-[var(--agyn-bg-light)] transition-colors text-left relative ${
           isSelected ? 'bg-[var(--agyn-bg-light)]' : ''
@@ -149,6 +152,12 @@ export function RunEventsList({
     </div>
   ) : null;
 
+  const footer = !hasMore && events.length > 0 ? (
+    <div className="px-4 py-2 text-center text-xs text-[var(--agyn-gray)]">
+      Beginning of timeline
+    </div>
+  ) : null;
+
   return (
     <div className="bg-white overflow-hidden h-full flex flex-col">
       <VirtualizedList
@@ -159,7 +168,9 @@ export function RunEventsList({
         isLoadingMore={isLoadingMore}
         onLoadMore={loadMore}
         header={header}
+        footer={footer}
         style={{ flex: 1 }}
+        scrollerProps={{ role: 'listbox', 'aria-label': 'Run events' }}
       />
     </div>
   );

@@ -118,7 +118,7 @@ describe('AgentsThreads conversation view', () => {
     expect(runInfo).toHaveTextContent('Finished');
     const viewRunButton = within(runInfo).getByRole('button', { name: /View Run/i });
     fireEvent.click(viewRunButton);
-    expect(navigateMock).toHaveBeenCalledWith('/agents/threads/th1/runs/run1/timeline');
+    expect(navigateMock).toHaveBeenCalledWith('/agents/threads/th1/runs/run1');
   });
 
   it('loads subthreads when expanding a thread', async () => {

@@ -11,7 +11,7 @@ import { RootLayout } from './layout/RootLayout';
 import { AgentsChat } from './pages/AgentsChat';
 import { AgentsThreads } from './pages/AgentsThreads';
 import { AgentsReminders } from './pages/AgentsReminders';
-import { AgentsRunTimeline } from './pages/AgentsRunTimeline';
+import { AgentsRunScreen } from './pages/AgentsRunScreen';
 import { TracingTraces } from './pages/TracingTraces';
 import { TracingErrors } from './pages/TracingErrors';
 import { TracingDisabledPage } from './pages/TracingDisabled';
@@ -41,7 +41,8 @@ function App() {
             <Route path="/agents/chat" element={<AgentsChat />} />
             <Route path="/agents/threads" element={<AgentsThreads />} />
             <Route path="/agents/threads/:threadId" element={<AgentsThreads />} />
-            <Route path="/agents/threads/:threadId/runs/:runId/timeline" element={<AgentsRunTimeline />} />
+            <Route path="/agents/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+            <Route path="/agents/threads/:threadId/runs/:runId/timeline" element={<Navigate to=".." replace />} />
             <Route path="/agents/reminders" element={<AgentsReminders />} />
 
             {/* Tracing */}

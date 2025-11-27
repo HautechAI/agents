@@ -951,7 +951,7 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
                 </span>
                 {callAgentMeta.childRunLinkEnabled && callAgentMeta.childRunId ? (
                   <Link
-                    to={`/agents/threads/${encodeURIComponent(callAgentMeta.childThreadId)}/runs/${encodeURIComponent(callAgentMeta.childRunId)}/timeline`}
+                    to={`/agents/threads/${encodeURIComponent(callAgentMeta.childThreadId)}/runs/${encodeURIComponent(callAgentMeta.childRunId)}`}
                     className="font-medium text-blue-600 hover:underline"
                   >
                     Run timeline

@@ -70,6 +70,8 @@ interface RunScreenProps {
   onTokensPopoverOpenChange: (open: boolean) => void;
   onRunsPopoverOpenChange: (open: boolean) => void;
   onLoadMoreEvents?: () => void;
+  onRefreshEvents?: () => void;
+  isRefreshingEvents?: boolean;
   onTerminate?: () => void;
   onBack?: () => void;
   className?: string;
@@ -101,6 +103,8 @@ export default function RunScreen({
   onTokensPopoverOpenChange,
   onRunsPopoverOpenChange,
   onLoadMoreEvents,
+  onRefreshEvents,
+  isRefreshingEvents = false,
   onTerminate,
   onBack,
   className = '',
@@ -332,8 +336,9 @@ export default function RunScreen({
 
           <div className="flex flex-1 overflow-hidden">
             <div className="flex w-80 flex-col border-r border-[var(--agyn-border-subtle)] bg-white">
-              <div className="flex items-center justify-between border-b border-[var(--agyn-border-subtle)] px-3 py-2">
-                <Popover.Root open={runsPopoverOpen} onOpenChange={onRunsPopoverOpenChange}>
+              <div className="flex flex-col gap-3 border-b border-[var(--agyn-border-subtle)] px-3 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Popover.Root open={runsPopoverOpen} onOpenChange={onRunsPopoverOpenChange}>
                   <Popover.Trigger asChild>
                     <button
                       className="text-sm text-[var(--agyn-dark)] transition-colors hover:text-[var(--agyn-blue)]"
@@ -423,41 +428,42 @@ export default function RunScreen({
                   </Popover.Portal>
                 </Popover.Root>
 
-                <div className="flex items-center gap-1">
-                  <Tooltip.Provider>
-                    <Tooltip.Root>
-                      <Tooltip.Trigger asChild>
-                        <div>
-                          <IconButton
-                            icon={<ScrollText className={isFollowing ? 'text-[var(--agyn-blue)]' : ''} />}
-                            onClick={() => onFollowingChange(!isFollowing)}
-                            variant="ghost"
-                            size="sm"
-                          />
-                        </div>
-                      </Tooltip.Trigger>
-                      <Tooltip.Portal>
-                        <Tooltip.Content
-                          className="z-50 rounded-md bg-[var(--agyn-dark)] px-3 py-2 text-xs text-white"
-                          sideOffset={5}
-                        >
-                          Follow new events
-                          <Tooltip.Arrow className="fill-[var(--agyn-dark)]" />
-                        </Tooltip.Content>
-                      </Tooltip.Portal>
-                    </Tooltip.Root>
-                  </Tooltip.Provider>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger asChild>
+                          <div>
+                            <IconButton
+                              icon={<ScrollText className={isFollowing ? 'text-[var(--agyn-blue)]' : ''} />}
+                              onClick={() => onFollowingChange(!isFollowing)}
+                              variant="ghost"
+                              size="sm"
+                            />
+                          </div>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Content
+                            className="z-50 rounded-md bg-[var(--agyn-dark)] px-3 py-2 text-xs text-white"
+                            sideOffset={5}
+                          >
+                            Follow new events
+                            <Tooltip.Arrow className="fill-[var(--agyn-dark)]" />
+                          </Tooltip.Content>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <div>
-                        <IconButton icon={<Settings2 />} variant="ghost" size="sm" />
-                      </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-56 rounded-[10px] border border-[var(--agyn-border-subtle)] bg-white p-1 shadow-lg"
-                    >
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <div>
+                          <IconButton icon={<Settings2 />} variant="ghost" size="sm" />
+                        </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-56 rounded-[10px] border border-[var(--agyn-border-subtle)] bg-white p-1 shadow-lg"
+                      >
                       <DropdownMenuGroup>
                         <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-[var(--agyn-text-subtle)]">
                           Event Kinds
@@ -623,8 +629,65 @@ export default function RunScreen({
                           )}
                         </DropdownMenuItem>
                       </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {onRefreshEvents && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onRefreshEvents}
+                      disabled={isRefreshingEvents}
+                      className="whitespace-nowrap"
+                    >
+                      {isRefreshingEvents && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                      )}
+                      Refresh
+                    </Button>
+                  )}
+
+                  {onLoadMoreEvents && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={onLoadMoreEvents}
+                      disabled={!hasMoreEvents || isLoadingMoreEvents}
+                      className="whitespace-nowrap"
+                    >
+                      {isLoadingMoreEvents && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                      )}
+                      Load older events
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Status filters">
+                  {(['running', 'finished', 'failed', 'terminated'] as StatusFilter[]).map((filter) => {
+                    const active = statusFilterSet.has(filter);
+                    const label = filter === 'finished' ? 'Success' : filter.charAt(0).toUpperCase() + filter.slice(1);
+                    return (
+                      <Button
+                        key={filter}
+                        type="button"
+                        variant={active ? 'primary' : 'outline'}
+                        size="sm"
+                        onClick={() => handleToggleStatusFilter(filter)}
+                        aria-pressed={active}
+                        className="flex items-center gap-2"
+                      >
+                        <span aria-hidden="true">
+                          <StatusIndicator status={filter} size="sm" showTooltip={false} />
+                        </span>
+                        <span>{label}</span>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
 
