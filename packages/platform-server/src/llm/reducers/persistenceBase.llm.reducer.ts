@@ -1,6 +1,6 @@
 import { Reducer } from '@agyn/llm';
 import type { LLMContext, LLMContextState, LLMState } from '../types';
-import { HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
+import { DeveloperMessage, HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
 import type { JsonValue, InputJsonValue } from '../services/messages.serialization';
 import type { ResponseInputItem, Response } from 'openai/resources/responses/responses.mjs';
 import { toPrismaJsonValue } from '../services/messages.serialization';
@@ -29,6 +29,10 @@ export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMCon
   protected serializeState(state: LLMState): PlainLLMState {
     const messages: PlainMessage[] = state.messages.map((m) => {
       if (m instanceof HumanMessage) return { kind: 'human', value: toPrismaJsonValue(m.toPlain()) };
+      if (m instanceof DeveloperMessage) {
+        const system = SystemMessage.fromText(m.text);
+        return { kind: 'system', value: toPrismaJsonValue(system.toPlain()) };
+      }
       if (m instanceof SystemMessage) return { kind: 'system', value: toPrismaJsonValue(m.toPlain()) };
       if (m instanceof ResponseMessage) return { kind: 'response', value: toPrismaJsonValue(m.toPlain()) };
       if (m instanceof ToolCallOutputMessage) return { kind: 'tool_call_output', value: toPrismaJsonValue(m.toPlain()) };
@@ -55,7 +59,11 @@ export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMCon
           if (this.isUserMessage(val)) return new HumanMessage(val);
           break;
         case 'system':
-          if (this.isSystemMessage(val)) return new SystemMessage(val);
+          if (this.isDeveloperMessage(val)) return new DeveloperMessage(val);
+          if (this.isSystemMessage(val)) {
+            const transformed = { ...val, role: 'developer' as const };
+            return new DeveloperMessage(transformed);
+          }
           break;
         case 'response':
           if (this.isResponseValue(val)) return new ResponseMessage(val);
@@ -121,6 +129,10 @@ export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMCon
 
   protected isUserMessage(v: unknown): v is ResponseInputItem.Message & { role: 'user' } {
     return this.isMessageLike(v) && v.role === 'user';
+  }
+
+  protected isDeveloperMessage(v: unknown): v is ResponseInputItem.Message & { role: 'developer' } {
+    return this.isMessageLike(v) && v.role === 'developer';
   }
 
   protected isSystemMessage(v: unknown): v is ResponseInputItem.Message & { role: 'system' } {

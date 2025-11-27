@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CallModelLLMReducer } from '../src/llm/reducers/callModel.llm.reducer';
-import { AIMessage, HumanMessage, ResponseMessage, SystemMessage } from '@agyn/llm';
+import { AIMessage, DeveloperMessage, HumanMessage, ResponseMessage } from '@agyn/llm';
 import { Signal } from '../src/signal';
 
 describe('CallModelLLMReducer usage metrics', () => {
@@ -38,7 +38,7 @@ describe('CallModelLLMReducer usage metrics', () => {
     });
 
     const initialState = {
-      messages: [SystemMessage.fromText('SYS'), HumanMessage.fromText('Hello')],
+      messages: [DeveloperMessage.fromText('SYS'), HumanMessage.fromText('Hello')],
       context: { messageIds: ['ctx-1'], memory: [] },
     } as any;
 
@@ -122,7 +122,7 @@ describe('CallModelLLMReducer usage metrics', () => {
     const llm = { call: vi.fn(async () => response) };
 
     const memoryProvider = vi.fn(async () => ({
-      msg: SystemMessage.fromText('Memory injection'),
+      msg: DeveloperMessage.fromText('Memory injection'),
       place: 'after_system' as const,
     }));
 

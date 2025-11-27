@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CallModelLLMReducer } from '../src/llm/reducers/callModel.llm.reducer';
 import { Signal } from '../src/signal';
-import { HumanMessage, ResponseMessage, SystemMessage } from '@agyn/llm';
+import { DeveloperMessage, HumanMessage, ResponseMessage } from '@agyn/llm';
 import { RunEventStatus } from '@prisma/client';
 
 const createRunEventsStub = () => ({
@@ -29,7 +29,7 @@ describe('CallModelLLMReducer termination handling', () => {
     const llmCall = vi.fn();
     const reducer = new CallModelLLMReducer(runEvents as any, eventsBus as any).init({ llm: { call: llmCall } as any, model: 'test-model', systemPrompt: 'SYS', tools: [] });
 
-    const state = { messages: [SystemMessage.fromText('SYS'), HumanMessage.fromText('hi')], context: { messageIds: [], memory: [] } } as any;
+    const state = { messages: [DeveloperMessage.fromText('SYS'), HumanMessage.fromText('hi')], context: { messageIds: [], memory: [] } } as any;
     const terminateSignal = new Signal();
     terminateSignal.activate();
 
@@ -59,7 +59,7 @@ describe('CallModelLLMReducer termination handling', () => {
 
     const reducer = new CallModelLLMReducer(runEvents as any, eventsBus as any).init({ llm: { call: llmCall } as any, model: 'test-model', systemPrompt: 'SYS', tools: [] });
 
-    const state = { messages: [SystemMessage.fromText('SYS'), HumanMessage.fromText('step')], context: { messageIds: [], memory: [] } } as any;
+    const state = { messages: [DeveloperMessage.fromText('SYS'), HumanMessage.fromText('step')], context: { messageIds: [], memory: [] } } as any;
 
     const result = await reducer.invoke(state, {
       threadId: 'thread-2',

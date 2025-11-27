@@ -56,7 +56,7 @@ vi.mock('@prisma/client', () => {
   };
 });
 const { AgentsPersistenceService } = await import('../src/agents/agents.persistence.service');
-import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
+import { AIMessage, DeveloperMessage, HumanMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import type { ResponseFunctionToolCall } from 'openai/resources/responses/responses.mjs';
 import { createRunEventsStub } from './helpers/runEvents.stub';
 import { CallAgentLinkingService } from '../src/agents/call-agent-linking.service';
@@ -157,7 +157,7 @@ describe('AgentsPersistenceService beginRun/completeRun populates Message.text',
     );
 
     // Begin run with user + system messages
-    const input = [HumanMessage.fromText('hello'), SystemMessage.fromText('sys')];
+    const input = [HumanMessage.fromText('hello'), DeveloperMessage.fromText('sys')];
     const started = await svc.beginRunThread('thread-1', input);
     expect(started.runId).toBe('run-1');
     const inputs = createdMessages.filter((m) => createdRunMessages.find((r) => r.messageId === m.id && r.type === 'input'));

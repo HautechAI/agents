@@ -1,4 +1,11 @@
-import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
+import {
+  AIMessage,
+  DeveloperMessage,
+  HumanMessage,
+  SystemMessage,
+  ToolCallMessage,
+  ToolCallOutputMessage,
+} from '@agyn/llm';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { MessageKind, Prisma, PrismaClient, RunMessageType, RunStatus, ThreadStatus } from '@prisma/client';
 import { PrismaService } from '../core/services/prisma.service';
@@ -164,7 +171,7 @@ export class AgentsPersistenceService {
    */
   async beginRunThread(
     threadId: string,
-    inputMessages: Array<HumanMessage | SystemMessage | AIMessage>,
+    inputMessages: Array<HumanMessage | DeveloperMessage | SystemMessage | AIMessage>,
   ): Promise<RunStartResult> {
     const { runId, createdMessages, eventIds, patchedEventIds } = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Begin run and persist messages
@@ -174,8 +181,9 @@ export class AgentsPersistenceService {
       const patchedEventIds: string[] = [];
       await Promise.all(
         inputMessages.map(async (msg) => {
-          const { kind, text } = this.deriveKindTextTyped(msg);
-          const source = toPrismaJsonValue(msg.toPlain());
+          const normalized = this.normalizeForPersistence(msg);
+          const { kind, text } = this.deriveKindTextTyped(normalized);
+          const source = toPrismaJsonValue(normalized.toPlain());
           const created = await tx.message.create({ data: { kind, text, source } });
           await tx.runMessage.create({ data: { runId: run.id, messageId: created.id, type: 'input' as RunMessageType } });
           const event = await this.runEvents.recordInvocationMessage({
@@ -217,11 +225,11 @@ export class AgentsPersistenceService {
   }
 
   /**
-   * Persist injected messages. Only SystemMessage injections are supported.
+   * Persist injected messages. Only DeveloperMessage injections are supported (SystemMessage retained for legacy callers).
    */
   async recordInjected(
     runId: string,
-    injectedMessages: Array<HumanMessage | SystemMessage | AIMessage>,
+    injectedMessages: Array<HumanMessage | DeveloperMessage | SystemMessage | AIMessage>,
     options?: { threadId?: string },
   ): Promise<{ messageIds: string[] }> {
     if (!injectedMessages.length) return { messageIds: [] };
@@ -238,8 +246,9 @@ export class AgentsPersistenceService {
       threadId = resolvedThreadId;
 
       for (const msg of injectedMessages) {
-        const { kind, text } = this.deriveKindTextTyped(msg);
-        const source = toPrismaJsonValue(msg.toPlain());
+        const normalized = this.normalizeForPersistence(msg);
+        const { kind, text } = this.deriveKindTextTyped(normalized);
+        const source = toPrismaJsonValue(normalized.toPlain());
         const created = await tx.message.create({ data: { kind, text, source } });
         await tx.runMessage.create({ data: { runId, messageId: created.id, type: 'injected' as RunMessageType } });
         const event = await this.runEvents.recordInvocationMessage({
@@ -312,8 +321,9 @@ export class AgentsPersistenceService {
       const threadId = current.threadId;
       await Promise.all(
         outputMessages.map(async (msg) => {
-          const { kind, text } = this.deriveKindTextTyped(msg);
-          const source = toPrismaJsonValue(msg.toPlain());
+          const normalized = this.normalizeForPersistence(msg);
+          const { kind, text } = this.deriveKindTextTyped(normalized);
+          const source = toPrismaJsonValue(normalized.toPlain());
           const created = await tx.message.create({ data: { kind, text, source } });
           await tx.runMessage.create({ data: { runId, messageId: created.id, type: 'output' as RunMessageType } });
           const event = await this.runEvents.recordInvocationMessage({
@@ -592,6 +602,15 @@ export class AgentsPersistenceService {
     const candidate = (tx as { runEvent?: RunEventDelegate }).runEvent;
     if (!candidate || typeof candidate.findFirst !== 'function') return undefined;
     return candidate;
+  }
+
+  private normalizeForPersistence(
+    msg: HumanMessage | DeveloperMessage | SystemMessage | AIMessage | ToolCallMessage | ToolCallOutputMessage,
+  ): HumanMessage | SystemMessage | AIMessage | ToolCallMessage | ToolCallOutputMessage {
+    if (msg instanceof DeveloperMessage) {
+      return SystemMessage.fromText(msg.text);
+    }
+    return msg;
   }
 
   /**

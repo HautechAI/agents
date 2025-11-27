@@ -1,6 +1,6 @@
-import { AIMessage, HumanMessage, SystemMessage } from '@agyn/llm';
+import { AIMessage, DeveloperMessage, HumanMessage, SystemMessage } from '@agyn/llm';
 
-export type BufferMessage = AIMessage | HumanMessage | SystemMessage;
+export type BufferMessage = AIMessage | HumanMessage | DeveloperMessage | SystemMessage;
 
 export enum ProcessBuffer {
   OneByOne = 'oneByOne',
