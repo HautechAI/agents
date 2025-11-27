@@ -1033,7 +1033,7 @@ export function AgentsThreads() {
   );
 
   const handleDraftRecipientChange = useCallback(
-    (agentId: string | null) => {
+    (agentId: string | null, agentTitle: string | null) => {
       if (!selectedThreadId || !isDraftThreadId(selectedThreadId)) return;
       setDrafts((prev) => {
         let mutated = false;
@@ -1044,8 +1044,7 @@ export function AgentsThreads() {
             mutated = true;
             return { ...draft, agentNodeId: undefined, agentTitle: undefined };
           }
-          const option = agentOptions.find((item) => item.id === agentId);
-          const nextTitle = option?.title ?? agentId;
+          const nextTitle = agentTitle ?? agentOptions.find((item) => item.id === agentId)?.title ?? agentId;
           if (draft.agentNodeId === agentId && draft.agentTitle === nextTitle) return draft;
           mutated = true;
           return { ...draft, agentNodeId: agentId, agentTitle: nextTitle };
