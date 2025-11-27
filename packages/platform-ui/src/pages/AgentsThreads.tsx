@@ -62,26 +62,34 @@ function sanitizeAgentName(agentName: string | null | undefined): string {
   return trimmed && trimmed.length > 0 ? trimmed : '(unknown agent)';
 }
 
-function mapThreadStatus(node: ThreadNode): Thread['status'] {
-  const activity = node.metrics?.activity;
-  if (activity === 'working') return 'running';
-  if (activity === 'waiting') return 'pending';
-  if (activity === 'idle') return node.status === 'closed' ? 'finished' : 'pending';
-  return node.status === 'closed' ? 'finished' : 'pending';
+type StatusOverride = {
+  hasRunningRun?: boolean;
+  hasPendingReminder?: boolean;
+};
+
+type StatusOverrides = Record<string, StatusOverride>;
+
+function computeStatusInputs(node: ThreadNode, override: StatusOverride | undefined): {
+  hasRunningRun: boolean;
+  hasPendingReminder: boolean;
+  activity: ThreadMetrics['activity'];
+} {
+  const metrics = node.metrics ?? defaultMetrics;
+  return {
+    hasRunningRun: override?.hasRunningRun ?? metrics.activity === 'working',
+    hasPendingReminder: override?.hasPendingReminder ?? metrics.remindersCount > 0,
+    activity: metrics.activity,
+  };
 }
 
-function deriveSelectedThreadStatus(thread: ThreadNode | undefined, runs: RunMeta[]): Thread['status'] {
-  if (runs.some((run) => run.status === 'running')) {
-    return 'running';
+function computeThreadStatus(node: ThreadNode, children: Thread[], overrides: StatusOverrides): Thread['status'] {
+  const inputs = computeStatusInputs(node, overrides[node.id]);
+  if (inputs.hasRunningRun) return 'running';
+  const hasActiveChild = children.some((child) => child.status === 'running' || child.status === 'pending');
+  if (inputs.hasPendingReminder || inputs.activity === 'waiting' || hasActiveChild) {
+    return 'pending';
   }
-  const latestRun = runs.length > 0 ? runs[runs.length - 1] : undefined;
-  if (latestRun?.status === 'terminated') {
-    return 'failed';
-  }
-  if (thread?.status === 'closed') {
-    return 'finished';
-  }
-  return 'pending';
+  return 'finished';
 }
 
 function matchesFilter(status: 'open' | 'closed', filter: FilterMode): boolean {
@@ -89,16 +97,16 @@ function matchesFilter(status: 'open' | 'closed', filter: FilterMode): boolean {
   return filter === status;
 }
 
-function buildThreadTree(node: ThreadNode, children: ThreadChildrenState): Thread {
+function buildThreadTree(node: ThreadNode, children: ThreadChildrenState, overrides: StatusOverrides): Thread {
   const entry = children[node.id];
   const childNodes = entry?.nodes ?? [];
-  const mappedChildren = childNodes.map((child) => buildThreadTree(child, children));
+  const mappedChildren = childNodes.map((child) => buildThreadTree(child, children, overrides));
   return {
     id: node.id,
     summary: sanitizeSummary(node.summary ?? null),
     agentName: sanitizeAgentName(node.agentTitle),
     createdAt: formatDate(node.createdAt),
-    status: mapThreadStatus(node),
+    status: computeThreadStatus(node, mappedChildren, overrides),
     isOpen: (node.status ?? 'open') === 'open',
     subthreads: mappedChildren.length > 0 ? mappedChildren : undefined,
     hasChildren: entry ? entry.hasChildren : true,
@@ -306,7 +314,46 @@ export function AgentsThreads() {
     return nodes;
   }, [threadsQuery.data]);
 
-  const threadsForList = useMemo<Thread[]>(() => rootNodes.map((node) => buildThreadTree(node, childrenState)), [rootNodes, childrenState]);
+  useEffect(() => {
+    if (rootNodes.length === 0) return;
+    const queue = rootNodes
+      .map((node) => node.id)
+      .filter((threadId) => {
+        const entry = childrenState[threadId];
+        if (!entry) return true;
+        if (entry.status === 'idle') {
+          if (entry.hasChildren === false) return false;
+          return entry.nodes.length === 0;
+        }
+        return false;
+      });
+    if (queue.length === 0) return;
+
+    const concurrency = 4;
+    let index = 0;
+    let active = 0;
+    let cancelled = false;
+
+    const pump = () => {
+      if (cancelled) return;
+      while (active < concurrency && index < queue.length) {
+        const threadId = queue[index++];
+        active += 1;
+        loadThreadChildren(threadId)
+          .catch(() => {})
+          .finally(() => {
+            active -= 1;
+            if (!cancelled) pump();
+          });
+      }
+    };
+
+    pump();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rootNodes, childrenState, loadThreadChildren]);
 
   const threadDetailQuery = useThreadById(selectedThreadId ?? undefined);
   const runsQuery = useThreadRuns(selectedThreadId ?? undefined);
@@ -655,6 +702,22 @@ export function AgentsThreads() {
   const remindersForScreen = useMemo(() => mapReminders(remindersQuery.data?.items ?? []), [remindersQuery.data]);
   const containersForScreen = useMemo(() => mapContainers(containersQuery.data?.items ?? []), [containersQuery.data]);
 
+  const selectedThreadHasRunningRun = runList.some((run) => run.status === 'running');
+  const selectedThreadRemindersCount = remindersQuery.data?.items?.length ?? 0;
+  const selectedThreadHasPendingReminder = selectedThreadRemindersCount > 0;
+
+  const statusOverrides = useMemo<StatusOverrides>(() => {
+    if (!selectedThreadId) return {};
+    return {
+      [selectedThreadId]: {
+        hasRunningRun: selectedThreadHasRunningRun,
+        hasPendingReminder: selectedThreadHasPendingReminder,
+      },
+    };
+  }, [selectedThreadId, selectedThreadHasRunningRun, selectedThreadHasPendingReminder]);
+
+  const threadsForList = useMemo<Thread[]>(() => rootNodes.map((node) => buildThreadTree(node, childrenState, statusOverrides)), [rootNodes, childrenState, statusOverrides]);
+
   const handleViewRun = useCallback(
     (runId: string) => {
       if (!selectedThreadId) return;
@@ -705,10 +768,8 @@ export function AgentsThreads() {
 
   const selectedThreadForScreen = useMemo(() => {
     if (!selectedThreadNode) return undefined;
-    const base = buildThreadTree(selectedThreadNode, childrenState);
-    const status = deriveSelectedThreadStatus(selectedThreadNode, runList);
-    return { ...base, status };
-  }, [selectedThreadNode, childrenState, runList]);
+    return buildThreadTree(selectedThreadNode, childrenState, statusOverrides);
+  }, [selectedThreadNode, childrenState, statusOverrides]);
 
   const threadsHasMore = (threadsQuery.data?.items?.length ?? 0) >= threadLimit && threadLimit < MAX_THREAD_LIMIT;
   const threadsIsLoading = threadsQuery.isFetching;

@@ -30,6 +30,15 @@ type RunMock = {
   updatedAt: string;
 };
 
+type ReminderMock = {
+  id: string;
+  threadId: string;
+  note: string;
+  at: string;
+  createdAt: string;
+  completedAt: string | null;
+};
+
 function makeThread(overrides: Partial<ThreadMock> = {}): ThreadMock {
   return {
     id: 'thread-1',
@@ -55,7 +64,29 @@ function makeRun(overrides: Partial<RunMock> = {}): RunMock {
   };
 }
 
-function registerThreadScenario({ thread, runs, children = [] }: { thread: ThreadMock; runs: RunMock[]; children?: ThreadMock[] }) {
+function makeReminder(overrides: Partial<ReminderMock> = {}): ReminderMock {
+  return {
+    id: 'reminder-1',
+    threadId: 'thread-1',
+    note: 'Reminder',
+    at: t(3),
+    createdAt: t(2),
+    completedAt: null,
+    ...overrides,
+  };
+}
+
+function registerThreadScenario({
+  thread,
+  runs,
+  children = [],
+  reminders = [],
+}: {
+  thread: ThreadMock;
+  runs: RunMock[];
+  children?: ThreadMock[];
+  reminders?: ReminderMock[];
+}) {
   const threadPayload: ThreadMock = {
     ...thread,
     metrics: { ...thread.metrics, runsCount: runs.length },
@@ -89,7 +120,10 @@ function registerThreadScenario({ thread, runs, children = [] }: { thread: Threa
     }),
     http.options(abs('/api/agents/threads/:threadId/children'), () => new HttpResponse(null, { status: 200 })),
     http.get('*/api/agents/runs/:runId/messages', () => HttpResponse.json({ items: [] })),
-    http.get('*/api/agents/reminders', () => HttpResponse.json({ items: [] })),
+    http.get('*/api/agents/reminders', () => HttpResponse.json({ items: reminders })),
+    http.get(abs('/api/agents/reminders'), () => HttpResponse.json({ items: reminders })),
+    http.options('*/api/agents/reminders', () => new HttpResponse(null, { status: 200 })),
+    http.options(abs('/api/agents/reminders'), () => new HttpResponse(null, { status: 200 })),
     http.get('*/api/containers', () => HttpResponse.json({ items: [] })),
   );
 }
@@ -112,6 +146,21 @@ describe('AgentsThreads page', () => {
         </MemoryRouter>
       </TestProviders>,
     );
+  }
+
+  async function expectDetailStatus(summary: string, label: string) {
+    const detailHeading = await screen.findByRole('heading', { name: summary });
+    const detailContainer = detailHeading.parentElement as HTMLElement;
+    expect(detailContainer).toBeTruthy();
+    expect(await within(detailContainer).findByLabelText(label)).toBeInTheDocument();
+  }
+
+  function expectListStatus(summary: string, label: string) {
+    const list = screen.getByTestId('threads-list');
+    const summaryNode = within(list).getByText(summary);
+    const row = summaryNode.parentElement?.parentElement as HTMLElement | null;
+    expect(row).toBeTruthy();
+    expect(within(row as HTMLElement).getByLabelText(label)).toBeInTheDocument();
   }
 
   it('loads thread details when navigating directly to a thread id', async () => {
@@ -159,13 +208,12 @@ describe('AgentsThreads page', () => {
 
     renderAt(`/agents/threads/${thread.id}`);
 
-    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
-    const detailContainer = detailHeading.parentElement as HTMLElement;
-    expect(detailContainer).toBeTruthy();
-    expect(await within(detailContainer).findByLabelText('Running')).toBeInTheDocument();
+    await screen.findByTestId('threads-list');
+    await expectDetailStatus(thread.summary, 'Running');
+    expectListStatus(thread.summary, 'Running');
   });
 
-  it('shows Failed when the latest run terminated', async () => {
+  it('shows Finished when the latest run terminated', async () => {
     const thread = makeThread();
     const runs = [
       makeRun({ id: 'run-old', status: 'finished', createdAt: t(1), updatedAt: t(2) }),
@@ -175,10 +223,9 @@ describe('AgentsThreads page', () => {
 
     renderAt(`/agents/threads/${thread.id}`);
 
-    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
-    const detailContainer = detailHeading.parentElement as HTMLElement;
-    expect(detailContainer).toBeTruthy();
-    expect(await within(detailContainer).findByLabelText('Failed')).toBeInTheDocument();
+    await screen.findByTestId('threads-list');
+    await expectDetailStatus(thread.summary, 'Finished');
+    expectListStatus(thread.summary, 'Finished');
   });
 
   it('shows Finished when the thread is closed and no runs are active', async () => {
@@ -186,25 +233,76 @@ describe('AgentsThreads page', () => {
     const runs = [makeRun({ id: 'run-finished', status: 'finished', createdAt: t(2), updatedAt: t(3) })];
     registerThreadScenario({ thread, runs, children: [] });
 
+    const user = userEvent.setup();
+
     renderAt(`/agents/threads/${thread.id}`);
 
-    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
-    const detailContainer = detailHeading.parentElement as HTMLElement;
-    expect(detailContainer).toBeTruthy();
-    expect(await within(detailContainer).findByLabelText('Finished')).toBeInTheDocument();
+    await expectDetailStatus(thread.summary, 'Finished');
+    const allButton = await screen.findByRole('button', { name: 'All' });
+    await user.click(allButton);
+    await screen.findByTestId('threads-list');
+    expectListStatus(thread.summary, 'Finished');
   });
 
-  it('shows Pending when the thread is open without running or terminated runs', async () => {
+  it('shows Finished when the thread is open without active runs, reminders, or running subthreads', async () => {
     const thread = makeThread({ status: 'open' });
     const runs = [makeRun({ id: 'run-finished', status: 'finished', createdAt: t(2), updatedAt: t(3) })];
     registerThreadScenario({ thread, runs, children: [] });
 
     renderAt(`/agents/threads/${thread.id}`);
 
-    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
-    const detailContainer = detailHeading.parentElement as HTMLElement;
-    expect(detailContainer).toBeTruthy();
-    expect(await within(detailContainer).findByLabelText('Pending')).toBeInTheDocument();
+    await screen.findByTestId('threads-list');
+    await expectDetailStatus(thread.summary, 'Finished');
+    expectListStatus(thread.summary, 'Finished');
+  });
+
+  it('shows Pending when the thread has active reminders', async () => {
+    const thread = makeThread({ id: '11111111-1111-1111-1111-111111111111', status: 'open' });
+    const reminders = [makeReminder({ id: 'rem-1', threadId: thread.id })];
+    registerThreadScenario({ thread, runs: [], children: [], reminders });
+
+    renderAt(`/agents/threads/${thread.id}`);
+
+    await screen.findByTestId('threads-list');
+    await expectDetailStatus(thread.summary, 'Pending');
+    expectListStatus(thread.summary, 'Pending');
+  });
+
+  it('shows Pending when a subthread is running', async () => {
+    const thread = makeThread({ summary: 'Parent thread' });
+    const childThread = makeThread({
+      id: 'child-1',
+      parentId: thread.id,
+      summary: 'Child thread',
+      metrics: { remindersCount: 0, containersCount: 0, activity: 'working', runsCount: 0 },
+    });
+    registerThreadScenario({
+      thread,
+      runs: [makeRun({ status: 'finished' })],
+      children: [childThread],
+    });
+
+    renderAt(`/agents/threads/${thread.id}`);
+
+    await screen.findByTestId('threads-list');
+    await expectDetailStatus(thread.summary, 'Pending');
+    expectListStatus(thread.summary, 'Pending');
+  });
+
+  it('preloads subthreads when viewing the list without a selected thread', async () => {
+    const thread = makeThread({ summary: 'Thread root' });
+    const child = makeThread({ id: 'child-1', summary: 'Root child', parentId: thread.id, createdAt: t(10) });
+    registerThreadScenario({ thread, runs: [], children: [child] });
+
+    const user = userEvent.setup();
+
+    renderAt('/agents/threads');
+
+    const expandButton = await screen.findByRole('button', { name: /Show 1 subthread/i });
+    await user.click(expandButton);
+
+    expect(screen.queryByText('Loading subthreads…')).not.toBeInTheDocument();
+    expect(await screen.findByText('Root child')).toBeInTheDocument();
   });
 
   it('preloads immediate subthreads for the selected thread', async () => {
