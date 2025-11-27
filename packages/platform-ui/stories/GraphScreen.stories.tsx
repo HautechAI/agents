@@ -24,7 +24,7 @@ export const Default: Story = {
     nodes: [
       { id: 'node-1', kind: 'Trigger', title: 'HTTP Trigger', x: 0, y: 0, status: 'ready', data: { method: 'POST' } },
       { id: 'node-2', kind: 'Agent', title: 'GPT-4 Agent', x: 320, y: 0, status: 'ready', data: { model: 'gpt-4', temperature: 0.7 }, avatarSeed: 'GPT4Agent' },
-      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', data: { toolName: 'web_search' } },
+      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', template: 'shellTool', data: { toolName: 'web_search' } },
       { id: 'node-4', kind: 'MCP', title: 'Database MCP', x: 0, y: 220, status: 'ready', data: { server: 'postgres' } },
       { id: 'node-5', kind: 'Workspace', title: 'Dev Workspace', x: 320, y: 220, status: 'provisioning', data: { cpu: 2, memory: 4096 } },
       { id: 'node-6', kind: 'Agent', title: 'Claude Agent', x: 640, y: 220, status: 'not_ready', data: { model: 'claude-3' }, avatarSeed: 'ClaudeAgent' },
@@ -40,7 +40,7 @@ export const Saving: Story = {
     nodes: [
       { id: 'node-1', kind: 'Trigger', title: 'HTTP Trigger', x: 0, y: 0, status: 'ready', data: { method: 'POST' } },
       { id: 'node-2', kind: 'Agent', title: 'GPT-4 Agent', x: 320, y: 0, status: 'ready', data: { model: 'gpt-4', temperature: 0.7 }, avatarSeed: 'GPT4Agent' },
-      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', data: { toolName: 'web_search' } },
+      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', template: 'shellTool', data: { toolName: 'web_search' } },
       { id: 'node-4', kind: 'MCP', title: 'Database MCP', x: 0, y: 220, status: 'ready', data: { server: 'postgres' } },
       { id: 'node-5', kind: 'Workspace', title: 'Dev Workspace', x: 320, y: 220, status: 'provisioning', data: { cpu: 2, memory: 4096 } },
       { id: 'node-6', kind: 'Agent', title: 'Claude Agent', x: 640, y: 220, status: 'not_ready', data: { model: 'claude-3' }, avatarSeed: 'ClaudeAgent' },
@@ -54,7 +54,7 @@ export const SaveError: Story = {
     nodes: [
       { id: 'node-1', kind: 'Trigger', title: 'HTTP Trigger', x: 0, y: 0, status: 'ready', data: { method: 'POST' } },
       { id: 'node-2', kind: 'Agent', title: 'GPT-4 Agent', x: 320, y: 0, status: 'ready', data: { model: 'gpt-4', temperature: 0.7 }, avatarSeed: 'GPT4Agent' },
-      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', data: { toolName: 'web_search' } },
+      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', template: 'shellTool', data: { toolName: 'web_search' } },
       { id: 'node-4', kind: 'MCP', title: 'Database MCP', x: 0, y: 220, status: 'ready', data: { server: 'postgres' } },
       { id: 'node-5', kind: 'Workspace', title: 'Dev Workspace', x: 320, y: 220, status: 'provisioning', data: { cpu: 2, memory: 4096 } },
       { id: 'node-6', kind: 'Agent', title: 'Claude Agent', x: 640, y: 220, status: 'not_ready', data: { model: 'claude-3' }, avatarSeed: 'ClaudeAgent' },
@@ -69,7 +69,7 @@ export const Interactive: Story = {
     const [nodes, setNodes] = useState<GraphNodeConfig[]>([
       { id: 'node-1', kind: 'Trigger', title: 'HTTP Trigger', x: 0, y: 0, status: 'ready', data: { method: 'POST' } },
       { id: 'node-2', kind: 'Agent', title: 'GPT-4 Agent', x: 320, y: 0, status: 'ready', data: { model: 'gpt-4', temperature: 0.7 }, avatarSeed: 'GPT4Agent' },
-      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', data: { toolName: 'web_search' } },
+      { id: 'node-3', kind: 'Tool', title: 'Search Tool', x: 640, y: 0, status: 'ready', template: 'shellTool', data: { toolName: 'web_search' } },
       { id: 'node-4', kind: 'MCP', title: 'Database MCP', x: 0, y: 220, status: 'ready', data: { server: 'postgres' } },
       { id: 'node-5', kind: 'Workspace', title: 'Dev Workspace', x: 320, y: 220, status: 'provisioning', data: { cpu: 2, memory: 4096 } },
       { id: 'node-6', kind: 'Agent', title: 'Claude Agent', x: 640, y: 220, status: 'not_ready', data: { model: 'claude-3' }, avatarSeed: 'ClaudeAgent' },

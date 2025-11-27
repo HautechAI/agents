@@ -65,6 +65,7 @@ export interface GraphNodeConfig {
   x: number;
   y: number;
   status: NodeStatus;
+  template?: string;
   data?: Record<string, unknown>;
   avatarSeed?: string;
 }
@@ -291,9 +292,10 @@ export default function GraphScreen({
         {selectedNode ? (
           <NodePropertiesSidebar
             config={{
+              ...selectedNode.data,
               kind: selectedNode.kind,
               title: selectedNode.title,
-              ...selectedNode.data,
+              ...(selectedNode.template ? { template: selectedNode.template } : {}),
             }}
             state={{
               status: selectedNode.status,
