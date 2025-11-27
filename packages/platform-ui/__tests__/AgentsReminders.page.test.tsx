@@ -79,6 +79,7 @@ describe('AgentsReminders page', () => {
     expect(within(rows[1]).getByText('Soon')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /All \(1\)/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Scheduled \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Rows')).toHaveValue('20');
   });
 
   it('filters reminders client-side by status', async () => {

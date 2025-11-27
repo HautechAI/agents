@@ -140,6 +140,8 @@ export default function RemindersScreen({
   const executedCount = countsByStatus.executed;
   const cancelledCount = countsByStatus.cancelled;
   const allCount = scheduledCount + executedCount + cancelledCount;
+  const showPaginationControls = safeTotalPages > 1;
+  const showFooter = showPaginationControls || perPageOptions.length > 0;
 
   const handleStatusFilterChange = (next: ReminderStatusFilter) => {
     onStatusFilterChange?.(next);
@@ -234,21 +236,6 @@ export default function RemindersScreen({
                   >
                     {sortOrder === 'desc' ? 'Desc' : 'Asc'}
                   </button>
-                </label>
-
-                <label className="flex items-center gap-2 text-xs text-[var(--agyn-text-subtle)]">
-                  <span>Rows</span>
-                  <select
-                    value={perPage}
-                    onChange={(event) => handlePerPageChange(Number(event.target.value))}
-                    className="rounded-md border border-[var(--agyn-border-subtle)] bg-white px-2 py-1 text-xs text-[var(--agyn-dark)] focus:border-[var(--agyn-blue)] focus:outline-none"
-                  >
-                    {perPageOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
                 </label>
               </div>
             </div>
@@ -394,42 +381,61 @@ export default function RemindersScreen({
           </div>
 
           {/* Pagination */}
-          {safeTotalPages > 1 && (
+          {showFooter && (
             <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="text-sm text-[var(--agyn-text-subtle)]">
                   {total === 0 ? 'Showing 0 to 0 of 0 reminders' : `Showing ${startIndex} to ${endIndex} of ${total} reminders`}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(safePage - 1)}
-                    disabled={safePage === 1}
-                    className="px-3 py-1.5 text-sm text-[var(--agyn-text-subtle)] hover:text-[var(--agyn-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Previous
-                  </button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: safeTotalPages }, (_, i) => i + 1).map((pageNumber) => (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                  <label className="flex items-center gap-2 text-xs text-[var(--agyn-text-subtle)]">
+                    <span>Rows</span>
+                    <select
+                      value={perPage}
+                      onChange={(event) => handlePerPageChange(Number(event.target.value))}
+                      className="rounded-md border border-[var(--agyn-border-subtle)] bg-white px-2 py-1 text-xs text-[var(--agyn-dark)] focus:border-[var(--agyn-blue)] focus:outline-none"
+                    >
+                      {perPageOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {showPaginationControls && (
+                    <div className="flex items-center gap-2">
                       <button
-                        key={pageNumber}
-                        onClick={() => handlePageChange(pageNumber)}
-                        className={`w-8 h-8 rounded-md text-sm transition-all ${
-                          safePage === pageNumber
-                            ? 'bg-[var(--agyn-blue)]/10 text-[var(--agyn-blue)] font-medium'
-                            : 'text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-bg-light)]'
-                        }`}
+                        onClick={() => handlePageChange(safePage - 1)}
+                        disabled={safePage === 1}
+                        className="px-3 py-1.5 text-sm text-[var(--agyn-text-subtle)] hover:text-[var(--agyn-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        {pageNumber}
+                        Previous
                       </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => handlePageChange(safePage + 1)}
-                    disabled={safePage === safeTotalPages}
-                    className="px-3 py-1.5 text-sm text-[var(--agyn-text-subtle)] hover:text-[var(--agyn-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: safeTotalPages }, (_, i) => i + 1).map((pageNumber) => (
+                          <button
+                            key={pageNumber}
+                            onClick={() => handlePageChange(pageNumber)}
+                            className={`w-8 h-8 rounded-md text-sm transition-all ${
+                              safePage === pageNumber
+                                ? 'bg-[var(--agyn-blue)]/10 text-[var(--agyn-blue)] font-medium'
+                                : 'text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-bg-light)]'
+                            }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => handlePageChange(safePage + 1)}
+                        disabled={safePage === safeTotalPages}
+                        className="px-3 py-1.5 text-sm text-[var(--agyn-text-subtle)] hover:text-[var(--agyn-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
