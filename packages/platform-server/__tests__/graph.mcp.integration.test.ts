@@ -138,6 +138,10 @@ describe('Graph MCP integration', () => {
         },
         { provide: VaultService, useClass: StubVaultService },
         { provide: LLMProvisioner, useClass: StubLLMProvisioner },
+        {
+          provide: ReferenceResolverService,
+          useValue: { resolve: async <T>(input: T) => ({ output: input, report: {} as Record<string, never> }) },
+        },
         { provide: NcpsKeyService, useValue: { getKeysForInjection: () => [] } },
         { provide: ContainerRegistry, useValue: { updateLastUsed: async () => {}, registerStart: async () => {}, markStopped: async () => {} } },
         { provide: NodeStateService, useValue: { upsertNodeState: async () => {}, getSnapshot: () => undefined } },

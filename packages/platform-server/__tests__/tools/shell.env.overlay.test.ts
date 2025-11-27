@@ -8,10 +8,13 @@ import { PrismaService } from '../../src/core/services/prisma.service';
 class FakeContainer {
   public lastExec: { cmd: string; env?: Record<string, string>; workdir?: string } | null = null;
   constructor(private baseEnv: Record<string, string>, private baseWd: string) {}
-  async getEnv() { return { ...this.baseEnv }; }
+
+  async getEnv() {
+    return { ...this.baseEnv };
+  }
+
   async exec(command: string, options?: { env?: Record<string, string>; workdir?: string }) {
     this.lastExec = { cmd: command, env: options?.env, workdir: options?.workdir };
-    // Simulate env effects for validation
     const overlay = (options?.env || {}) as Record<string, string>;
     const eff: Record<string, string> = { ...this.baseEnv, ...overlay };
     const keys = ['FOO', 'BAR', 'BASE_ONLY'];
@@ -25,7 +28,10 @@ class FakeContainer {
 
 class FakeProvider {
   private c = new FakeContainer({ UNSETME: '1', BASE_ONLY: '1' }, '/workspace');
-  async provide(_thread: string) { return this.c as any; }
+
+  async provide(_thread: string) {
+    return this.c as any;
+  }
 }
 
 describe('ShellTool env/workdir isolation with vault-backed overlay', () => {
@@ -72,16 +78,35 @@ describe('ShellTool env/workdir isolation with vault-backed overlay', () => {
       workdir: '/w/a',
     });
     const b = createNode(new EnvService());
-    await b.setConfig({ env: [ { name: 'FOO', value: 'B' } ], workdir: '/w/b' });
+    await b.setConfig({ env: [{ name: 'FOO', value: 'B' }], workdir: '/w/b' });
 
     const at = a.getTool();
     const bt = b.getTool();
 
-    const aRes = String(await at.execute({ command: 'printenv' } as any, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false } as any, callerAgent: {} as any } as any));
-    const bRes = String(await bt.execute({ command: 'printenv' } as any, { threadId: 't', finishSignal: { activate() {}, deactivate() {}, isActive: false } as any, callerAgent: {} as any } as any));
+    const aRes = String(
+      await at.execute(
+        { command: 'printenv' } as any,
+        {
+          threadId: 't',
+          finishSignal: { activate() {}, deactivate() {}, isActive: false } as any,
+          callerAgent: {} as any,
+        } as any,
+      ),
+    );
+    const bRes = String(
+      await bt.execute(
+        { command: 'printenv' } as any,
+        {
+          threadId: 't',
+          finishSignal: { activate() {}, deactivate() {}, isActive: false } as any,
+          callerAgent: {} as any,
+        } as any,
+      ),
+    );
 
     const parse = (s: string) => Object.fromEntries(s.trim().split('\n').map((l) => l.split('=')));
-    const A = parse(aRes), B = parse(bRes);
+    const A = parse(aRes);
+    const B = parse(bRes);
     expect(A.WD).toBe('/w/a');
     expect(A.FOO).toBe('A');
     expect(A.BAR).toBe('VAULTED');

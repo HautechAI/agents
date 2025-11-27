@@ -27,7 +27,6 @@ export interface ReferenceEnvFieldProps {
   onValidate?: (errors: string[]) => void;
 }
 
-
 function isVaultRef(v: string) {
   // Expect mount/path/key
   return /^(?:[^/]+)\/(?:[^/]+)\/(?:[^/]+)$/.test(v || '');
@@ -36,19 +35,22 @@ function isVaultRef(v: string) {
 export default function ReferenceEnvField({ label, value, onChange, readOnly, disabled, addLabel = 'Add env', onValidate }: ReferenceEnvFieldProps) {
   const isDisabled = !!readOnly || !!disabled;
 
-  const validate = useCallback((list: EnvVar[]) => {
-    const errors: string[] = [];
-    const seen = new Set<string>();
-    for (const it of list) {
-      const name = (it.name || '').trim();
-      if (!name) errors.push('env name is required');
-      if (seen.has(name)) errors.push(`duplicate env name: ${name}`);
-      if (name) seen.add(name);
-      const src = (it.source || 'static');
-      if (src === 'vault' && it.value && !isVaultRef(it.value)) errors.push(`env ${name || '(blank)'} vault ref must be mount/path/key`);
-    }
-    onValidate?.(errors);
-  }, [onValidate]);
+  const validate = useCallback(
+    (list: EnvVar[]) => {
+      const errors: string[] = [];
+      const seen = new Set<string>();
+      for (const it of list) {
+        const name = (it.name || '').trim();
+        if (!name) errors.push('env name is required');
+        if (seen.has(name)) errors.push(`duplicate env name: ${name}`);
+        if (name) seen.add(name);
+        const src = it.source || 'static';
+        if (src === 'vault' && it.value && !isVaultRef(it.value)) errors.push(`env ${name || '(blank)'} vault ref must be mount/path/key`);
+      }
+      onValidate?.(errors);
+    },
+    [onValidate],
+  );
 
   const commit = useCallback(
     (list: EnvVar[]) => {
@@ -115,17 +117,11 @@ export default function ReferenceEnvField({ label, value, onChange, readOnly, di
                       aria-label={(it.source ?? 'static') === 'vault' ? 'Vault secret' : 'Static value'}
                       data-testid={`env-source-trigger-${idx}`}
                     >
-                      {(!it.source || it.source === 'static') ? (
-                        <Brackets aria-hidden className="size-4" />
-                      ) : (
-                        <Lock aria-hidden className="size-4" />
-                      )}
+                      {!it.source || it.source === 'static' ? <Brackets aria-hidden className="size-4" /> : <Lock aria-hidden className="size-4" />}
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent>
-                  {(it.source ?? 'static') === 'vault' ? 'Vault secret' : 'Static value'}
-                </TooltipContent>
+                <TooltipContent>{(it.source ?? 'static') === 'vault' ? 'Vault secret' : 'Static value'}</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end">
                 <DropdownMenuRadioGroup

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EnvService } from '../src/env/env.service';
+import { EnvService, type EnvItem } from '../src/env/env.service';
 
 describe('EnvService', () => {
   it('resolveEnvItems: static only', async () => {
@@ -7,17 +7,17 @@ describe('EnvService', () => {
     const res = await svc.resolveEnvItems([
       { name: 'A', value: '1' },
       { name: 'B', value: '2' },
-    ]);
+    ] satisfies EnvItem[]);
     expect(res).toEqual({ A: '1', B: '2' });
   });
 
-  it('resolveEnvItems: duplicate key error', async () => {
+  it('resolveEnvItems: duplicate name error', async () => {
     const svc = new EnvService();
     await expect(
       svc.resolveEnvItems([
         { name: 'A', value: '1' },
         { name: 'A', value: '2' },
-      ]),
+      ] satisfies EnvItem[]),
     ).rejects.toMatchObject({ code: 'env_name_duplicate' });
   });
 
@@ -26,7 +26,7 @@ describe('EnvService', () => {
     await expect(
       svc.resolveEnvItems([
         { name: 'A', value: { kind: 'vault', path: 'secret/app/db', key: 'PASSWORD' } as unknown as string },
-      ]),
+      ] satisfies EnvItem[]),
     ).rejects.toMatchObject({ code: 'env_value_invalid' });
   });
 
@@ -47,7 +47,7 @@ describe('EnvService', () => {
       [
         { name: 'A', value: '1' },
         { name: 'B', value: '2' },
-      ],
+      ] satisfies EnvItem[],
       undefined,
       base,
     );
@@ -72,16 +72,11 @@ describe('EnvService', () => {
   });
 
   it('resolveProviderEnv: base present + empty overlay => {} ; no base + empty overlay => undefined', async () => {
-    // Explicitly stub VaultService and EnvService methods to ensure empty overlay yields {}
     const svc = new EnvService();
-    // Ensure overlay resolution returns an empty map
     vi.spyOn(svc, 'resolveEnvItems').mockResolvedValue({});
-    // For this specific case, treat an empty overlay as explicitly-empty result ({}), not base propagation
     vi.spyOn(svc, 'mergeEnv').mockImplementation((_base, _overlay) => ({}));
-    // empty overlay (array that resolves to empty) with base present -> {}
     const res1 = await svc.resolveProviderEnv([], undefined, { A: '1' });
     expect(res1).toEqual({});
-    // empty overlay with no base -> undefined
     const res2 = await svc.resolveProviderEnv([], undefined, undefined);
     expect(res2).toBeUndefined();
   });

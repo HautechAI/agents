@@ -13,12 +13,7 @@ vi.mock('../../ReferenceInput', () => ({
   ReferenceInput: (props: any) => {
     latestReferenceProps.current = props;
     return (
-      <input
-        data-testid="reference-input"
-        value={props.value}
-        onChange={props.onChange}
-        onFocus={props.onFocus}
-      />
+      <input data-testid="reference-input" value={props.value} onChange={props.onChange} onFocus={props.onFocus} />
     );
   },
 }));

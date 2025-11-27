@@ -175,10 +175,7 @@ function NodePropertiesSidebar({
   const volumesEnabled = volumesConfig.enabled === true;
   const volumesMountPath =
     typeof volumesConfig.mountPath === 'string' ? (volumesConfig.mountPath as string) : '/workspace';
-  const workspaceNixPackages = useMemo(
-    () => readNixPackages(configRecord.nix),
-    [configRecord.nix],
-  );
+  const workspaceNixPackages = useMemo(() => readNixPackages(configRecord.nix), [configRecord.nix]);
 
   const setVersionLoading = useCallback((name: string, loading: boolean) => {
     setNixVersionLoading((prev) => {
@@ -233,7 +230,9 @@ function NodePropertiesSidebar({
 
   const loadPackageVersions = useCallback(
     async (name: string) => {
-      if (!fetchNixPackageVersions) return;
+      if (!fetchNixPackageVersions) {
+        return;
+      }
       if (nixVersionLoading.has(name)) return;
       setVersionLoading(name, true);
       try {

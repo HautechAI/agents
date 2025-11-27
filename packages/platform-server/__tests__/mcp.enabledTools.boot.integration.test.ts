@@ -140,6 +140,10 @@ describe('Boot respects MCP enabledTools from persisted state', () => {
         },
         { provide: VaultService, useClass: StubVaultService },
         { provide: LLMProvisioner, useClass: StubLLMProvisioner },
+        {
+          provide: ReferenceResolverService,
+          useValue: { resolve: async <T>(input: T) => ({ output: input, report: {} as Record<string, never> }) },
+        },
         { provide: NcpsKeyService, useValue: { getKeysForInjection: () => [] } },
         { provide: ContainerRegistry, useValue: { updateLastUsed: async () => {}, registerStart: async () => {}, markStopped: async () => {} } },
         { provide: GraphSocketGateway, useValue: { emitNodeState: (_id: string, _state: Record<string, unknown>) => {} } },

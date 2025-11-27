@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { vi } from 'vitest';
+import type * as AgynUI from '@agyn/ui';
 
 vi.mock('@agyn/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agyn/ui')>();
+  const actual = (await importOriginal()) as AgynUI;
   const PassThrough = ({ children }: { children: React.ReactNode }) => <>{children}</>;
   return {
     ...actual,
@@ -63,7 +64,6 @@ describe('ReferenceEnvField', () => {
     );
     const row = screen.getByTestId('env-name-0').closest('div');
     expect(row).toBeTruthy();
-    // The order should be: Key input, Value input, Source trigger button, Remove button
     const inputsAndButtons = row!.querySelectorAll('input, button');
     expect(inputsAndButtons.length).toBeGreaterThanOrEqual(3);
     expect(inputsAndButtons[0]).toBe(screen.getByTestId('env-name-0'));
@@ -72,7 +72,6 @@ describe('ReferenceEnvField', () => {
     const removeBtn = screen.getByLabelText('Remove variable');
     expect(removeBtn).toBeTruthy();
   });
-
 
   it('keyboard a11y: Enter opens menu and Enter selects option', async () => {
     const initial = readEnvList([{ name: 'FOO', value: '', source: 'static' }]);
@@ -90,7 +89,6 @@ describe('ReferenceEnvField', () => {
     trigger.focus();
     fireEvent.keyDown(trigger, { key: 'Enter' });
     const menu = await screen.findByTestId('env-source-menu-0');
-    // After opening, select vault via keyboard
     const vaultItem = menu.querySelector('[data-testid="env-source-option-vault-0"]') as HTMLElement;
     expect(vaultItem).toBeTruthy();
     vaultItem.focus();
