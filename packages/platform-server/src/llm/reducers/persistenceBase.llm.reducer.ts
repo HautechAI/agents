@@ -123,8 +123,8 @@ export abstract class PersistenceBaseLLMReducer extends Reducer<LLMState, LLMCon
     return this.isMessageLike(v) && v.role === 'user';
   }
 
-  protected isSystemMessage(v: unknown): v is ResponseInputItem.Message & { role: 'system' } {
-    return this.isMessageLike(v) && v.role === 'system';
+  protected isSystemMessage(v: unknown): v is ResponseInputItem.Message & { role: 'system' | 'developer' } {
+    return this.isMessageLike(v) && (v.role === 'system' || v.role === 'developer');
   }
 
   protected isResponseValue(v: unknown): v is { output: Response['output']; usage?: Response['usage'] | null } {

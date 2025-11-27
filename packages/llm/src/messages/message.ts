@@ -16,8 +16,8 @@ export class Message {
       if (obj.role === 'user') {
         return new HumanMessage(obj as ResponseInputItem.Message & { role: 'user' });
       }
-      if (obj.role === 'system') {
-        return new SystemMessage(obj as ResponseInputItem.Message & { role: 'system' });
+      if (obj.role === 'system' || obj.role === 'developer') {
+        return new SystemMessage(obj as ResponseInputItem.Message & { role: 'system' | 'developer' });
       }
       if (obj.role === 'assistant') {
         return new AIMessage(obj);
