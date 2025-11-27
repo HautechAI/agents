@@ -21,7 +21,9 @@ export interface RunEventsListProps {
   loadMore?: () => void;
   isLoadingMore?: boolean;
   errorMessage?: string;
+  restoreFocusOnSelect?: boolean;
 }
+
 
 function getEventIcon(event: RunEvent) {
   switch (event.type) {
@@ -93,6 +95,7 @@ export function RunEventsList({
   loadMore,
   isLoadingMore = false,
   errorMessage,
+  restoreFocusOnSelect = true,
 }: RunEventsListProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const eventCount = events.length;
@@ -112,15 +115,17 @@ export function RunEventsList({
   }, []);
 
   const handleItemSelect = useCallback(
-    (eventId: string) => {
+    (eventId: string, options?: { restoreFocus?: boolean }) => {
       onSelectEvent(eventId);
+      const shouldRestoreFocus = options?.restoreFocus ?? restoreFocusOnSelect;
+      if (!shouldRestoreFocus) return;
       if (typeof window !== 'undefined') {
         window.requestAnimationFrame(() => {
           focusList();
         });
       }
     },
-    [focusList, onSelectEvent],
+    [focusList, onSelectEvent, restoreFocusOnSelect],
   );
 
   const handleKeyDown = useCallback(
@@ -137,21 +142,21 @@ export function RunEventsList({
         const fallbackIndex = key === 'ArrowDown' ? 0 : eventCount - 1;
         const nextIndex = clampIndex(selectedIndex >= 0 ? selectedIndex + delta : fallbackIndex);
         const target = events[nextIndex];
-        if (target) handleItemSelect(target.id);
+        if (target) handleItemSelect(target.id, { restoreFocus: true });
         return;
       }
 
       if (key === 'Home') {
         keyboardEvent.preventDefault();
         const target = events[0];
-        if (target) handleItemSelect(target.id);
+        if (target) handleItemSelect(target.id, { restoreFocus: true });
         return;
       }
 
       if (key === 'End') {
         keyboardEvent.preventDefault();
         const target = events[eventCount - 1];
-        if (target) handleItemSelect(target.id);
+        if (target) handleItemSelect(target.id, { restoreFocus: true });
       }
     },
     [eventCount, events, handleItemSelect, selectedIndex],
@@ -206,7 +211,7 @@ export function RunEventsList({
           aria-selected={isSelected}
           data-event-id={event.id}
           tabIndex={-1}
-          onClick={() => handleItemSelect(event.id)}
+          onClick={() => handleItemSelect(event.id, { restoreFocus: restoreFocusOnSelect })}
           className={`relative w-full border-b border-[var(--agyn-border-subtle)] px-4 py-3 text-left transition-colors hover:bg-[var(--agyn-bg-light)] ${
             isSelected ? 'bg-[var(--agyn-bg-light)]' : ''
           }`}
@@ -231,7 +236,7 @@ export function RunEventsList({
         </button>
       );
     },
-    [handleItemSelect, selectedEventId],
+    [handleItemSelect, restoreFocusOnSelect, selectedEventId],
   );
 
   return (

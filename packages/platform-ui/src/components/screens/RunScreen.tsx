@@ -214,6 +214,7 @@ export default function RunScreen({
         isLoadingMore={isLoadingMoreEvents}
         loadMore={onLoadMoreEvents}
         errorMessage={listErrorMessage}
+        restoreFocusOnSelect={isDesktopLayout}
       />
     );
   };

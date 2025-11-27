@@ -743,16 +743,13 @@ export function AgentsRunScreen() {
       const latestEventFilters = eventFiltersRef.current;
       const latestStatusFilters = statusFiltersRef.current;
       const cursor = toCursor(event);
-      const currentCursor = cursorRef.current;
-      if (!currentCursor || compareCursors(cursor, currentCursor) >= 0) {
-        graphSocket.setRunCursor(runId, cursor);
-      }
+      graphSocket.setRunCursor(runId, cursor);
       updateEventsState((prev) => mergeEvents(prev, [event], latestEventFilters, latestStatusFilters, {
         context: {
           source: 'socket-event',
           runId,
           filters: { eventFilters: latestEventFilters, statusFilters: latestStatusFilters },
-          cursor: cursor,
+          cursor,
           mode: 'MERGE',
         },
       }));

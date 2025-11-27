@@ -64,15 +64,21 @@ export const runs = {
 };
 
 function buildCursorParams(params: { cursorTs?: string; cursorId?: string; cursorParamMode?: 'both' | 'bracketed' | 'plain' }) {
-  const mode = params.cursorParamMode ?? 'both';
+  const { cursorTs, cursorId, cursorParamMode = 'both' } = params;
   const next: Record<string, string> = {};
-  if (params.cursorTs) {
-    if (mode !== 'plain') next['cursor[ts]'] = params.cursorTs;
-    if (mode !== 'bracketed') next.cursorTs = params.cursorTs;
+
+  const includeBracketed = cursorParamMode === 'both' || cursorParamMode === 'bracketed';
+  const includePlain = cursorParamMode === 'both' || cursorParamMode === 'plain';
+
+  if (cursorTs) {
+    if (includeBracketed) next['cursor[ts]'] = cursorTs;
+    if (includePlain) next.cursorTs = cursorTs;
   }
-  if (params.cursorId) {
-    if (mode !== 'plain') next['cursor[id]'] = params.cursorId;
-    if (mode !== 'bracketed') next.cursorId = params.cursorId;
+
+  if (cursorId) {
+    if (includeBracketed) next['cursor[id]'] = cursorId;
+    if (includePlain) next.cursorId = cursorId;
   }
+
   return next;
 }
