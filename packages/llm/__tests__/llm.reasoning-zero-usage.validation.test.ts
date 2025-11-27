@@ -44,6 +44,31 @@ function createMessageResponse(usage: Response['usage']): Response {
   } as unknown as Response;
 }
 
+function createMixedResponse(usage: Response['usage']): Response {
+  return {
+    id: 'resp_789',
+    created_at: 0,
+    output_text: 'hello',
+    error: null,
+    incomplete_details: null,
+    instructions: null,
+    metadata: null,
+    model: 'gpt-4o-mini',
+    object: 'response',
+    output: [
+      {
+        id: 'reasoning_1',
+        type: 'reasoning',
+        summary: [{ type: 'summary_text', text: 'thinking' }],
+        content: [{ type: 'reasoning_text', text: 'step-by-step' }],
+        status: 'completed',
+      },
+      AIMessage.fromText('finished').toPlain(),
+    ],
+    usage,
+  } as unknown as Response;
+}
+
 function buildUsage(tokens: { input: number; output: number; total: number; cached?: number; reasoning?: number }): Response['usage'] {
   return {
     input_tokens: tokens.input,
@@ -98,5 +123,14 @@ describe('LLM reasoning-only zero usage validation', () => {
 
     const result = await llm.call({ model: 'gpt-4o', input: baseInput });
     expect(result.text).toBe('');
+  });
+
+  it('does not throw when output mixes reasoning with assistant message', async () => {
+    const rawResponse = createMixedResponse(buildUsage({ input: 0, output: 0, total: 0 }));
+
+    const llm = createLLMFor(rawResponse);
+
+    const result = await llm.call({ model: 'gpt-4o', input: baseInput });
+    expect(result.text).toBe('finished');
   });
 });
