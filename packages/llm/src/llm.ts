@@ -9,6 +9,7 @@ import {
   ResponseMessage,
 } from './messages';
 import { FunctionTool } from './functionTool';
+import { validateReasoningOnlyZeroUsage } from './validation/reasoningOnlyZeroUsage';
 
 export type LLMInput =
   | HumanMessage
@@ -39,6 +40,8 @@ export class LLM {
       input: flattenInput,
       tools: toolDefinitions,
     });
+
+    validateReasoningOnlyZeroUsage(response);
 
     return new ResponseMessage(response);
   }
