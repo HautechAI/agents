@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react';
 import Badge from './Badge';
 
-interface DraggableNodeItem {
+export interface DraggableNodeItem {
   id: string;
   kind: 'Trigger' | 'Agent' | 'Tool' | 'MCP' | 'Workspace';
   title: string;
