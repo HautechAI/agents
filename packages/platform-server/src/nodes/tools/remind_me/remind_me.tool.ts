@@ -3,7 +3,7 @@ import { FunctionTool, HumanMessage } from '@agyn/llm';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../../../core/services/prisma.service';
-import type { Prisma, PrismaClient, Reminder } from '@prisma/client';
+import type { Reminder } from '@prisma/client';
 import { LLMContext } from '../../../llm/types';
 
 export const remindMeInvocationSchema = z
@@ -106,35 +106,18 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     return JSON.stringify({ status: 'scheduled', etaMs: delayMs, at: eta, id: created.id });
   }
 
-  async cancelByThread(
-    threadId: string,
-    prismaInstance?: PrismaClient | Prisma.TransactionClient,
-    cancelledAtOverride?: Date,
-  ): Promise<number> {
-    const prisma = prismaInstance ?? this.prismaService.getClient();
+  clearTimersByThread(threadId: string): string[] {
     const entries = Array.from(this.active.entries()).filter(([, { reminder }]) => reminder.threadId === threadId);
-    const ids = entries.map(([id]) => id);
-    const cancelledAt = cancelledAtOverride ?? new Date();
+    if (entries.length === 0) return [];
 
-    if (ids.length > 0) {
-      try {
-        await prisma.reminder.updateMany({
-          where: { id: { in: ids }, threadId, completedAt: null, cancelledAt: null },
-          data: { cancelledAt },
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn('RemindMe cancelByThread persistence update failed', { threadId, error: message });
-      }
-    }
-
+    const clearedIds: string[] = [];
     for (const [id, { timer }] of entries) {
       clearTimeout(timer);
       this.active.delete(id);
+      clearedIds.push(id);
     }
 
-    if (entries.length > 0) this.onRegistryChanged?.(this.active.size, Date.now(), threadId);
-
-    return entries.length;
+    this.onRegistryChanged?.(this.active.size, Date.now(), threadId);
+    return clearedIds;
   }
 }

@@ -34,7 +34,7 @@ const makeCoordinator = () => {
     removeVolume: vi.fn(async () => undefined),
   };
   const prismaService = { getClient: () => prismaStub };
-  const remindersCancellation = { cancelThread: vi.fn(async () => ({ cancelledDb: 0, cancelledRuntime: 0 })) };
+  const reminders = { cancelByThread: vi.fn(async () => ({ cancelledDb: 0, clearedRuntime: 0, threadIds: [] })) };
 
   const coordinator = new ThreadCleanupCoordinator(
     persistence as any,
@@ -45,10 +45,10 @@ const makeCoordinator = () => {
     prismaService as any,
     registry as any,
     containerService as any,
-    remindersCancellation as any,
+    reminders as any,
   );
 
-  return { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, remindersCancellation };
+  return { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders };
 };
 
 describe('ThreadCleanupCoordinator', () => {
@@ -78,7 +78,7 @@ describe('ThreadCleanupCoordinator', () => {
       return [];
     });
 
-    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, remindersCancellation } = makeCoordinator();
+    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders } = makeCoordinator();
 
     registry.listByThread.mockImplementation(async (threadId: string) => [{ containerId: `${threadId}-c`, status: 'running' }]);
     registry.findByVolume.mockResolvedValue([]);
@@ -101,7 +101,11 @@ describe('ThreadCleanupCoordinator', () => {
       ['ha_ws_child', { force: true }],
       ['ha_ws_root', { force: true }],
     ]);
-    expect(remindersCancellation.cancelThread.mock.calls.map(([tid]) => tid)).toEqual(['leaf', 'child', 'root']);
+    expect(reminders.cancelByThread.mock.calls.map(([args]) => args)).toEqual([
+      { threadId: 'leaf' },
+      { threadId: 'child' },
+      { threadId: 'root' },
+    ]);
   });
 
   it('terminates active runs and proceeds with cleanup', async () => {
@@ -110,7 +114,7 @@ describe('ThreadCleanupCoordinator', () => {
     prismaStub.thread.findMany.mockResolvedValue([]);
     prismaStub.run.findMany.mockResolvedValue([{ id: 'run-root', threadId: 'root', status: 'running' }]);
 
-    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, remindersCancellation } = makeCoordinator();
+    const { coordinator, persistence, termination, cleanup, runSignals, registry, containerService, reminders } = makeCoordinator();
     registry.listByThread.mockResolvedValue([{ containerId: 'root-c', status: 'running' }]);
     registry.findByVolume.mockResolvedValue([]);
     containerService.listContainersByVolume.mockResolvedValue([]);
@@ -126,7 +130,7 @@ describe('ThreadCleanupCoordinator', () => {
       deleteEphemeral: true,
     });
     expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
-    expect(remindersCancellation.cancelThread).toHaveBeenCalledWith('root');
+    expect(reminders.cancelByThread).toHaveBeenCalledWith({ threadId: 'root' });
   });
 
   it('skips workspace volume removal when references remain', async () => {
@@ -135,7 +139,7 @@ describe('ThreadCleanupCoordinator', () => {
     prismaStub.thread.findMany.mockResolvedValue([]);
     prismaStub.run.findMany.mockResolvedValue([]);
 
-    const { coordinator, containerService, registry, remindersCancellation } = makeCoordinator();
+    const { coordinator, containerService, registry, reminders } = makeCoordinator();
     registry.listByThread.mockResolvedValue([]);
     registry.findByVolume.mockResolvedValue([{ containerId: 'other', threadId: 'other-thread', status: 'running' }]);
     containerService.listContainersByVolume.mockResolvedValue([]);
@@ -143,6 +147,6 @@ describe('ThreadCleanupCoordinator', () => {
     await coordinator.closeThreadWithCascade('root');
 
     expect(containerService.removeVolume).not.toHaveBeenCalled();
-    expect(remindersCancellation.cancelThread).toHaveBeenCalledWith('root');
+    expect(reminders.cancelByThread).toHaveBeenCalledWith({ threadId: 'root' });
   });
 });

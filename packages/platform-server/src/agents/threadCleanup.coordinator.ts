@@ -8,7 +8,7 @@ import { LoggerService } from '../core/services/logger.service';
 import { PrismaService } from '../core/services/prisma.service';
 import { ContainerRegistry } from '../infra/container/container.registry';
 import { ContainerService } from '../infra/container/container.service';
-import { RemindersCancellationService } from './remindersCancellation.service';
+import { RemindersService } from './reminders.service';
 
 type ThreadNode = {
   id: string;
@@ -34,7 +34,7 @@ export class ThreadCleanupCoordinator {
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(ContainerRegistry) private readonly registry: ContainerRegistry,
     @Inject(ContainerService) private readonly containerService: ContainerService,
-    @Inject(RemindersCancellationService) private readonly remindersCancellation: RemindersCancellationService,
+    @Inject(RemindersService) private readonly reminders: RemindersService,
   ) {}
 
   async closeThreadWithCascade(threadId: string): Promise<void> {
@@ -60,12 +60,12 @@ export class ThreadCleanupCoordinator {
       await this.ensureThreadClosed(node);
 
       try {
-        const result = await this.remindersCancellation.cancelThread(threadId);
-        if (result.cancelledDb > 0 || result.cancelledRuntime > 0) {
+        const result = await this.reminders.cancelByThread({ threadId });
+        if (result.cancelledDb > 0 || result.clearedRuntime > 0) {
           this.logger.info('ThreadCleanup: cancelled reminders', {
             threadId,
             cancelledDb: result.cancelledDb,
-            cancelledRuntime: result.cancelledRuntime,
+            cancelledRuntime: result.clearedRuntime,
           });
         }
       } catch (error) {

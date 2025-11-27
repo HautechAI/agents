@@ -15,7 +15,7 @@ import { ThreadsMetricsService } from '../agents/threads.metrics.service';
 import { RunSignalsRegistry } from '../agents/run-signals.service';
 import { CallAgentLinkingService } from '../agents/call-agent-linking.service';
 import { ThreadCleanupCoordinator } from '../agents/threadCleanup.coordinator';
-import { RemindersCancellationService } from '../agents/remindersCancellation.service';
+import { RemindersService } from '../agents/reminders.service';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
 
 @Global()
@@ -26,7 +26,7 @@ import { TemplateRegistry } from '../graph-core/templateRegistry';
     RunSignalsRegistry,
     CallAgentLinkingService,
     ThreadCleanupCoordinator,
-    RemindersCancellationService,
+    RemindersService,
     {
       provide: GraphRepository,
       useFactory: async (config: ConfigService, moduleRef: ModuleRef) => {
@@ -52,7 +52,7 @@ import { TemplateRegistry } from '../graph-core/templateRegistry';
     ThreadsMetricsService,
     RunSignalsRegistry,
     CallAgentLinkingService,
-    RemindersCancellationService,
+    RemindersService,
   ],
 })
 export class GraphDomainModule {}

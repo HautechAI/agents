@@ -299,7 +299,7 @@ describe('RemindMeTool', () => {
     expect(prisma.reminderCreate).not.toHaveBeenCalled();
   });
 
-  it('cancelByThread clears timers, updates persistence, and emits registry change', async () => {
+  it('clearTimersByThread clears timers and emits registry change without touching persistence', async () => {
     const { tool, prisma } = createToolInstance();
     const onRegistryChanged = vi.fn();
     tool.setOnRegistryChanged(onRegistryChanged);
@@ -313,14 +313,10 @@ describe('RemindMeTool', () => {
     expect(tool.getActiveReminders()).toHaveLength(1);
     const createdId = prisma.reminderCreate.mock.calls[0][0].data.id;
 
-    const cancelledAt = new Date('2025-11-27T00:00:00Z');
-    const result = await tool.cancelByThread('t-cancel', undefined, cancelledAt);
-    expect(result).toBe(1);
+    const cleared = tool.clearTimersByThread('t-cancel');
+    expect(cleared).toEqual([createdId]);
     expect(tool.getActiveReminders()).toHaveLength(0);
-    expect(prisma.reminderUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: [createdId] }, threadId: 't-cancel', completedAt: null, cancelledAt: null },
-      data: { cancelledAt },
-    });
+    expect(prisma.reminderUpdateMany).not.toHaveBeenCalled();
     const calls = onRegistryChanged.mock.calls as unknown as Array<[number, number | undefined, string | undefined]>;
     expect(calls.at(-1)).toEqual([0, expect.any(Number), 't-cancel']);
 
