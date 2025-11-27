@@ -9,6 +9,8 @@ import { IconButton } from '../IconButton';
 import { GraphCanvas, type GraphCanvasDropContext, type GraphNodeData } from '../GraphCanvas';
 import type { NodeKind } from '../Node';
 import type { SavingStatus } from '../SavingStatusControl';
+import { useTemplates } from '@/lib/graph/hooks';
+import { mapTemplatesToSidebarItems } from '@/lib/graph/sidebarNodeItems';
 
 const nodeKindToColor: Record<NodeKind, string> = {
   Trigger: 'var(--agyn-yellow)',
@@ -66,6 +68,7 @@ export interface GraphNodeConfig {
   x: number;
   y: number;
   status: NodeStatus;
+  template?: string;
   data?: Record<string, unknown>;
   avatarSeed?: string;
 }
@@ -85,6 +88,19 @@ export default function GraphScreen({
   savingErrorMessage,
   onNodeUpdate,
 }: GraphScreenProps) {
+  const templatesQuery = useTemplates();
+  const templateItems = useMemo(() => mapTemplatesToSidebarItems(templatesQuery.data), [templatesQuery.data]);
+  const templatesErrorMessage = useMemo(() => {
+    if (!templatesQuery.error) return null;
+    if (templatesQuery.error instanceof Error) {
+      const message = typeof templatesQuery.error.message === 'string' ? templatesQuery.error.message.trim() : '';
+      return message.length > 0 ? message : 'Failed to load templates';
+    }
+    const fallback = String(templatesQuery.error).trim();
+    return fallback.length > 0 ? fallback : 'Failed to load templates';
+  }, [templatesQuery.error]);
+  const templatesLoading = templatesQuery.isLoading && templateItems.length === 0;
+
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const nodeConfigs = initialNodesConfig;
 
@@ -292,9 +308,10 @@ export default function GraphScreen({
         {selectedNode ? (
           <NodePropertiesSidebar
             config={{
+              ...selectedNode.data,
               kind: selectedNode.kind,
               title: selectedNode.title,
-              ...selectedNode.data,
+              ...(selectedNode.template ? { template: selectedNode.template } : {}),
             }}
             state={{
               status: selectedNode.status,
@@ -309,7 +326,11 @@ export default function GraphScreen({
             }
           />
         ) : (
-          <EmptySelectionSidebar />
+          <EmptySelectionSidebar
+            nodeItems={templateItems}
+            isLoading={templatesLoading}
+            errorMessage={templatesErrorMessage}
+          />
         )}
       </div>
     </div>

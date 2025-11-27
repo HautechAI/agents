@@ -5,3 +5,7 @@ export { Loop } from './loop';
 export { FunctionTool } from './functionTool';
 export { LLM } from './llm';
 export type { LLMInput } from './llm';
+export {
+  ReasoningOnlyZeroUsageError,
+  validateReasoningOnlyZeroUsage,
+} from './validation/reasoningOnlyZeroUsage';

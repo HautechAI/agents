@@ -11,6 +11,8 @@ import { useGraphSocket } from '@/features/graph/hooks/useGraphSocket';
 import { useNodeStatus } from '@/features/graph/hooks/useNodeStatus';
 import { useNodeAction } from '@/features/graph/hooks/useNodeAction';
 import { useMcpNodeState } from '@/lib/graph/hooks';
+import { useTemplatesCache } from '@/lib/graph/templates.provider';
+import { mapTemplatesToSidebarItems } from '@/lib/graph/sidebarNodeItems';
 import type { GraphNodeConfig, GraphNodeStatus, GraphPersistedEdge } from '@/features/graph/types';
 import type { NodeStatus as ApiNodeStatus } from '@/api/types/graph';
 
@@ -161,6 +163,18 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     applyNodeState,
     setEdges,
   } = useGraphData();
+  const { templates: cachedTemplates, loading: templatesLoading, error: templatesError } = useTemplatesCache();
+  const sidebarTemplateItems = useMemo(() => mapTemplatesToSidebarItems(cachedTemplates), [cachedTemplates]);
+  const sidebarTemplateErrorMessage = useMemo(() => {
+    if (!templatesError) return null;
+    if (templatesError instanceof Error) {
+      const message = typeof templatesError.message === 'string' ? templatesError.message.trim() : '';
+      return message.length > 0 ? message : 'Failed to load templates';
+    }
+    const fallback = String(templatesError).trim();
+    return fallback.length > 0 ? fallback : 'Failed to load templates';
+  }, [templatesError]);
+  const sidebarTemplatesLoading = templatesLoading && sidebarTemplateItems.length === 0;
 
   const providerDebounceMs = 275;
   const vaultMountsRef = useRef<string[] | null>(null);
@@ -657,9 +671,10 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     }
     const baseConfig = selectedNode.config ?? {};
     return {
+      ...baseConfig,
       kind: selectedNode.kind,
       title: selectedNode.title,
-      ...baseConfig,
+      template: selectedNode.template,
     } satisfies SidebarNodeConfig;
   }, [selectedNode]);
 
@@ -762,7 +777,11 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           providerDebounceMs={providerDebounceMs}
         />
       ) : (
-        <EmptySelectionSidebar />
+        <EmptySelectionSidebar
+          nodeItems={sidebarTemplateItems}
+          isLoading={sidebarTemplatesLoading}
+          errorMessage={sidebarTemplateErrorMessage}
+        />
       )}
     </div>
   );

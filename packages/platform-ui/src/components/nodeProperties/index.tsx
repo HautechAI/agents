@@ -9,6 +9,7 @@ import { AgentSection } from './AgentSection';
 import { TriggerSection } from './TriggerSection';
 import { McpSection } from './McpSection';
 import { WorkspaceSection } from './WorkspaceSection';
+import { ToolSection } from './ToolSection';
 import {
   applyNixUpdate,
   applyQueueUpdate,
@@ -125,11 +126,14 @@ function NodePropertiesSidebar({
   const { kind: nodeKind, title: nodeTitle } = config;
   const { status } = state;
   const configRecord = config as Record<string, unknown>;
+  const template = typeof config.template === 'string' ? config.template : undefined;
 
   const [workspaceEnvOpen, setWorkspaceEnvOpen] = useState(true);
   const [mcpEnvOpen, setMcpEnvOpen] = useState(true);
+  const [toolEnvOpen, setToolEnvOpen] = useState(true);
   const [nixPackagesOpen, setNixPackagesOpen] = useState(true);
   const [mcpLimitsOpen, setMcpLimitsOpen] = useState(false);
+  const [toolLimitsOpen, setToolLimitsOpen] = useState(false);
   const [nixPackageQuery, setNixPackageQuery] = useState('');
   const [nixVersionOptions, setNixVersionOptions] = useState<Record<string, string[]>>({});
   const [nixVersionLoading, setNixVersionLoading] = useState<Set<string>>(() => new Set());
@@ -183,6 +187,20 @@ function NodePropertiesSidebar({
   const volumesMountPath =
     typeof volumesConfig.mountPath === 'string' ? (volumesConfig.mountPath as string) : '/workspace';
   const workspaceNixPackages = useMemo(() => readNixPackages(configRecord.nix), [configRecord.nix]);
+  const toolWorkdir =
+    typeof configRecord.workdir === 'string'
+      ? (configRecord.workdir as string)
+      : typeof configRecord.workingDir === 'string'
+      ? (configRecord.workingDir as string)
+      : '';
+  const toolExecutionTimeout = readNumber(configRecord.executionTimeoutMs);
+  const toolIdleTimeout = readNumber(configRecord.idleTimeoutMs);
+  const toolOutputLimit = readNumber(configRecord.outputLimitChars);
+  const toolChunkCoalesce = readNumber(configRecord.chunkCoalesceMs);
+  const toolChunkSize = readNumber(configRecord.chunkSizeBytes);
+  const toolClientBufferLimit = readNumber(configRecord.clientBufferLimitBytes);
+  const logToPid1Enabled =
+    typeof configRecord.logToPid1 === 'boolean' ? (configRecord.logToPid1 as boolean) : true;
 
   const setVersionLoading = useCallback((name: string, loading: boolean) => {
     setNixVersionLoading((prev) => {
@@ -328,6 +346,35 @@ function NodePropertiesSidebar({
       }
     },
     [envVars, onConfigChange, fetchSecretNow, fetchVariableNow],
+  );
+
+  type ToolLimitKey =
+    | 'executionTimeoutMs'
+    | 'idleTimeoutMs'
+    | 'outputLimitChars'
+    | 'chunkCoalesceMs'
+    | 'chunkSizeBytes'
+    | 'clientBufferLimitBytes';
+
+  const handleToolWorkdirChange = useCallback(
+    (value: string) => {
+      onConfigChange?.({ workdir: value });
+    },
+    [onConfigChange],
+  );
+
+  const handleToolLimitChange = useCallback(
+    (key: ToolLimitKey, value: number | undefined) => {
+      onConfigChange?.({ [key]: value } as Partial<NodeConfig>);
+    },
+    [onConfigChange],
+  );
+
+  const handleLogToPid1Change = useCallback(
+    (checked: boolean) => {
+      onConfigChange?.({ logToPid1: checked });
+    },
+    [onConfigChange],
   );
 
   const handleQueueUpdate = useCallback(
@@ -499,6 +546,35 @@ function NodePropertiesSidebar({
     ],
   );
 
+  const toolEnvEditorProps = useMemo(
+    () => ({
+      title: 'Environment Variables',
+      isOpen: toolEnvOpen,
+      onOpenChange: setToolEnvOpen,
+      envVars,
+      onAdd: handleEnvAdd,
+      onRemove: handleEnvRemove,
+      onNameChange: handleEnvNameChange,
+      onValueChange: handleEnvValueChange,
+      onValueFocus: handleEnvValueFocus,
+      onSourceTypeChange: handleEnvSourceChange,
+      secretSuggestions,
+      variableSuggestions,
+    }),
+    [
+      envVars,
+      handleEnvAdd,
+      handleEnvRemove,
+      handleEnvNameChange,
+      handleEnvValueChange,
+      handleEnvValueFocus,
+      handleEnvSourceChange,
+      toolEnvOpen,
+      secretSuggestions,
+      variableSuggestions,
+    ],
+  );
+
   const workspaceEnvEditorProps = useMemo(
     () => ({
       title: 'Environment Variables',
@@ -635,6 +711,27 @@ function NodePropertiesSidebar({
                 loading: toolsLoading,
                 onToggle: handleToggleToolInternal,
               }}
+            />
+          )}
+
+          {nodeKind === 'Tool' && template === 'shellTool' && (
+            <ToolSection
+              workdir={toolWorkdir}
+              onWorkdirChange={handleToolWorkdirChange}
+              envEditorProps={toolEnvEditorProps}
+              limits={{
+                executionTimeoutMs: toolExecutionTimeout,
+                idleTimeoutMs: toolIdleTimeout,
+                outputLimitChars: toolOutputLimit,
+                chunkCoalesceMs: toolChunkCoalesce,
+                chunkSizeBytes: toolChunkSize,
+                clientBufferLimitBytes: toolClientBufferLimit,
+              }}
+              onLimitChange={handleToolLimitChange}
+              limitsOpen={toolLimitsOpen}
+              onLimitsOpenChange={setToolLimitsOpen}
+              logToPid1={logToPid1Enabled}
+              onLogToPid1Change={handleLogToPid1Change}
             />
           )}
 
