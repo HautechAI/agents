@@ -98,7 +98,7 @@ export class LocalMCPServerNode extends Node<z.infer<typeof LocalMcpServerStatic
   private _provInFlight: Promise<void> | null = null;
 
   // Dynamic config: enabled tools (undefined => disabled by default)
-  // Dynamic tool filtering removed per strictness spec; always expose all cached tools
+  // Tools are exposed only after enabledTools explicitly enumerates them.
   private _globalStaleTimeoutMs = 0;
   // Last seen enabled tools from state for change detection
   private _lastEnabledTools?: string[];
