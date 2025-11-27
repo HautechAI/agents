@@ -18,6 +18,7 @@ type RecoveredReminder = {
   id: string;
   threadId: string;
   completedAt: Date | null;
+  cancelledAt: Date | null;
 };
 
 const RECOVERY_REASON = 'server_restart_recovery';
@@ -127,7 +128,7 @@ export class StartupRecoveryService implements OnApplicationBootstrap {
     }
 
     const pending = await reminderDelegate.findMany({
-      where: { completedAt: null },
+      where: { completedAt: null, cancelledAt: null },
       select: { id: true, threadId: true },
     });
     if (pending.length === 0) return [];
@@ -138,7 +139,7 @@ export class StartupRecoveryService implements OnApplicationBootstrap {
 
     const completed = await reminderDelegate.findMany({
       where: { id: { in: ids } },
-      select: { id: true, threadId: true, completedAt: true },
+      select: { id: true, threadId: true, completedAt: true, cancelledAt: true },
     });
     return completed.map((rem) => ({ ...rem }));
   }

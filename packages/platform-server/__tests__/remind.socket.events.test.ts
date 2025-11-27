@@ -6,7 +6,20 @@ describe('RemindMe socket reminder_count events', () => {
   afterEach(() => { vi.useRealTimers(); vi.clearAllTimers(); vi.restoreAllMocks(); });
 
   it('emits count on schedule and on fire (decrement)', async () => {
-    const prismaStub = { getClient() { return { reminder: { create: vi.fn(async (args) => ({ ...args.data, createdAt: new Date() })), update: vi.fn(async () => ({})) } } as any; } };
+    const prismaStub = {
+      getClient() {
+        return {
+          reminder: {
+            create: vi.fn(async (args) => ({ ...args.data, createdAt: new Date(), cancelledAt: null })),
+            update: vi.fn(async () => ({})),
+            updateMany: vi.fn(async () => ({ count: 0 })),
+          },
+          thread: {
+            findUnique: vi.fn(async () => ({ status: 'open' })),
+          },
+        } as any;
+      },
+    };
     const emitted: Array<{ nodeId: string; count: number; threadId?: string; updatedAtMs?: number }> = [];
     const eventsBusStub: any = {
       emitReminderCount: (payload: { nodeId: string; count: number; threadId?: string; updatedAtMs?: number }) => {
@@ -35,7 +48,20 @@ describe('RemindMe socket reminder_count events', () => {
   });
 
   it('emits count=0 on deprovision/destroy', async () => {
-    const prismaStub = { getClient() { return { reminder: { create: vi.fn(async (args) => ({ ...args.data, createdAt: new Date() })), update: vi.fn(async () => ({})) } } as any; } };
+    const prismaStub = {
+      getClient() {
+        return {
+          reminder: {
+            create: vi.fn(async (args) => ({ ...args.data, createdAt: new Date(), cancelledAt: null })),
+            update: vi.fn(async () => ({})),
+            updateMany: vi.fn(async () => ({ count: 0 })),
+          },
+          thread: {
+            findUnique: vi.fn(async () => ({ status: 'open' })),
+          },
+        } as any;
+      },
+    };
     const emitted: Array<{ nodeId: string; count: number; threadId?: string; updatedAtMs?: number }> = [];
     const eventsBusStub: any = {
       emitReminderCount: (payload: { nodeId: string; count: number; threadId?: string; updatedAtMs?: number }) => {

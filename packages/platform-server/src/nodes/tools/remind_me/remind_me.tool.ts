@@ -3,7 +3,7 @@ import { FunctionTool, HumanMessage } from '@agyn/llm';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../../../core/services/prisma.service';
-import type { Reminder } from '@prisma/client';
+import type { Prisma, PrismaClient, Reminder } from '@prisma/client';
 import { LLMContext } from '../../../llm/types';
 
 export const remindMeInvocationSchema = z
@@ -66,9 +66,15 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     const etaDate = new Date(Date.now() + delayMs);
     const eta = etaDate.toISOString();
     const prisma = this.prismaService.getClient();
+
+    if (threadId) {
+      const thread = await prisma.thread.findUnique({ where: { id: threadId }, select: { status: true } });
+      if (!thread) throw new Error('Thread not found');
+      if (thread.status === 'closed') throw new Error('Cannot schedule reminder on a closed thread');
+    }
     // Create DB row first; id is UUID
     const created = await prisma.reminder.create({
-      data: { id: uuidv4(), threadId, note, at: etaDate, completedAt: null },
+      data: { id: uuidv4(), threadId, note, at: etaDate, completedAt: null, cancelledAt: null },
     });
     const timer = setTimeout(async () => {
       const exists = this.active.has(created.id);
@@ -98,5 +104,37 @@ export class RemindMeFunctionTool extends FunctionTool<typeof remindMeInvocation
     this.onRegistryChanged?.(this.active.size, undefined, threadId);
     // Return ack including DB id
     return JSON.stringify({ status: 'scheduled', etaMs: delayMs, at: eta, id: created.id });
+  }
+
+  async cancelByThread(
+    threadId: string,
+    prismaInstance?: PrismaClient | Prisma.TransactionClient,
+    cancelledAtOverride?: Date,
+  ): Promise<number> {
+    const prisma = prismaInstance ?? this.prismaService.getClient();
+    const entries = Array.from(this.active.entries()).filter(([, { reminder }]) => reminder.threadId === threadId);
+    const ids = entries.map(([id]) => id);
+    const cancelledAt = cancelledAtOverride ?? new Date();
+
+    if (ids.length > 0) {
+      try {
+        await prisma.reminder.updateMany({
+          where: { id: { in: ids }, threadId, completedAt: null, cancelledAt: null },
+          data: { cancelledAt },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn('RemindMe cancelByThread persistence update failed', { threadId, error: message });
+      }
+    }
+
+    for (const [id, { timer }] of entries) {
+      clearTimeout(timer);
+      this.active.delete(id);
+    }
+
+    if (entries.length > 0) this.onRegistryChanged?.(this.active.size, Date.now(), threadId);
+
+    return entries.length;
   }
 }
