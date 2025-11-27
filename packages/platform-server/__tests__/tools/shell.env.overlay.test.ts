@@ -36,10 +36,11 @@ describe('ShellTool env/workdir isolation with vault-backed overlay', () => {
     const resolverA = {
       resolve: vi.fn(async (input: unknown) => {
         if (!Array.isArray(input)) return { output: input, report: emptyReport };
-        const list = input as Array<{ name: string; value: unknown }>;
-        const output = list.map((item) =>
-          item.name === 'BAR' ? { ...item, value: 'VAULTED' } : { ...item },
-        );
+        const list = input as Array<{ key?: string; name?: string; value: unknown }>;
+        const output = list.map((item) => {
+          const key = typeof item.key === 'string' ? item.key : item.name;
+          return key === 'BAR' ? { ...item, key, value: 'VAULTED' } : { ...item, key };
+        });
         return { output, report: emptyReport };
       }),
     };

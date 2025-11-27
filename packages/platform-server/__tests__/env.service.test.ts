@@ -26,7 +26,7 @@ describe('EnvService', () => {
         { name: 'A', value: '1' },
         { name: 'A', value: '2' },
       ] as EnvItem[]),
-    ).rejects.toMatchObject({ code: 'env_name_duplicate' });
+    ).rejects.toMatchObject({ code: 'env_key_duplicate' });
   });
 
   it('resolveEnvItems: maps ResolveError codes to EnvError', async () => {
