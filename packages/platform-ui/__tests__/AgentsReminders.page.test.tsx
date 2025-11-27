@@ -85,6 +85,54 @@ describe('AgentsReminders page', () => {
       .map((button) => button.textContent?.replace(/\s+/g, ' ').trim());
 
     expect(statusButtons).toEqual(['Scheduled (1)', 'Executed (0)', 'Cancelled (0)', 'All (1)']);
+
+    const footer = screen.getByTestId('reminders-footer');
+    expect(footer).toBeInTheDocument();
+    expect(within(footer).getByText('Showing 1 to 1 of 1 reminders')).toBeInTheDocument();
+    expect(within(footer).queryByTestId('reminders-pagination')).not.toBeInTheDocument();
+  });
+
+  it('renders pagination controls inside the footer when multiple pages exist', async () => {
+    const items = Array.from({ length: 20 }, (_, index) => ({
+      id: `r-${index}`,
+      threadId: `th-${index}`,
+      note: `Reminder ${index + 1}`,
+      at: t(100 + index),
+      createdAt: t(50 + index),
+      completedAt: null,
+    }));
+
+    const payload = {
+      total: 45,
+      page: 1,
+      perPage: 20,
+      totalPages: 3,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+      countsByStatus: { scheduled: 45, executed: 0, cancelled: 0 },
+      items,
+    };
+
+    server.use(
+      http.get('/api/agents/reminders', () => HttpResponse.json(payload)),
+      http.get(abs('/api/agents/reminders'), () => HttpResponse.json(payload)),
+    );
+
+    renderPage();
+
+    await screen.findByText('Showing 1 to 20 of 45 reminders');
+    const footer = screen.getByTestId('reminders-footer');
+    expect(within(footer).getByText('Showing 1 to 20 of 45 reminders')).toBeInTheDocument();
+
+    const pagination = within(footer).getByTestId('reminders-pagination');
+    expect(pagination).toBeInTheDocument();
+    expect(within(pagination).getByRole('button', { name: 'Previous' })).toBeDisabled();
+    expect(within(pagination).getByRole('button', { name: 'Next' })).toBeEnabled();
+
+    const pageButtons = within(pagination)
+      .getAllByRole('button')
+      .filter((button) => /^\d+$/.test(button.textContent ?? ''));
+    expect(pageButtons).toHaveLength(3);
   });
 
   it('filters reminders client-side by status', async () => {
