@@ -18,3 +18,5 @@ packages/.DS_Store
 
 packages/platform-ui/storybook-static/
 packages/platform-server/data/graph/**
+!packages/platform-server/data/graph/.gitignore
+!packages/platform-server/data/graph/graph.meta.yaml
