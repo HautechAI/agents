@@ -1,34 +1,44 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { WebClient, type ChatPostMessageResponse } from '@slack/web-api';
-import type { SendResult } from '../types';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { LiveGraphRuntime } from '../../graph-core/liveGraph.manager';
+import { SlackTrigger } from '../../nodes/slackTrigger/slackTrigger.node';
+import type { SendResult, ThreadOutboxSendRequest } from '../types';
 
 @Injectable()
 export class SlackAdapter {
   private readonly logger = new Logger(SlackAdapter.name);
 
-  async sendText(input: { token: string; channel: string; text: string; thread_ts?: string }): Promise<SendResult> {
-    const { token, channel, text, thread_ts } = input;
+  constructor(@Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime) {}
 
-    this.logger.log(
-      `SlackAdapter.sendText ${JSON.stringify({ channel, threadTs: thread_ts ?? null })}`,
-    );
+  private format(context?: Record<string, unknown>): string {
+    return context ? ` ${JSON.stringify(context)}` : '';
+  }
 
-    const client = new WebClient(token, { logLevel: undefined });
-    try {
-      const resp: ChatPostMessageResponse = await client.chat.postMessage({
-        channel,
-        text,
-        ...(thread_ts ? { thread_ts } : {}),
-      });
-      if (!resp.ok) return { ok: false, error: resp.error || 'unknown_error' };
-      const ts: string | undefined = typeof resp.ts === 'string' ? resp.ts : undefined;
-      // Stakeholder constraint: derive thread id deterministically without duck typing.
-      // Only use known typed fields: request thread_ts and response ts.
-      const threadIdOut = thread_ts ?? ts ?? null;
-      return { ok: true, channelMessageId: ts ?? null, threadId: threadIdOut };
-    } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
-      return { ok: false, error: msg };
+  async sendText(payload: ThreadOutboxSendRequest & { channelNodeId: string }): Promise<SendResult> {
+    const { channelNodeId, threadId, source } = payload;
+    const text = payload.prefix ? `${payload.prefix}${payload.text}` : payload.text;
+
+    const node = this.runtime.getNodeInstance(channelNodeId);
+    if (!node) {
+      this.logger.warn(
+        `SlackAdapter: missing SlackTrigger node${this.format({ channelNodeId, threadId, source })}`,
+      );
+      return { ok: false, error: 'channel_node_unavailable' } satisfies SendResult;
     }
+
+    if (!(node instanceof SlackTrigger)) {
+      this.logger.warn(
+        `SlackAdapter: node is not SlackTrigger${this.format({ channelNodeId, threadId, source })}`,
+      );
+      return { ok: false, error: 'invalid_channel_node' } satisfies SendResult;
+    }
+
+    if (node.status !== 'ready') {
+      this.logger.warn(
+        `SlackAdapter: trigger not ready${this.format({ channelNodeId, threadId, source, status: node.status })}`,
+      );
+      return { ok: false, error: 'slacktrigger_not_ready' } satisfies SendResult;
+    }
+
+    return node.sendToChannel(threadId, text);
   }
 }

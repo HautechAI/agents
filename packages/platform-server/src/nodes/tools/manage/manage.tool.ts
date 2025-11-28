@@ -92,6 +92,13 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
             })()
           : this.sanitizeAlias(targetTitle);
       const childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', alias, parentThreadId, '');
+      await persistence.updateThreadChannelDescriptor(childThreadId, {
+        type: 'manage',
+        version: 1,
+        identifiers: { parentThreadId },
+        meta: { agentTitle: targetTitle },
+        createdBy: 'manage-tool',
+      });
       try {
         const res = await targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
         const responseText = res?.text ?? '';

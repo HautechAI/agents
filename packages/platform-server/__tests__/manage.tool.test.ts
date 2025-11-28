@@ -52,7 +52,7 @@ async function createHarness(options: { persistence?: AgentsPersistenceService }
   const hasCustomPersistence = Object.prototype.hasOwnProperty.call(options, 'persistence');
   const persistence = hasCustomPersistence
     ? (options.persistence as AgentsPersistenceService)
-    : ({ getOrCreateSubthreadByAlias: defaultSpy } as unknown as AgentsPersistenceService);
+    : ({ getOrCreateSubthreadByAlias: defaultSpy, updateThreadChannelDescriptor: vi.fn().mockResolvedValue(undefined) } as unknown as AgentsPersistenceService);
 
   const module = await Test.createTestingModule({
     providers: [
@@ -80,7 +80,7 @@ async function createHarness(options: { persistence?: AgentsPersistenceService }
 
 async function addWorker(module: Awaited<ReturnType<typeof createHarness>>['module'], node: ManageToolNode, title: string) {
   const worker = await module.resolve(FakeAgent);
-  await worker.setConfig({ title });
+  await worker.setConfig({ title, sendLLMResponseToThread: false });
   node.addWorker(worker);
   return worker;
 }
@@ -88,7 +88,8 @@ async function addWorker(module: Awaited<ReturnType<typeof createHarness>>['modu
 describe('ManageTool unit', () => {
   it('send_message: uses explicit threadAlias verbatim after trim', async () => {
     const getOrCreateSubthreadByAlias = vi.fn().mockResolvedValue('child-explicit');
-    const persistence = { getOrCreateSubthreadByAlias } as unknown as AgentsPersistenceService;
+    const updateThreadChannelDescriptor = vi.fn().mockResolvedValue(undefined);
+    const persistence = { getOrCreateSubthreadByAlias, updateThreadChannelDescriptor } as unknown as AgentsPersistenceService;
     const harness = await createHarness({ persistence });
     await addWorker(harness.module, harness.node, '  child-1  ');
 
@@ -105,11 +106,19 @@ describe('ManageTool unit', () => {
 
     expect(res).toBe('Response from: child-1\nok-child-explicit');
     expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith('manage', 'Mixed.Alias-Case_123', 'parent', '');
+    expect(updateThreadChannelDescriptor).toHaveBeenCalledWith('child-explicit', {
+      type: 'manage',
+      version: 1,
+      identifiers: { parentThreadId: 'parent' },
+      meta: { agentTitle: 'child-1' },
+      createdBy: 'manage-tool',
+    });
   });
 
   it('send_message: derives sanitized alias when omitted', async () => {
     const getOrCreateSubthreadByAlias = vi.fn().mockResolvedValue('child-derived');
-    const persistence = { getOrCreateSubthreadByAlias } as unknown as AgentsPersistenceService;
+    const updateThreadChannelDescriptor = vi.fn().mockResolvedValue(undefined);
+    const persistence = { getOrCreateSubthreadByAlias, updateThreadChannelDescriptor } as unknown as AgentsPersistenceService;
     const harness = await createHarness({ persistence });
     await addWorker(harness.module, harness.node, 'Alpha Worker');
 
@@ -121,6 +130,13 @@ describe('ManageTool unit', () => {
 
     expect(res).toBe('Response from: Alpha Worker\nok-child-derived');
     expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith('manage', 'alpha-worker', 'parent', '');
+    expect(updateThreadChannelDescriptor).toHaveBeenCalledWith('child-derived', {
+      type: 'manage',
+      version: 1,
+      identifiers: { parentThreadId: 'parent' },
+      meta: { agentTitle: 'Alpha Worker' },
+      createdBy: 'manage-tool',
+    });
   });
 
   it('send_message: prefixes multi-line worker response preserving content', async () => {
@@ -233,14 +249,14 @@ describe('ManageTool unit', () => {
     expect(() => harness.node.addWorker(first)).not.toThrow();
 
     const noTitle = await harness.module.resolve(FakeAgent);
-    await noTitle.setConfig({});
+    await noTitle.setConfig({ sendLLMResponseToThread: false });
     expect(() => harness.node.addWorker(noTitle)).toThrow('ManageToolNode: worker agent requires non-empty title');
 
     const dup = await harness.module.resolve(FakeAgent);
-    await dup.setConfig({ title: '  Alpha  ' });
+    await dup.setConfig({ title: '  Alpha  ', sendLLMResponseToThread: false });
     expect(() => harness.node.addWorker(dup)).toThrow('ManageToolNode: worker with title "Alpha" already exists');
 
-    await first.setConfig({ title: ' Beta ' });
+    await first.setConfig({ title: ' Beta ', sendLLMResponseToThread: false });
     expect(harness.node.listWorkers()).toEqual(['Beta']);
     expect(harness.node.getWorkerByTitle('Beta')).toBe(first);
 
@@ -263,7 +279,7 @@ describe('ManageTool unit', () => {
         FakeAgent,
         {
           provide: AgentsPersistenceService,
-          useValue: { getOrCreateSubthreadByAlias: async () => 'child-t' } as unknown as AgentsPersistenceService,
+          useValue: { getOrCreateSubthreadByAlias: async () => 'child-t', updateThreadChannelDescriptor: async () => {} } as unknown as AgentsPersistenceService,
         },
         RunSignalsRegistry,
       ],
@@ -283,7 +299,7 @@ describe('ManageTool unit', () => {
       module.get(LLMProvisioner),
       module.get(ModuleRef),
     );
-    await failingAgent.setConfig({ title: 'W' });
+    await failingAgent.setConfig({ title: 'W', sendLLMResponseToThread: false });
     node.addWorker(failingAgent);
 
     const tool = node.getTool();
@@ -310,7 +326,7 @@ describe('ManageTool graph wiring', () => {
         FakeAgent,
         {
           provide: AgentsPersistenceService,
-          useValue: { getOrCreateSubthreadByAlias: async () => 'child-t' } as unknown as AgentsPersistenceService,
+          useValue: { getOrCreateSubthreadByAlias: async () => 'child-t', updateThreadChannelDescriptor: async () => {} } as unknown as AgentsPersistenceService,
         },
         RunSignalsRegistry,
       ],
@@ -352,7 +368,7 @@ describe('ManageTool graph wiring', () => {
         { provide: ModuleRef, useValue: moduleRef },
         {
           provide: AgentsPersistenceService,
-          useValue: { getOrCreateSubthreadByAlias: async () => 'child-t' } as unknown as AgentsPersistenceService,
+          useValue: { getOrCreateSubthreadByAlias: async () => 'child-t', updateThreadChannelDescriptor: async () => {} } as unknown as AgentsPersistenceService,
         },
         RunSignalsRegistry,
       ],

@@ -56,7 +56,7 @@ vi.mock('@prisma/client', () => {
   };
 });
 const { AgentsPersistenceService } = await import('../src/agents/agents.persistence.service');
-import { AIMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
+import { AIMessage, DeveloperMessage, HumanMessage, SystemMessage, ToolCallMessage, ToolCallOutputMessage } from '@agyn/llm';
 import type { ResponseFunctionToolCall } from 'openai/resources/responses/responses.mjs';
 import { createRunEventsStub } from './helpers/runEvents.stub';
 import { CallAgentLinkingService } from '../src/agents/call-agent-linking.service';
@@ -162,6 +162,10 @@ describe('AgentsPersistenceService beginRun/completeRun populates Message.text',
     expect(started.runId).toBe('run-1');
     const inputs = createdMessages.filter((m) => createdRunMessages.find((r) => r.messageId === m.id && r.type === 'input'));
     expect(inputs.map((m) => m.text)).toEqual(['hello', 'sys']);
+    const developerRecord = inputs.find((m) => m.text === 'sys');
+    expect(developerRecord?.kind).toBe('user');
+    const expectedStructured = { ...DeveloperMessage.fromText('sys').toPlain(), role: 'user' as const };
+    expect(developerRecord?.source).toEqual(expectedStructured);
 
     // Complete run with assistant output and tool events
     const call = new ToolCallMessage({ type: 'function_call', call_id: 'c1', name: 'echo', arguments: '{"x":1}' } as ResponseFunctionToolCall);

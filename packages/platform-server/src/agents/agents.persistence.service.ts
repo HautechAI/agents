@@ -16,7 +16,7 @@ import { GraphRepository } from '../graph/graph.repository';
 import type { PersistedGraphNode } from '../shared/types/graph.types';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
 import { coerceRole } from '../llm/services/messages.normalization';
-import { ChannelDescriptorSchema, type ChannelDescriptor } from '../messaging/types';
+import { ChannelDescriptorSchema, type ChannelDescriptor, type ThreadOutboxSource } from '../messaging/types';
 import { RunEventsService } from '../events/run-events.service';
 import { EventsBusService } from '../events/events-bus.service';
 import { CallAgentLinkingService } from './call-agent-linking.service';
@@ -228,21 +228,22 @@ export class AgentsPersistenceService {
       await Promise.all(
         inputMessages.map(async (msg) => {
           const normalized = this.normalizeForPersistence(msg);
-          const { kind, text } = this.deriveKindTextTyped(normalized);
-          const source = toPrismaJsonValue(normalized.toPlain());
-          const created = await tx.message.create({ data: { kind, text, source } });
+          const { text } = this.deriveKindTextTyped(normalized);
+          const coerced = coerceRole(normalized.toPlain(), 'user');
+          const source = toPrismaJsonValue(coerced);
+          const created = await tx.message.create({ data: { kind: 'user' as MessageKind, text, source } });
           await tx.runMessage.create({ data: { runId: run.id, messageId: created.id, type: 'input' as RunMessageType } });
           const event = await this.runEvents.recordInvocationMessage({
             tx,
             runId: run.id,
             threadId,
             messageId: created.id,
-            role: kind,
+            role: 'user' as MessageKind,
             ts: created.createdAt,
             metadata: { messageType: 'input' },
           });
           eventIds.push(event.id);
-          createdMessages.push({ id: created.id, kind, text, source: created.source as Prisma.JsonValue, createdAt: created.createdAt });
+          createdMessages.push({ id: created.id, kind: 'user' as MessageKind, text, source: created.source as Prisma.JsonValue, createdAt: created.createdAt });
         }),
       );
       const linkedEventId = await this.callAgentLinking.onChildRunStarted({
@@ -294,21 +295,22 @@ export class AgentsPersistenceService {
 
       for (const msg of injectedMessages) {
         const normalized = this.normalizeForPersistence(msg);
-        const { kind, text } = this.deriveKindTextTyped(normalized);
-        const source = toPrismaJsonValue(normalized.toPlain());
-        const created = await tx.message.create({ data: { kind, text, source } });
+        const { text } = this.deriveKindTextTyped(normalized);
+        const coerced = coerceRole(normalized.toPlain(), 'user');
+        const source = toPrismaJsonValue(coerced);
+        const created = await tx.message.create({ data: { kind: 'user' as MessageKind, text, source } });
         await tx.runMessage.create({ data: { runId, messageId: created.id, type: 'injected' as RunMessageType } });
         const event = await this.runEvents.recordInvocationMessage({
           tx,
           runId,
           threadId: resolvedThreadId,
           messageId: created.id,
-          role: kind,
+          role: 'user' as MessageKind,
           ts: created.createdAt,
           metadata: { messageType: 'injected' },
         });
         eventIds.push(event.id);
-        createdMessages.push({ id: created.id, kind, text, source: created.source as Prisma.JsonValue, createdAt: created.createdAt });
+        createdMessages.push({ id: created.id, kind: 'user' as MessageKind, text, source: created.source as Prisma.JsonValue, createdAt: created.createdAt });
       }
 
       if (createdMessages.length > 0) {
@@ -349,6 +351,52 @@ export class AgentsPersistenceService {
     await Promise.all(patchedEventIds.map((id) => this.eventsBus.publishEvent(id, 'update')));
 
     return { messageIds: createdMessages.map((m) => m.id) };
+  }
+
+  async recordOutboxMessage(params: {
+    threadId: string;
+    text: string;
+    role: 'assistant' | 'user';
+    source: ThreadOutboxSource;
+    runId?: string | null;
+  }): Promise<{ messageId: string }> {
+    const { threadId, role, source } = params;
+    const textValue = params.text?.trim() ?? '';
+    if (!textValue) throw new Error('outbox_empty_message');
+    const runId = params.runId ?? null;
+    const sourceJson = toPrismaJsonValue({ role, text: textValue, origin: 'thread_outbox', source });
+
+    const { messageId, createdAt, eventId } = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const created = await tx.message.create({ data: { kind: role as MessageKind, text: textValue, source: sourceJson } });
+      if (runId) {
+        await tx.runMessage.create({ data: { runId, messageId: created.id, type: 'output' as RunMessageType } });
+      }
+      let recordedEventId: string | null = null;
+      if (runId) {
+        const event = await this.runEvents.recordInvocationMessage({
+          tx,
+          runId,
+          threadId,
+          messageId: created.id,
+          role: role as MessageKind,
+          ts: created.createdAt,
+          metadata: { messageType: 'output', outboxSource: source },
+        });
+        recordedEventId = event.id;
+      }
+      if (runId) {
+        await this.callAgentLinking.onChildRunMessage({ tx, runId, latestMessageId: created.id });
+      }
+      return { messageId: created.id, createdAt: created.createdAt, eventId: recordedEventId };
+    });
+
+    this.eventsBus.emitMessageCreated({
+      threadId,
+      message: { id: messageId, kind: role as MessageKind, text: textValue, source: sourceJson, createdAt, runId: runId ?? undefined },
+    });
+    this.eventsBus.emitThreadMetrics({ threadId });
+    if (eventId) await this.eventsBus.publishEvent(eventId, 'append');
+    return { messageId };
   }
 
   /**
@@ -726,6 +774,11 @@ export class AgentsPersistenceService {
 
     for (const id of threadIds) if (!titles[id]) titles[id] = fallback;
     return titles;
+  }
+
+  async getThreadAgentTitle(threadId: string): Promise<string | null> {
+    const titles = await this.resolveAgentTitles([threadId]);
+    return titles[threadId] ?? null;
   }
 
   private getRunEventDelegate(tx: Prisma.TransactionClient): RunEventDelegate | undefined {

@@ -12,6 +12,9 @@ import { MemoryConnectorNode } from './memoryConnector/memoryConnector.node';
 import { AgentNode } from './agent/agent.node';
 import { SlackTrigger } from './slackTrigger/slackTrigger.node';
 import { SlackAdapter } from '../messaging/slack/slack.adapter';
+import { ThreadOutboxService } from '../messaging/threadOutbox.service';
+import { ChannelRouter } from '../messaging/channelRouter.service';
+import { ManageAdapter } from '../messaging/manage/manage.adapter';
 import { LocalMCPServerNode } from './mcp';
 import { ManageToolNode } from './tools/manage/manage.node';
 import { ManageFunctionTool } from './tools/manage/manage.tool';
@@ -47,6 +50,9 @@ class NodesTemplateRegistrar implements OnModuleInit {
   imports: [CoreModule, EnvModule, EventsModule, InfraModule, LLMModule, forwardRef(() => GraphCoreModule)],
   providers: [
     SlackAdapter,
+    ManageAdapter,
+    ChannelRouter,
+    ThreadOutboxService,
     PostgresMemoryEntitiesRepository,
     MemoryService,
     MemoryNode,
@@ -78,6 +84,9 @@ class NodesTemplateRegistrar implements OnModuleInit {
   ],
   exports: [
     SlackAdapter,
+    ManageAdapter,
+    ChannelRouter,
+    ThreadOutboxService,
     PostgresMemoryEntitiesRepository,
     MemoryService,
     MemoryNode,
