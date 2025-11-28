@@ -581,8 +581,8 @@ export class ContainerTerminalGateway {
       const defaultLocale: LocaleChoice = { lang: 'C.UTF-8', lcAll: 'C.UTF-8', fallback: 'none' };
       const script =
         'if command -v locale >/dev/null 2>&1; then ' +
-        'if locale -a 2>/dev/null | grep -i "^c\\.utf-8$" >/dev/null 2>&1; then echo C.UTF-8; exit 0; fi; ' +
-        'if locale -a 2>/dev/null | grep -i "^en_us\\.utf-8$" >/dev/null 2>&1; then echo en_US.UTF-8; exit 0; fi; ' +
+        'if locale -a 2>/dev/null | grep -iE "^c\\.utf-?8$" >/dev/null 2>&1; then echo C.UTF-8; exit 0; fi; ' +
+        'if locale -a 2>/dev/null | grep -iE "^en_us\\.utf-?8$" >/dev/null 2>&1; then echo en_US.UTF-8; exit 0; fi; ' +
         'fi; echo C.UTF-8';
       try {
         const { stdout } = await this.containers.execContainer(
