@@ -186,8 +186,8 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
     await waitFor(() => messages.some((msg) => msg.type === 'status' && msg.phase === 'running'), 3000);
 
     ws.send(JSON.stringify({ type: 'input', data: 'echo hi\r\n' }));
-    await waitFor(() => stdinBuffer.length > 0);
-    expect(stdinBuffer).toBe('echo hi\r');
+    await waitFor(() => stdinBuffer.endsWith('echo hi\r'));
+    expect(stdinBuffer).toBe('stty -ixon iutf8\rexport COLORTERM=truecolor\recho hi\r');
 
     ws.close();
     const closeInfo = await waitForWsClose(ws, 3000);

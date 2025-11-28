@@ -531,6 +531,7 @@ export class ContainerTerminalGateway {
     }
 
     containerId = session.containerId;
+    const containerShortId = containerId.substring(0, 12);
 
     if (containerIdParam && containerIdParam !== containerId) {
       send({ type: 'error', code: 'container_mismatch', message: 'Terminal session belongs to different container' });
@@ -573,10 +574,99 @@ export class ContainerTerminalGateway {
       : null;
     if (maxTimer?.unref) maxTimer.unref();
 
+    type LocaleChoice = { lang: string; lcAll: string; fallback: 'none' | 'en_US' };
+    type TermChoice = { term: string; fallback: 'none' | 'xterm' };
+
+    const detectLocaleEnv = async (): Promise<LocaleChoice> => {
+      const defaultLocale: LocaleChoice = { lang: 'C.UTF-8', lcAll: 'C.UTF-8', fallback: 'none' };
+      const script =
+        'if command -v locale >/dev/null 2>&1; then ' +
+        'if locale -a 2>/dev/null | grep -i "^c\\.utf-8$" >/dev/null 2>&1; then echo C.UTF-8; exit 0; fi; ' +
+        'if locale -a 2>/dev/null | grep -i "^en_us\\.utf-8$" >/dev/null 2>&1; then echo en_US.UTF-8; exit 0; fi; ' +
+        'fi; echo C.UTF-8';
+      try {
+        const { stdout } = await this.containers.execContainer(
+          containerId,
+          ['/bin/sh', '-lc', script],
+          { timeoutMs: 1_000, idleTimeoutMs: 1_000 },
+        );
+        const localeCandidate = stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .find((line) => line.length > 0);
+        if (localeCandidate === 'en_US.UTF-8') {
+          return { lang: 'en_US.UTF-8', lcAll: 'en_US.UTF-8', fallback: 'en_US' };
+        }
+        if (localeCandidate === 'C.UTF-8') {
+          return defaultLocale;
+        }
+      } catch (err) {
+        this.logger.debug('terminal locale detection failed', {
+          containerId: containerShortId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      return defaultLocale;
+    };
+
+    const detectTermEnv = async (): Promise<TermChoice> => {
+      const script =
+        'if command -v infocmp >/dev/null 2>&1 && infocmp xterm-256color >/dev/null 2>&1; then echo xterm-256color; exit 0; fi; ' +
+        'for dir in /usr/share/terminfo /usr/lib/terminfo /lib/terminfo; do ' +
+        'if [ -f "$dir/x/xterm-256color" ] || [ -f "$dir/78/xterm-256color" ]; then echo xterm-256color; exit 0; fi; ' +
+        'done; ' +
+        'if command -v infocmp >/dev/null 2>&1 && infocmp xterm >/dev/null 2>&1; then echo xterm; exit 0; fi; ' +
+        'echo xterm';
+      try {
+        const { stdout } = await this.containers.execContainer(
+          containerId,
+          ['/bin/sh', '-lc', script],
+          { timeoutMs: 1_000, idleTimeoutMs: 1_000 },
+        );
+        const termCandidate = stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .find((line) => line.length > 0);
+        if (termCandidate === 'xterm-256color') {
+          return { term: 'xterm-256color', fallback: 'none' };
+        }
+        if (termCandidate === 'xterm') {
+          return { term: 'xterm', fallback: 'xterm' };
+        }
+      } catch (err) {
+        this.logger.debug('terminal terminfo detection failed', {
+          containerId: containerShortId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      return { term: 'xterm-256color', fallback: 'none' };
+    };
+
     try {
+      const [localeChoice, termChoice] = await Promise.all([detectLocaleEnv(), detectTermEnv()]);
+      const execEnv = {
+        TERM: termChoice.term,
+        LANG: localeChoice.lang,
+        LC_ALL: localeChoice.lcAll,
+      };
+      if (localeChoice.fallback !== 'none') {
+        this.logger.debug('terminal locale fallback applied', {
+          sessionId,
+          containerId: containerShortId,
+          locale: localeChoice.lang,
+        });
+      }
+      if (termChoice.fallback !== 'none') {
+        this.logger.debug('terminal terminfo fallback applied', {
+          sessionId,
+          containerId: containerShortId,
+          term: termChoice.term,
+        });
+      }
       const exec = await this.containers.openInteractiveExec(containerId, `exec ${session.shell}`, {
         tty: true,
         demuxStderr: false,
+        env: execEnv,
       });
       execId = exec.execId;
       stdin = exec.stdin;
@@ -607,6 +697,43 @@ export class ContainerTerminalGateway {
       send({ type: 'status', phase: 'running' });
       logStatus('running', { execId });
       refreshActivity();
+
+      const sendInitializationCommand = (command: string) => {
+        if (!stdin) return;
+        try {
+          const payload = Buffer.from(`${command}\r`, 'utf8');
+          const writeOk = stdin.write(payload, (error) => {
+            if (error) {
+              this.logger.warn('terminal init command write error', {
+                command,
+                execId,
+                sessionId,
+                containerId: containerShortId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          });
+          if (!writeOk) {
+            const streamRef = stdin;
+            const onDrain = () => {
+              streamRef?.removeListener('drain', onDrain);
+            };
+            streamRef?.once('drain', onDrain);
+          }
+          refreshActivity();
+        } catch (err) {
+          this.logger.warn('terminal init command dispatch failed', {
+            command,
+            execId,
+            sessionId,
+            containerId: containerShortId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      };
+
+      sendInitializationCommand('stty -ixon iutf8');
+      sendInitializationCommand('export COLORTERM=truecolor');
 
       if (execId) {
         try {
