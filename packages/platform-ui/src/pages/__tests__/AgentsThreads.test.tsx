@@ -204,15 +204,22 @@ describe('AgentsThreads page', () => {
     registerThreadScenario({ thread, runs: [], children: [] });
 
     const requests: Array<{ params: Record<string, string>; body: unknown }> = [];
+    const pendingResolvers: Array<() => void> = [];
+    const holdResponse = () =>
+      new Promise<void>((resolve) => {
+        pendingResolvers.push(resolve);
+      });
     server.use(
       http.post('*/api/agents/threads/:threadId/messages', async ({ params, request }) => {
         const json = await request.json();
         requests.push({ params: params as Record<string, string>, body: json });
+        await holdResponse();
         return HttpResponse.json({ ok: true });
       }),
       http.post(abs('/api/agents/threads/:threadId/messages'), async ({ params, request }) => {
         const json = await request.json();
         requests.push({ params: params as Record<string, string>, body: json });
+        await holdResponse();
         return HttpResponse.json({ ok: true });
       }),
     );
@@ -227,6 +234,16 @@ describe('AgentsThreads page', () => {
     await userEvent.click(sendButton);
 
     await waitFor(() => {
+      expect(sendButton).toBeDisabled();
+    });
+
+    await waitFor(() => {
+      expect(pendingResolvers.length).toBeGreaterThan(0);
+    });
+
+    pendingResolvers.splice(0).forEach((resolve) => resolve());
+
+    await waitFor(() => {
       expect(requests.length).toBeGreaterThan(0);
     });
     const first = requests[0];
@@ -235,6 +252,7 @@ describe('AgentsThreads page', () => {
 
     await waitFor(() => {
       expect(input).toHaveValue('');
+      expect(sendButton).not.toBeDisabled();
     });
   });
 

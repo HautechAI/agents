@@ -28,6 +28,7 @@ interface ThreadsScreenProps {
   listError?: ReactNode;
   detailError?: ReactNode;
   isToggleThreadStatusPending?: boolean;
+  isSendMessagePending?: boolean;
   onFilterModeChange?: (mode: 'all' | 'open' | 'closed') => void;
   onSelectThread?: (threadId: string) => void;
   onToggleRunsInfoCollapsed?: (isCollapsed: boolean) => void;
@@ -56,6 +57,7 @@ export default function ThreadsScreen({
   listError,
   detailError,
   isToggleThreadStatusPending = false,
+  isSendMessagePending = false,
   onFilterModeChange,
   onSelectThread,
   onToggleRunsInfoCollapsed,
@@ -275,7 +277,7 @@ export default function ThreadsScreen({
                 onClick={() => onSendMessage?.(inputValue, { threadId: selectedThreadId })}
                 aria-label="Send message"
                 title="Send message"
-                disabled={!onSendMessage || !selectedThreadId}
+                disabled={!onSendMessage || !selectedThreadId || isSendMessagePending}
               />
             </div>
           </div>

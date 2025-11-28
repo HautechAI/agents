@@ -1047,6 +1047,7 @@ export function AgentsThreads() {
           onThreadExpand={handleThreadExpand}
           onToggleThreadStatus={handleToggleThreadStatus}
           isToggleThreadStatusPending={toggleThreadStatusMutation.isPending}
+          isSendMessagePending={isSendMessagePending}
           selectedThread={selectedThreadForScreen}
         />
       </div>
