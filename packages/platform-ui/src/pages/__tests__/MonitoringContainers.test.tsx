@@ -129,13 +129,14 @@ describe('MonitoringContainers page', () => {
           containerId: 'abcdef1234567890',
           threadId: '11111111-1111-1111-1111-111111111111',
           image: 'workspace:latest',
+          name: null,
           status: 'running',
           startedAt: timestamp,
           lastUsedAt: timestamp,
           killAfterAt: null,
           role: 'workspace',
           sidecars: [
-            { containerId: 'dind1234567890', role: 'dind', image: 'dind:latest', status: 'terminating' },
+            { containerId: 'dind1234567890', role: 'dind', image: 'dind:latest', status: 'terminating', name: null },
           ],
           mounts: [
             { source: 'ha_ws_thread', destination: '/workspace' },
@@ -249,7 +250,7 @@ describe('MonitoringContainers page', () => {
     });
 
     expect(mutateSessionMock).toHaveBeenCalledWith({ containerId: 'abcdef1234567890' });
-    expect(screen.getByText(/Terminal for abcdef123456/)).toBeTruthy();
+    expect(screen.getByText('workspace:latest')).toBeTruthy();
     expect(screen.getByTestId('terminal-view')).toBeTruthy();
     expect(terminalOpenMock).toHaveBeenCalled();
   });

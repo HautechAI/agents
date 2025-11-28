@@ -31,8 +31,15 @@ function toVolumes(mounts: ContainerItem['mounts']): string[] {
 }
 
 function toName(container: ContainerItem): string {
+  const name = container.name?.trim();
+  if (name) return name;
   const image = container.image?.trim();
-  if (image) return image;
+  if (image) {
+    const segments = image.split('/');
+    const last = segments[segments.length - 1]?.trim();
+    if (last) return last;
+    return image;
+  }
   return container.containerId;
 }
 
@@ -41,6 +48,7 @@ function createSidecarSource(parent: ContainerItem, sidecar: NonNullable<Contain
     containerId: sidecar.containerId,
     threadId: parent.threadId,
     image: sidecar.image,
+    name: sidecar.name ?? null,
     status: sidecar.status,
     startedAt: parent.startedAt,
     lastUsedAt: parent.lastUsedAt,

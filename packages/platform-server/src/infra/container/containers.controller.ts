@@ -66,24 +66,25 @@ export class ContainersController {
     containerId: string;
     threadId: string | null;
     image: string;
+    name: string | null;
     status: ContainerStatus;
     startedAt: string;
     lastUsedAt: string;
     killAfterAt: string | null;
     role: 'workspace' | 'dind' | string;
-    sidecars?: Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus }>;
+    sidecars?: Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus; name: string | null }>;
     mounts?: Array<{ source: string; destination: string }>;
   }> }> {
     try {
-    const {
-      status = 'running' as ContainerStatus,
-      threadId,
-      image,
-      nodeId,
-      sortBy = SortBy.lastUsedAt,
-      sortDir = SortDir.desc,
-      limit,
-    } = query || {};
+      const {
+        status = 'running' as ContainerStatus,
+        threadId,
+        image,
+        nodeId,
+        sortBy = SortBy.lastUsedAt,
+        sortDir = SortDir.desc,
+        limit,
+      } = query || {};
 
     // Build Prisma where clause with optional filters
     const where: Prisma.ContainerWhereInput = { status };
@@ -137,14 +138,50 @@ export class ContainersController {
 
     // Narrow type guard for metadata.labels
     type MetadataShape = { labels?: Record<string, unknown>; mounts?: unknown };
-    const toMetadata = (value: unknown): { labels: Record<string, string>; mounts: ContainerMount[] } => {
-      if (!value || typeof value !== 'object') return { labels: {}, mounts: [] };
+    const sanitizeName = (value: unknown): string | null => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      return trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
+    };
+    const extractNameFromMeta = (value: unknown): string | null => {
+      if (!value || typeof value !== 'object') return null;
+      const meta = value as Record<string, unknown>;
+      const direct = sanitizeName(meta.name);
+      if (direct) return direct;
+      const upper = sanitizeName(meta.Name);
+      if (upper) return upper;
+      const nestedCandidates: unknown[] = [];
+      const inspect = meta.inspect;
+      if (inspect && typeof inspect === 'object') nestedCandidates.push((inspect as Record<string, unknown>).Name);
+      const docker = meta.docker;
+      if (docker && typeof docker === 'object') nestedCandidates.push((docker as Record<string, unknown>).Name);
+      const container = meta.container;
+      if (container && typeof container === 'object') {
+        const record = container as Record<string, unknown>;
+        nestedCandidates.push(record.Name, record.name);
+      }
+      const details = meta.details;
+      if (details && typeof details === 'object') {
+        const record = details as Record<string, unknown>;
+        nestedCandidates.push(record.Name, record.name);
+      }
+      for (const candidate of nestedCandidates) {
+        const resolved = sanitizeName(candidate);
+        if (resolved) return resolved;
+      }
+      return null;
+    };
+    const toMetadata = (value: unknown): { labels: Record<string, string>; mounts: ContainerMount[]; name: string | null } => {
+      if (!value || typeof value !== 'object') return { labels: {}, mounts: [], name: null };
       const meta = value as MetadataShape;
       const rawLabels = meta.labels && typeof meta.labels === 'object' && meta.labels !== null ? meta.labels : {};
       const labels: Record<string, string> = {};
       for (const [key, val] of Object.entries(rawLabels)) if (typeof val === 'string') labels[key] = val;
       const mounts = sanitizeContainerMounts(meta.mounts);
-      return { labels, mounts };
+      const labelOverride = sanitizeName(labels['hautech.ai/name']);
+      const metaName = labelOverride ?? extractNameFromMeta(value);
+      return { labels, mounts, name: metaName };
     };
     // Exclude DinD from top-level list (only attach as sidecars)
     const filteredRows = rows.filter((row) => {
@@ -156,7 +193,7 @@ export class ContainersController {
     // Optimize: preselect DinD sidecars for current parent set via JSON-path raw query;
     // provide a safe fallback when $queryRaw is not implemented by the Prisma stub.
     const parentIds = filteredRows.map((row) => row.containerId);
-    const byParent: Record<string, Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus }>> = {};
+    const byParent: Record<string, Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus; name: string | null }>> = {};
     const hasQueryRaw = (() => {
       const obj = this.prisma as unknown as Record<string, unknown>;
       const fn = obj && (obj['$queryRaw'] as unknown);
@@ -182,7 +219,7 @@ export class ContainersController {
     const isStatus = (s: unknown): s is ContainerStatus =>
       typeof s === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(s);
     for (const sc of sidecarSource) {
-      const { labels } = toMetadata(sc.metadata);
+      const { labels, name } = toMetadata(sc.metadata);
       const role = labels['hautech.ai/role'];
       const parent = labels['hautech.ai/parent_cid'];
       if (role !== 'dind') continue;
@@ -192,36 +229,37 @@ export class ContainersController {
         ? (isStatus(sc.status) ? sc.status : 'failed')
         : (sc.status as ContainerStatus);
       const arr = byParent[parent] || (byParent[parent] = []);
-      arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status });
+      arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status, name: name ?? null });
     }
 
-      const toIso = (d: unknown): string => {
-        // Validate and format without empty catch; return safe default when invalid
-        if (d instanceof Date) {
-          const t = d.getTime();
-          return Number.isFinite(t) ? d.toISOString() : new Date(0).toISOString();
-        }
-        if (typeof d === 'string') {
-          const dt = new Date(d);
-          const t = dt.getTime();
-          return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
-        }
-        if (typeof d === 'number') {
-          const dt = new Date(d);
-          const t = dt.getTime();
-          return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
-        }
-        const dt = new Date(String(d));
+    const toIso = (d: unknown): string => {
+      // Validate and format without empty catch; return safe default when invalid
+      if (d instanceof Date) {
+        const t = d.getTime();
+        return Number.isFinite(t) ? d.toISOString() : new Date(0).toISOString();
+      }
+      if (typeof d === 'string') {
+        const dt = new Date(d);
         const t = dt.getTime();
         return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
-      };
+      }
+      if (typeof d === 'number') {
+        const dt = new Date(d);
+        const t = dt.getTime();
+        return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
+      }
+      const dt = new Date(String(d));
+      const t = dt.getTime();
+      return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
+    };
     const items = filteredRows.map((row) => {
-      const { labels, mounts } = toMetadata(row.metadata);
+      const { labels, mounts, name } = toMetadata(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
       return {
         containerId: row.containerId,
         threadId: row.threadId,
         image: row.image,
+        name: name ?? null,
         status: row.status,
         startedAt: toIso(row.createdAt),
         lastUsedAt: toIso(row.lastUsedAt),
@@ -233,10 +271,10 @@ export class ContainersController {
     });
 
     return { items };
-    } catch (e) {
-      const msg = e && typeof e === 'object' && 'message' in (e as Record<string, unknown>) ? String((e as Error).message) : String(e);
-      this.logger.error(`ContainersController.list error: ${msg}`);
-      throw e;
-    }
+  } catch (e) {
+    const msg = e && typeof e === 'object' && 'message' in (e as Record<string, unknown>) ? String((e as Error).message) : String(e);
+    this.logger.error(`ContainersController.list error: ${msg}`);
+    throw e;
+  }
   }
 }

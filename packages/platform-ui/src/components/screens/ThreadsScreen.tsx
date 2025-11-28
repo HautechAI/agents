@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Play, Container, Bell, Send, PanelRightClose, PanelRight, Loader2 } from 'lucide-react';
+import { Play, Container, Bell, Send, PanelRightClose, PanelRight, Loader2, Terminal } from 'lucide-react';
 import { IconButton } from '../IconButton';
 import { ThreadsList } from '../ThreadsList';
 import type { Thread } from '../ThreadItem';
@@ -10,6 +10,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { Button } from '../Button';
 import { StatusIndicator } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
+import { Badge } from '../Badge';
 
 interface ThreadsScreenProps {
   threads: Thread[];
@@ -36,6 +37,7 @@ interface ThreadsScreenProps {
   onThreadsLoadMore?: () => void;
   onThreadExpand?: (threadId: string, isExpanded: boolean) => void;
   onToggleThreadStatus?: (threadId: string, next: 'open' | 'closed') => void;
+  onOpenContainerTerminal?: (containerId: string) => void;
   className?: string;
 }
 
@@ -64,6 +66,7 @@ export default function ThreadsScreen({
   onThreadsLoadMore,
   onThreadExpand,
   onToggleThreadStatus,
+  onOpenContainerTerminal,
   className = '',
 }: ThreadsScreenProps) {
   const filteredThreads = threads.filter((thread) => {
@@ -198,15 +201,38 @@ export default function ThreadsScreen({
                 <PopoverContent className="w-[280px]">
                   <div className="space-y-2">
                     <h4 className="mb-3 text-sm text-[var(--agyn-dark)]">Containers</h4>
-                    {containers.map((container) => (
-                      <div
-                        key={container.id}
-                        className="flex items-center justify-between rounded-[6px] bg-[var(--agyn-bg-light)] px-3 py-2"
-                      >
-                        <span className="text-sm text-[var(--agyn-dark)]">{container.name}</span>
-                        <StatusIndicator status={container.status} size="sm" />
+                    {containers.length === 0 ? (
+                      <div className="rounded-[10px] border border-[var(--agyn-border-subtle)] bg-white px-3 py-2 text-sm text-[var(--agyn-text-subtle)]">
+                        No containers available.
                       </div>
-                    ))}
+                    ) : (
+                      containers.map((container) => {
+                        const isRunning = container.status === 'running';
+                        return (
+                          <div
+                            key={container.id}
+                            className="rounded-[10px] border border-[var(--agyn-border-subtle)] bg-white px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm text-[var(--agyn-dark)]">{container.name}</span>
+                              <Badge variant={isRunning ? 'success' : 'neutral'} size="sm">
+                                {isRunning ? 'Ready' : 'Finished'}
+                              </Badge>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-3 w-full justify-center gap-2 text-xs"
+                              onClick={() => onOpenContainerTerminal?.(container.id)}
+                              disabled={!isRunning || !onOpenContainerTerminal}
+                            >
+                              <Terminal className="h-4 w-4" />
+                              Open Terminal
+                            </Button>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </PopoverContent>
               </Popover>

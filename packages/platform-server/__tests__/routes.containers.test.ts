@@ -156,7 +156,7 @@ describe('ContainersController routes', () => {
 
   it('lists running containers by default and maps startedAt', async () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/containers' }); expect(res.statusCode).toBe(200);
-    type ContainerTestItem = { containerId: string; threadId: string | null; image: string; status: string; startedAt: string; lastUsedAt: string; killAfterAt: string | null; role: string; sidecars?: Array<{ containerId: string; role: string; image: string; status: string }> };
+    type ContainerTestItem = { containerId: string; threadId: string | null; image: string; name: string | null; status: string; startedAt: string; lastUsedAt: string; killAfterAt: string | null; role: string; sidecars?: Array<{ containerId: string; role: string; image: string; status: string; name: string | null }> };
     type ListResponse = { items: ContainerTestItem[] };
     const body = res.json() as ListResponse;
     const items = body.items;
@@ -169,6 +169,8 @@ describe('ContainersController routes', () => {
     expect(first.startedAt).toBe(src.createdAt.toISOString());
     // role should default/workspace
     expect(first.role).toBe('workspace');
+    expect(first).toHaveProperty('name');
+    expect(first.sidecars?.[0]).toHaveProperty('name');
     // sidecars for cid-1 include a dind
     expect(first.sidecars && first.sidecars.length).toBeGreaterThan(0);
     expect(first.sidecars![0]).toMatchObject({ containerId: 'sidecar-1', role: 'dind', image: 'dind:latest', status: 'running' });

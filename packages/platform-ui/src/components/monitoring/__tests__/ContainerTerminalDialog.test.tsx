@@ -101,6 +101,7 @@ const container: ContainerItem = {
   containerId: 'container-123456',
   threadId: '11111111-1111-1111-1111-111111111111',
   image: 'workspace:latest',
+  name: 'Workspace container',
   status: 'running',
   startedAt: new Date().toISOString(),
   lastUsedAt: new Date().toISOString(),
