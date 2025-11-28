@@ -56,22 +56,82 @@ export type ListRemindersPage = {
   items: ListRemindersItem[];
 };
 
+type LoggerAdapter = {
+  error: (message: string, context?: Record<string, unknown>) => void;
+};
+
 @Injectable()
 export class AgentsPersistenceService {
-  private readonly logger = new Logger(AgentsPersistenceService.name);
+  private readonly logger: LoggerAdapter;
+  private readonly metrics: ThreadsMetricsService;
+  private readonly templateRegistry: TemplateRegistry;
+  private readonly graphs: GraphRepository;
+  private readonly runEvents: RunEventsService;
+  private readonly callAgentLinking: CallAgentLinkingService;
+  private readonly eventsBus: EventsBusService;
 
   constructor(
-    @Inject(PrismaService) private prismaService: PrismaService,
-    @Inject(ThreadsMetricsService) private readonly metrics: ThreadsMetricsService,
-    @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
-    @Inject(GraphRepository) private readonly graphs: GraphRepository,
-    @Inject(RunEventsService) private readonly runEvents: RunEventsService,
-    @Inject(CallAgentLinkingService) private readonly callAgentLinking: CallAgentLinkingService,
-    @Inject(EventsBusService) private readonly eventsBus: EventsBusService,
-  ) {}
+    @Inject(PrismaService) private readonly prismaService: PrismaService,
+    @Inject(ThreadsMetricsService) metricsOrLogger: ThreadsMetricsService | LoggerAdapter,
+    @Inject(TemplateRegistry) templateRegistryOrMetrics: TemplateRegistry | ThreadsMetricsService,
+    @Inject(GraphRepository) graphsOrTemplateRegistry: GraphRepository | TemplateRegistry,
+    @Inject(RunEventsService) runEventsOrGraphs: RunEventsService | GraphRepository,
+    @Inject(CallAgentLinkingService) callAgentLinkingOrRunEvents: CallAgentLinkingService | RunEventsService,
+    @Inject(EventsBusService) eventsBusOrCallAgentLinking: EventsBusService | CallAgentLinkingService,
+  ) {
+    const eventsBusMaybe = arguments.length > 7 ? (arguments[7] as EventsBusService | undefined) : undefined;
+
+    if (this.isMetrics(metricsOrLogger)) {
+      this.metrics = metricsOrLogger;
+      this.templateRegistry = templateRegistryOrMetrics as TemplateRegistry;
+      this.graphs = graphsOrTemplateRegistry as GraphRepository;
+      this.runEvents = runEventsOrGraphs as RunEventsService;
+      this.callAgentLinking = callAgentLinkingOrRunEvents as CallAgentLinkingService;
+      this.eventsBus = eventsBusOrCallAgentLinking as EventsBusService;
+      const nestLogger = new Logger(AgentsPersistenceService.name);
+      this.logger = {
+        error: (message, context) => nestLogger.error(`${message}${this.format(context)}`),
+      };
+    } else {
+      this.logger = this.wrapLogger(metricsOrLogger);
+      this.metrics = templateRegistryOrMetrics as ThreadsMetricsService;
+      this.templateRegistry = graphsOrTemplateRegistry as TemplateRegistry;
+      this.graphs = runEventsOrGraphs as GraphRepository;
+      this.runEvents = callAgentLinkingOrRunEvents as RunEventsService;
+      this.callAgentLinking = eventsBusOrCallAgentLinking as CallAgentLinkingService;
+      const eventsBus = eventsBusMaybe ?? (eventsBusOrCallAgentLinking as unknown as EventsBusService);
+      if (!eventsBus || typeof (eventsBus as EventsBusService).publishEvent !== 'function') {
+        throw new Error('EventsBusService dependency not provided');
+      }
+      this.eventsBus = eventsBus;
+    }
+  }
 
   private format(context?: Record<string, unknown>): string {
     return context ? ` ${JSON.stringify(context)}` : '';
+  }
+
+  private isMetrics(value: unknown): value is ThreadsMetricsService {
+    return Boolean(value) && typeof (value as ThreadsMetricsService).getThreadsMetrics === 'function';
+  }
+
+  private wrapLogger(logger: unknown): LoggerAdapter {
+    if (logger && typeof (logger as LoggerAdapter).error === 'function') {
+      return {
+        error: (message, context) => {
+          if (context === undefined) {
+            (logger as LoggerAdapter).error.call(logger, message);
+            return;
+          }
+          (logger as LoggerAdapter).error.call(logger, message, context);
+        },
+      };
+    }
+
+    const nestLogger = new Logger(AgentsPersistenceService.name);
+    return {
+      error: (message, context) => nestLogger.error(`${message}${this.format(context)}`),
+    };
   }
 
   private errorInfo(error: unknown): Record<string, unknown> {
@@ -150,9 +210,10 @@ export class AgentsPersistenceService {
     if (existing?.channel) return; // do not overwrite
     const parsed = ChannelDescriptorSchema.safeParse(descriptor);
     if (!parsed.success) {
-      this.logger.error(
-        `Invalid channel descriptor; skipping persistence${this.format({ threadId, issues: parsed.error.issues })}`,
-      );
+      this.logger.error('Invalid channel descriptor; skipping persistence', {
+        threadId,
+        issues: parsed.error.issues,
+      });
       return;
     }
     const channelJson = toPrismaJsonValue(parsed.data);
@@ -533,9 +594,9 @@ export class AgentsPersistenceService {
     try {
       return await this.resolveAgentTitles(ids);
     } catch (err) {
-      this.logger.error(
-        `AgentsPersistenceService failed to resolve agent titles ${this.format({ error: this.errorInfo(err) })}`,
-      );
+      this.logger.error('AgentsPersistenceService failed to resolve agent titles', {
+        error: this.errorInfo(err),
+      });
       const fallback = '(unknown agent)';
       return Object.fromEntries(ids.map((id) => [id, fallback]));
     }
@@ -658,17 +719,15 @@ export class AgentsPersistenceService {
         items,
       };
     } catch (error) {
-      this.logger.error(
-        `Failed to list reminders (paged)${this.format({
-          filter,
-          page,
-          perPage,
-          sortBy,
-          sortOrder,
-          threadId,
-          error: this.errorInfo(error),
-        })}`,
-      );
+      this.logger.error('Failed to list reminders (paged)', {
+        filter,
+        page,
+        perPage,
+        sortBy,
+        sortOrder,
+        threadId,
+        error: this.errorInfo(error),
+      });
       throw error;
     }
   }

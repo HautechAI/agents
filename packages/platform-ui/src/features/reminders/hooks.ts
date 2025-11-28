@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { listReminders, type ListRemindersFilter } from './api';
+import { listReminders } from './api';
 import { toViewModel } from './mappers';
-import type { ReminderVm } from './types';
+import type { ListRemindersFilter, ReminderVm } from './types';
 
 export function useAgentsReminders(filter: ListRemindersFilter = 'all') {
   return useQuery<ReminderVm[], Error>({
