@@ -11,6 +11,7 @@ import type { MessageKind, Prisma, PrismaClient, RunMessageType, RunStatus, Thre
 import type { ResponseInputItem } from 'openai/resources/responses/responses.mjs';
 import { PrismaService } from '../core/services/prisma.service';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
+import { isAgentTemplate } from './agent-node.utils';
 import { GraphRepository } from '../graph/graph.repository';
 import type { PersistedGraphNode } from '../shared/types/graph.types';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
@@ -684,11 +685,7 @@ export class AgentsPersistenceService {
     const graph = await this.graphs.get('main');
     if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return {};
 
-    const agentNodes = graph.nodes.filter((node) => {
-      const meta = this.templateRegistry.getMeta(node.template);
-      if (meta) return meta.kind === 'agent';
-      return node.template === 'agent';
-    });
+    const agentNodes = graph.nodes.filter((node) => isAgentTemplate(node.template, this.templateRegistry));
     if (agentNodes.length === 0) return {};
 
     const nodeById = new Map<string, PersistedGraphNode>(agentNodes.map((node) => [node.id, node]));
@@ -720,11 +717,7 @@ export class AgentsPersistenceService {
     const graph = await this.graphs.get('main');
     if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return empty;
 
-    const agentNodes = graph.nodes.filter((node) => {
-      const meta = this.templateRegistry.getMeta(node.template);
-      if (meta) return meta.kind === 'agent';
-      return node.template === 'agent';
-    });
+    const agentNodes = graph.nodes.filter((node) => isAgentTemplate(node.template, this.templateRegistry));
     if (agentNodes.length === 0) return empty;
 
     const nodeById = new Map<string, PersistedGraphNode>(agentNodes.map((node) => [node.id, node]));

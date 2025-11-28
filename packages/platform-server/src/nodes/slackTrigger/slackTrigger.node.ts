@@ -13,6 +13,8 @@ import { SlackAdapter } from '../../messaging/slack/slack.adapter';
 import { ChannelDescriptorSchema, type SendResult, type ChannelDescriptor } from '../../messaging/types';
 import { LiveGraphRuntime } from '../../graph-core/liveGraph.manager';
 import type { LiveNode } from '../../graph/liveGraph.types';
+import { TemplateRegistry } from '../../graph-core/templateRegistry';
+import { isAgentLiveNode } from '../../agents/agent-node.utils';
 import { SecretReferenceSchema, VariableReferenceSchema } from '../../utils/reference-schemas';
 
 type TriggerHumanMessage = {
@@ -65,6 +67,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
+    @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
   ) {
     super();
   }
@@ -77,7 +80,7 @@ export class SlackTrigger extends Node<SlackTriggerConfig> {
       const liveNodes = new Map(this.runtime.getNodes().map((node) => [node.id, node]));
       const agentCandidates = outbound
         .map((id) => liveNodes.get(id))
-        .filter((node): node is LiveNode => !!node && node.template === 'agent');
+        .filter((node): node is LiveNode => isAgentLiveNode(node, this.templateRegistry));
       if (agentCandidates.length === 0) return null;
       agentCandidates.sort((a, b) => a.id.localeCompare(b.id));
       return agentCandidates[0]?.id ?? null;

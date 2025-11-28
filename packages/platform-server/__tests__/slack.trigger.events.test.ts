@@ -126,7 +126,7 @@ import { ResolveError } from '../src/utils/references';
 import type { BufferMessage } from '../src/nodes/agent/messagesBuffer';
 
 describe('SlackTrigger events', () => {
-  const setupTrigger = async () => {
+  const setupTrigger = async (options: { nodeTemplate?: string; templateMeta?: { kind: 'agent' | 'tool'; title: string } } = {}) => {
     const getOrCreateThreadByAlias = vi.fn(async () => 't-slack');
     const updateThreadChannelDescriptor = vi.fn(async () => undefined);
     const ensureAssignedAgent = vi.fn(async () => {});
@@ -137,11 +137,18 @@ describe('SlackTrigger events', () => {
     } satisfies Pick<import('../src/agents/agents.persistence.service').AgentsPersistenceService, 'getOrCreateThreadByAlias' | 'updateThreadChannelDescriptor' | 'ensureAssignedAgent'>) as import('../src/agents/agents.persistence.service').AgentsPersistenceService;
     const prismaStub = ({ getClient: () => ({ thread: { findUnique: async () => ({ channel: null }) } }) } satisfies Pick<import('../src/core/services/prisma.service').PrismaService, 'getClient'>) as import('../src/core/services/prisma.service').PrismaService;
     const slackAdapterStub = ({ sendText: vi.fn() } satisfies Pick<SlackAdapter, 'sendText'>) as SlackAdapter;
+    const nodeTemplate = options.nodeTemplate ?? 'agent';
     const runtimeStub = ({
       getOutboundNodeIds: () => ['agent-rt-1'],
-      getNodes: () => [{ id: 'agent-rt-1', template: 'agent' }],
+      getNodes: () => [{ id: 'agent-rt-1', template: nodeTemplate }],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trig = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapterStub, runtimeStub);
+    const templateRegistryStub = ({
+      getMeta: (template: string) => {
+        if (template === nodeTemplate) return options.templateMeta ?? { kind: 'agent', title: 'Agent' };
+        return undefined;
+      },
+    } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trig = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapterStub, runtimeStub, templateRegistryStub);
     const nodeId = 'slack-node';
     trig.init({ nodeId });
     await trig.setConfig({ app_token: 'xapp-abc', bot_token: 'xoxb-bot' });
@@ -227,6 +234,27 @@ describe('SlackTrigger events', () => {
       channelNodeId: nodeId,
     });
     expect(updateThreadChannelDescriptor).not.toHaveBeenCalled();
+    expect(ensureAssignedAgent).toHaveBeenCalledWith('t-slack', 'agent-rt-1');
+  });
+
+  it('assigns agent using template metadata when template name differs', async () => {
+    const { handler, ensureAssignedAgent } = await setupTrigger({ nodeTemplate: 'custom.agent', templateMeta: { kind: 'agent', title: 'Custom Agent' } });
+    const ack = vi.fn<[], Promise<void>>(async () => {});
+    const env: SlackEnvelope = {
+      envelope_id: 'meta',
+      ack,
+      body: {
+        type: 'event_callback',
+        event: {
+          type: 'message',
+          user: 'U',
+          channel: 'C',
+          text: 'hello',
+          ts: 'meta-1',
+        },
+      },
+    };
+    await handler(env);
     expect(ensureAssignedAgent).toHaveBeenCalledWith('t-slack', 'agent-rt-1');
   });
 
@@ -351,7 +379,8 @@ describe('SlackTrigger events', () => {
       getOutboundNodeIds: () => [],
       getNodes: () => [],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trig = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapterStub, runtimeStub);
+    const templateRegistryStub = ({ getMeta: () => undefined } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trig = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapterStub, runtimeStub, templateRegistryStub);
     const badConfig = {
       app_token: { kind: 'vault', path: 'secret/slack', key: 'APP' },
       bot_token: 'xoxb-good',
@@ -370,7 +399,8 @@ describe('SlackTrigger events', () => {
       getOutboundNodeIds: () => [],
       getNodes: () => [],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trig = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapterStub, runtimeStub);
+    const templateRegistryStub = ({ getMeta: () => undefined } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trig = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapterStub, runtimeStub, templateRegistryStub);
     await expect(trig.setConfig({ app_token: 'xapp-valid', bot_token: 'bot-invalid' })).rejects.toThrow(
       /Slack bot token must start with xoxb-/,
     );
@@ -393,7 +423,8 @@ describe('SlackTrigger events', () => {
       getOutboundNodeIds: () => [],
       getNodes: () => [],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trig = new SlackTrigger(resolver, persistence, prismaStub, slackAdapterStub, runtimeStub);
+    const templateRegistryStub = ({ getMeta: () => undefined } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trig = new SlackTrigger(resolver, persistence, prismaStub, slackAdapterStub, runtimeStub, templateRegistryStub);
     await trig.setConfig({
       app_token: { kind: 'vault', path: 'secret/slack', key: 'APP' } as any,
       bot_token: { kind: 'var', name: 'SLACK_BOT', default: 'xoxb-from-resolver' } as any,
@@ -422,7 +453,8 @@ describe('SlackTrigger events', () => {
       getOutboundNodeIds: () => [],
       getNodes: () => [],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trig = new SlackTrigger(resolver, persistence, prismaStub, slackAdapterStub, runtimeStub);
+    const templateRegistryStub = ({ getMeta: () => undefined } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trig = new SlackTrigger(resolver, persistence, prismaStub, slackAdapterStub, runtimeStub, templateRegistryStub);
     await expect(
       trig.setConfig({
         app_token: { kind: 'vault', path: 'secret/slack', key: 'APP' } as any,

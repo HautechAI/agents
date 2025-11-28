@@ -80,7 +80,8 @@ describe('send_message tool', () => {
       getOutboundNodeIds: () => [],
       getNodes: () => [],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trigger = new SlackTrigger(undefined as any, persistence, prismaService, slackAdapter, runtimeStub);
+    const templateRegistryStub = ({ getMeta: () => undefined } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trigger = new SlackTrigger(undefined as any, persistence, prismaService, slackAdapter, runtimeStub, templateRegistryStub);
     trigger.init({ nodeId: 'channel-node' });
 
     // Override prisma behavior for descriptor lookup inside sendToChannel
@@ -132,7 +133,8 @@ describe('send_message tool', () => {
       getOutboundNodeIds: () => [],
       getNodes: () => [],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trigger = new SlackTrigger(undefined as any, persistence, prismaService, slackAdapter, runtimeStub);
+    const templateRegistryStub = ({ getMeta: () => undefined } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trigger = new SlackTrigger(undefined as any, persistence, prismaService, slackAdapter, runtimeStub, templateRegistryStub);
     trigger.init({ nodeId: 'channel-node' });
     const runtime = makeRuntimeStub(trigger);
     const tool = new SendMessageFunctionTool(prismaService, runtime);

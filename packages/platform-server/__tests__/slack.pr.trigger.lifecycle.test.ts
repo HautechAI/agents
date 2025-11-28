@@ -45,7 +45,8 @@ describe('SlackTrigger and PRTrigger lifecycle', () => {
       getOutboundNodeIds: () => [],
       getNodes: () => [],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trigger = new SlackTrigger(undefined as any, persistence, prisma as PrismaService, slackAdapter, runtimeStub);
+    const templateRegistryStub = ({ getMeta: () => undefined } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trigger = new SlackTrigger(undefined as any, persistence, prisma as PrismaService, slackAdapter, runtimeStub, templateRegistryStub);
     await trigger.setConfig({ app_token: 'xapp-test', bot_token: 'xoxb-test' });
     await trigger.provision();
     await trigger.deprovision();

@@ -26,7 +26,8 @@ import { RunEventsService } from '../events/run-events.service';
 import { RunSignalsRegistry } from './run-signals.service';
 import { LiveGraphRuntime } from '../graph-core/liveGraph.manager';
 import { HumanMessage } from '@agyn/llm';
-import { AgentNode } from '../nodes/agent/agent.node';
+import { TemplateRegistry } from '../graph-core/templateRegistry';
+import { isAgentLiveNode, isAgentRuntimeInstance } from './agent-node.utils';
 
 // Avoid runtime import of Prisma in tests; enumerate allowed values
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'injected', 'output'];
@@ -170,6 +171,7 @@ export class AgentsThreadsController {
     @Inject(RunEventsService) private readonly runEvents: RunEventsService,
     @Inject(RunSignalsRegistry) private readonly runSignals: RunSignalsRegistry,
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
+    @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
   ) {}
 
   @Get('threads')
@@ -367,7 +369,7 @@ export class AgentsThreadsController {
     }
 
     const liveNodes = this.runtime.getNodes();
-    const agentNodes = liveNodes.filter((node) => node.template === 'agent');
+    const agentNodes = liveNodes.filter((node) => isAgentLiveNode(node, this.templateRegistry));
     if (agentNodes.length === 0) {
       throw new ServiceUnavailableException({ error: 'agent_unavailable' });
     }
@@ -389,7 +391,7 @@ export class AgentsThreadsController {
     }
 
     const instance = liveAgentNode.instance;
-    if (!this.isAgentRuntimeInstance(instance)) {
+    if (!isAgentRuntimeInstance(instance)) {
       throw new ServiceUnavailableException({ error: 'agent_unavailable' });
     }
     if (instance.status !== 'ready') {
@@ -423,13 +425,6 @@ export class AgentsThreadsController {
   async getThreadMetrics(@Param('threadId') threadId: string) {
     const metrics = await this.persistence.getThreadsMetrics([threadId]);
     return metrics[threadId] ?? { remindersCount: 0, containersCount: 0, activity: 'idle' as const, runsCount: 0 };
-  }
-
-  private isAgentRuntimeInstance(value: unknown): value is Pick<AgentNode, 'invoke' | 'status'> {
-    if (value instanceof AgentNode) return true;
-    if (!value || typeof value !== 'object') return false;
-    const candidate = value as Partial<AgentNode>;
-    return typeof candidate.invoke === 'function' && typeof candidate.status === 'string';
   }
 
   @Post('runs/:runId/terminate')

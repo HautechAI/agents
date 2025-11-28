@@ -7,6 +7,7 @@ import { RunEventsService } from '../src/events/run-events.service';
 import { RunSignalsRegistry } from '../src/agents/run-signals.service';
 import { NotImplementedException } from '@nestjs/common';
 import { LiveGraphRuntime } from '../src/graph-core/liveGraph.manager';
+import { TemplateRegistry } from '../src/graph-core/templateRegistry';
 
 describe('AgentsThreadsController tool output snapshot endpoint', () => {
   it('returns 501 when tool output persistence is unavailable', async () => {
@@ -22,6 +23,7 @@ describe('AgentsThreadsController tool output snapshot endpoint', () => {
         { provide: RunEventsService, useValue: runEventsStub },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
         { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 
@@ -57,6 +59,7 @@ describe('AgentsThreadsController tool output snapshot endpoint', () => {
         { provide: RunEventsService, useValue: runEventsStub },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
         { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 

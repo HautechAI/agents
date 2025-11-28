@@ -62,6 +62,10 @@ const runtimeStub = makeStub({
   getNodes: vi.fn(() => []),
 });
 
+const templateRegistryStub = makeStub({
+  getMeta: vi.fn(() => undefined),
+});
+
 if (!shouldRunDbTests) {
   describe.skip('NodesModule DI smoke test', () => {
     it('skipped because RUN_DB_TESTS is not true', () => {
@@ -77,6 +81,7 @@ if (!shouldRunDbTests) {
         prismaStub as unknown as PrismaService,
         slackAdapterStub as unknown as SlackAdapter,
         runtimeStub as unknown as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime,
+        templateRegistryStub as unknown as import('../src/graph-core/templateRegistry').TemplateRegistry,
       );
       expect(slackTrigger).toBeInstanceOf(SlackTrigger);
 

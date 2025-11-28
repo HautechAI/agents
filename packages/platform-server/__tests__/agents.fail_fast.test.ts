@@ -10,6 +10,7 @@ import { ThreadCleanupCoordinator } from '../src/agents/threadCleanup.coordinato
 import { RunEventsService } from '../src/events/run-events.service';
 import { RunSignalsRegistry } from '../src/agents/run-signals.service';
 import { LiveGraphRuntime } from '../src/graph-core/liveGraph.manager';
+import { TemplateRegistry } from '../src/graph-core/templateRegistry';
 
 class StubLLMProvisioner extends LLMProvisioner {
   async getLLM(): Promise<{ call: (messages: unknown) => Promise<{ text: string; output: unknown[] }> }> {
@@ -85,6 +86,7 @@ describe('Fail-fast behavior', () => {
         { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: vi.fn() } },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
         { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 

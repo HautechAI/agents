@@ -97,7 +97,8 @@ describe('SlackTrigger threading integration', () => {
       getOutboundNodeIds: () => ['agent-slack'],
       getNodes: () => [{ id: 'agent-slack', template: 'agent' }],
     } satisfies Pick<import('../src/graph-core/liveGraph.manager').LiveGraphRuntime, 'getOutboundNodeIds' | 'getNodes'>) as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime;
-    const trigger = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapter, runtimeStub);
+    const templateRegistryStub = ({ getMeta: (template: string) => (template === 'agent' ? { kind: 'agent', title: 'Agent' } : undefined) } satisfies Pick<import('../src/graph-core/templateRegistry').TemplateRegistry, 'getMeta'>) as import('../src/graph-core/templateRegistry').TemplateRegistry;
+    const trigger = new SlackTrigger(undefined as any, persistence, prismaStub, slackAdapter, runtimeStub, templateRegistryStub);
     trigger.init({ nodeId: 'slack-node' });
     await trigger.setConfig({ app_token: 'xapp-abc', bot_token: 'xoxb-bot' });
     await trigger.provision();
