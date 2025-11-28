@@ -1,5 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { formatDistanceToNow } from 'date-fns';
 import { Play, Container, Bell, Send, PanelRightClose, PanelRight, Loader2, MessageSquarePlus } from 'lucide-react';
+import { AutocompleteInput, type AutocompleteInputHandle, type AutocompleteOption } from '@/components/AutocompleteInput';
+import { Button } from '@/components/Button';
 import { IconButton } from '../IconButton';
 import { ThreadsList } from '../ThreadsList';
 import type { Thread } from '../ThreadItem';
@@ -8,7 +11,6 @@ import { Conversation, type Run } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { StatusIndicator } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 
 interface ThreadsScreenProps {
   threads: Thread[];
@@ -34,10 +36,12 @@ interface ThreadsScreenProps {
   onThreadsLoadMore?: () => void;
   onThreadExpand?: (threadId: string, isExpanded: boolean) => void;
   onCreateDraft?: () => void;
+  onToggleThreadStatus?: (threadId: string, nextStatus: 'open' | 'closed') => void;
+  isToggleThreadStatusPending?: boolean;
   draftMode?: boolean;
   draftRecipientId?: string | null;
   draftRecipientLabel?: string | null;
-  draftRecipients?: Array<{ id: string; title: string }>;
+  draftFetchOptions?: (query: string) => Promise<AutocompleteOption[]>;
   onDraftRecipientChange?: (agentId: string | null, agentTitle: string | null) => void;
   onDraftCancel?: () => void;
   className?: string;
@@ -67,10 +71,12 @@ export default function ThreadsScreen({
   onThreadsLoadMore,
   onThreadExpand,
   onCreateDraft,
+  onToggleThreadStatus,
+  isToggleThreadStatusPending = false,
   draftMode = false,
   draftRecipientId = null,
   draftRecipientLabel = null,
-  draftRecipients = [],
+  draftFetchOptions,
   onDraftRecipientChange,
   onDraftCancel,
   className = '',
@@ -83,7 +89,53 @@ export default function ThreadsScreen({
   });
 
   const resolvedSelectedThread = selectedThread ?? threads.find((thread) => thread.id === selectedThreadId);
-  const [isRecipientSelectorOpen, setRecipientSelectorOpen] = useState(false);
+  const [draftRecipientQuery, setDraftRecipientQuery] = useState('');
+  const draftRecipientInputRef = useRef<AutocompleteInputHandle | null>(null);
+
+  const resolvedDraftFetchOptions = useCallback(
+    async (query: string) => {
+      if (!draftFetchOptions) return [];
+      return draftFetchOptions(query);
+    },
+    [draftFetchOptions],
+  );
+
+  useEffect(() => {
+    if (!draftMode) {
+      setDraftRecipientQuery('');
+      return;
+    }
+    if (draftRecipientId && draftRecipientLabel) {
+      setDraftRecipientQuery(draftRecipientLabel);
+    }
+  }, [draftMode, draftRecipientId, draftRecipientLabel]);
+
+  useEffect(() => {
+    if (!draftMode) return;
+    const frame = requestAnimationFrame(() => {
+      draftRecipientInputRef.current?.focus();
+      draftRecipientInputRef.current?.open();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draftMode]);
+
+  const handleDraftRecipientInputChange = useCallback(
+    (next: string) => {
+      setDraftRecipientQuery(next);
+      if (draftRecipientId) {
+        onDraftRecipientChange?.(null, null);
+      }
+    },
+    [draftRecipientId, onDraftRecipientChange],
+  );
+
+  const handleDraftRecipientSelect = useCallback(
+    (option: AutocompleteOption) => {
+      setDraftRecipientQuery(option.label);
+      onDraftRecipientChange?.(option.value, option.label);
+    },
+    [onDraftRecipientChange],
+  );
 
   const renderThreadsList = () => {
     if (listError) {
@@ -131,6 +183,38 @@ export default function ThreadsScreen({
       );
     }
 
+    if (draftMode) {
+      return (
+        <>
+          <div className="border-b border-[var(--agyn-border-subtle)] bg-white p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex-1">
+                <AutocompleteInput
+                  ref={draftRecipientInputRef}
+                  value={draftRecipientQuery}
+                  onChange={handleDraftRecipientInputChange}
+                  onSelect={handleDraftRecipientSelect}
+                  fetchOptions={resolvedDraftFetchOptions}
+                  placeholder="Search agents..."
+                  clearable
+                  autoOpenOnMount
+                  disabled={!draftFetchOptions}
+                />
+              </div>
+              {onDraftCancel ? (
+                <Button variant="ghost" size="sm" type="button" onClick={onDraftCancel}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-[var(--agyn-gray)]">
+            Start your new conversation with the agent
+          </div>
+        </>
+      );
+    }
+
     if (isEmpty) {
       return (
         <div className="flex h-full items-center justify-center text-[var(--agyn-gray)]">
@@ -147,119 +231,15 @@ export default function ThreadsScreen({
       );
     }
 
-    if (draftMode) {
-      const currentRecipientLabel = draftRecipientLabel ?? 'Select agent';
-      const trimmedDraftInput = inputValue.trim();
 
-      return (
-        <>
-          <div className="bg-white border-b border-[var(--agyn-border-subtle)] p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="mb-1 flex items-center gap-2">
-                  <StatusIndicator status={resolvedSelectedThread.status} size="sm" />
-                  <span className="text-xs text-[var(--agyn-gray)]">{resolvedSelectedThread.agentName}</span>
-                  <span className="text-xs text-[var(--agyn-gray)]">•</span>
-                  <span className="text-xs text-[var(--agyn-gray)]">{resolvedSelectedThread.createdAt}</span>
-                </div>
-                <h3 className="text-[var(--agyn-dark)]">{resolvedSelectedThread.summary}</h3>
-              </div>
-              {onDraftCancel ? (
-                <button
-                  type="button"
-                  onClick={onDraftCancel}
-                  className="rounded-[6px] border border-transparent px-3 py-1 text-sm text-[var(--agyn-gray)] transition-colors hover:border-[var(--agyn-border-subtle)] hover:text-[var(--agyn-dark)]"
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-
-            <div className="mt-4">
-              <span className="mb-2 block text-xs uppercase tracking-wide text-[var(--agyn-gray)]">Recipient</span>
-              <Popover open={isRecipientSelectorOpen} onOpenChange={setRecipientSelectorOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-[6px] border border-[var(--agyn-border-subtle)] px-3 py-2 text-left text-sm text-[var(--agyn-dark)] transition-colors hover:border-[var(--agyn-border-strong)]"
-                  >
-                    <span className={draftRecipientId ? '' : 'text-[var(--agyn-gray)]'}>{currentRecipientLabel}</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search agents..." />
-                    <CommandList>
-                      <CommandEmpty>No agents found</CommandEmpty>
-                      {draftRecipients.length > 0 ? (
-                        <CommandGroup heading="Agents">
-                          {draftRecipients.map((recipient) => (
-                            <CommandItem
-                              key={recipient.id}
-                              value={recipient.title}
-                              keywords={[recipient.title, recipient.id]}
-                              onSelect={() => {
-                                onDraftRecipientChange?.(recipient.id, recipient.title);
-                                setRecipientSelectorOpen(false);
-                              }}
-                            >
-                              {recipient.title}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      ) : null}
-                      {draftRecipientId ? (
-                        <CommandItem
-                          value="__clear__"
-                          onSelect={() => {
-                            onDraftRecipientChange?.(null, null);
-                            setRecipientSelectorOpen(false);
-                          }}
-                        >
-                          Clear selection
-                        </CommandItem>
-                      ) : null}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {trimmedDraftInput.length === 0 || !draftRecipientId ? (
-              <p className="mt-3 text-xs text-[var(--agyn-gray)]">Select a recipient and start typing to prepare your first message.</p>
-            ) : null}
-          </div>
-
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            <Conversation runs={[]} className="h-full rounded-none border-none" collapsed={false} />
-          </div>
-
-          <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] p-4">
-            <div className="relative">
-              <AutosizeTextarea
-                placeholder="Type a message..."
-                value={inputValue}
-                onChange={(event) => onInputValueChange?.(event.target.value)}
-                size="sm"
-                minLines={1}
-                maxLines={8}
-                className="pr-12"
-              />
-              <div className="absolute bottom-[11px] right-[5px]">
-                <IconButton
-                  icon={<Send className="h-4 w-4" />}
-                  variant="primary"
-                  size="sm"
-                  onClick={() => onSendMessage?.(inputValue, { threadId: selectedThreadId })}
-                  disabled={!onSendMessage || !draftRecipientId || trimmedDraftInput.length === 0}
-                  title="Send message"
-                />
-              </div>
-            </div>
-          </div>
-        </>
-      );
-    }
+    const createdAtDate = new Date(resolvedSelectedThread.createdAt);
+    const createdAtValid = Number.isFinite(createdAtDate.getTime());
+    const createdAtRelative = createdAtValid
+      ? formatDistanceToNow(createdAtDate, { addSuffix: true })
+      : resolvedSelectedThread.createdAt;
+    const createdAtTitle = createdAtValid ? createdAtDate.toLocaleString() : undefined;
+    const nextThreadStatus: 'open' | 'closed' = resolvedSelectedThread.isOpen ? 'closed' : 'open';
+    const toggleLabel = resolvedSelectedThread.isOpen ? 'Close thread' : 'Reopen thread';
 
     return (
       <>
@@ -270,7 +250,9 @@ export default function ThreadsScreen({
                 <StatusIndicator status={resolvedSelectedThread.status} size="sm" />
                 <span className="text-xs text-[var(--agyn-gray)]">{resolvedSelectedThread.agentName}</span>
                 <span className="text-xs text-[var(--agyn-gray)]">•</span>
-                <span className="text-xs text-[var(--agyn-gray)]">{resolvedSelectedThread.createdAt}</span>
+                <span className="text-xs text-[var(--agyn-gray)]" title={createdAtTitle}>
+                  {createdAtRelative}
+                </span>
               </div>
               <h3 className="text-[var(--agyn-dark)]">{resolvedSelectedThread.summary}</h3>
             </div>
@@ -335,13 +317,30 @@ export default function ThreadsScreen({
               </Popover>
             </div>
 
-            <IconButton
-              icon={isRunsInfoCollapsed ? <PanelRight className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggleRunsInfoCollapsed?.(!isRunsInfoCollapsed)}
-              title={isRunsInfoCollapsed ? 'Show runs info' : 'Hide runs info'}
-            />
+            <div className="flex items-center gap-2">
+              {onToggleThreadStatus ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onToggleThreadStatus(resolvedSelectedThread.id, nextThreadStatus)}
+                  disabled={isToggleThreadStatusPending}
+                  aria-busy={isToggleThreadStatusPending || undefined}
+                >
+                  {toggleLabel}
+                </Button>
+              ) : null}
+
+              <IconButton
+                icon={
+                  isRunsInfoCollapsed ? <PanelRight className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />
+                }
+                variant="ghost"
+                size="sm"
+                onClick={() => onToggleRunsInfoCollapsed?.(!isRunsInfoCollapsed)}
+                title={isRunsInfoCollapsed ? 'Show runs info' : 'Hide runs info'}
+              />
+            </div>
           </div>
 
           {resolvedSelectedThread.childrenError ? (

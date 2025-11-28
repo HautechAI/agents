@@ -15,11 +15,11 @@ describe('AgentsThreads layout', () => {
       </TestProviders>,
     );
 
-    expect(screen.getByRole('heading', { name: /Agents \/ Threads/i })).toBeInTheDocument();
     expect(await screen.findByTestId('threads-list')).toBeInTheDocument();
     expect(screen.getByText('Select a thread to view details')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Closed/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /All/i })).toBeInTheDocument();
+    expect(screen.getByTitle('New thread')).toBeInTheDocument();
   });
 });

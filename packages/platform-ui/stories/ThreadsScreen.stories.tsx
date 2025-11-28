@@ -4,6 +4,7 @@ import { useArgs } from 'storybook/preview-api';
 import ThreadsScreen from '../src/components/screens/ThreadsScreen';
 import type { Thread } from '../src/components/ThreadItem';
 import type { Run } from '../src/components/Conversation';
+import type { AutocompleteOption } from '../src/components/AutocompleteInput';
 import { withMainLayout } from './decorators/withMainLayout';
 
 type ThreadsScreenProps = React.ComponentProps<typeof ThreadsScreen>;
@@ -133,11 +134,23 @@ const defaultDraftThread: Thread = {
   isOpen: true,
 };
 
-const defaultDraftRecipients = [
-  { id: 'agent-1', title: 'Agent Nimbus' },
-  { id: 'agent-2', title: 'Agent Cirrus' },
-  { id: 'agent-3', title: 'Agent Stratus' },
+const draftAgentOptions: AutocompleteOption[] = [
+  { value: 'agent-1', label: 'Agent Nimbus' },
+  { value: 'agent-2', label: 'Agent Cirrus' },
+  { value: 'agent-3', label: 'Agent Stratus' },
+  { value: 'agent-4', label: 'Agent Cumulus' },
+  { value: 'agent-5', label: 'Agent Altostratus' },
 ];
+
+const fetchDraftAgents = async (query: string): Promise<AutocompleteOption[]> => {
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches = normalizedQuery.length
+    ? draftAgentOptions.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
+    : draftAgentOptions;
+
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  return matches;
+};
 
 const baseArgs: ThreadsScreenProps = {
   threads,
@@ -152,6 +165,7 @@ const baseArgs: ThreadsScreenProps = {
   threadsIsLoading: false,
   isLoading: false,
   isEmpty: false,
+  draftFetchOptions: fetchDraftAgents,
 };
 
 const ControlledRender: Story['render'] = () => {
@@ -163,6 +177,8 @@ const ControlledRender: Story['render'] = () => {
   const logSendMessage = action('onSendMessage');
   const logThreadsLoadMore = action('onThreadsLoadMore');
   const logCreateDraft = action('onCreateDraft');
+  const logDraftRecipientChange = action('onDraftRecipientChange');
+  const logDraftCancel = action('onDraftCancel');
 
   return (
     <ThreadsScreen
@@ -182,11 +198,9 @@ const ControlledRender: Story['render'] = () => {
           selectedThreadId: draftThread.id,
           selectedThread: draftThread,
           draftMode: true,
-          draftRecipients: currentArgs.draftRecipients?.length
-            ? currentArgs.draftRecipients
-            : defaultDraftRecipients,
           draftRecipientId: null,
           draftRecipientLabel: null,
+          draftFetchOptions: currentArgs.draftFetchOptions ?? fetchDraftAgents,
           runs: [],
           inputValue: currentArgs.draftMode ? currentArgs.inputValue : '',
         });
@@ -214,6 +228,30 @@ const ControlledRender: Story['render'] = () => {
       onThreadsLoadMore={() => {
         logThreadsLoadMore();
       }}
+      onDraftRecipientChange={(agentId, agentTitle) => {
+        logDraftRecipientChange(agentId, agentTitle);
+        updateArgs({
+          draftRecipientId: agentId,
+          draftRecipientLabel: agentTitle,
+        });
+      }}
+      onDraftCancel={() => {
+        logDraftCancel();
+        const remainingThreads = (currentArgs.threads ?? []).filter(
+          (thread) => thread.id !== defaultDraftThread.id,
+        );
+
+        const nextThread = remainingThreads[0] ?? threads[0] ?? null;
+        updateArgs({
+          draftMode: false,
+          threads: remainingThreads.length ? remainingThreads : threads,
+          selectedThreadId: nextThread?.id ?? null,
+          selectedThread: nextThread ?? undefined,
+          draftRecipientId: null,
+          draftRecipientLabel: null,
+          inputValue: '',
+        });
+      }}
     />
   );
 };
@@ -234,9 +272,9 @@ export const DraftModePreview: Story = {
     selectedThreadId: defaultDraftThread.id,
     selectedThread: defaultDraftThread,
     draftMode: true,
-    draftRecipients: defaultDraftRecipients,
     draftRecipientId: null,
     draftRecipientLabel: null,
+    draftFetchOptions: fetchDraftAgents,
   },
   render: ControlledRender,
   parameters: {
@@ -258,6 +296,7 @@ export const Empty: Story = {
     threadsIsLoading: false,
     isLoading: false,
     isEmpty: true,
+    draftFetchOptions: fetchDraftAgents,
   },
   render: ControlledRender,
   parameters: {
@@ -279,6 +318,7 @@ export const Loading: Story = {
     threadsIsLoading: true,
     isLoading: true,
     isEmpty: false,
+    draftFetchOptions: fetchDraftAgents,
   },
   render: ControlledRender,
   parameters: {
@@ -301,6 +341,7 @@ export const Error: Story = {
     isLoading: false,
     isEmpty: false,
     error: 'Failed to load threads. Please try again.',
+    draftFetchOptions: fetchDraftAgents,
   },
   render: ControlledRender,
   parameters: {

@@ -280,6 +280,7 @@ export function AgentsThreads() {
   const [runMessages, setRunMessages] = useState<Record<string, ConversationMessageWithMeta[]>>({});
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isRunsInfoCollapsed, setRunsInfoCollapsed] = useState(false);
+  const [isToggleThreadStatusPending, setIsToggleThreadStatusPending] = useState(false);
 
   const pendingMessagesRef = useRef<Map<string, ConversationMessageWithMeta[]>>(new Map());
   const seenMessageIdsRef = useRef<Map<string, Set<string>>>(new Map());
@@ -405,6 +406,14 @@ export function AgentsThreads() {
     return result;
   }, [fullGraphQuery.data, graphTemplatesQuery.data]);
 
+  const fetchDraftAgentOptions = useCallback(async (query: string) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const matches = normalizedQuery.length
+      ? agentOptions.filter((option) => option.title.toLowerCase().includes(normalizedQuery))
+      : agentOptions;
+    return matches.slice(0, 20).map((option) => ({ value: option.id, label: option.title }));
+  }, [agentOptions]);
+
   const limitKey = useMemo(() => ({ limit: threadLimit }), [threadLimit]);
   const threadsQueryKey = useMemo(() => ['agents', 'threads', 'roots', filterMode, limitKey] as const, [filterMode, limitKey]);
 
@@ -466,6 +475,63 @@ export function AgentsThreads() {
     sorted.sort(compareRunMeta);
     return sorted;
   }, [runsQuery.data]);
+
+  const applyThreadStatus = useCallback(
+    (threadId: string, status: 'open' | 'closed') => {
+      const updateNode = (node: ThreadNode): ThreadNode => ({ ...node, status });
+
+      queryClient.setQueryData(threadsQueryKey, (prev: { items: ThreadNode[] } | undefined) => {
+        if (!prev) return prev;
+        const items = prev.items ?? [];
+        const idx = items.findIndex((item) => item.id === threadId);
+        if (idx === -1) {
+          if (!matchesFilter(status, filterMode)) return prev;
+          const sourceNode =
+            threadDetailQuery.data?.id === threadId
+              ? threadDetailQuery.data
+              : rootNodes.find((node) => node.id === threadId);
+          if (!sourceNode) return prev;
+          const nextItems = [updateNode(sourceNode), ...items];
+          nextItems.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+          return { items: nextItems.slice(0, threadLimit) };
+        }
+
+        if (!matchesFilter(status, filterMode)) {
+          const nextItems = items.filter((item) => item.id !== threadId);
+          return { items: nextItems };
+        }
+
+        const nextItems = [...items];
+        nextItems[idx] = updateNode(nextItems[idx]);
+        return { items: nextItems };
+      });
+
+      setChildrenState((prev) => {
+        let mutated = false;
+        const nextEntries: ThreadChildrenState = {};
+
+        for (const [parentId, entry] of Object.entries(prev)) {
+          const idx = entry.nodes.findIndex((node) => node.id === threadId);
+          if (idx === -1) {
+            nextEntries[parentId] = entry;
+            continue;
+          }
+          const nodes = [...entry.nodes];
+          nodes[idx] = updateNode(nodes[idx]);
+          nextEntries[parentId] = { ...entry, nodes };
+          mutated = true;
+        }
+
+        return mutated ? nextEntries : prev;
+      });
+
+      queryClient.setQueryData(['agents', 'threads', 'by-id', threadId] as const, (prev: ThreadNode | undefined) => {
+        if (!prev) return prev;
+        return updateNode(prev);
+      });
+    },
+    [queryClient, threadsQueryKey, threadDetailQuery.data, rootNodes, threadLimit, filterMode],
+  );
 
   useEffect(() => {
     setRunMessages({});
@@ -891,6 +957,30 @@ export function AgentsThreads() {
     return buildThreadTree(selectedThreadNode, childrenState, statusOverrides);
   }, [activeDraft, selectedThreadNode, childrenState, statusOverrides]);
 
+  const handleToggleThreadStatus = useCallback(
+    async (threadId: string, nextStatus: 'open' | 'closed') => {
+      if (isDraftThreadId(threadId)) return;
+      if (isToggleThreadStatusPending) return;
+
+      setIsToggleThreadStatusPending(true);
+      const previousStatus: 'open' | 'closed' = nextStatus === 'open' ? 'closed' : 'open';
+
+      applyThreadStatus(threadId, nextStatus);
+
+      try {
+        await threads.patchStatus(threadId, nextStatus);
+        queryClient.invalidateQueries({ queryKey: ['agents', 'threads'] }).catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['agents', 'threads', 'by-id', threadId] }).catch(() => {});
+      } catch (error) {
+        applyThreadStatus(threadId, previousStatus);
+        notifyError(error instanceof Error ? error.message : 'Failed to update thread status');
+      } finally {
+        setIsToggleThreadStatusPending(false);
+      }
+    },
+    [applyThreadStatus, isToggleThreadStatusPending, queryClient],
+  );
+
   const threadsHasMore = (threadsQuery.data?.items?.length ?? 0) >= threadLimit && threadLimit < MAX_THREAD_LIMIT;
   const threadsIsLoading = threadsQuery.isFetching;
   const isThreadsEmpty = !threadsQuery.isLoading && threadsForList.length === 0;
@@ -1077,10 +1167,12 @@ export function AgentsThreads() {
         onThreadExpand={handleThreadExpand}
         selectedThread={selectedThreadForScreen}
         onCreateDraft={handleCreateDraft}
+        onToggleThreadStatus={handleToggleThreadStatus}
+        isToggleThreadStatusPending={isToggleThreadStatusPending}
         draftMode={isDraftSelected}
         draftRecipientId={activeDraft?.agentNodeId ?? null}
         draftRecipientLabel={activeDraft?.agentTitle ?? null}
-        draftRecipients={agentOptions}
+        draftFetchOptions={agentOptions.length ? fetchDraftAgentOptions : undefined}
         onDraftRecipientChange={handleDraftRecipientChange}
         onDraftCancel={handleDraftCancel}
       />

@@ -211,7 +211,7 @@ describe('AgentsThreads page', () => {
 
     expect(await screen.findByRole('heading', { name: thread.summary })).toBeInTheDocument();
     expect(screen.getByTestId('threads-list')).toBeInTheDocument();
-    expect(screen.getByText('Agents / Threads')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
   });
 
   it('shows a friendly error when the thread is missing', async () => {
@@ -506,10 +506,13 @@ describe('AgentsThreads page', () => {
       const newButton = await screen.findByRole('button', { name: 'New thread' });
       await user.click(newButton);
 
-      expect(await screen.findByRole('heading', { name: '(new conversation)' })).toBeInTheDocument();
-      const list = screen.getByTestId('threads-list');
+      const list = await screen.findByTestId('threads-list');
       expect(within(list).getByText('(new conversation)')).toBeInTheDocument();
-      expect(await screen.findByRole('button', { name: 'Select agent' })).toBeInTheDocument();
+
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      expect(searchInput).toBeInTheDocument();
+
+      expect(screen.getByText(/Start your new conversation with the agent/i)).toBeInTheDocument();
     });
 
     it('allows selecting a recipient and cancel removes the draft', async () => {
@@ -525,19 +528,19 @@ describe('AgentsThreads page', () => {
 
       await user.click(await screen.findByRole('button', { name: 'New thread' }));
 
-      const selectorButton = await screen.findByRole('button', { name: 'Select agent' });
-      await user.click(selectorButton);
-
-      const option = await screen.findByText('Agent Nimbus');
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      const option = await screen.findByRole('button', { name: 'Agent Nimbus' });
       await user.click(option);
 
-      expect(await screen.findByRole('button', { name: 'Agent Nimbus' })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(searchInput).toHaveValue('Agent Nimbus');
+      });
 
       const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       await user.click(cancelButton);
 
       await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: '(new conversation)' })).not.toBeInTheDocument();
+        expect(within(screen.getByTestId('threads-list')).queryByText('(new conversation)')).not.toBeInTheDocument();
       });
       expect(screen.getByText(/Select a thread to view details/i)).toBeInTheDocument();
     });
@@ -555,23 +558,24 @@ describe('AgentsThreads page', () => {
 
       await user.click(await screen.findByRole('button', { name: 'New thread' }));
 
-      const selectorButton = await screen.findByRole('button', { name: 'Select agent' });
-      await user.click(selectorButton);
-
       const searchInput = await screen.findByPlaceholderText('Search agents...');
+      await screen.findByRole('button', { name: 'Agent Nimbus' });
+
       await user.type(searchInput, 'Cirrus');
 
+      const visibleOption = await screen.findByRole('button', { name: 'Agent Cirrus' });
       await waitFor(() => {
-        expect(screen.queryByText('Agent Nimbus')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Agent Nimbus' })).not.toBeInTheDocument();
       });
 
-      const visibleOption = await screen.findByText('Agent Cirrus');
       await user.click(visibleOption);
 
-      expect(await screen.findByRole('button', { name: 'Agent Cirrus' })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(searchInput).toHaveValue('Agent Cirrus');
+      });
     });
 
-    it('disables Send until a recipient is chosen and message entered', async () => {
+    it('shows guidance message without composer controls in draft mode', async () => {
       const user = userEvent.setup();
       const thread = makeThread();
       registerThreadScenario({ thread, runs: [] });
@@ -581,17 +585,9 @@ describe('AgentsThreads page', () => {
 
       await user.click(await screen.findByRole('button', { name: 'New thread' }));
 
-      const sendButton = screen.getByTitle('Send message');
-      expect(sendButton).toBeDisabled();
-
-      const selectorButton = await screen.findByRole('button', { name: 'Select agent' });
-      await user.click(selectorButton);
-      await user.click(await screen.findByText('Agent Nimbus'));
-      expect(sendButton).toBeDisabled();
-
-      const textarea = screen.getByPlaceholderText('Type a message...');
-      await user.type(textarea, 'Hello draft');
-      expect(sendButton).toBeEnabled();
+      expect(screen.getByText(/Start your new conversation with the agent/i)).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Type a message...')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Send message')).not.toBeInTheDocument();
     });
 
     it('does not fetch thread or run data when a draft is selected', async () => {
@@ -642,7 +638,7 @@ describe('AgentsThreads page', () => {
 
       await user.click(await screen.findByRole('button', { name: 'New thread' }));
 
-      expect(await screen.findByRole('heading', { name: '(new conversation)' })).toBeInTheDocument();
+      await screen.findByPlaceholderText('Search agents...');
 
       await new Promise((resolve) => setTimeout(resolve, 50));
 
