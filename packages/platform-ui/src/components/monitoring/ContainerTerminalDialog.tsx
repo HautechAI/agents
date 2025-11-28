@@ -128,7 +128,7 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
       <DialogContent
-        className="max-w-4xl p-0 [&_[data-slot='dialog-close']]:hidden"
+        className="max-w-4xl p-0 [&>button[data-slot='dialog-close']]:hidden"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
         }}
