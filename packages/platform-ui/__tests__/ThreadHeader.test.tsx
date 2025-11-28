@@ -86,12 +86,14 @@ describe('ThreadHeader', () => {
       createdAt: '2025-11-14T10:00:00.000Z',
       metrics: { remindersCount: 1, containersCount: 1, activity: 'idle', runsCount: 1 },
       agentTitle: 'Incident Agent',
+      agentRole: 'Incident Commander',
     };
 
     render(<ThreadHeader thread={thread} runsCount={5} />);
 
     expect(screen.getByTestId('thread-header-summary')).toHaveTextContent('Investigate alerts');
     expect(screen.getByText('Incident Agent')).toBeInTheDocument();
+    expect(screen.getByText('Incident Commander')).toBeInTheDocument();
     expect(screen.getByText(/Status: Open/i)).toBeInTheDocument();
     const stats = screen.getByTestId('thread-header-stats');
     expect(stats).toHaveTextContent('Runs 5');
@@ -102,6 +104,23 @@ describe('ThreadHeader', () => {
     expect(screen.getByLabelText('Runs total: 5')).toHaveTextContent('Runs 5');
     // Activity indicator should not render in header
     expect(screen.queryByLabelText(/Activity:/)).toBeNull();
+  });
+
+  it('omits agent role line when not provided', () => {
+    const thread: ThreadNode = {
+      id: 't2',
+      alias: 'root',
+      summary: 'Review incidents',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+      agentTitle: 'Incident Agent',
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    expect(screen.queryByTestId('thread-agent-role')).toBeNull();
   });
 
   it('shows reminders in popover when opened', async () => {

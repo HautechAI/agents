@@ -20,6 +20,7 @@ type ThreadMock = {
   parentId: string | null;
   metrics: { remindersCount: number; containersCount: number; activity: 'idle' | 'waiting' | 'working'; runsCount: number };
   agentTitle?: string | null;
+  agentRole?: string | null;
 };
 
 type RunMock = {
@@ -51,6 +52,7 @@ function makeThread(overrides: Partial<ThreadMock> = {}): ThreadMock {
     parentId: null,
     metrics: { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 },
     agentTitle: 'Agent Uno',
+    agentRole: 'Lead Planner',
     ...overrides,
   };
 }
@@ -174,6 +176,9 @@ describe('AgentsThreads page', () => {
 
     expect(await screen.findByRole('heading', { name: thread.summary })).toBeInTheDocument();
     expect(screen.getByTestId('threads-list')).toBeInTheDocument();
+    expect(await screen.findByTestId('thread-agent-role')).toHaveTextContent(thread.agentRole ?? '');
+    const list = screen.getByTestId('threads-list');
+    expect(within(list).getByTestId('thread-item-role')).toHaveTextContent(thread.agentRole ?? '');
   });
 
   it('shows a friendly error when the thread is missing', async () => {

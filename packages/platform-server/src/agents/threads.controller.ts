@@ -182,22 +182,22 @@ export class AgentsThreadsController {
     const threads = await this.persistence.listThreads({ rootsOnly, status, limit });
     const includeMetrics = (query.includeMetrics ?? 'false') === 'true';
     const includeAgentTitles = (query.includeAgentTitles ?? 'false') === 'true';
-    if (!includeMetrics && !includeAgentTitles) return { items: threads };
     const ids = threads.map((t) => t.id);
-    const [metrics, agentTitles] = await Promise.all([
+    const [metrics, descriptors] = await Promise.all([
       includeMetrics && ids.length > 0
         ? this.persistence.getThreadsMetrics(ids)
         : Promise.resolve<Record<string, ThreadMetrics>>({}),
-      includeAgentTitles && ids.length > 0
-        ? this.persistence.getThreadsAgentTitles(ids)
-        : Promise.resolve<Record<string, string>>({}),
+      ids.length > 0
+        ? this.persistence.getThreadsAgentDescriptors(ids)
+        : Promise.resolve<Record<string, { title: string; role?: string }>>({}),
     ]);
     const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
     const fallbackTitle = '(unknown agent)';
     const items = threads.map((t) => ({
       ...t,
+      ...(descriptors[t.id]?.role ? { agentRole: descriptors[t.id].role } : {}),
       ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
-      ...(includeAgentTitles ? { agentTitle: agentTitles[t.id] ?? fallbackTitle } : {}),
+      ...(includeAgentTitles ? { agentTitle: descriptors[t.id]?.title ?? fallbackTitle } : {}),
     }));
     return { items };
   }
@@ -207,23 +207,23 @@ export class AgentsThreadsController {
     const items = await this.persistence.listChildren(threadId, query.status ?? 'all');
     const includeMetrics = (query.includeMetrics ?? 'false') === 'true';
     const includeAgentTitles = (query.includeAgentTitles ?? 'false') === 'true';
-    if (!includeMetrics && !includeAgentTitles) return { items };
     const ids = items.map((t) => t.id);
-    const [metrics, agentTitles] = await Promise.all([
+    const [metrics, descriptors] = await Promise.all([
       includeMetrics && ids.length > 0
         ? this.persistence.getThreadsMetrics(ids)
         : Promise.resolve<Record<string, ThreadMetrics>>({}),
-      includeAgentTitles && ids.length > 0
-        ? this.persistence.getThreadsAgentTitles(ids)
-        : Promise.resolve<Record<string, string>>({}),
+      ids.length > 0
+        ? this.persistence.getThreadsAgentDescriptors(ids)
+        : Promise.resolve<Record<string, { title: string; role?: string }>>({}),
     ]);
     const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
     const fallbackTitle = '(unknown agent)';
     return {
       items: items.map((t) => ({
         ...t,
+        ...(descriptors[t.id]?.role ? { agentRole: descriptors[t.id].role } : {}),
         ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
-        ...(includeAgentTitles ? { agentTitle: agentTitles[t.id] ?? fallbackTitle } : {}),
+        ...(includeAgentTitles ? { agentTitle: descriptors[t.id]?.title ?? fallbackTitle } : {}),
       })),
     };
   }

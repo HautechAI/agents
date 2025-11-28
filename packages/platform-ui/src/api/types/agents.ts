@@ -27,6 +27,7 @@ export type ThreadNode = {
   createdAt: string;
   metrics?: ThreadMetrics;
   agentTitle?: string;
+  agentRole?: string;
 };
 
 export type RunMeta = {

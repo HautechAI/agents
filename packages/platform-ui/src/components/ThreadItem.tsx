@@ -8,6 +8,7 @@ export interface Thread {
   id: string;
   summary: string;
   agentName: string;
+  agentRole?: string;
   agentAvatar?: string;
   createdAt: string;
   status: ThreadStatus;
@@ -59,6 +60,7 @@ export function ThreadItem({
     ? formatDistanceToNow(createdAtDate, { addSuffix: true })
     : thread.createdAt;
   const createdAtTitle = createdAtValid ? createdAtDate.toLocaleString() : undefined;
+  const agentRole = thread.agentRole?.trim();
 
   const handleToggleExpand = () => {
     if (hasSubthreads && onToggleExpand) {
@@ -100,18 +102,26 @@ export function ThreadItem({
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <span className="text-sm text-[var(--agyn-dark)]">{thread.agentName}</span>
               <span className="text-xs text-[var(--agyn-gray)]">•</span>
               <span className="text-xs text-[var(--agyn-gray)]" title={createdAtTitle}>
                 {createdAtRelative}
               </span>
             </div>
-            <p className="text-sm text-[var(--agyn-dark)] overflow-hidden" style={{ 
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical'
-            }}>
+            {agentRole ? (
+              <p className="mt-0.5 truncate text-xs text-[var(--agyn-gray)]" title={agentRole} data-testid="thread-item-role">
+                {agentRole}
+              </p>
+            ) : null}
+            <p
+              className="mt-1 text-sm text-[var(--agyn-dark)] overflow-hidden"
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+              }}
+            >
               {thread.summary}
             </p>
           </div>

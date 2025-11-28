@@ -150,6 +150,7 @@ export default function ThreadsScreen({
     const nextStatus = resolvedSelectedThread.isOpen ? 'closed' : 'open';
     const toggleLabel = resolvedSelectedThread.isOpen ? 'Close' : 'Reopen';
     const toggleDisabled = !onToggleThreadStatus || isToggleThreadStatusPending;
+    const agentRole = resolvedSelectedThread.agentRole?.trim();
 
     return (
       <>
@@ -164,7 +165,12 @@ export default function ThreadsScreen({
                   {createdAtRelative}
                 </span>
               </div>
-              <h3 className="text-[var(--agyn-dark)]">{resolvedSelectedThread.summary}</h3>
+              {agentRole ? (
+                <p className="mt-0.5 truncate text-xs text-[var(--agyn-gray)]" title={agentRole} data-testid="thread-agent-role">
+                  {agentRole}
+                </p>
+              ) : null}
+              <h3 className="mt-1 text-[var(--agyn-dark)]">{resolvedSelectedThread.summary}</h3>
             </div>
             <Button
               variant="ghost"

@@ -74,4 +74,31 @@ describe('SimpleAgentConfigView prompt modal', () => {
     const systemPrompts = handleChange.mock.calls.map((call) => call[0]?.systemPrompt);
     expect(systemPrompts).not.toContain('dirty draft');
   });
+
+  it('allows editing role with trimming and enforces max length', () => {
+    const handleChange = vi.fn();
+    const handleValidate = vi.fn();
+    render(
+      <SimpleAgentConfigView
+        templateName="agent"
+        value={{ role: 'Architect', model: 'gpt' }}
+        onChange={handleChange}
+        onValidate={handleValidate}
+        readOnly={false}
+        disabled={false}
+      />,
+    );
+
+    const input = screen.getByTestId('simple-agent-role') as HTMLInputElement;
+    expect(input).toHaveAttribute('maxLength', '64');
+
+    fireEvent.change(input, { target: { value: '  Lead Engineer  ' } });
+    const latest = handleChange.mock.calls.at(-1)?.[0];
+    expect(latest?.role).toBe('Lead Engineer');
+    expect(handleValidate.mock.calls.at(-1)?.[0]).toEqual([]);
+
+    fireEvent.change(input, { target: { value: '' } });
+    const cleared = handleChange.mock.calls.at(-1)?.[0];
+    expect(cleared?.role).toBeUndefined();
+  });
 });

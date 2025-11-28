@@ -18,6 +18,7 @@ export default function SimpleAgentConfigView({
   const [model, setModel] = useState<string>(typeof init.model === 'string' ? (init.model as string) : '');
   const [systemPrompt, setSystemPrompt] = useState<string>((init.systemPrompt as string) || '');
   const [title, setTitle] = useState<string>((init.title as string) || '');
+  const [role, setRole] = useState<string>((init.role as string) || '');
   const [debounceMs, setDebounceMs] = useState<number>(typeof init.debounceMs === 'number' ? (init.debounceMs as number) : 0);
   const [whenBusy, setWhenBusy] = useState<string>((init.whenBusy as string) || 'wait');
   const [processBuffer, setProcessBuffer] = useState<string>((init.processBuffer as string) || 'allTogether');
@@ -38,6 +39,8 @@ export default function SimpleAgentConfigView({
     const errors: string[] = [];
     // Required validation: non-empty after trim
     if (!model || !model.trim()) errors.push('Model is required');
+    const trimmedRole = role.trim();
+    if (trimmedRole.length > 64) errors.push('Role must be 64 characters or fewer');
     if (restrictionMaxInjections < 0) errors.push('restrictionMaxInjections must be >= 0');
     if (debounceMs < 0) errors.push('debounceMs must be >= 0');
     if (!['wait', 'injectAfterTools'].includes(whenBusy)) errors.push('whenBusy must be wait|injectAfterTools');
@@ -45,12 +48,14 @@ export default function SimpleAgentConfigView({
     if (summarizationKeepTokens < 0) errors.push('summarizationKeepTokens must be >= 0');
     if (summarizationMaxTokens < 1) errors.push('summarizationMaxTokens must be >= 1');
     onValidate?.(errors);
-  }, [model, debounceMs, whenBusy, processBuffer, summarizationKeepTokens, summarizationMaxTokens, restrictionMaxInjections, onValidate]);
+  }, [model, role, debounceMs, whenBusy, processBuffer, summarizationKeepTokens, summarizationMaxTokens, restrictionMaxInjections, onValidate]);
 
   useEffect(() => {
+    const trimmedRole = role.trim();
     const next = {
       ...value,
       title: title || undefined,
+      role: trimmedRole.length > 0 ? trimmedRole : undefined,
       model: model?.trim() || model, // persist trimmed value
       systemPrompt,
       debounceMs,
@@ -66,7 +71,7 @@ export default function SimpleAgentConfigView({
       onChange(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, model, systemPrompt, debounceMs, whenBusy, processBuffer, summarizationKeepTokens, summarizationMaxTokens, restrictOutput, restrictionMessage, restrictionMaxInjections]);
+  }, [title, role, model, systemPrompt, debounceMs, whenBusy, processBuffer, summarizationKeepTokens, summarizationMaxTokens, restrictOutput, restrictionMessage, restrictionMaxInjections]);
 
   const isDisabled = !!readOnly || !!disabled;
 
@@ -91,6 +96,18 @@ export default function SimpleAgentConfigView({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           disabled={isDisabled}
+        />
+      </div>
+      <div>
+        <Label>Role (optional)</Label>
+        <input
+          className="w-full border rounded px-2 py-1 bg-background"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          disabled={isDisabled}
+          maxLength={64}
+          placeholder="e.g., Engineer, Manager"
+          data-testid="simple-agent-role"
         />
       </div>
       <div>

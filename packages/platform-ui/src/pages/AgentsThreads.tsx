@@ -72,6 +72,11 @@ function sanitizeAgentName(agentName: string | null | undefined): string {
   return trimmed && trimmed.length > 0 ? trimmed : '(unknown agent)';
 }
 
+function sanitizeAgentRole(agentRole: string | null | undefined): string | undefined {
+  const trimmed = agentRole?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
 function containerDisplayName(container: ContainerItem): string {
   return container.name;
 }
@@ -153,6 +158,7 @@ function buildThreadTree(node: ThreadNode, children: ThreadChildrenState, overri
     id: node.id,
     summary: sanitizeSummary(node.summary ?? null),
     agentName: sanitizeAgentName(node.agentTitle),
+    agentRole: sanitizeAgentRole(node.agentRole),
     createdAt: node.createdAt,
     status: computeThreadStatus(node, mappedChildren, overrides),
     isOpen: status === 'open',

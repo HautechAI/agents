@@ -121,6 +121,7 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
   }, [thread]);
 
   const agentTitle = thread?.agentTitle?.trim().length ? thread.agentTitle.trim() : '(unknown agent)';
+  const agentRole = thread?.agentRole?.trim().length ? thread.agentRole.trim() : undefined;
   const createdAt = thread?.createdAt ? new Date(thread.createdAt) : null;
   const createdAtLabel = createdAt && Number.isFinite(createdAt.getTime()) ? createdAt.toLocaleString() : null;
   const createdRelative = createdAt && Number.isFinite(createdAt.getTime()) ? formatDistanceToNow(createdAt, { addSuffix: true }) : null;
@@ -155,16 +156,23 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
               </span>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
-            <span title={agentTitle}>{agentTitle}</span>
-            {createdAtLabel && (
-              <>
-                <span aria-hidden="true">•</span>
-                <span title={createdAtLabel}>Created {createdRelative ?? createdAtLabel}</span>
-              </>
-            )}
-            <span aria-hidden="true">•</span>
-            <span>Status: {statusLabel}</span>
+          <div className="mt-1 text-xs text-gray-500">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span title={agentTitle}>{agentTitle}</span>
+              {createdAtLabel && (
+                <>
+                  <span aria-hidden="true">•</span>
+                  <span title={createdAtLabel}>Created {createdRelative ?? createdAtLabel}</span>
+                </>
+              )}
+              <span aria-hidden="true">•</span>
+              <span>Status: {statusLabel}</span>
+            </div>
+            {agentRole ? (
+              <div className="mt-0.5 truncate text-gray-400" title={agentRole} data-testid="thread-agent-role">
+                {agentRole}
+              </div>
+            ) : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600" data-testid="thread-header-stats">
             <div className="rounded border px-3 py-1 text-gray-700" aria-label={`Runs total: ${effectiveRunsCount}`}>

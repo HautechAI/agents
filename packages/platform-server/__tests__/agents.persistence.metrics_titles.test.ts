@@ -91,7 +91,11 @@ describe('AgentsPersistenceService metrics and agent titles', () => {
         version: 1,
         updatedAt: new Date().toISOString(),
         nodes: [
-          { id: 'agent-configured', template: 'templateA', config: { title: '  Configured Agent  ' } },
+          {
+            id: 'agent-configured',
+            template: 'templateA',
+            config: { title: '  Configured Agent  ', role: '  Lead Engineer  ' },
+          },
           { id: 'agent-template', template: 'templateB' },
           { id: 'agent-assigned', template: 'templateA', config: { title: 'Assigned Only' } },
         ],
@@ -113,10 +117,26 @@ describe('AgentsPersistenceService metrics and agent titles', () => {
     stub.conversationState._push({ threadId: threadConfigured, nodeId: 'agent-template', state: {}, updatedAt: new Date('2023-01-01T00:00:00Z') });
     stub.conversationState._push({ threadId: threadTemplate, nodeId: 'agent-template', state: {}, updatedAt: new Date('2024-03-01T00:00:00Z') });
 
-    const titles = await svc.getThreadsAgentTitles([threadConfigured, threadTemplate, threadFallback, threadAssignedOnly]);
+    const titles = await svc.getThreadsAgentTitles([
+      threadConfigured,
+      threadTemplate,
+      threadFallback,
+      threadAssignedOnly,
+    ]);
     expect(titles[threadConfigured]).toBe('Configured Agent');
     expect(titles[threadTemplate]).toBe('Template B');
     expect(titles[threadFallback]).toBe('(unknown agent)');
     expect(titles[threadAssignedOnly]).toBe('Assigned Only');
+
+    const roles = await svc.getThreadsAgentRoles([
+      threadConfigured,
+      threadTemplate,
+      threadFallback,
+      threadAssignedOnly,
+    ]);
+    expect(roles[threadConfigured]).toBe('Lead Engineer');
+    expect(roles[threadTemplate]).toBeUndefined();
+    expect(roles[threadFallback]).toBeUndefined();
+    expect(roles[threadAssignedOnly]).toBeUndefined();
   });
 });

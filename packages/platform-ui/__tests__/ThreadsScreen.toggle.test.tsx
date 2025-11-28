@@ -102,6 +102,7 @@ describe('ThreadItem relative time display', () => {
       id: 'child-1',
       summary: 'Index nightly ETL job failures',
       agentName: 'Indexer',
+      agentRole: 'Data Engineer',
       createdAt: '2024-06-01T11:59:00.000Z',
       status: 'pending',
       isOpen: true,
@@ -112,6 +113,23 @@ describe('ThreadItem relative time display', () => {
     const relativeLabel = screen.getByText(/ago/i);
     expect(relativeLabel.textContent).toMatch(/1 minute ago/i);
     expect(relativeLabel).toHaveAttribute('title', new Date(thread.createdAt).toLocaleString());
+    expect(screen.getByTestId('thread-item-role')).toHaveTextContent('Data Engineer');
+  });
+
+  it('does not render agent role when value is empty', () => {
+    const thread: Thread = {
+      id: 'child-2',
+      summary: 'Rotate credentials',
+      agentName: 'Ops',
+      agentRole: '',
+      createdAt: '2024-06-01T11:50:00.000Z',
+      status: 'finished',
+      isOpen: true,
+    };
+
+    render(<ThreadItem thread={thread} />);
+
+    expect(screen.queryByTestId('thread-item-role')).toBeNull();
   });
 });
 

@@ -46,6 +46,12 @@ const DEFAULT_RESTRICTION_MESSAGE =
 export const AgentStaticConfigSchema = z
   .object({
     title: z.string().optional().describe('Display name for this agent (UI only).'),
+    role: z
+      .string()
+      .trim()
+      .max(64)
+      .describe('Role label for this agent (UI only).')
+      .optional(),
     model: z.string().default('gpt-5').describe('LLM model identifier to use for this agent (provider-specific name).'),
     systemPrompt: z
       .string()
@@ -202,6 +208,15 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
   get config() {
     if (!this._config) throw new Error('Agent not configured.');
     return this._config;
+  }
+
+  override async setConfig(cfg: AgentStaticConfig): Promise<void> {
+    const parsed = AgentStaticConfigSchema.parse(cfg ?? {});
+    const sanitized: AgentStaticConfig = { ...parsed };
+    if (typeof sanitized.role === 'string' && sanitized.role.length === 0) {
+      delete sanitized.role;
+    }
+    await super.setConfig(sanitized);
   }
 
   private getAgentLabel(): string {
