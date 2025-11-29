@@ -1,18 +1,43 @@
 import React from 'react';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi, type Mock } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { ConversationsHost } from '../ThreadsScreen';
 import type { Run, QueuedMessageData, ReminderData } from '../../Conversation';
 
 vi.mock('../../Conversation', () => {
-  const { useRef } = React;
+  const { useRef, useImperativeHandle, forwardRef, useMemo, useEffect } = React;
   let instanceCounter = 0;
+  const conversationMock = vi.fn();
+  const handleSpies = new Map<string, { capture: Mock; restore: Mock }>();
 
-  const ConversationComponent: React.FC<any> = (props) => {
+  const ConversationComponent = forwardRef<any, any>((props, ref) => {
     const instanceIdRef = useRef<number | null>(null);
     if (instanceIdRef.current === null) {
       instanceIdRef.current = instanceCounter++;
     }
+
+    const captureSpy = useMemo(
+      () => vi.fn(async () => ({ topIndex: instanceIdRef.current, offset: 4, scrollTop: 42 })),
+      [],
+    );
+    const restoreSpy = useMemo(() => vi.fn(), []);
+
+    useImperativeHandle(ref, () => ({
+      captureScrollState: () => captureSpy(),
+      restoreScrollState: (state: unknown) => {
+        restoreSpy(state);
+      },
+      isAtBottom: () => true,
+    }));
+
+    conversationMock(props);
+
+    useEffect(() => {
+      handleSpies.set(props.threadId, { capture: captureSpy, restore: restoreSpy });
+      return () => {
+        handleSpies.delete(props.threadId);
+      };
+    }, [captureSpy, props.threadId, restoreSpy]);
 
     return (
       <div
@@ -21,18 +46,20 @@ vi.mock('../../Conversation', () => {
         data-instance-id={instanceIdRef.current ?? -1}
       />
     );
-  };
+  });
 
-  const conversationMock = vi.fn(ConversationComponent);
+  ConversationComponent.displayName = 'MockConversation';
 
   return {
-    Conversation: conversationMock,
+    Conversation: ConversationComponent,
     __conversationMock: conversationMock,
+    __conversationHandleSpies: handleSpies,
   };
 });
 
 type ConversationMockModule = {
   __conversationMock: ReturnType<typeof vi.fn>;
+  __conversationHandleSpies: Map<string, { capture: Mock; restore: Mock }>;
 };
 
 let conversationMockModule: ConversationMockModule;
@@ -43,6 +70,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   conversationMockModule.__conversationMock.mockClear();
+  conversationMockModule.__conversationHandleSpies.clear();
 });
 
 function createRun(id: string): Run {
@@ -161,5 +189,61 @@ describe('ConversationsHost', () => {
 
     expect(activeConversation.getAttribute('data-active')).toBe('true');
     expect(inactiveConversation.getAttribute('data-active')).toBe('false');
+
+    const activeContainer = screen.getByTestId('conversation-host-item-thread-b');
+    const inactiveContainer = screen.getByTestId('conversation-host-item-thread-a');
+
+    expect(activeContainer).toHaveClass('visible', 'opacity-100', 'pointer-events-auto');
+    expect(inactiveContainer).toHaveClass('invisible', 'opacity-0', 'pointer-events-none');
+  });
+
+  it('captures and restores scroll state for cached conversations', async () => {
+    const { rerender } = render(
+      <ConversationsHost
+        activeThreadId="thread-a"
+        runs={[createRun('a')]}
+        queuedMessages={EMPTY_QUEUE}
+        reminders={EMPTY_REMINDERS}
+        hydrationComplete
+        isRunsInfoCollapsed={false}
+      />,
+    );
+
+    await act(async () => {
+      rerender(
+        <ConversationsHost
+          activeThreadId="thread-b"
+          runs={[createRun('b')]}
+          queuedMessages={EMPTY_QUEUE}
+          reminders={EMPTY_REMINDERS}
+          hydrationComplete
+          isRunsInfoCollapsed={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const spiesForA = conversationMockModule.__conversationHandleSpies.get('thread-a');
+    expect(spiesForA).toBeDefined();
+    expect(spiesForA?.capture).toHaveBeenCalledTimes(1);
+    const capturedState = await spiesForA!.capture.mock.results[0].value;
+
+    await act(async () => {
+      rerender(
+        <ConversationsHost
+          activeThreadId="thread-a"
+          runs={[createRun('a')]}
+          queuedMessages={EMPTY_QUEUE}
+          reminders={EMPTY_REMINDERS}
+          hydrationComplete
+          isRunsInfoCollapsed={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const refreshedSpiesForA = conversationMockModule.__conversationHandleSpies.get('thread-a');
+    expect(refreshedSpiesForA?.restore).toHaveBeenCalledTimes(1);
+    expect(refreshedSpiesForA?.restore).toHaveBeenCalledWith(capturedState);
   });
 });

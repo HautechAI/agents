@@ -1,11 +1,18 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Play, Container, Bell, Send, PanelRightClose, PanelRight, Loader2, Terminal } from 'lucide-react';
 import { IconButton } from '../IconButton';
 import { ThreadsList } from '../ThreadsList';
 import type { Thread } from '../ThreadItem';
 import { SegmentedControl } from '../SegmentedControl';
-import { Conversation, type Run, type QueuedMessageData, type ReminderData } from '../Conversation';
+import {
+  Conversation,
+  type Run,
+  type QueuedMessageData,
+  type ReminderData,
+  type ConversationHandle,
+  type ConversationScrollState,
+} from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { Button } from '../Button';
 import { StatusIndicator } from '../StatusIndicator';
@@ -349,6 +356,7 @@ type ConversationCacheEntry = {
   queuedMessages: QueuedMessageData[];
   reminders: ReminderData[];
   hydrationComplete: boolean;
+  scrollState?: ConversationScrollState | null;
 };
 
 type ConversationCacheState = {
@@ -393,20 +401,29 @@ export function ConversationsHost({
         queuedMessages,
         reminders,
         hydrationComplete,
+        scrollState: null,
       },
     },
   }));
+  const cacheRef = useRef(cache);
+  const conversationRefs = useRef<Map<string, ConversationHandle>>(new Map());
+  const pendingRestoresRef = useRef<Map<string, ConversationScrollState>>(new Map());
+  const previousActiveRef = useRef<string>(activeThreadId);
+
+  useEffect(() => {
+    cacheRef.current = cache;
+  }, [cache]);
 
   useEffect(() => {
     setCache((prev) => {
-      const entries: Record<string, ConversationCacheEntry> = {
-        ...prev.entries,
-        [activeThreadId]: {
-          runs,
-          queuedMessages,
-          reminders,
-          hydrationComplete,
-        },
+      const entries: Record<string, ConversationCacheEntry> = { ...prev.entries };
+      const previousEntry = entries[activeThreadId];
+      entries[activeThreadId] = {
+        runs,
+        queuedMessages,
+        reminders,
+        hydrationComplete,
+        scrollState: previousEntry?.scrollState ?? null,
       };
 
       const filtered = prev.order.filter((id) => id !== activeThreadId);
@@ -414,14 +431,70 @@ export function ConversationsHost({
       if (nextOrder.length > MAX_CONVERSATION_CACHE) {
         const trimmed = nextOrder.slice(0, MAX_CONVERSATION_CACHE);
         const removed = nextOrder.slice(MAX_CONVERSATION_CACHE);
-        for (const id of removed) {
-          delete entries[id];
+        const trimmedEntries: Record<string, ConversationCacheEntry> = {};
+        for (const id of trimmed) {
+          if (entries[id]) {
+            trimmedEntries[id] = entries[id];
+          }
         }
-        return { order: trimmed, entries };
+        for (const id of removed) {
+          pendingRestoresRef.current.delete(id);
+          conversationRefs.current.delete(id);
+        }
+        return { order: trimmed, entries: trimmedEntries };
       }
       return { order: nextOrder, entries };
     });
   }, [activeThreadId, hydrationComplete, queuedMessages, reminders, runs]);
+
+  const storeScrollState = useCallback((threadId: string, scrollState: ConversationScrollState | null) => {
+    if (!scrollState) return;
+    setCache((prev) => {
+      const entry = prev.entries[threadId];
+      if (!entry) return prev;
+      const entries = {
+        ...prev.entries,
+        [threadId]: {
+          ...entry,
+          scrollState,
+        },
+      };
+      return { order: prev.order, entries };
+    });
+  }, []);
+
+  const captureScrollState = useCallback(
+    async (threadId: string) => {
+      const handle = conversationRefs.current.get(threadId);
+      if (!handle) return;
+      const snapshot = await handle.captureScrollState();
+      storeScrollState(threadId, snapshot);
+    },
+    [storeScrollState],
+  );
+
+  const requestRestore = useCallback((threadId: string, state: ConversationScrollState) => {
+    const handle = conversationRefs.current.get(threadId);
+    if (handle) {
+      handle.restoreScrollState(state);
+      return;
+    }
+    pendingRestoresRef.current.set(threadId, state);
+  }, []);
+
+  useEffect(() => {
+    const previousId = previousActiveRef.current;
+    if (previousId && previousId !== activeThreadId) {
+      void captureScrollState(previousId);
+    }
+
+    const entry = cacheRef.current.entries[activeThreadId];
+    if (entry?.scrollState) {
+      requestRestore(activeThreadId, entry.scrollState);
+    }
+
+    previousActiveRef.current = activeThreadId;
+  }, [activeThreadId, captureScrollState, requestRestore]);
 
   const normalizedOrder = cache.order.includes(activeThreadId)
     ? cache.order
@@ -436,16 +509,32 @@ export function ConversationsHost({
         const queuedForThread = isActive ? queuedMessages : cached?.queuedMessages ?? [];
         const remindersForThread = isActive ? reminders : cached?.reminders ?? [];
         const hydrationForThread = isActive ? hydrationComplete : cached?.hydrationComplete ?? false;
+        const visibilityClass = isActive
+          ? 'absolute inset-0 flex flex-col visible opacity-100 pointer-events-auto'
+          : 'absolute inset-0 flex flex-col invisible opacity-0 pointer-events-none';
+
+        const handleRef = (handle: ConversationHandle | null) => {
+          if (handle) {
+            conversationRefs.current.set(threadId, handle);
+            const pending = pendingRestoresRef.current.get(threadId);
+            if (pending) {
+              handle.restoreScrollState(pending);
+              pendingRestoresRef.current.delete(threadId);
+            }
+          } else {
+            conversationRefs.current.delete(threadId);
+          }
+        };
 
         return (
           <div
             key={threadId}
-            className="absolute inset-0"
-            style={{ display: isActive ? 'flex' : 'none', width: '100%', height: '100%', flexDirection: 'column' }}
+            className={visibilityClass}
             aria-hidden={!isActive}
             data-testid={`conversation-host-item-${threadId}`}
           >
             <Conversation
+              ref={handleRef}
               threadId={threadId}
               runs={runsForThread}
               queuedMessages={queuedForThread}

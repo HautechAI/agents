@@ -1,4 +1,4 @@
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { Virtuoso, type VirtuosoHandle, type StateSnapshot } from 'react-virtuoso';
 import {
   useRef,
   useEffect,
@@ -13,11 +13,19 @@ import {
   type MutableRefObject,
 } from 'react';
 
+export interface VirtualizedListScrollPosition {
+  topIndex: number | null;
+  offset: number;
+  scrollTop: number;
+}
+
 export interface VirtualizedListHandle {
   scrollToIndex: VirtuosoHandle['scrollToIndex'];
   scrollTo: VirtuosoHandle['scrollTo'];
   getScrollerElement: () => HTMLElement | null;
   isAtBottom: () => boolean;
+  captureScrollPosition: () => Promise<VirtualizedListScrollPosition | null>;
+  restoreScrollPosition: (position: VirtualizedListScrollPosition) => void;
 }
 
 export interface VirtualizedListProps<T> {
@@ -32,7 +40,6 @@ export interface VirtualizedListProps<T> {
   emptyPlaceholder?: ReactNode;
   className?: string;
   style?: React.CSSProperties;
-  followMode?: 'smooth' | 'auto' | false;
   onAtBottomChange?: (isAtBottom: boolean) => void;
 }
 
@@ -49,7 +56,6 @@ function VirtualizedListInner<T>(
   emptyPlaceholder,
   className,
   style,
-  followMode = 'smooth',
   onAtBottomChange,
 }: VirtualizedListProps<T>,
   ref: ForwardedRef<VirtualizedListHandle>,
@@ -59,21 +65,59 @@ function VirtualizedListInner<T>(
   const prevItemsLengthRef = useRef(items.length);
   const prevFirstItemKeyRef = useRef<string | number | null>(null);
   const isInitialMount = useRef(true);
-  const [firstItemIndex, setFirstItemIndex] = useState(100000);
+  const [firstItemIndex, setFirstItemIndex] = useState(() => Math.max(0, 100000 - items.length));
+  const [hasProvidedInitialTopMost, setHasProvidedInitialTopMost] = useState(false);
+  const initialTopMostItemIndexRef = useRef<number | null>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const itemRefs = useRef<Array<HTMLElement | null>>([]);
   const forceStatic = Boolean((globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__);
+
+  const scrollElement = useCallback((element: HTMLElement, options: ScrollToOptions | number) => {
+    const scrollFn = (element as HTMLElement & { scrollTo?: (options: ScrollToOptions | number) => void }).scrollTo;
+    if (typeof scrollFn === 'function') {
+      scrollFn.call(element, options as ScrollToOptions);
+      return;
+    }
+    if (typeof options === 'number') {
+      element.scrollTop = options;
+      return;
+    }
+    if (options && typeof options === 'object' && 'top' in options && typeof options.top === 'number') {
+      element.scrollTop = options.top;
+    }
+  }, []);
+
+  const resolveInitialTopMostIndex = useCallback(() => {
+    if (initialTopMostItemIndexRef.current !== null) {
+      return initialTopMostItemIndexRef.current;
+    }
+    if (items.length === 0) return null;
+    const baseIndex = Math.max(0, 100000 - items.length);
+    const topMost = baseIndex + items.length - 1;
+    initialTopMostItemIndexRef.current = topMost;
+    return topMost;
+  }, [items.length]);
 
   // Handle initial scroll to bottom
   useEffect(() => {
     if (isInitialMount.current && items.length > 0) {
       isInitialMount.current = false;
-      setFirstItemIndex(Math.max(0, 100000 - items.length));
+      const baseIndex = Math.max(0, 100000 - items.length);
+      setFirstItemIndex(baseIndex);
+      if (initialTopMostItemIndexRef.current === null) {
+        initialTopMostItemIndexRef.current = baseIndex + items.length - 1;
+      }
       if (getItemKey) {
         prevFirstItemKeyRef.current = getItemKey(items[0]);
       }
     }
   }, [items.length, items, getItemKey]);
+
+  useEffect(() => {
+    if (!hasProvidedInitialTopMost && initialTopMostItemIndexRef.current !== null) {
+      setHasProvidedInitialTopMost(true);
+    }
+  }, [hasProvidedInitialTopMost]);
 
   // Detect when new items are added
   useEffect(() => {
@@ -109,11 +153,35 @@ function VirtualizedListInner<T>(
       if (index < 0 || index >= items.length) return;
       const target = itemRefs.current[index];
       if (!target) return;
-      const behavior = 'behavior' in options && options.behavior ? options.behavior : 'auto';
-      const align = 'align' in options && options.align ? options.align : 'end';
-      target.scrollIntoView({ behavior, block: align as ScrollLogicalPosition });
+      const behavior = ('behavior' in options && options.behavior ? options.behavior : 'auto') as ScrollBehavior;
+      const align = ('align' in options && options.align ? options.align : 'end') as ScrollLogicalPosition;
+      const offset = 'offset' in options && typeof options.offset === 'number' ? options.offset : 0;
+
+      if (align === 'start') {
+        const top = target.offsetTop + offset;
+        scrollElement(scroller, { top, behavior });
+        return;
+      }
+
+      if (typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior, block: align });
+        if (offset) {
+          scrollElement(scroller, { top: target.offsetTop + offset, behavior });
+        }
+        return;
+      }
+
+      let top = target.offsetTop;
+      if (align === 'end') {
+        top = target.offsetTop - (scroller.clientHeight - target.offsetHeight) + offset;
+      } else if (align === 'center') {
+        top = target.offsetTop - scroller.clientHeight / 2 + target.offsetHeight / 2 + offset;
+      } else {
+        top += offset;
+      }
+      scrollElement(scroller, { top, behavior });
     },
-    [forceStatic, items.length],
+    [forceStatic, items.length, scrollElement],
   );
 
   const fallbackScrollTo = useCallback(
@@ -121,9 +189,91 @@ function VirtualizedListInner<T>(
       if (!forceStatic) return;
       const scroller = scrollerRef.current;
       if (!scroller) return;
-      scroller.scrollTo(location);
+      scrollElement(scroller, location ?? { top: 0 });
     },
-    [forceStatic],
+    [forceStatic, scrollElement],
+  );
+
+  const captureStaticPosition = useCallback((): VirtualizedListScrollPosition | null => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return null;
+    const scrollTop = scroller.scrollTop;
+    const entries = itemRefs.current;
+    let topIndex: number | null = null;
+    let offset = 0;
+    for (let index = 0; index < entries.length; index += 1) {
+      const node = entries[index];
+      if (!node) continue;
+      const nodeTop = node.offsetTop;
+      const nodeBottom = nodeTop + node.offsetHeight;
+      if (scrollTop < nodeBottom) {
+        topIndex = index;
+        offset = Math.max(0, scrollTop - nodeTop);
+        break;
+      }
+    }
+    if (topIndex === null) {
+      topIndex = items.length > 0 ? items.length - 1 : 0;
+      offset = 0;
+    }
+    return { topIndex, offset, scrollTop };
+  }, [items.length]);
+
+  const restoreStaticPosition = useCallback(
+    (position: VirtualizedListScrollPosition) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      if (Number.isFinite(position.topIndex) && position.topIndex !== null) {
+        const node = itemRefs.current[position.topIndex] ?? null;
+        if (node) {
+          const top = node.offsetTop + (Number.isFinite(position.offset) ? position.offset : 0);
+          scrollElement(scroller, { top, behavior: 'auto' });
+          return;
+        }
+      }
+      scrollElement(scroller, { top: position.scrollTop, behavior: 'auto' });
+    },
+    [scrollElement],
+  );
+
+  const captureScrollPosition = useCallback(async () => {
+    if (forceStatic) {
+      return captureStaticPosition();
+    }
+    const instance = virtuosoRef.current;
+    if (!instance) return null;
+    return new Promise<VirtualizedListScrollPosition | null>((resolve) => {
+      instance.getState((snapshot: StateSnapshot) => {
+        const range = snapshot.ranges[0];
+        resolve({
+          topIndex: range ? range.startIndex : null,
+          offset: 0,
+          scrollTop: snapshot.scrollTop,
+        });
+      });
+    });
+  }, [captureStaticPosition, forceStatic]);
+
+  const restoreScrollPosition = useCallback(
+    (position: VirtualizedListScrollPosition) => {
+      if (!position) return;
+      if (forceStatic) {
+        restoreStaticPosition(position);
+        return;
+      }
+      const instance = virtuosoRef.current;
+      if (!instance) return;
+      if (Number.isFinite(position.topIndex) && position.topIndex !== null) {
+        instance.scrollToIndex({ index: position.topIndex, align: 'start', offset: position.offset ?? 0, behavior: 'auto' });
+      } else {
+        instance.scrollTo({ top: position.scrollTop, behavior: 'auto' });
+        return;
+      }
+      if (Number.isFinite(position.scrollTop)) {
+        instance.scrollTo({ top: position.scrollTop, behavior: 'auto' });
+      }
+    },
+    [forceStatic, restoreStaticPosition],
   );
 
   useImperativeHandle(
@@ -135,6 +285,10 @@ function VirtualizedListInner<T>(
           scrollTo: (location) => fallbackScrollTo(location),
           getScrollerElement: () => scrollerRef.current,
           isAtBottom: () => atBottomRef.current,
+          captureScrollPosition: () => Promise.resolve(captureStaticPosition()),
+          restoreScrollPosition: (position) => {
+            if (position) restoreStaticPosition(position);
+          },
         } as VirtualizedListHandle;
       }
       return {
@@ -146,9 +300,13 @@ function VirtualizedListInner<T>(
         },
         getScrollerElement: () => scrollerRef.current,
         isAtBottom: () => atBottomRef.current,
+        captureScrollPosition: () => captureScrollPosition(),
+        restoreScrollPosition: (position) => {
+          if (position) restoreScrollPosition(position);
+        },
       } as VirtualizedListHandle;
     },
-    [fallbackScrollTo, fallbackScrollToIndex, forceStatic],
+    [captureScrollPosition, captureStaticPosition, fallbackScrollTo, fallbackScrollToIndex, forceStatic, restoreScrollPosition, restoreStaticPosition],
   );
 
   useEffect(() => {
@@ -158,17 +316,17 @@ function VirtualizedListInner<T>(
 
   useEffect(() => {
     if (!forceStatic) return;
-    if (followMode === false) return;
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    const behavior = followMode === 'smooth' ? 'smooth' : 'auto';
-    scroller.scrollTo({ top: scroller.scrollHeight, behavior });
     const isAtBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 1;
+    if (isAtBottom) {
+      scrollElement(scroller, { top: scroller.scrollHeight, behavior: 'auto' });
+    }
     if (isAtBottom !== atBottomRef.current) {
       atBottomRef.current = isAtBottom;
       onAtBottomChange?.(isAtBottom);
     }
-  }, [followMode, forceStatic, items.length, onAtBottomChange]);
+  }, [forceStatic, items.length, onAtBottomChange, scrollElement]);
 
   useEffect(() => {
     if (!forceStatic) return;
@@ -194,9 +352,10 @@ function VirtualizedListInner<T>(
   const Scroller = useMemo(
     () =>
       forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function VirtualizedListScroller(props, forward) {
+        const { itemKey: _ignoredItemKey, ...rest } = props as HTMLAttributes<HTMLDivElement> & { itemKey?: unknown };
         return (
           <div
-            {...props}
+            {...rest}
             ref={(node) => {
               scrollerRef.current = node ?? null;
               if (typeof forward === 'function') {
@@ -247,13 +406,21 @@ function VirtualizedListInner<T>(
         ref={virtuosoRef}
         data={items}
         firstItemIndex={firstItemIndex}
-        initialTopMostItemIndex={firstItemIndex + items.length - 1}
+        itemContent={(index, item) => {
+          const arrayIndex = index - firstItemIndex;
+          return renderItem(arrayIndex, item);
+        }}
+        itemKey={(index, item) => (getItemKey ? getItemKey(item as T) : index)}
+        components={{
+          Header: header ? () => <>{header}</> : undefined,
+          Footer: footer ? () => <>{footer}</> : undefined,
+          EmptyPlaceholder: emptyPlaceholder ? () => <>{emptyPlaceholder}</> : undefined,
+          Scroller,
+        }}
+        initialTopMostItemIndex={!hasProvidedInitialTopMost ? resolveInitialTopMostIndex() ?? undefined : undefined}
         followOutput={(isAtBottom) => {
           atBottomRef.current = isAtBottom;
-          if (followMode === 'smooth' || followMode === 'auto') {
-            return isAtBottom ? followMode : false;
-          }
-          return false;
+          return isAtBottom ? 'auto' : false;
         }}
         atBottomStateChange={(isAtBottom) => {
           atBottomRef.current = isAtBottom;
@@ -263,16 +430,6 @@ function VirtualizedListInner<T>(
           if (hasMore && !isLoadingMore) {
             onLoadMore();
           }
-        }}
-        itemContent={(index, item) => {
-          const arrayIndex = index - firstItemIndex;
-          return renderItem(arrayIndex, item);
-        }}
-        components={{
-          Header: header ? () => <>{header}</> : undefined,
-          Footer: footer ? () => <>{footer}</> : undefined,
-          EmptyPlaceholder: emptyPlaceholder ? () => <>{emptyPlaceholder}</> : undefined,
-          Scroller,
         }}
       />
     </div>

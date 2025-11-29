@@ -6,10 +6,16 @@ import {
   useEffect,
   useLayoutEffect,
   useCallback,
+  forwardRef,
+  useImperativeHandle,
 } from 'react';
 import { Loader2 } from 'lucide-react';
 import { waitForStableScrollHeight } from './agents/waitForStableScrollHeight';
-import { VirtualizedList, type VirtualizedListHandle } from './VirtualizedList';
+import {
+  VirtualizedList,
+  type VirtualizedListHandle,
+  type VirtualizedListScrollPosition,
+} from './VirtualizedList';
 import { Message, type MessageRole } from './Message';
 import { RunInfo } from './RunInfo';
 import { QueuedMessage } from './QueuedMessage';
@@ -66,7 +72,15 @@ type ConversationListItem =
   | { type: 'queue' }
   | { type: 'spacer' };
 
-export function Conversation({
+export type ConversationScrollState = VirtualizedListScrollPosition;
+
+export interface ConversationHandle {
+  captureScrollState: () => Promise<ConversationScrollState | null>;
+  restoreScrollState: (state: ConversationScrollState | null) => void;
+  isAtBottom: () => boolean;
+}
+
+export const Conversation = forwardRef<ConversationHandle, ConversationProps>(function ConversationComponent({
   threadId,
   runs,
   hydrationComplete,
@@ -79,7 +93,7 @@ export function Conversation({
   defaultCollapsed = false,
   collapsed,
   testId,
-}: ConversationProps) {
+}: ConversationProps, ref) {
   const messagesRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listHandleRef = useRef<VirtualizedListHandle | null>(null);
   const scrollRequestIdRef = useRef(0);
@@ -362,6 +376,27 @@ export function Conversation({
     [getMessageContainerRef, isCollapsed, queuedMessages, reminders, runHeights],
   );
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      captureScrollState: async () => {
+        const handle = listHandleRef.current;
+        if (!handle) return null;
+        return handle.captureScrollPosition();
+      },
+      restoreScrollState: (state) => {
+        if (!state) return;
+        const handle = listHandleRef.current;
+        initialScrollRequestedRef.current = true;
+        initialScrollCompletedRef.current = true;
+        setIsLoaderVisible(false);
+        handle?.restoreScrollPosition(state);
+      },
+      isAtBottom: () => isAtBottomRef.current,
+    }),
+    [],
+  );
+
   return (
     <div
       className={`flex flex-col h-full bg-white rounded-[10px] border border-[var(--agyn-border-subtle)] overflow-hidden ${className}`}
@@ -383,7 +418,6 @@ export function Conversation({
           getItemKey={getItemKey}
           className="h-full"
           style={{ height: '100%' }}
-          followMode={false}
           onAtBottomChange={handleAtBottomChange}
         />
 
@@ -402,4 +436,4 @@ export function Conversation({
       ) : null}
     </div>
   );
-}
+});

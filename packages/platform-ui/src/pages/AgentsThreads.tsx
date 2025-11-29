@@ -23,6 +23,7 @@ const THREAD_MESSAGE_MAX_LENGTH = 8000;
 
 const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
 const THREAD_PRELOAD_CONCURRENCY = 4;
+const CONVERSATION_CACHE_LIMIT = 10;
 
 type FilterMode = 'open' | 'closed' | 'all';
 
@@ -54,6 +55,15 @@ type SocketMessage = {
 type SocketRun = { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string };
 
 type ConversationMessageWithMeta = ConversationMessage & { createdAtRaw: string };
+
+type ThreadConversationCache = {
+  runMessages: Record<string, ConversationMessageWithMeta[]>;
+  pendingMessages: Map<string, ConversationMessageWithMeta[]>;
+  seenMessageIds: Map<string, Set<string>>;
+  runIds: Set<string>;
+  hydrationComplete: boolean;
+  messagesError: string | null;
+};
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '';
@@ -230,6 +240,57 @@ function mergeMessages(base: ConversationMessageWithMeta[], additions: Conversat
   return merged;
 }
 
+function cloneRunMessagesMap(
+  source: Record<string, ConversationMessageWithMeta[]>,
+): Record<string, ConversationMessageWithMeta[]> {
+  const result: Record<string, ConversationMessageWithMeta[]> = {};
+  for (const [runId, messages] of Object.entries(source)) {
+    result[runId] = [...messages];
+  }
+  return result;
+}
+
+function clonePendingMessagesMap(
+  source: Map<string, ConversationMessageWithMeta[]>,
+): Map<string, ConversationMessageWithMeta[]> {
+  const next = new Map<string, ConversationMessageWithMeta[]>();
+  for (const [runId, list] of source.entries()) {
+    next.set(runId, [...list]);
+  }
+  return next;
+}
+
+function cloneSeenMessagesMap(source: Map<string, Set<string>>): Map<string, Set<string>> {
+  const next = new Map<string, Set<string>>();
+  for (const [runId, set] of source.entries()) {
+    next.set(runId, new Set(set));
+  }
+  return next;
+}
+
+function applyMessageToCacheEntry(
+  entry: ThreadConversationCache,
+  runId: string,
+  message: ConversationMessageWithMeta,
+): void {
+  const seen = entry.seenMessageIds.get(runId) ?? new Set<string>();
+  if (seen.has(message.id)) return;
+  seen.add(message.id);
+  entry.seenMessageIds.set(runId, seen);
+
+  if (!entry.runIds.has(runId)) {
+    const pending = entry.pendingMessages.get(runId) ?? [];
+    const merged = mergeMessages(pending, [message]);
+    entry.pendingMessages.set(runId, merged);
+    return;
+  }
+
+  const existing = entry.runMessages[runId] ?? [];
+  const merged = mergeMessages(existing, [message]);
+  entry.runMessages[runId] = merged;
+  entry.seenMessageIds.set(runId, new Set(merged.map((item) => item.id)));
+}
+
 function areMessageListsEqual(a: ConversationMessageWithMeta[], b: ConversationMessageWithMeta[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i += 1) {
@@ -306,11 +367,30 @@ export function AgentsThreads() {
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
   const [conversationHydrationComplete, setConversationHydrationComplete] = useState(false);
 
+  const runMessagesStateRef = useRef(runMessages);
+  const messagesErrorRef = useRef<string | null>(messagesError);
+  const conversationHydrationCompleteRef = useRef(conversationHydrationComplete);
+
   const pendingMessagesRef = useRef<Map<string, ConversationMessageWithMeta[]>>(new Map());
   const seenMessageIdsRef = useRef<Map<string, Set<string>>>(new Map());
   const runIdsRef = useRef<Set<string>>(new Set());
+  const conversationCacheRef = useRef<Map<string, ThreadConversationCache>>(new Map());
+  const conversationCacheOrderRef = useRef<string[]>([]);
 
   const selectedThreadId = params.threadId ?? selectedThreadIdState;
+  const previousThreadIdRef = useRef<string | null>(selectedThreadId ?? null);
+
+  useEffect(() => {
+    runMessagesStateRef.current = runMessages;
+  }, [runMessages]);
+
+  useEffect(() => {
+    messagesErrorRef.current = messagesError;
+  }, [messagesError]);
+
+  useEffect(() => {
+    conversationHydrationCompleteRef.current = conversationHydrationComplete;
+  }, [conversationHydrationComplete]);
 
   useEffect(() => {
     if (params.threadId) {
@@ -424,12 +504,57 @@ export function AgentsThreads() {
   }, [runsQuery.data]);
 
   useEffect(() => {
-    setRunMessages({});
-    setMessagesError(null);
-    pendingMessagesRef.current.clear();
-    seenMessageIdsRef.current.clear();
-    runIdsRef.current = new Set();
-    setConversationHydrationComplete(false);
+    const previousId = previousThreadIdRef.current;
+    if (previousId && previousId !== selectedThreadId) {
+      const entry: ThreadConversationCache = {
+        runMessages: cloneRunMessagesMap(runMessagesStateRef.current),
+        pendingMessages: clonePendingMessagesMap(pendingMessagesRef.current),
+        seenMessageIds: cloneSeenMessagesMap(seenMessageIdsRef.current),
+        runIds: new Set(runIdsRef.current),
+        hydrationComplete: conversationHydrationCompleteRef.current,
+        messagesError: messagesErrorRef.current,
+      };
+      conversationCacheRef.current.set(previousId, entry);
+      conversationCacheOrderRef.current = [previousId, ...conversationCacheOrderRef.current.filter((id) => id !== previousId)];
+      while (conversationCacheOrderRef.current.length > CONVERSATION_CACHE_LIMIT) {
+        const removed = conversationCacheOrderRef.current.pop();
+        if (removed) {
+          conversationCacheRef.current.delete(removed);
+        }
+      }
+    }
+
+    if (!selectedThreadId) {
+      setRunMessages({});
+      setMessagesError(null);
+      pendingMessagesRef.current = new Map();
+      seenMessageIdsRef.current = new Map();
+      runIdsRef.current = new Set();
+      setConversationHydrationComplete(false);
+      previousThreadIdRef.current = null;
+      return;
+    }
+
+    const cached = conversationCacheRef.current.get(selectedThreadId);
+    if (cached) {
+      conversationCacheRef.current.delete(selectedThreadId);
+      conversationCacheOrderRef.current = conversationCacheOrderRef.current.filter((id) => id !== selectedThreadId);
+      setRunMessages(cloneRunMessagesMap(cached.runMessages));
+      setMessagesError(cached.messagesError ?? null);
+      pendingMessagesRef.current = clonePendingMessagesMap(cached.pendingMessages);
+      seenMessageIdsRef.current = cloneSeenMessagesMap(cached.seenMessageIds);
+      runIdsRef.current = new Set(cached.runIds);
+      setConversationHydrationComplete(cached.hydrationComplete);
+    } else {
+      setRunMessages({});
+      setMessagesError(null);
+      pendingMessagesRef.current = new Map();
+      seenMessageIdsRef.current = new Map();
+      runIdsRef.current = new Set();
+      setConversationHydrationComplete(false);
+    }
+
+    previousThreadIdRef.current = selectedThreadId;
   }, [selectedThreadId]);
 
   useEffect(() => {
@@ -520,11 +645,18 @@ export function AgentsThreads() {
   }, [runList, flushPendingForRun]);
 
   useEffect(() => {
-    if (!selectedThreadId) return;
     const offMsg = graphSocket.onMessageCreated(({ threadId, message }) => {
-      if (threadId !== selectedThreadId || !message.runId) return;
+      if (!message.runId) return;
       const runId = message.runId;
       const mapped = mapSocketMessage(message as SocketMessage);
+
+      const cachedEntry = conversationCacheRef.current.get(threadId);
+      if (cachedEntry) {
+        applyMessageToCacheEntry(cachedEntry, runId, mapped);
+      }
+
+      if (threadId !== selectedThreadId) return;
+
       const seen = seenMessageIdsRef.current.get(runId) ?? new Set<string>();
       if (seen.has(mapped.id)) return;
       seen.add(mapped.id);
@@ -554,8 +686,14 @@ export function AgentsThreads() {
     if (!selectedThreadId) return;
     const queryKey = ['agents', 'threads', selectedThreadId, 'runs'] as const;
     const offRun = graphSocket.onRunStatusChanged(({ threadId, run }) => {
-      if (threadId !== selectedThreadId) return;
       const next = run as SocketRun;
+      if (threadId) {
+        const cachedEntry = conversationCacheRef.current.get(threadId);
+        if (cachedEntry) {
+          cachedEntry.runIds.add(next.id);
+        }
+      }
+      if (threadId !== selectedThreadId) return;
       queryClient.setQueryData(queryKey, (prev: { items: RunMeta[] } | undefined) => {
         const items = prev?.items ?? [];
         const idx = items.findIndex((item) => item.id === next.id);

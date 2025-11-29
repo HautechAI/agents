@@ -10,7 +10,7 @@ import {
   type Mock,
 } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
-import { Conversation, type Run } from '../Conversation';
+import { Conversation, type Run, type ConversationHandle } from '../Conversation';
 import { waitForStableScrollHeight } from '../agents/waitForStableScrollHeight';
 
 vi.mock('../agents/waitForStableScrollHeight', () => ({
@@ -30,6 +30,11 @@ vi.mock('../VirtualizedList', () => {
 
     const scrollToIndexMock = useMemo(() => vi.fn(), []);
     const scrollToMock = useMemo(() => vi.fn(), []);
+    const captureScrollPositionMock = useMemo(
+      () => vi.fn(() => Promise.resolve({ topIndex: null, offset: 0, scrollTop: 0 })),
+      [],
+    );
+    const restoreScrollPositionMock = useMemo(() => vi.fn(), []);
 
     const instanceRef = useRef<any | null>(null);
     if (!instanceRef.current) {
@@ -41,6 +46,8 @@ vi.mock('../VirtualizedList', () => {
           propsRef.current.onAtBottomChange?.(value);
         },
         getScroller: () => scrollerRef.current,
+        captureScrollPosition: captureScrollPositionMock,
+        restoreScrollPosition: restoreScrollPositionMock,
       };
       instances.push(instanceRef.current);
     }
@@ -56,6 +63,10 @@ vi.mock('../VirtualizedList', () => {
       },
       getScrollerElement: () => scrollerRef.current,
       isAtBottom: () => atBottomRef.current,
+      captureScrollPosition: () => captureScrollPositionMock(),
+      restoreScrollPosition: (position: unknown) => {
+        restoreScrollPositionMock(position);
+      },
     }));
 
     useEffect(() => {
@@ -96,6 +107,8 @@ type MockVirtualizedListInstance = {
   scrollTo: Mock;
   setAtBottom: (value: boolean) => void;
   getScroller: () => HTMLDivElement | null;
+  captureScrollPosition: Mock;
+  restoreScrollPosition: Mock;
 };
 
 type VirtualizedListMockModule = {
@@ -281,5 +294,39 @@ describe('Conversation auto-follow behavior', () => {
 
     expect(waitForStableScrollHeightMock).not.toHaveBeenCalled();
     expect(instance.scrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('keeps the loader hidden after restoring scroll state on reactivation', async () => {
+    const runs = createRuns();
+    const ref = React.createRef<ConversationHandle>();
+
+    const { rerender } = render(
+      <Conversation threadId="thread-1" runs={runs} hydrationComplete={false} isActive ref={ref} />,
+    );
+
+    const instance = getLatestInstance();
+    await completeInitialHydration({ rerender, instance, runs });
+
+    act(() => {
+      instance.setAtBottom(true);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('conversation-loader')).toBeNull();
+    });
+
+    rerender(
+      <Conversation threadId="thread-1" runs={runs} hydrationComplete isActive={false} ref={ref} />,
+    );
+    expect(screen.queryByTestId('conversation-loader')).toBeNull();
+
+    rerender(<Conversation threadId="thread-1" runs={runs} hydrationComplete isActive ref={ref} />);
+
+    act(() => {
+      ref.current?.restoreScrollState({ topIndex: 0, offset: 0, scrollTop: 10 });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('conversation-loader')).toBeNull();
+    });
   });
 });
