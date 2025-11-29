@@ -672,8 +672,68 @@ export class ContainerTerminalGateway {
       }
       let bootstrapMarkerLogged = false;
       let bootstrapMarkerBuffer = '';
+      let stdoutMuxRemainder: Buffer | null = null;
+      let stdoutMuxStrippedLogged = false;
+      const decodeDockerMultiplex = (buffer: Buffer): { payload: Buffer; remainder: Buffer | null; stripped: boolean } => {
+        let offset = 0;
+        const frames: Buffer[] = [];
+        let stripped = false;
+
+        while (buffer.length - offset >= 8) {
+          const streamId = buffer[offset];
+          const headerLooksValid =
+            (streamId === 0 || streamId === 1 || streamId === 2) &&
+            buffer[offset + 1] === 0 &&
+            buffer[offset + 2] === 0 &&
+            buffer[offset + 3] === 0;
+          if (!headerLooksValid) {
+            if (offset === 0) {
+              return { payload: buffer, remainder: null, stripped: false };
+            }
+            frames.push(buffer.subarray(offset));
+            return { payload: Buffer.concat(frames), remainder: null, stripped };
+          }
+
+          const frameLength = buffer.readUInt32BE(offset + 4);
+          const frameEnd = offset + 8 + frameLength;
+          if (frameEnd > buffer.length) {
+            return {
+              payload: frames.length ? Buffer.concat(frames) : Buffer.alloc(0),
+              remainder: buffer.subarray(offset),
+              stripped,
+            };
+          }
+          frames.push(buffer.subarray(offset + 8, frameEnd));
+          stripped = true;
+          offset = frameEnd;
+        }
+
+        const remainder = buffer.length - offset > 0 ? buffer.subarray(offset) : null;
+        if (!stripped) {
+          return { payload: buffer, remainder: null, stripped: false };
+        }
+        return {
+          payload: Buffer.concat(frames),
+          remainder,
+          stripped,
+        };
+      };
+
       stdout?.on('data', (chunk: Buffer | string) => {
-        const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        const incoming = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
+        const buffered = stdoutMuxRemainder ? Buffer.concat([stdoutMuxRemainder, incoming]) : incoming;
+        const { payload, remainder, stripped } = decodeDockerMultiplex(buffered);
+        stdoutMuxRemainder = remainder;
+        if (stripped && !stdoutMuxStrippedLogged) {
+          stdoutMuxStrippedLogged = true;
+          this.logger.warn('docker multiplex headers stripped from stdout', {
+            execId,
+            sessionId,
+            containerId: containerShortId,
+          });
+        }
+
+        const data = payload.toString('utf8');
         if (data.length) {
           bootstrapMarkerBuffer = (bootstrapMarkerBuffer + data).slice(-512);
           if (!bootstrapMarkerLogged && bootstrapMarkerBuffer.includes('BOOTSTRAP_OK')) {

@@ -358,6 +358,86 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
     await app.close();
   });
 
+  it('strips docker multiplex headers before forwarding output', async () => {
+    const harness = createSessionServiceHarness({
+      shell: '/bin/bash',
+      containerId: 'd'.repeat(64),
+    });
+
+    const sessionMocks = harness.service as unknown as TerminalSessionsService;
+    const record = harness.getRecord();
+    if (!record) {
+      throw new Error('expected active terminal session');
+    }
+
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    setImmediate(() => {
+      stdout.write('BOOTSTRAP_OK\n');
+    });
+    const closeExec = vi.fn().mockResolvedValue({ exitCode: 0 });
+
+    const containerMocks = {
+      openInteractiveExec: vi.fn().mockResolvedValue({
+        stdin,
+        stdout,
+        stderr: undefined,
+        close: closeExec,
+        execId: 'exec-mux',
+      }),
+      resizeExec: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ContainerService;
+
+    const gateway = new ContainerTerminalGateway(sessionMocks, containerMocks);
+
+    const app = Fastify();
+    gateway.registerRoutes(app);
+    const port = await listenFastify(app);
+
+    const messages: { type?: string; data?: unknown; phase?: string }[] = [];
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${port}/api/containers/${record.containerId}/terminal/ws?sessionId=${record.sessionId}&token=${record.token}`,
+    );
+    ws.on('message', (payload) => {
+      const text = typeof payload === 'string' ? payload : payload.toString('utf8');
+      try {
+        messages.push(JSON.parse(text) as { type?: string; data?: unknown; phase?: string });
+      } catch {
+        messages.push({ data: text });
+      }
+    });
+
+    await waitFor(() => messages.some((msg) => msg.type === 'status' && msg.phase === 'running'), 3000);
+    await waitFor(
+      () => messages.some((msg) => msg.type === 'output' && typeof msg.data === 'string' && msg.data.includes('BOOTSTRAP_OK')),
+      3000,
+    );
+    messages.length = 0;
+
+    const payload = Buffer.from('hello\n', 'utf8');
+    const header = Buffer.alloc(8 + payload.length);
+    header.writeUInt8(1, 0);
+    header.writeUInt8(0, 1);
+    header.writeUInt8(0, 2);
+    header.writeUInt8(0, 3);
+    header.writeUInt32BE(payload.length, 4);
+    payload.copy(header, 8);
+    stdout.write(header);
+
+    await waitFor(
+      () => messages.some((msg) => msg.type === 'output' && typeof msg.data === 'string' && msg.data.includes('hello')),
+      3000,
+    );
+    const forwarded = messages.find((msg) => msg.type === 'output')?.data;
+    expect(forwarded).toBe('hello\n');
+    expect(typeof forwarded === 'string' && forwarded.includes('\u0001')).toBe(false);
+
+    ws.send(JSON.stringify({ type: 'close' }));
+    await waitForWsClose(ws, 3000);
+
+    await app.close();
+  });
+
   it('aborts exec when socket closes before start', async () => {
     const record = createSessionRecord({
       containerId: 'c'.repeat(64),
