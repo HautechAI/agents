@@ -574,96 +574,46 @@ export class ContainerTerminalGateway {
       : null;
     if (maxTimer?.unref) maxTimer.unref();
 
-    type LocaleChoice = { lang: string; lcAll: string; fallback: 'none' | 'en_US' };
-    type TermChoice = { term: string; fallback: 'none' | 'xterm' };
-
-    const detectLocaleEnv = async (): Promise<LocaleChoice> => {
-      const defaultLocale: LocaleChoice = { lang: 'C.UTF-8', lcAll: 'C.UTF-8', fallback: 'none' };
-      const script =
-        'if command -v locale >/dev/null 2>&1; then ' +
-        'if locale -a 2>/dev/null | grep -iE "^c\\.utf-?8$" >/dev/null 2>&1; then echo C.UTF-8; exit 0; fi; ' +
-        'if locale -a 2>/dev/null | grep -iE "^en_us\\.utf-?8$" >/dev/null 2>&1; then echo en_US.UTF-8; exit 0; fi; ' +
-        'fi; echo C.UTF-8';
-      try {
-        const { stdout } = await this.containers.execContainer(
-          containerId,
-          ['/bin/sh', '-lc', script],
-          { timeoutMs: 1_000, idleTimeoutMs: 1_000 },
-        );
-        const localeCandidate = stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .find((line) => line.length > 0);
-        if (localeCandidate === 'en_US.UTF-8') {
-          return { lang: 'en_US.UTF-8', lcAll: 'en_US.UTF-8', fallback: 'en_US' };
-        }
-        if (localeCandidate === 'C.UTF-8') {
-          return defaultLocale;
-        }
-      } catch (err) {
-        this.logger.debug('terminal locale detection failed', {
-          containerId: containerShortId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-      return defaultLocale;
-    };
-
-    const detectTermEnv = async (): Promise<TermChoice> => {
-      const script =
-        'if command -v infocmp >/dev/null 2>&1 && infocmp xterm-256color >/dev/null 2>&1; then echo xterm-256color; exit 0; fi; ' +
-        'for dir in /usr/share/terminfo /usr/lib/terminfo /lib/terminfo; do ' +
-        'if [ -f "$dir/x/xterm-256color" ] || [ -f "$dir/78/xterm-256color" ]; then echo xterm-256color; exit 0; fi; ' +
-        'done; ' +
-        'if command -v infocmp >/dev/null 2>&1 && infocmp xterm >/dev/null 2>&1; then echo xterm; exit 0; fi; ' +
-        'echo xterm';
-      try {
-        const { stdout } = await this.containers.execContainer(
-          containerId,
-          ['/bin/sh', '-lc', script],
-          { timeoutMs: 1_000, idleTimeoutMs: 1_000 },
-        );
-        const termCandidate = stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .find((line) => line.length > 0);
-        if (termCandidate === 'xterm-256color') {
-          return { term: 'xterm-256color', fallback: 'none' };
-        }
-        if (termCandidate === 'xterm') {
-          return { term: 'xterm', fallback: 'xterm' };
-        }
-      } catch (err) {
-        this.logger.debug('terminal terminfo detection failed', {
-          containerId: containerShortId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-      return { term: 'xterm-256color', fallback: 'none' };
-    };
-
     try {
-      const [localeChoice, termChoice] = await Promise.all([detectLocaleEnv(), detectTermEnv()]);
       const execEnv = {
-        TERM: termChoice.term,
-        LANG: localeChoice.lang,
-        LC_ALL: localeChoice.lcAll,
+        TERM: 'xterm-256color',
+        LANG: 'C.UTF-8',
+        LC_ALL: 'C.UTF-8',
+        COLORTERM: 'truecolor',
       };
-      if (localeChoice.fallback !== 'none') {
-        this.logger.debug('terminal locale fallback applied', {
-          sessionId,
-          containerId: containerShortId,
-          locale: localeChoice.lang,
-        });
-      }
-      if (termChoice.fallback !== 'none') {
-        this.logger.debug('terminal terminfo fallback applied', {
-          sessionId,
-          containerId: containerShortId,
-          term: termChoice.term,
-        });
-      }
-      const exec = await this.containers.openInteractiveExec(containerId, `exec ${session.shell}`, {
+      const bootstrapScriptLines = [
+        'BOOTSTRAP_LANG=""',
+        'if command -v locale >/dev/null 2>&1; then',
+        "  if locale -a 2>/dev/null | grep -iE '^c\\.utf-?8$' >/dev/null 2>&1; then",
+        "    BOOTSTRAP_LANG='C.UTF-8'",
+        "  elif locale -a 2>/dev/null | grep -iE '^en_us\\.utf-?8$' >/dev/null 2>&1; then",
+        "    BOOTSTRAP_LANG='en_US.UTF-8'",
+        '  fi',
+        'fi',
+        'if [ -z "$BOOTSTRAP_LANG" ]; then',
+        "  BOOTSTRAP_LANG='C.UTF-8'",
+        'fi',
+        'export LANG="$BOOTSTRAP_LANG"',
+        'export LC_ALL="$BOOTSTRAP_LANG"',
+        "BOOTSTRAP_TERM='xterm-256color'",
+        'if command -v infocmp >/dev/null 2>&1; then',
+        '  if ! infocmp "$BOOTSTRAP_TERM" >/dev/null 2>&1; then',
+        "    if infocmp xterm >/dev/null 2>&1; then",
+        "      BOOTSTRAP_TERM='xterm'",
+        '    fi',
+        '  fi',
+        'fi',
+        'export TERM="$BOOTSTRAP_TERM"',
+        'if command -v stty >/dev/null 2>&1; then stty -ixon iutf8; fi',
+        'BOOTSTRAP_LANG_LINE="LANG=$LANG"',
+        'BOOTSTRAP_LC_LINE="LC_ALL=$LC_ALL"',
+        'BOOTSTRAP_TERM_LINE="TERM=$TERM"',
+        "BOOTSTRAP_STTY_LINE=\"$(stty -a 2>/dev/null | tr '\\n' ' ')\"",
+        "printf 'BOOTSTRAP_OK\\n%s\\n%s\\n%s\\n%s\\n' \"$BOOTSTRAP_LANG_LINE\" \"$BOOTSTRAP_LC_LINE\" \"$BOOTSTRAP_TERM_LINE\" \"$BOOTSTRAP_STTY_LINE\"",
+        'if command -v bash >/dev/null 2>&1; then exec bash -li; else exec sh -i; fi',
+      ];
+      const bootstrapScript = bootstrapScriptLines.join('\n');
+      const exec = await this.containers.openInteractiveExec(containerId, bootstrapScript, {
         tty: true,
         demuxStderr: false,
         env: execEnv,
@@ -698,43 +648,6 @@ export class ContainerTerminalGateway {
       logStatus('running', { execId });
       refreshActivity();
 
-      const sendInitializationCommand = (command: string) => {
-        if (!stdin) return;
-        try {
-          const payload = Buffer.from(`${command}\r`, 'utf8');
-          const writeOk = stdin.write(payload, (error) => {
-            if (error) {
-              this.logger.warn('terminal init command write error', {
-                command,
-                execId,
-                sessionId,
-                containerId: containerShortId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
-          });
-          if (!writeOk) {
-            const streamRef = stdin;
-            const onDrain = () => {
-              streamRef?.removeListener('drain', onDrain);
-            };
-            streamRef?.once('drain', onDrain);
-          }
-          refreshActivity();
-        } catch (err) {
-          this.logger.warn('terminal init command dispatch failed', {
-            command,
-            execId,
-            sessionId,
-            containerId: containerShortId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      };
-
-      sendInitializationCommand('stty -ixon iutf8');
-      sendInitializationCommand('export COLORTERM=truecolor');
-
       if (execId) {
         try {
           await this.containers.resizeExec(execId, { cols: session.cols, rows: session.rows });
@@ -757,9 +670,22 @@ export class ContainerTerminalGateway {
           });
         });
       }
+      let bootstrapMarkerLogged = false;
+      let bootstrapMarkerBuffer = '';
       stdout?.on('data', (chunk: Buffer | string) => {
         const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-        if (data.length) send({ type: 'output', data });
+        if (data.length) {
+          bootstrapMarkerBuffer = (bootstrapMarkerBuffer + data).slice(-512);
+          if (!bootstrapMarkerLogged && bootstrapMarkerBuffer.includes('BOOTSTRAP_OK')) {
+            bootstrapMarkerLogged = true;
+            this.logger.debug('terminal bootstrap confirmed', {
+              execId,
+              sessionId,
+              containerId: containerShortId,
+            });
+          }
+          send({ type: 'output', data });
+        }
         refreshActivity();
       });
       stdout?.on('end', () => {

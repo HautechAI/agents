@@ -148,6 +148,9 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
       stdinBuffer += chunk.toString();
     });
     const stdout = new PassThrough();
+    setImmediate(() => {
+      stdout.write('BOOTSTRAP_OK\nLANG=C.UTF-8\nLC_ALL=C.UTF-8\nTERM=xterm-256color\nSTTY=... iutf8\n');
+    });
     const closeExec = vi.fn().mockResolvedValue({ exitCode: 0 });
 
     const containerMocks = {
@@ -170,7 +173,7 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
     gateway.registerRoutes(app);
     const port = await listenFastify(app);
 
-    const messages: { type?: string; phase?: string }[] = [];
+    const messages: { type?: string; phase?: string; data?: unknown }[] = [];
     const ws = new WebSocket(
       `ws://127.0.0.1:${port}/api/containers/${record.containerId}/terminal/ws?sessionId=${record.sessionId}&token=${record.token}`,
     );
@@ -184,10 +187,22 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
     });
 
     await waitFor(() => messages.some((msg) => msg.type === 'status' && msg.phase === 'running'), 3000);
+    await waitFor(
+      () => messages.some((msg) => msg.type === 'output' && typeof msg.data === 'string' && msg.data.includes('BOOTSTRAP_OK')),
+      3000,
+    );
+    expect(containerMocks.openInteractiveExec).toHaveBeenCalledWith(
+      record.containerId,
+      expect.stringContaining('BOOTSTRAP_OK'),
+      expect.objectContaining({
+        env: expect.objectContaining({ TERM: 'xterm-256color', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' }),
+        tty: true,
+      }),
+    );
 
     ws.send(JSON.stringify({ type: 'input', data: 'echo hi\r\n' }));
     await waitFor(() => stdinBuffer.endsWith('echo hi\r'));
-    expect(stdinBuffer).toBe('stty -ixon iutf8\rexport COLORTERM=truecolor\recho hi\r');
+    expect(stdinBuffer).toBe('echo hi\r');
 
     ws.close();
     const closeInfo = await waitForWsClose(ws, 3000);
@@ -216,6 +231,9 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
 
     const stdin = new PassThrough();
     const stdout = new PassThrough();
+    setImmediate(() => {
+      stdout.write('BOOTSTRAP_OK\nLANG=C.UTF-8\nLC_ALL=C.UTF-8\nTERM=xterm-256color\nSTTY=... iutf8\n');
+    });
     const closeExec = vi.fn().mockResolvedValue({ exitCode: 0 });
 
     const containerMocks = {
@@ -303,6 +321,11 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
     });
 
     await waitFor(() => messages.some((msg) => msg.type === 'status' && msg.phase === 'running'), 3000);
+    await waitFor(
+      () => messages.some((msg) => msg.type === 'output' && typeof msg.data === 'string' && msg.data.includes('BOOTSTRAP_OK')),
+      3000,
+    );
+    messages.length = 0;
 
     ws.send(JSON.stringify({ type: 'input', data: 'echo first\r\n' }));
     await waitFor(

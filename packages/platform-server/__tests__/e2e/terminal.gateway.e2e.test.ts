@@ -35,6 +35,10 @@ class TestContainerService {
     this.stdin = stdin;
     this.stdout = stdout;
 
+    setImmediate(() => {
+      stdout.write('BOOTSTRAP_OK\nLANG=C.UTF-8\nLC_ALL=C.UTF-8\nTERM=xterm-256color\nSTTY=... iutf8\n');
+    });
+
     let buffer = '';
     stdin.on('data', (chunk: Buffer) => {
       buffer += chunk.toString('utf8');
@@ -150,6 +154,11 @@ describe('ContainerTerminalGateway E2E', () => {
     });
 
     await waitFor(() => messages.some((msg) => msg.type === 'status' && msg.phase === 'running'), 2000);
+    await waitFor(
+      () => messages.some((msg) => msg.type === 'output' && typeof msg.data === 'string' && msg.data.includes('BOOTSTRAP_OK')),
+      2000,
+    );
+    messages.length = 0;
 
     ws.send(JSON.stringify({ type: 'input', data: 'echo hi\r' }));
     await waitFor(
