@@ -1,4 +1,5 @@
 import { type ReactNode, useRef, useEffect, useState } from 'react';
+import { waitForStableScrollHeight } from './agents/waitForStableScrollHeight';
 import { Message, type MessageRole } from './Message';
 import { RunInfo } from './RunInfo';
 import { QueuedMessage } from './QueuedMessage';
@@ -44,6 +45,7 @@ interface ConversationProps {
   className?: string;
   defaultCollapsed?: boolean;
   collapsed?: boolean;
+  activeThreadId?: string | null;
 }
 
 export function Conversation({
@@ -55,8 +57,13 @@ export function Conversation({
   className = '',
   defaultCollapsed = false,
   collapsed,
+  activeThreadId,
 }: ConversationProps) {
   const messagesRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const previousThreadIdRef = useRef<string | null>(null);
+  const lastAutoScrolledThreadIdRef = useRef<string | null>(null);
+  const scrollRequestIdRef = useRef(0);
   const [runHeights, setRunHeights] = useState<Map<string, number>>(new Map());
 
   // Use controlled or uncontrolled state
@@ -74,6 +81,40 @@ export function Conversation({
     setRunHeights(newHeights);
   }, [runs]);
 
+  useEffect(() => {
+    const threadId = activeThreadId ?? null;
+    if (previousThreadIdRef.current !== threadId) {
+      previousThreadIdRef.current = threadId;
+      lastAutoScrolledThreadIdRef.current = null;
+    }
+
+    const container = scrollContainerRef.current;
+    if (!container || !threadId) {
+      return undefined;
+    }
+
+    if (lastAutoScrolledThreadIdRef.current === threadId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const requestId = scrollRequestIdRef.current + 1;
+    scrollRequestIdRef.current = requestId;
+
+    (async () => {
+      await waitForStableScrollHeight(container);
+      if (cancelled || scrollRequestIdRef.current !== requestId) {
+        return;
+      }
+      container.scrollTop = container.scrollHeight;
+      lastAutoScrolledThreadIdRef.current = threadId;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runs, activeThreadId]);
+
   const hasQueueOrReminders = queuedMessages.length > 0 || reminders.length > 0;
 
   return (
@@ -89,7 +130,11 @@ export function Conversation({
       )}
 
       {/* Main Content Area - Single Scroll Container */}
-      <div className="flex-1 min-w-0 overflow-y-auto flex flex-col">
+      <div
+        ref={scrollContainerRef}
+        data-testid="conversation-scroll-area"
+        className="flex-1 min-w-0 overflow-y-auto flex flex-col"
+      >
         {/* Runs Container */}
         <div className="flex flex-col flex-1 min-w-0">
           {/* Runs */}

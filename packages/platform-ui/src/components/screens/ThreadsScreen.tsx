@@ -277,7 +277,13 @@ export default function ThreadsScreen({
         </div>
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <Conversation runs={runs} className="h-full rounded-none border-none" collapsed={isRunsInfoCollapsed} />
+          <Conversation
+            key={resolvedSelectedThread.id}
+            runs={runs}
+            className="h-full rounded-none border-none"
+            collapsed={isRunsInfoCollapsed}
+            activeThreadId={resolvedSelectedThread.id}
+          />
         </div>
 
         <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] p-4">
