@@ -10,7 +10,6 @@ import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { Button } from '../Button';
 import { StatusIndicator } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
-import { Badge } from '../Badge';
 
 interface ThreadsScreenProps {
   threads: Thread[];
@@ -156,7 +155,7 @@ export default function ThreadsScreen({
           <div className="mb-3 flex items-start justify-between">
             <div className="flex-1">
               <div className="mb-1 flex items-center gap-2">
-                <StatusIndicator status={resolvedSelectedThread.status} size="sm" />
+                <StatusIndicator status={resolvedSelectedThread.status} size="sm" showTooltip={false} />
                 <span className="text-xs text-[var(--agyn-gray)]">{resolvedSelectedThread.agentName}</span>
                 <span className="text-xs text-[var(--agyn-gray)]">•</span>
                 <span className="text-xs text-[var(--agyn-gray)]" title={createdAtTitle}>
@@ -211,24 +210,21 @@ export default function ThreadsScreen({
                         return (
                           <div
                             key={container.id}
-                            className="rounded-[10px] border border-[var(--agyn-border-subtle)] bg-white px-3 py-2"
+                            className="rounded-[10px] border border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-3 py-2"
                           >
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
                               <span className="truncate text-sm text-[var(--agyn-dark)]">{container.name}</span>
-                              <Badge variant={isRunning ? 'success' : 'neutral'} size="sm">
-                                {isRunning ? 'Ready' : 'Finished'}
-                              </Badge>
+                              <IconButton
+                                variant="ghost"
+                                size="sm"
+                                icon={<Terminal className="h-4 w-4" />}
+                                aria-label="Open terminal"
+                                title="Open terminal"
+                                onClick={() => onOpenContainerTerminal?.(container.id)}
+                                disabled={!isRunning || !onOpenContainerTerminal}
+                              />
+                              <StatusIndicator status={container.status} size="sm" showTooltip={false} />
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="mt-3 w-full justify-center gap-2 text-xs"
-                              onClick={() => onOpenContainerTerminal?.(container.id)}
-                              disabled={!isRunning || !onOpenContainerTerminal}
-                            >
-                              <Terminal className="h-4 w-4" />
-                              Open Terminal
-                            </Button>
                           </div>
                         );
                       })

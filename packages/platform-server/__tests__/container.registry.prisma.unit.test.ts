@@ -8,6 +8,7 @@ type ContainerRow = {
   threadId: string | null;
   providerType: 'docker';
   image: string;
+  name: string | null;
   status: ContainerStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +35,7 @@ class FakePrismaClient {
           threadId: (create.threadId as string | null) ?? null,
           providerType: 'docker',
           image: create.image as string,
+          name: (create.name as string | null) ?? null,
           status: (create.status as ContainerStatus) ?? 'running',
           createdAt: now,
           updatedAt: now,
@@ -51,6 +53,7 @@ class FakePrismaClient {
         existing.dockerContainerId = (update.dockerContainerId as string | null) ?? existing.dockerContainerId;
         existing.threadId = (update.threadId as string | null) ?? existing.threadId;
         existing.image = (update.image as string) ?? existing.image;
+        if ('name' in update) existing.name = (update.name as string | null) ?? null;
         existing.status = (update.status as ContainerStatus) ?? existing.status;
         existing.updatedAt = new Date();
         existing.lastUsedAt = (update.lastUsedAt as Date) ?? existing.lastUsedAt;
@@ -79,6 +82,7 @@ class FakePrismaClient {
       if ('metadata' in data) existing.metadata = (data.metadata as ContainerMetadata | null) ?? existing.metadata;
       if ('dockerContainerId' in data) existing.dockerContainerId = (data.dockerContainerId as string | null) ?? existing.dockerContainerId;
       if ('threadId' in data) existing.threadId = (data.threadId as string | null) ?? existing.threadId;
+      if ('name' in data) existing.name = (data.name as string | null) ?? null;
       return existing;
     },
     updateMany: async (args: { where: { containerId: string; status: ContainerStatus }; data: { status: ContainerStatus; metadata?: ContainerMetadata | null } }) => {
@@ -144,6 +148,7 @@ describe('ContainerRegistry (Prisma-backed)', () => {
       image: 'node:20',
       labels: { 'hautech.ai/role': 'workspace' },
       ttlSeconds: 10,
+      name: '/workspace-main',
     });
     const row = await prisma.container.findUnique({ where: { containerId: 'abc' } });
     expect(row).toBeTruthy();
@@ -151,6 +156,7 @@ describe('ContainerRegistry (Prisma-backed)', () => {
     expect(row!.killAfterAt).not.toBeNull();
     expect(row!.metadata!.ttlSeconds).toBe(10);
     expect(row!.dockerContainerId).toBe('abc');
+    expect(row!.name).toBe('workspace-main');
   });
 
   it('updateLastUsed does not create when missing', async () => {

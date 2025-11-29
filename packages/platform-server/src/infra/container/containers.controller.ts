@@ -115,6 +115,7 @@ export class ContainersController {
       containerId: string;
       threadId: string | null;
       image: string;
+      name: string | null;
       status: ContainerStatus;
       createdAt: Date;
       lastUsedAt: Date;
@@ -127,6 +128,7 @@ export class ContainersController {
         containerId: true,
         threadId: true,
         image: true,
+        name: true,
         status: true,
         createdAt: true,
         lastUsedAt: true,
@@ -199,27 +201,27 @@ export class ContainersController {
       const fn = obj && (obj['$queryRaw'] as unknown);
       return typeof fn === 'function';
     })();
-    let sidecarSource: Array<{ containerId: string; image: string; status: unknown; metadata: unknown }> = [];
+    let sidecarSource: Array<{ containerId: string; image: string; status: unknown; metadata: unknown; name: string | null }> = [];
     if (hasQueryRaw) {
       if (parentIds.length === 0) {
         sidecarSource = [];
       } else {
         const q = Prisma.sql`
-          SELECT "containerId", "image", "status", "metadata" FROM "Container"
+          SELECT "containerId", "image", "status", "metadata", "name" FROM "Container"
           WHERE "metadata"->'labels'->>'hautech.ai/role' = 'dind'
             AND ("metadata"->'labels'->>'hautech.ai/parent_cid') IN (${Prisma.join(parentIds)})
         `;
-        sidecarSource = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown }>>(q);
+        sidecarSource = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown; name: string | null }>>(q);
       }
     } else {
       sidecarSource = await this.prisma.container.findMany({
-        select: { containerId: true, image: true, status: true, metadata: true },
-      }) as Array<{ containerId: string; image: string; status: ContainerStatus; metadata: unknown }>;
+        select: { containerId: true, image: true, status: true, metadata: true, name: true },
+      }) as Array<{ containerId: string; image: string; status: ContainerStatus; metadata: unknown; name: string | null }>;
     }
     const isStatus = (s: unknown): s is ContainerStatus =>
       typeof s === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(s);
     for (const sc of sidecarSource) {
-      const { labels, name } = toMetadata(sc.metadata);
+      const { labels, name: metaName } = toMetadata(sc.metadata);
       const role = labels['hautech.ai/role'];
       const parent = labels['hautech.ai/parent_cid'];
       if (role !== 'dind') continue;
@@ -229,7 +231,9 @@ export class ContainersController {
         ? (isStatus(sc.status) ? sc.status : 'failed')
         : (sc.status as ContainerStatus);
       const arr = byParent[parent] || (byParent[parent] = []);
-      arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status, name: name ?? null });
+      const dbName = sanitizeName(sc.name);
+      const resolvedName = dbName ?? metaName ?? null;
+      arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status, name: resolvedName });
     }
 
     const toIso = (d: unknown): string => {
@@ -253,13 +257,15 @@ export class ContainersController {
       return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
     };
     const items = filteredRows.map((row) => {
-      const { labels, mounts, name } = toMetadata(row.metadata);
+      const { labels, mounts, name: metaName } = toMetadata(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
+      const dbName = sanitizeName(row.name);
+      const resolvedName = dbName ?? metaName ?? null;
       return {
         containerId: row.containerId,
         threadId: row.threadId,
         image: row.image,
-        name: name ?? null,
+        name: resolvedName,
         status: row.status,
         startedAt: toIso(row.createdAt),
         lastUsedAt: toIso(row.lastUsedAt),

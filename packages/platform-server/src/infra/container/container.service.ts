@@ -228,6 +228,7 @@ export class ContainerService {
           platform: optsWithDefaults.platform,
           ttlSeconds: optsWithDefaults.ttlSeconds,
           mounts: mounts.length ? mounts : undefined,
+          name: inspect.Name,
         });
       } catch (e) {
         this.error('Failed to register container start', { error: this.errorContext(e) });

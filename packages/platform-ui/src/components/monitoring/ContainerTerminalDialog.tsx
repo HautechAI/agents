@@ -37,7 +37,6 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
   const mutation = useCreateContainerTerminalSession();
   const [session, setSession] = useState<ContainerTerminalSessionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'terminal' | 'logs'>('terminal');
   const loading = mutation.status === 'pending';
 
   const mutateAsyncRef = useRef(mutation.mutateAsync);
@@ -111,11 +110,6 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
       });
   };
 
-  useEffect(() => {
-    if (open) {
-      setActiveTab('terminal');
-    }
-  }, [open, container?.containerId]);
 
   const displayName = resolveDisplayName(container);
 
@@ -128,16 +122,12 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
       <DialogContent
-        className="max-w-4xl p-0 [&>button[data-slot='dialog-close']]:hidden"
+        className="w-full md:w-[50vw] md:max-w-[960px] p-0 [&>button[data-slot='dialog-close']]:hidden"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
         }}
       >
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value === 'logs' ? 'logs' : 'terminal')}
-          className="flex min-h-[520px] flex-col gap-0"
-        >
+        <Tabs defaultValue="terminal" key={container?.containerId ?? 'default'} className="flex min-h-[520px] flex-col gap-0">
           <DialogHeader className="gap-4 border-b border-[var(--agyn-border-subtle)] px-6 py-4">
             <div className="flex items-center justify-between gap-4">
               <DialogTitle className="text-lg font-semibold text-[var(--agyn-dark)]">
@@ -153,7 +143,7 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
             </TabsList>
           </DialogHeader>
 
-          <TabsContent value="terminal" className="flex flex-1 flex-col">
+          <TabsContent value="terminal" className="flex flex-1 flex-col" forceMount>
             <div className="flex flex-1 flex-col gap-4 px-6 py-4">
               {error && (
                 <div className="flex items-center justify-between rounded-md border border-[var(--agyn-status-failed)]/40 bg-[var(--agyn-status-failed)]/10 px-3 py-2 text-sm text-[var(--agyn-status-failed)]">
@@ -173,7 +163,7 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
             </div>
           </TabsContent>
 
-          <TabsContent value="logs" className="flex flex-1">
+          <TabsContent value="logs" className="flex flex-1" forceMount>
             <div className="flex flex-1 items-center justify-center px-6 py-4 text-sm text-[var(--agyn-text-subtle)]">
               Logs view coming soon.
             </div>

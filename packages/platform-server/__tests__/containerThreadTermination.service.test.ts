@@ -53,7 +53,7 @@ const createHarness = () => {
       row.metadata.claimId = claimId;
       return true;
     }),
-    registerStart: vi.fn(async (args: { containerId: string; threadId: string; labels?: Record<string, string>; platform?: string; ttlSeconds?: number; nodeId: string; image: string }) => {
+    registerStart: vi.fn(async (args: { containerId: string; threadId: string; labels?: Record<string, string>; platform?: string; ttlSeconds?: number; nodeId: string; image: string; name?: string | null }) => {
       const meta: ContainerMetadata = {
         labels: args.labels ?? {},
         platform: args.platform,

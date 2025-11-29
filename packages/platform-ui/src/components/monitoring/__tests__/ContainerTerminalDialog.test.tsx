@@ -224,6 +224,26 @@ describe('ContainerTerminalDialog stability', () => {
       expect(getSentInputs()).toContain('live command');
     });
   });
+
+  it('keeps the terminal session active when switching tabs', async () => {
+    render(<ContainerTerminalDialog container={container} open onClose={() => {}} />);
+
+    const logsTab = await screen.findByRole('tab', { name: 'Logs' });
+    const terminalTab = await screen.findByRole('tab', { name: 'Terminal' });
+
+    await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalledTimes(1));
+    expect(terminalDisposeMock).not.toHaveBeenCalled();
+
+    fireEvent.click(logsTab);
+    await waitFor(() => expect(screen.getByText('Logs view coming soon.')).toBeInTheDocument());
+
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(terminalDisposeMock).not.toHaveBeenCalled();
+
+    fireEvent.click(terminalTab);
+    expect(terminalDisposeMock).not.toHaveBeenCalled();
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('toWsUrl', () => {
