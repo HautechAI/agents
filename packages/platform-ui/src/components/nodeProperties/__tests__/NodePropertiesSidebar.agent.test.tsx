@@ -54,8 +54,6 @@ describe('NodePropertiesSidebar - agent', () => {
     expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ role: 'Support' }));
 
     fireEvent.change(titleInput, { target: { value: '   ' } });
-    expect(onConfigChange).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Casey Quinn (Lead Planner)' }),
-    );
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ title: '' }));
   });
 });

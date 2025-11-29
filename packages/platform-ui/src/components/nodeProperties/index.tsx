@@ -232,17 +232,9 @@ function NodePropertiesSidebar({
       const rawTitle = record.title;
       const stringTitle = typeof rawTitle === 'string' ? rawTitle : '';
       const trimmedTitle = stringTitle.trim();
-      if (trimmedTitle.length > 0) {
-        onConfigChange(partial);
-        return;
-      }
-
-      const nextName = typeof record.name === 'string' ? (record.name as string) : agentNameValue;
-      const nextRole = typeof record.role === 'string' ? (record.role as string) : agentRoleValue;
-      const resolvedTitle = computeAgentDefaultTitle(nextName, nextRole, 'Agent');
-      onConfigChange({ ...partial, title: resolvedTitle });
+      onConfigChange({ ...partial, title: trimmedTitle });
     },
-    [onConfigChange, nodeKind, agentNameValue, agentRoleValue],
+    [onConfigChange, nodeKind],
   );
 
   const slackAppReference = useMemo(() => readReferenceValue(configRecord.app_token), [configRecord.app_token]);
