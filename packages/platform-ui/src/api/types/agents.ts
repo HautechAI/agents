@@ -14,6 +14,8 @@ export type ThreadReminder = {
   at: string;
   createdAt: string;
   completedAt: string | null;
+  cancelledAt: string | null;
+  runId?: string | null;
 };
 
 export type ReminderItem = ThreadReminder;
