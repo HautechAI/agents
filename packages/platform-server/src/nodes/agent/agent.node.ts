@@ -138,7 +138,7 @@ type RegisteredTool = {
 };
 
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
-import { Inject, Injectable, Optional, Scope } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, Optional, Scope } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { TemplatePortConfig } from '../../graph/ports.types';
 import type { RuntimeContext } from '../../graph/runtimeContext';
@@ -146,25 +146,29 @@ import Node from '../base/Node';
 import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
 
 @Injectable({ scope: Scope.TRANSIENT })
-export class AgentNode extends Node<AgentStaticConfig> {
+export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
   protected buffer = new MessagesBuffer({ debounceMs: 0 });
 
   private mcpServerTools: Map<LocalMCPServerNode, Map<string, FunctionTool>> = new Map();
   private toolsByName: Map<string, RegisteredTool> = new Map();
   private toolNames: Set<string> = new Set();
   private runningThreads: Set<string> = new Set();
+  private persistence?: AgentsPersistenceService;
 
   constructor(
     @Inject(ConfigService) protected configService: ConfigService,
     @Inject(LLMProvisioner) protected llmProvisioner: LLMProvisioner,
     @Inject(ModuleRef) protected readonly moduleRef: ModuleRef,
-    @Optional() @Inject(AgentsPersistenceService) private persistence?: AgentsPersistenceService,
     @Optional() @Inject(RunSignalsRegistry) private runSignals?: RunSignalsRegistry,
   ) {
     super();
   }
 
-  private getPersistence(): AgentsPersistenceService {
+  onModuleInit(): void {
+    this.persistence = this.moduleRef.get(AgentsPersistenceService, { strict: false });
+  }
+
+  private getPersistenceOrThrow(): AgentsPersistenceService {
     if (!this.persistence) {
       const resolved = this.moduleRef.get(AgentsPersistenceService, { strict: false });
       if (!resolved) {
@@ -286,7 +290,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
       `[Agent: ${this.config.title ?? this.nodeId}] Injecting ${drained.length} buffered message(s) into active run for thread ${ctx.threadId}`,
     );
 
-    await this.getPersistence().recordInjected(ctx.runId, drained, { threadId: ctx.threadId });
+    await this.getPersistenceOrThrow().recordInjected(ctx.runId, drained, { threadId: ctx.threadId });
     state.messages.push(...drained);
   }
 
@@ -461,7 +465,7 @@ export class AgentNode extends Node<AgentStaticConfig> {
     let terminateSignal: Signal | undefined;
     let effectiveBehavior: EffectiveAgentConfig['behavior'] | undefined;
     try {
-      const persistence = this.getPersistence();
+      const persistence = this.getPersistenceOrThrow();
       const started = await persistence.beginRunThread(thread, messages);
       runId = started.runId;
       if (!runId) throw new Error('run_start_failed');
