@@ -639,6 +639,11 @@ export class AgentsPersistenceService {
     }
   }
 
+  async getThreadAgentTitle(threadId: string): Promise<string | null> {
+    const titles = await this.getThreadsAgentTitles([threadId]);
+    return titles[threadId] ?? null;
+  }
+
   async listRuns(
     threadId: string,
     take: number = 100,

@@ -60,10 +60,9 @@ export class ManageAdapter {
         return { ok: false, error: 'manage_missing_parent' };
       }
 
-      let agentTitle = await this.persistence.getThreadAgentTitle(childThreadId);
-      if (!agentTitle || agentTitle.trim().length === 0) {
-        agentTitle = 'Subagent';
-      }
+      const agentTitleCandidate = await this.persistence.getThreadAgentTitle(childThreadId);
+      const trimmedAgentTitle = typeof agentTitleCandidate === 'string' ? agentTitleCandidate.trim() : '';
+      const agentTitle = trimmedAgentTitle.length > 0 ? trimmedAgentTitle : 'Subagent';
       const resolvedPrefix = typeof params.prefix === 'string' && params.prefix.length > 0 ? params.prefix : `From ${agentTitle}: `;
       const forwardedText = `${resolvedPrefix}${text}`;
 
