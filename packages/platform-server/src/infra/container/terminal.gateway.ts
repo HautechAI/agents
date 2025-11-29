@@ -575,48 +575,9 @@ export class ContainerTerminalGateway {
     if (maxTimer?.unref) maxTimer.unref();
 
     try {
-      const execEnv = {
-        TERM: 'xterm-256color',
-        LANG: 'C.UTF-8',
-        LC_ALL: 'C.UTF-8',
-        COLORTERM: 'truecolor',
-      };
-      const bootstrapScriptLines = [
-        'BOOTSTRAP_LANG=""',
-        'if command -v locale >/dev/null 2>&1; then',
-        "  if locale -a 2>/dev/null | grep -iE '^c\\.utf-?8$' >/dev/null 2>&1; then",
-        "    BOOTSTRAP_LANG='C.UTF-8'",
-        "  elif locale -a 2>/dev/null | grep -iE '^en_us\\.utf-?8$' >/dev/null 2>&1; then",
-        "    BOOTSTRAP_LANG='en_US.UTF-8'",
-        '  fi',
-        'fi',
-        'if [ -z "$BOOTSTRAP_LANG" ]; then',
-        "  BOOTSTRAP_LANG='C.UTF-8'",
-        'fi',
-        'export LANG="$BOOTSTRAP_LANG"',
-        'export LC_ALL="$BOOTSTRAP_LANG"',
-        "BOOTSTRAP_TERM='xterm-256color'",
-        'if command -v infocmp >/dev/null 2>&1; then',
-        '  if ! infocmp "$BOOTSTRAP_TERM" >/dev/null 2>&1; then',
-        "    if infocmp xterm >/dev/null 2>&1; then",
-        "      BOOTSTRAP_TERM='xterm'",
-        '    fi',
-        '  fi',
-        'fi',
-        'export TERM="$BOOTSTRAP_TERM"',
-        'if command -v stty >/dev/null 2>&1; then stty -ixon iutf8; fi',
-        'BOOTSTRAP_LANG_LINE="LANG=$LANG"',
-        'BOOTSTRAP_LC_LINE="LC_ALL=$LC_ALL"',
-        'BOOTSTRAP_TERM_LINE="TERM=$TERM"',
-        "BOOTSTRAP_STTY_LINE=\"$(stty -a 2>/dev/null | tr '\\n' ' ')\"",
-        "printf 'BOOTSTRAP_OK\\n%s\\n%s\\n%s\\n%s\\n' \"$BOOTSTRAP_LANG_LINE\" \"$BOOTSTRAP_LC_LINE\" \"$BOOTSTRAP_TERM_LINE\" \"$BOOTSTRAP_STTY_LINE\"",
-        'if command -v bash >/dev/null 2>&1; then exec bash -li; else exec sh -i; fi',
-      ];
-      const bootstrapScript = bootstrapScriptLines.join('\n');
-      const exec = await this.containers.openInteractiveExec(containerId, bootstrapScript, {
+      const exec = await this.containers.openInteractiveExec(containerId, `exec ${session.shell}`, {
         tty: true,
         demuxStderr: false,
-        env: execEnv,
       });
       execId = exec.execId;
       stdin = exec.stdin;
@@ -670,8 +631,6 @@ export class ContainerTerminalGateway {
           });
         });
       }
-      let bootstrapMarkerLogged = false;
-      let bootstrapMarkerBuffer = '';
       let stdoutMuxRemainder: Buffer | null = null;
       let stdoutMuxStrippedLogged = false;
       const decodeDockerMultiplex = (
@@ -759,18 +718,7 @@ export class ContainerTerminalGateway {
 
         const payloadBuffer = treatAsPlain ? payloads[0] : Buffer.concat(payloads);
         const data = payloadBuffer.toString('utf8');
-        if (data.length) {
-          bootstrapMarkerBuffer = (bootstrapMarkerBuffer + data).slice(-512);
-          if (!bootstrapMarkerLogged && bootstrapMarkerBuffer.includes('BOOTSTRAP_OK')) {
-            bootstrapMarkerLogged = true;
-            this.logger.debug('terminal bootstrap confirmed', {
-              execId,
-              sessionId,
-              containerId: containerShortId,
-            });
-          }
-          send({ type: 'output', data });
-        }
+        if (data.length) send({ type: 'output', data });
         refreshActivity();
       });
       stdout?.on('end', () => {
@@ -826,7 +774,7 @@ export class ContainerTerminalGateway {
             return;
           }
           try {
-            const normalized = message.data.replace(/\r\n/g, '\r');
+            const normalized = message.data.replace(/\r\n/g, '\n').replace(/\n/g, '\r');
             const buffer = Buffer.from(normalized, 'utf8');
             const writeOk = stdin.write(buffer, (error) => {
               if (error) {
