@@ -41,7 +41,7 @@ export class ContainerRegistry {
     platform?: string;
     ttlSeconds?: number;
     mounts?: ContainerMount[];
-    name?: string | null;
+    name: string;
   }): Promise<void> {
     const nowIso = new Date().toISOString();
     const killAfter = this.computeKillAfter(nowIso, args.ttlSeconds);
@@ -62,7 +62,7 @@ export class ContainerRegistry {
         threadId: args.threadId || null,
         providerType: 'docker',
         image: args.image,
-        ...(sanitizedName !== undefined ? { name: sanitizedName } : {}),
+        name: sanitizedName,
         status: 'running',
         lastUsedAt: new Date(nowIso),
         killAfterAt: killAfter ? new Date(killAfter) : null,
@@ -77,7 +77,7 @@ export class ContainerRegistry {
         threadId: args.threadId || null,
         providerType: 'docker',
         image: args.image,
-        ...(sanitizedName !== undefined ? { name: sanitizedName } : {}),
+        name: sanitizedName,
         status: 'running',
         lastUsedAt: new Date(nowIso),
         killAfterAt: killAfter ? new Date(killAfter) : null,
@@ -89,11 +89,14 @@ export class ContainerRegistry {
     });
   }
 
-  private sanitizeName(value: string | null | undefined): string | null | undefined {
-    if (value === undefined) return undefined;
-    if (value === null) return null;
+  private sanitizeName(value: string | null | undefined): string {
+    if (typeof value !== 'string') {
+      throw new Error('ContainerRegistry.registerStart requires a container name');
+    }
     const trimmed = value.trim();
-    if (!trimmed) return null;
+    if (!trimmed) {
+      throw new Error('ContainerRegistry.registerStart received an empty container name');
+    }
     return trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
   }
 

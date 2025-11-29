@@ -66,13 +66,13 @@ export class ContainersController {
     containerId: string;
     threadId: string | null;
     image: string;
-    name: string | null;
+    name: string;
     status: ContainerStatus;
     startedAt: string;
     lastUsedAt: string;
     killAfterAt: string | null;
     role: 'workspace' | 'dind' | string;
-    sidecars?: Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus; name: string | null }>;
+    sidecars?: Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus; name: string }>;
     mounts?: Array<{ source: string; destination: string }>;
   }> }> {
     try {
@@ -115,7 +115,7 @@ export class ContainersController {
       containerId: string;
       threadId: string | null;
       image: string;
-      name: string | null;
+      name: string;
       status: ContainerStatus;
       createdAt: Date;
       lastUsedAt: Date;
@@ -140,50 +140,20 @@ export class ContainersController {
 
     // Narrow type guard for metadata.labels
     type MetadataShape = { labels?: Record<string, unknown>; mounts?: unknown };
-    const sanitizeName = (value: unknown): string | null => {
-      if (typeof value !== 'string') return null;
+    const sanitizeName = (value: unknown): string => {
+      if (typeof value !== 'string') throw new Error('Container name missing');
       const trimmed = value.trim();
-      if (!trimmed) return null;
+      if (!trimmed) throw new Error('Container name is empty');
       return trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
     };
-    const extractNameFromMeta = (value: unknown): string | null => {
-      if (!value || typeof value !== 'object') return null;
-      const meta = value as Record<string, unknown>;
-      const direct = sanitizeName(meta.name);
-      if (direct) return direct;
-      const upper = sanitizeName(meta.Name);
-      if (upper) return upper;
-      const nestedCandidates: unknown[] = [];
-      const inspect = meta.inspect;
-      if (inspect && typeof inspect === 'object') nestedCandidates.push((inspect as Record<string, unknown>).Name);
-      const docker = meta.docker;
-      if (docker && typeof docker === 'object') nestedCandidates.push((docker as Record<string, unknown>).Name);
-      const container = meta.container;
-      if (container && typeof container === 'object') {
-        const record = container as Record<string, unknown>;
-        nestedCandidates.push(record.Name, record.name);
-      }
-      const details = meta.details;
-      if (details && typeof details === 'object') {
-        const record = details as Record<string, unknown>;
-        nestedCandidates.push(record.Name, record.name);
-      }
-      for (const candidate of nestedCandidates) {
-        const resolved = sanitizeName(candidate);
-        if (resolved) return resolved;
-      }
-      return null;
-    };
-    const toMetadata = (value: unknown): { labels: Record<string, string>; mounts: ContainerMount[]; name: string | null } => {
-      if (!value || typeof value !== 'object') return { labels: {}, mounts: [], name: null };
+    const toMetadata = (value: unknown): { labels: Record<string, string>; mounts: ContainerMount[] } => {
+      if (!value || typeof value !== 'object') return { labels: {}, mounts: [] };
       const meta = value as MetadataShape;
       const rawLabels = meta.labels && typeof meta.labels === 'object' && meta.labels !== null ? meta.labels : {};
       const labels: Record<string, string> = {};
       for (const [key, val] of Object.entries(rawLabels)) if (typeof val === 'string') labels[key] = val;
       const mounts = sanitizeContainerMounts(meta.mounts);
-      const labelOverride = sanitizeName(labels['hautech.ai/name']);
-      const metaName = labelOverride ?? extractNameFromMeta(value);
-      return { labels, mounts, name: metaName };
+      return { labels, mounts };
     };
     // Exclude DinD from top-level list (only attach as sidecars)
     const filteredRows = rows.filter((row) => {
@@ -195,13 +165,13 @@ export class ContainersController {
     // Optimize: preselect DinD sidecars for current parent set via JSON-path raw query;
     // provide a safe fallback when $queryRaw is not implemented by the Prisma stub.
     const parentIds = filteredRows.map((row) => row.containerId);
-    const byParent: Record<string, Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus; name: string | null }>> = {};
+    const byParent: Record<string, Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus; name: string }>> = {};
     const hasQueryRaw = (() => {
       const obj = this.prisma as unknown as Record<string, unknown>;
       const fn = obj && (obj['$queryRaw'] as unknown);
       return typeof fn === 'function';
     })();
-    let sidecarSource: Array<{ containerId: string; image: string; status: unknown; metadata: unknown; name: string | null }> = [];
+    let sidecarSource: Array<{ containerId: string; image: string; status: unknown; metadata: unknown; name: string }> = [];
     if (hasQueryRaw) {
       if (parentIds.length === 0) {
         sidecarSource = [];
@@ -211,17 +181,17 @@ export class ContainersController {
           WHERE "metadata"->'labels'->>'hautech.ai/role' = 'dind'
             AND ("metadata"->'labels'->>'hautech.ai/parent_cid') IN (${Prisma.join(parentIds)})
         `;
-        sidecarSource = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown; name: string | null }>>(q);
+        sidecarSource = await this.prisma.$queryRaw<Array<{ containerId: string; image: string; status: string; metadata: unknown; name: string }>>(q);
       }
     } else {
       sidecarSource = await this.prisma.container.findMany({
         select: { containerId: true, image: true, status: true, metadata: true, name: true },
-      }) as Array<{ containerId: string; image: string; status: ContainerStatus; metadata: unknown; name: string | null }>;
+      }) as Array<{ containerId: string; image: string; status: ContainerStatus; metadata: unknown; name: string }>;
     }
     const isStatus = (s: unknown): s is ContainerStatus =>
       typeof s === 'string' && ['running', 'stopped', 'terminating', 'failed'].includes(s);
     for (const sc of sidecarSource) {
-      const { labels, name: metaName } = toMetadata(sc.metadata);
+      const { labels } = toMetadata(sc.metadata);
       const role = labels['hautech.ai/role'];
       const parent = labels['hautech.ai/parent_cid'];
       if (role !== 'dind') continue;
@@ -231,9 +201,8 @@ export class ContainersController {
         ? (isStatus(sc.status) ? sc.status : 'failed')
         : (sc.status as ContainerStatus);
       const arr = byParent[parent] || (byParent[parent] = []);
-      const dbName = sanitizeName(sc.name);
-      const resolvedName = dbName ?? metaName ?? null;
-      arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status, name: resolvedName });
+      const name = sanitizeName(sc.name);
+      arr.push({ containerId: sc.containerId, role: 'dind', image: sc.image, status, name });
     }
 
     const toIso = (d: unknown): string => {
@@ -257,15 +226,14 @@ export class ContainersController {
       return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
     };
     const items = filteredRows.map((row) => {
-      const { labels, mounts, name: metaName } = toMetadata(row.metadata);
+      const { labels, mounts } = toMetadata(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
-      const dbName = sanitizeName(row.name);
-      const resolvedName = dbName ?? metaName ?? null;
+      const name = sanitizeName(row.name);
       return {
         containerId: row.containerId,
         threadId: row.threadId,
         image: row.image,
-        name: resolvedName,
+        name,
         status: row.status,
         startedAt: toIso(row.createdAt),
         lastUsedAt: toIso(row.lastUsedAt),

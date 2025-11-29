@@ -72,11 +72,7 @@ function sanitizeAgentName(agentName: string | null | undefined): string {
 }
 
 function containerDisplayName(container: ContainerItem): string {
-  const byName = container.name?.trim();
-  if (byName) return byName;
-  const imageSegment = container.image?.split('/').pop()?.trim();
-  if (imageSegment) return imageSegment;
-  return container.containerId.substring(0, 12);
+  return container.name;
 }
 
 type StatusOverride = {

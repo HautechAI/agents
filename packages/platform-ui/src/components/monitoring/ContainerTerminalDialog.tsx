@@ -26,11 +26,7 @@ type Props = {
 
 function resolveDisplayName(container: ContainerItem | null): string {
   if (!container) return 'Terminal';
-  const fromName = container.name?.trim();
-  if (fromName) return fromName;
-  const fromImage = container.image?.split('/').pop()?.trim();
-  if (fromImage) return fromImage;
-  return container.containerId.substring(0, 12);
+  return container.name;
 }
 
 export function ContainerTerminalDialog({ container, open, onClose }: Props) {
@@ -122,7 +118,8 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
       <DialogContent
-        className="w-full md:w-[50vw] md:max-w-[960px] p-0 [&>button[data-slot='dialog-close']]:hidden"
+        className="w-full md:w-[50vw] md:max-w-[960px] p-0"
+        hideCloseButton
         onOpenAutoFocus={(event) => {
           event.preventDefault();
         }}
@@ -134,7 +131,13 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
                 {displayName}
               </DialogTitle>
               <DialogClose asChild>
-                <IconButton icon={<X className="h-4 w-4" />} variant="ghost" size="sm" aria-label="Close terminal" />
+                <IconButton
+                  icon={<X className="h-4 w-4" />}
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Close terminal"
+                  data-slot="dialog-close"
+                />
               </DialogClose>
             </div>
             <TabsList className="mt-2">

@@ -225,6 +225,13 @@ describe('ContainerTerminalDialog stability', () => {
     });
   });
 
+  it('renders only the header close control', () => {
+    render(<ContainerTerminalDialog container={container} open onClose={() => {}} />);
+
+    const closeButtons = document.querySelectorAll('[data-slot="dialog-close"]');
+    expect(closeButtons).toHaveLength(1);
+  });
+
   it('keeps the terminal session active when switching tabs', async () => {
     render(<ContainerTerminalDialog container={container} open onClose={() => {}} />);
 
