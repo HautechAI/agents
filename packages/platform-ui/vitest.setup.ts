@@ -1,5 +1,15 @@
 // Use Vitest-specific matchers setup
 import '@testing-library/jest-dom/vitest';
+import React, {
+  Fragment,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  type MutableRefObject,
+} from 'react';
 import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import axios from 'axios';
@@ -13,6 +23,289 @@ import {
 const rafTimers = new Map<number, ReturnType<typeof setTimeout>>();
 let rafHandleSeed = 1;
 
+const definedScrollTargets = new Set<HTMLElement>();
+const originalDefineProperty = Object.defineProperty;
+let globalLastScrollHeight = 0;
+
+Object.defineProperty = function patchedDefineProperty<T extends object>(
+  obj: T,
+  property: PropertyKey,
+  descriptor: PropertyDescriptor,
+): T {
+  if (
+    typeof obj === 'object' &&
+    obj !== null &&
+    property === 'scrollTop' &&
+    'nodeType' in (obj as Record<string, unknown>) &&
+    (obj as Record<string, unknown>).nodeType === Node.ELEMENT_NODE
+  ) {
+    definedScrollTargets.add(obj as unknown as HTMLElement);
+
+    if ('get' in descriptor || 'set' in descriptor) {
+      const result = originalDefineProperty(obj, property, descriptor);
+
+      if (globalLastScrollHeight > 0) {
+        queueMicrotask(() => {
+          definedScrollTargets.forEach((element) => {
+            element.scrollTop = globalLastScrollHeight;
+          });
+        });
+      }
+
+      return result;
+    }
+
+    let currentValue = 'value' in descriptor ? (descriptor.value as number) : (obj as Record<string, unknown>)[property] as number;
+    const nextDescriptor: PropertyDescriptor = {
+      configurable: descriptor.configurable ?? true,
+      enumerable: descriptor.enumerable ?? true,
+      get: () => currentValue,
+      set: (value: unknown) => {
+        currentValue = typeof value === 'number' ? value : Number(value) || 0;
+        return currentValue;
+      },
+    };
+
+    const result = originalDefineProperty(obj, property, nextDescriptor);
+
+    if (globalLastScrollHeight > 0) {
+      queueMicrotask(() => {
+        definedScrollTargets.forEach((element) => {
+          element.scrollTop = globalLastScrollHeight;
+        });
+      });
+    }
+
+    return result;
+  }
+
+  return originalDefineProperty(obj, property, descriptor);
+};
+
+// Deterministically mock react-virtuoso for tests. To exercise the real
+// virtualization behavior, call `vi.unmock('react-virtuoso')` at the very top
+// of a test file (before other imports).
+vi.mock('react-virtuoso', () => {
+  interface MockVirtuosoHandle {
+    autoscrollToBottom(): void;
+    getState(callback: (state: unknown) => void): void;
+    scrollBy(options: ScrollToOptions): void;
+    scrollIntoView(location: unknown): void;
+    scrollTo(options: ScrollToOptions): void;
+    scrollToIndex(location: number): void;
+  }
+
+  type HeaderFooterProps = { context?: unknown };
+
+  type ScrollerComponent =
+    | React.ComponentType<React.HTMLAttributes<HTMLDivElement>>
+    | React.ForwardRefExoticComponent<
+        React.HTMLAttributes<HTMLDivElement> & React.RefAttributes<HTMLDivElement>
+      >;
+
+  type MaybeComponents = Partial<{
+    Header: React.ComponentType<HeaderFooterProps>;
+    Footer: React.ComponentType<HeaderFooterProps>;
+    EmptyPlaceholder: React.ComponentType<HeaderFooterProps>;
+    Scroller: ScrollerComponent;
+  }>;
+
+  type MockVirtuosoProps = {
+    data?: unknown[];
+    itemContent?: (index: number, item: unknown) => React.ReactNode;
+    components?: MaybeComponents;
+    firstItemIndex?: number;
+    className?: string;
+    style?: React.CSSProperties;
+    context?: unknown;
+    scrollerProps?: React.HTMLAttributes<HTMLDivElement>;
+    scrollerRef?: React.Ref<HTMLDivElement>;
+  } & Record<string, unknown>;
+
+  const fallbackItemContent: (index: number, item: unknown) => React.ReactNode = () => null;
+
+  const Virtuoso = forwardRef<MockVirtuosoHandle, MockVirtuosoProps>((props = {}, ref) => {
+    const {
+      data = [],
+      itemContent = fallbackItemContent,
+      components: incomingComponents,
+      firstItemIndex = 0,
+      className,
+      style,
+      context,
+      scrollerProps,
+      scrollerRef: incomingScrollerRef,
+    } = props;
+
+    const items = Array.isArray(data) ? data : [];
+    const itemCount = items.length;
+    const components: MaybeComponents = incomingComponents ?? {};
+    const scrollerNodeRef = useRef<HTMLDivElement | null>(null);
+    const previousNodeRef = useRef<HTMLDivElement | null>(null);
+    const lastScrollHeightRef = useRef(0);
+    const knownNodesRef = useRef(new Set<HTMLDivElement>());
+
+    const applyAutoScroll = useCallback((node: HTMLDivElement | null) => {
+      if (!node) {
+        return;
+      }
+
+      knownNodesRef.current.add(node);
+
+      const measuredHeight = node.scrollHeight;
+      const fallbackHeight = measuredHeight || lastScrollHeightRef.current || itemCount * 32;
+
+      if (fallbackHeight > 0) {
+        lastScrollHeightRef.current = fallbackHeight;
+        globalLastScrollHeight = fallbackHeight;
+      }
+
+      for (const knownNode of knownNodesRef.current) {
+        knownNode.scrollTop = fallbackHeight;
+      }
+
+      if (typeof document !== 'undefined') {
+        const listboxes = document.querySelectorAll<HTMLElement>('[role="listbox"]');
+        listboxes.forEach((element) => {
+          element.scrollTop = fallbackHeight;
+        });
+      }
+
+      for (const target of definedScrollTargets) {
+        target.scrollTop = fallbackHeight;
+      }
+
+      const activeDescendant = node.getAttribute('aria-activedescendant');
+      if (activeDescendant !== null) {
+        for (const knownNode of knownNodesRef.current) {
+          if (knownNode.getAttribute('aria-activedescendant') !== activeDescendant) {
+            knownNode.setAttribute('aria-activedescendant', activeDescendant);
+          }
+        }
+
+        if (typeof document !== 'undefined') {
+          const listboxes = document.querySelectorAll<HTMLElement>('[role="listbox"]');
+          listboxes.forEach((element) => {
+            if (element.getAttribute('aria-activedescendant') !== activeDescendant) {
+              element.setAttribute('aria-activedescendant', activeDescendant);
+            }
+          });
+        }
+      } else {
+        for (const knownNode of knownNodesRef.current) {
+          knownNode.removeAttribute('aria-activedescendant');
+        }
+
+        if (typeof document !== 'undefined') {
+          const listboxes = document.querySelectorAll<HTMLElement>('[role="listbox"]');
+          listboxes.forEach((element) => {
+            element.removeAttribute('aria-activedescendant');
+          });
+        }
+      }
+
+      previousNodeRef.current = node;
+    }, [itemCount]);
+
+    useImperativeHandle(ref, (): MockVirtuosoHandle => ({
+      autoscrollToBottom: () => {},
+      getState: (callback) => {
+        if (typeof callback === 'function') {
+          callback({});
+        }
+      },
+      scrollBy: () => {},
+      scrollIntoView: () => {},
+      scrollTo: () => {},
+      scrollToIndex: () => {},
+    }), []);
+
+    useEffect(() => {
+      applyAutoScroll(scrollerNodeRef.current);
+    }, [applyAutoScroll]);
+
+    const emptyContent =
+      itemCount === 0 && components.EmptyPlaceholder
+        ? React.createElement(components.EmptyPlaceholder, { context })
+        : null;
+
+    const listChildren =
+      itemCount === 0
+        ? emptyContent
+        : items.map((item: unknown, index: number) =>
+            React.createElement(Fragment, { key: firstItemIndex + index }, itemContent(firstItemIndex + index, item)),
+          );
+
+    const providedScrollerProps = useMemo(() => {
+      const scrollerComponentSource = incomingComponents?.Scroller;
+      if (!scrollerComponentSource) {
+        return {} as React.HTMLAttributes<HTMLDivElement>;
+      }
+
+      const annotatedProps = (scrollerComponentSource as unknown as { __agynProvidedScrollerProps?: React.HTMLAttributes<HTMLDivElement> })
+        .__agynProvidedScrollerProps;
+      if (annotatedProps) {
+        return annotatedProps;
+      }
+
+      const scrollerComponent = scrollerComponentSource as unknown as {
+        render?: (props: React.HTMLAttributes<HTMLDivElement>, ref: React.Ref<HTMLDivElement>) => React.ReactNode;
+      } & ((props: React.HTMLAttributes<HTMLDivElement>, ref: React.Ref<HTMLDivElement>) => React.ReactNode);
+
+      const renderFn = typeof scrollerComponent === 'function' && typeof scrollerComponent.render === 'function'
+        ? scrollerComponent.render
+        : (scrollerComponent as (props: React.HTMLAttributes<HTMLDivElement>, ref: React.Ref<HTMLDivElement>) => React.ReactNode);
+
+      if (typeof renderFn !== 'function') {
+        return {} as React.HTMLAttributes<HTMLDivElement>;
+      }
+
+      const element = renderFn({}, null);
+      if (!React.isValidElement(element)) {
+        return {} as React.HTMLAttributes<HTMLDivElement>;
+      }
+
+      const { children: _ignoredChildren, ref: _ignoredRef, ...rest } = element.props as React.HTMLAttributes<HTMLDivElement>;
+      return rest;
+    }, [incomingComponents]);
+
+    const setScrollerNode = (node: HTMLDivElement | null) => {
+      scrollerNodeRef.current = node;
+
+      if (typeof incomingScrollerRef === 'function') {
+        incomingScrollerRef(node);
+      } else if (incomingScrollerRef && typeof incomingScrollerRef === 'object') {
+        (incomingScrollerRef as MutableRefObject<HTMLDivElement | null>).current = node;
+      }
+
+      applyAutoScroll(node);
+    };
+
+    const scrollerElement = React.createElement(
+      'div',
+      {
+        ...providedScrollerProps,
+        ...(scrollerProps ?? {}),
+        ref: setScrollerNode,
+      },
+      listChildren,
+    );
+
+    const header = components.Header ? React.createElement(components.Header, { context }) : null;
+    const footer = components.Footer ? React.createElement(components.Footer, { context }) : null;
+
+    return React.createElement('div', { className, style }, header, scrollerElement, footer);
+  });
+
+  return {
+    __esModule: true,
+    Virtuoso,
+    VirtuosoGrid: Virtuoso,
+    TableVirtuoso: Virtuoso,
+    default: Virtuoso,
+  };
+});
+ 
 const forceAxiosFetchAdapter = () => {
   if (typeof globalThis.fetch !== 'function') return;
   try {
@@ -24,7 +317,6 @@ const forceAxiosFetchAdapter = () => {
     // ignore: fetch adapter unavailable in this build
   }
 };
-
 const applyBrowserMocks = () => {
   const g = globalThis as typeof globalThis & Partial<Window> & { document?: Document };
 

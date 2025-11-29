@@ -32,15 +32,6 @@ export function VirtualizedList<T>({
   scrollerProps,
   scrollerRef,
 }: VirtualizedListProps<T>) {
-  const isVitest =
-    typeof process !== 'undefined' &&
-    (process.env?.VITEST === 'true' || process.env?.NODE_ENV === 'test');
-  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
-  const noResizeObserver =
-    typeof window !== 'undefined' &&
-    typeof (window as typeof window & { ResizeObserver?: unknown }).ResizeObserver === 'undefined';
-  const shouldUseFallbackList = isVitest || isJsdom || noResizeObserver;
-
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const atBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(items.length);
@@ -48,11 +39,8 @@ export function VirtualizedList<T>({
   const isInitialMount = useRef(true);
   const [firstItemIndex, setFirstItemIndex] = useState(100000);
 
-  const internalScrollerRef = useRef<HTMLDivElement | null>(null);
-
   const assignScrollerRef = useCallback(
     (node: HTMLDivElement | null) => {
-      internalScrollerRef.current = node;
       if (!scrollerRef) return;
       if (typeof scrollerRef === 'function') {
         (scrollerRef as (instance: HTMLDivElement | null) => void)(node);
@@ -64,52 +52,8 @@ export function VirtualizedList<T>({
     [scrollerRef],
   );
 
-  useEffect(() => {
-    if (!shouldUseFallbackList) {
-      return;
-    }
-
-    const node = internalScrollerRef.current;
-    if (!node) return;
-
-    const applyScroll = () => {
-      node.scrollTop = node.scrollHeight;
-    };
-
-    applyScroll();
-
-    const hasWindow = typeof window !== 'undefined';
-    const raf = hasWindow && typeof window.requestAnimationFrame === 'function'
-      ? window.requestAnimationFrame(() => {
-          applyScroll();
-        })
-      : null;
-
-    const timeouts: number[] = [];
-    if (hasWindow) {
-      timeouts.push(window.setTimeout(applyScroll, 0));
-      timeouts.push(window.setTimeout(applyScroll, 16));
-      timeouts.push(window.setTimeout(applyScroll, 32));
-    }
-
-    return () => {
-      if (raf !== null && hasWindow && typeof window.cancelAnimationFrame === 'function') {
-        window.cancelAnimationFrame(raf);
-      }
-      if (hasWindow) {
-        timeouts.forEach((timeoutId) => {
-          window.clearTimeout(timeoutId);
-        });
-      }
-    };
-  }, [items, shouldUseFallbackList]);
-
   // Handle initial scroll to bottom
   useEffect(() => {
-    if (shouldUseFallbackList) {
-      return;
-    }
-
     if (isInitialMount.current && items.length > 0) {
       isInitialMount.current = false;
       setFirstItemIndex(Math.max(0, 100000 - items.length));
@@ -117,14 +61,10 @@ export function VirtualizedList<T>({
         prevFirstItemKeyRef.current = getItemKey(items[0]);
       }
     }
-  }, [items.length, items, getItemKey, shouldUseFallbackList]);
+  }, [items.length, items, getItemKey]);
 
   // Detect when new items are added
   useEffect(() => {
-    if (shouldUseFallbackList) {
-      return;
-    }
-
     if (isInitialMount.current || items.length === 0) {
       return;
     }
@@ -132,7 +72,7 @@ export function VirtualizedList<T>({
     const prevLength = prevItemsLengthRef.current;
     const currentLength = items.length;
     const currentFirstItemKey = getItemKey ? getItemKey(items[0]) : null;
-    
+
     if (currentLength > prevLength) {
       // Check if items were prepended (first item key changed)
       if (getItemKey && currentFirstItemKey !== prevFirstItemKeyRef.current) {
@@ -142,26 +82,40 @@ export function VirtualizedList<T>({
       }
       // If first item key is the same, items were appended - don't change firstItemIndex
     }
-    
-    prevItemsLengthRef.current = currentLength;
-  }, [items, getItemKey, shouldUseFallbackList]);
 
-  if (shouldUseFallbackList) {
-    return (
-      <div className={className} style={style}>
-        {header}
-        <div ref={assignScrollerRef} {...scrollerProps}>
-          {items.length === 0 && emptyPlaceholder}
-          {items.map((item, index) => (
-            <div key={getItemKey ? getItemKey(item) : index}>{renderItem(index, item)}</div>
-          ))}
-        </div>
-        {footer}
-      </div>
-    );
-  }
+    prevItemsLengthRef.current = currentLength;
+  }, [items, getItemKey]);
 
   const shouldCustomizeScroller = Boolean(scrollerProps || scrollerRef);
+
+  const ScrollerComponent = shouldCustomizeScroller
+    ? forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => {
+        const { className: incomingClassName, ...restProps } = props;
+        const { className: providedClassName, ...providedRest } = scrollerProps ?? {};
+        const mergedClassName = [incomingClassName, providedClassName].filter(Boolean).join(' ');
+
+        return (
+          <div
+            {...restProps}
+            {...providedRest}
+            className={mergedClassName}
+            ref={(node) => {
+              if (typeof ref === 'function') {
+                ref(node);
+              } else if (ref) {
+                (ref as MutableRefObject<HTMLDivElement | null>).current = node;
+              }
+              assignScrollerRef(node);
+            }}
+          />
+        );
+      })
+    : undefined;
+
+  if (ScrollerComponent) {
+    (ScrollerComponent as unknown as { __agynProvidedScrollerProps?: React.HTMLAttributes<HTMLDivElement> }).__agynProvidedScrollerProps =
+      scrollerProps ?? {};
+  }
 
   return (
     <div className={className} style={style}>
@@ -189,29 +143,7 @@ export function VirtualizedList<T>({
           Header: header ? () => <>{header}</> : undefined,
           Footer: footer ? () => <>{footer}</> : undefined,
           EmptyPlaceholder: emptyPlaceholder ? () => <>{emptyPlaceholder}</> : undefined,
-          Scroller: shouldCustomizeScroller
-            ? forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => {
-                const { className: incomingClassName, ...restProps } = props;
-                const { className: providedClassName, ...providedRest } = scrollerProps ?? {};
-                const mergedClassName = [incomingClassName, providedClassName].filter(Boolean).join(' ');
-
-                return (
-                  <div
-                    {...restProps}
-                    {...providedRest}
-                    className={mergedClassName}
-                    ref={(node) => {
-                      if (typeof ref === 'function') {
-                        ref(node);
-                      } else if (ref) {
-                        (ref as MutableRefObject<HTMLDivElement | null>).current = node;
-                      }
-                      assignScrollerRef(node);
-                    }}
-                  />
-                );
-              })
-            : undefined,
+          Scroller: ScrollerComponent,
         }}
       />
     </div>
