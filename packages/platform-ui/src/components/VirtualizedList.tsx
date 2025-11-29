@@ -32,9 +32,14 @@ export function VirtualizedList<T>({
   scrollerProps,
   scrollerRef,
 }: VirtualizedListProps<T>) {
-  const shouldUseFallbackList =
-    (typeof process !== 'undefined' && process.env?.VITEST === 'true') ||
-    (typeof window !== 'undefined' && typeof window.ResizeObserver === 'undefined');
+  const isVitest =
+    typeof process !== 'undefined' &&
+    (process.env?.VITEST === 'true' || process.env?.NODE_ENV === 'test');
+  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
+  const noResizeObserver =
+    typeof window !== 'undefined' &&
+    typeof (window as typeof window & { ResizeObserver?: unknown }).ResizeObserver === 'undefined';
+  const shouldUseFallbackList = isVitest || isJsdom || noResizeObserver;
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const atBottomRef = useRef(true);
