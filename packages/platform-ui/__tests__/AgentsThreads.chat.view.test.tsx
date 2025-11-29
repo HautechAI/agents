@@ -22,7 +22,11 @@ function t(offsetMs: number) {
 
 describe('AgentsThreads conversation view', () => {
   beforeAll(() => server.listen());
+  beforeEach(() => {
+    (globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__ = true;
+  });
   afterEach(() => {
+    (globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__ = false;
     server.resetHandlers();
     navigateMock.mockReset();
   });

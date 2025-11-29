@@ -304,6 +304,7 @@ export function AgentsThreads() {
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isRunsInfoCollapsed, setRunsInfoCollapsed] = useState(false);
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
+  const [conversationHydrationComplete, setConversationHydrationComplete] = useState(false);
 
   const pendingMessagesRef = useRef<Map<string, ConversationMessageWithMeta[]>>(new Map());
   const seenMessageIdsRef = useRef<Map<string, Set<string>>>(new Map());
@@ -428,6 +429,7 @@ export function AgentsThreads() {
     pendingMessagesRef.current.clear();
     seenMessageIdsRef.current.clear();
     runIdsRef.current = new Set();
+    setConversationHydrationComplete(false);
   }, [selectedThreadId]);
 
   useEffect(() => {
@@ -456,9 +458,11 @@ export function AgentsThreads() {
     if (!pending || pending.length === 0) return;
     pendingMessagesRef.current.delete(runId);
     setRunMessages((prev) => {
-      const existing = prev[runId] ?? [];
-      const merged = mergeMessages(existing, pending);
+      const existing = prev[runId];
+      const base = existing ?? [];
+      const merged = mergeMessages(base, pending);
       seenMessageIdsRef.current.set(runId, new Set(merged.map((m) => m.id)));
+      if (!existing) return { ...prev, [runId]: merged };
       if (areMessageListsEqual(existing, merged)) return prev;
       return { ...prev, [runId]: merged };
     });
@@ -476,9 +480,11 @@ export function AgentsThreads() {
         const msgs = await fetchRunMessages(run.id);
         if (!cancelled) {
           setRunMessages((prev) => {
-            const existing = prev[run.id] ?? [];
-            const merged = mergeMessages(existing, msgs);
+            const existing = prev[run.id];
+            const base = existing ?? [];
+            const merged = mergeMessages(base, msgs);
             seenMessageIdsRef.current.set(run.id, new Set(merged.map((m) => m.id)));
+            if (!existing) return { ...prev, [run.id]: merged };
             if (areMessageListsEqual(existing, merged)) return prev;
             return { ...prev, [run.id]: merged };
           });
@@ -532,9 +538,11 @@ export function AgentsThreads() {
       }
 
       setRunMessages((prev) => {
-        const existing = prev[runId] ?? [];
-        const merged = mergeMessages(existing, [mapped]);
+        const existing = prev[runId];
+        const base = existing ?? [];
+        const merged = mergeMessages(base, [mapped]);
         seenMessageIdsRef.current.set(runId, new Set(merged.map((m) => m.id)));
+        if (!existing) return { ...prev, [runId]: merged };
         if (areMessageListsEqual(existing, merged)) return prev;
         return { ...prev, [runId]: merged };
       });
@@ -964,6 +972,20 @@ export function AgentsThreads() {
     setSelectedContainerId(null);
   };
 
+  useEffect(() => {
+    if (!selectedThreadId) {
+      setConversationHydrationComplete(false);
+      return;
+    }
+    if (conversationHydrationComplete) return;
+    if (runsQuery.isLoading) return;
+    const runIds = runList.map((run) => run.id);
+    const allLoaded = runIds.every((id) => runMessages[id] !== undefined);
+    if (allLoaded) {
+      setConversationHydrationComplete(true);
+    }
+  }, [selectedThreadId, conversationHydrationComplete, runsQuery.isLoading, runList, runMessages]);
+
   const handleSelectThread = useCallback(
     (threadId: string) => {
       setSelectedThreadIdState(threadId);
@@ -1075,6 +1097,7 @@ export function AgentsThreads() {
           isSendMessagePending={isSendMessagePending}
           selectedThread={selectedThreadForScreen}
           onOpenContainerTerminal={handleOpenContainerTerminal}
+          conversationHydrationComplete={conversationHydrationComplete}
         />
       </div>
       <ContainerTerminalDialog

@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Play, Container, Bell, Send, PanelRightClose, PanelRight, Loader2, Terminal } from 'lucide-react';
 import { IconButton } from '../IconButton';
 import { ThreadsList } from '../ThreadsList';
 import type { Thread } from '../ThreadItem';
 import { SegmentedControl } from '../SegmentedControl';
-import { Conversation, type Run } from '../Conversation';
+import { Conversation, type Run, type QueuedMessageData, type ReminderData } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { Button } from '../Button';
 import { StatusIndicator } from '../StatusIndicator';
@@ -29,6 +29,7 @@ interface ThreadsScreenProps {
   detailError?: ReactNode;
   isToggleThreadStatusPending?: boolean;
   isSendMessagePending?: boolean;
+  conversationHydrationComplete?: boolean;
   onFilterModeChange?: (mode: 'all' | 'open' | 'closed') => void;
   onSelectThread?: (threadId: string) => void;
   onToggleRunsInfoCollapsed?: (isCollapsed: boolean) => void;
@@ -59,6 +60,7 @@ export default function ThreadsScreen({
   detailError,
   isToggleThreadStatusPending = false,
   isSendMessagePending = false,
+  conversationHydrationComplete = true,
   onFilterModeChange,
   onSelectThread,
   onToggleRunsInfoCollapsed,
@@ -277,11 +279,16 @@ export default function ThreadsScreen({
         </div>
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <Conversation
-            runs={runs}
-            className="h-full rounded-none border-none"
-            collapsed={isRunsInfoCollapsed}
+          <ConversationsHost
             activeThreadId={resolvedSelectedThread.id}
+            runs={runs}
+            queuedMessages={[] as QueuedMessageData[]}
+            reminders={[] as ReminderData[]}
+            hydrationComplete={conversationHydrationComplete}
+            isRunsInfoCollapsed={isRunsInfoCollapsed}
+            className="h-full rounded-none border-none"
+            defaultCollapsed={isRunsInfoCollapsed}
+            collapsed={isRunsInfoCollapsed}
           />
         </div>
 
@@ -333,6 +340,128 @@ export default function ThreadsScreen({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col bg-[var(--agyn-bg-light)]">{renderDetailContent()}</div>
+    </div>
+  );
+}
+
+type ConversationCacheEntry = {
+  runs: Run[];
+  queuedMessages: QueuedMessageData[];
+  reminders: ReminderData[];
+  hydrationComplete: boolean;
+};
+
+type ConversationCacheState = {
+  order: string[];
+  entries: Record<string, ConversationCacheEntry>;
+};
+
+interface ConversationsHostProps {
+  activeThreadId: string;
+  runs: Run[];
+  queuedMessages: QueuedMessageData[];
+  reminders: ReminderData[];
+  hydrationComplete: boolean;
+  isRunsInfoCollapsed: boolean;
+  className?: string;
+  header?: ReactNode;
+  footer?: ReactNode;
+  defaultCollapsed?: boolean;
+  collapsed?: boolean;
+}
+
+const MAX_CONVERSATION_CACHE = 10;
+
+export function ConversationsHost({
+  activeThreadId,
+  runs,
+  queuedMessages,
+  reminders,
+  hydrationComplete,
+  isRunsInfoCollapsed,
+  className,
+  header,
+  footer,
+  defaultCollapsed,
+  collapsed,
+}: ConversationsHostProps) {
+  const [cache, setCache] = useState<ConversationCacheState>(() => ({
+    order: [activeThreadId],
+    entries: {
+      [activeThreadId]: {
+        runs,
+        queuedMessages,
+        reminders,
+        hydrationComplete,
+      },
+    },
+  }));
+
+  useEffect(() => {
+    setCache((prev) => {
+      const entries: Record<string, ConversationCacheEntry> = {
+        ...prev.entries,
+        [activeThreadId]: {
+          runs,
+          queuedMessages,
+          reminders,
+          hydrationComplete,
+        },
+      };
+
+      const filtered = prev.order.filter((id) => id !== activeThreadId);
+      const nextOrder = [activeThreadId, ...filtered];
+      if (nextOrder.length > MAX_CONVERSATION_CACHE) {
+        const trimmed = nextOrder.slice(0, MAX_CONVERSATION_CACHE);
+        const removed = nextOrder.slice(MAX_CONVERSATION_CACHE);
+        for (const id of removed) {
+          delete entries[id];
+        }
+        return { order: trimmed, entries };
+      }
+      return { order: nextOrder, entries };
+    });
+  }, [activeThreadId, hydrationComplete, queuedMessages, reminders, runs]);
+
+  const normalizedOrder = cache.order.includes(activeThreadId)
+    ? cache.order
+    : [activeThreadId, ...cache.order].slice(0, MAX_CONVERSATION_CACHE);
+
+  return (
+    <div className="relative h-full">
+      {normalizedOrder.map((threadId) => {
+        const isActive = threadId === activeThreadId;
+        const cached = cache.entries[threadId];
+        const runsForThread = isActive ? runs : cached?.runs ?? [];
+        const queuedForThread = isActive ? queuedMessages : cached?.queuedMessages ?? [];
+        const remindersForThread = isActive ? reminders : cached?.reminders ?? [];
+        const hydrationForThread = isActive ? hydrationComplete : cached?.hydrationComplete ?? false;
+
+        return (
+          <div
+            key={threadId}
+            className="absolute inset-0"
+            style={{ display: isActive ? 'flex' : 'none', width: '100%', height: '100%', flexDirection: 'column' }}
+            aria-hidden={!isActive}
+            data-testid={`conversation-host-item-${threadId}`}
+          >
+            <Conversation
+              threadId={threadId}
+              runs={runsForThread}
+              queuedMessages={queuedForThread}
+              reminders={remindersForThread}
+              hydrationComplete={hydrationForThread}
+              isActive={isActive}
+              className={className}
+              header={header}
+              footer={footer}
+              defaultCollapsed={defaultCollapsed ?? isRunsInfoCollapsed}
+              collapsed={collapsed ?? isRunsInfoCollapsed}
+              testId={isActive ? undefined : null}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

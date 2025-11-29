@@ -1,5 +1,24 @@
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { useRef, useEffect, useState, type ReactNode } from 'react';
+import {
+  useRef,
+  useEffect,
+  useState,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+  useCallback,
+  type ReactNode,
+  type ForwardedRef,
+  type HTMLAttributes,
+  type MutableRefObject,
+} from 'react';
+
+export interface VirtualizedListHandle {
+  scrollToIndex: VirtuosoHandle['scrollToIndex'];
+  scrollTo: VirtuosoHandle['scrollTo'];
+  getScrollerElement: () => HTMLElement | null;
+  isAtBottom: () => boolean;
+}
 
 export interface VirtualizedListProps<T> {
   items: T[];
@@ -13,9 +32,12 @@ export interface VirtualizedListProps<T> {
   emptyPlaceholder?: ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  followMode?: 'smooth' | 'auto' | false;
+  onAtBottomChange?: (isAtBottom: boolean) => void;
 }
 
-export function VirtualizedList<T>({
+function VirtualizedListInner<T>(
+  {
   items,
   renderItem,
   getItemKey,
@@ -27,13 +49,20 @@ export function VirtualizedList<T>({
   emptyPlaceholder,
   className,
   style,
-}: VirtualizedListProps<T>) {
+  followMode = 'smooth',
+  onAtBottomChange,
+}: VirtualizedListProps<T>,
+  ref: ForwardedRef<VirtualizedListHandle>,
+) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const atBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(items.length);
   const prevFirstItemKeyRef = useRef<string | number | null>(null);
   const isInitialMount = useRef(true);
   const [firstItemIndex, setFirstItemIndex] = useState(100000);
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const itemRefs = useRef<Array<HTMLElement | null>>([]);
+  const forceStatic = Boolean((globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__);
 
   // Handle initial scroll to bottom
   useEffect(() => {
@@ -69,6 +98,149 @@ export function VirtualizedList<T>({
     prevItemsLengthRef.current = currentLength;
   }, [items, getItemKey]);
 
+  const fallbackScrollToIndex = useCallback(
+    (location: Parameters<VirtualizedListHandle['scrollToIndex']>[0]) => {
+      if (!forceStatic) return;
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const options = typeof location === 'number' ? { index: location } : location ?? { index: 0 };
+      const index = options.index === 'LAST' ? items.length - 1 : options.index;
+      if (typeof index !== 'number' || !Number.isFinite(index)) return;
+      if (index < 0 || index >= items.length) return;
+      const target = itemRefs.current[index];
+      if (!target) return;
+      const behavior = 'behavior' in options && options.behavior ? options.behavior : 'auto';
+      const align = 'align' in options && options.align ? options.align : 'end';
+      target.scrollIntoView({ behavior, block: align as ScrollLogicalPosition });
+    },
+    [forceStatic, items.length],
+  );
+
+  const fallbackScrollTo = useCallback(
+    (location: Parameters<VirtualizedListHandle['scrollTo']>[0]) => {
+      if (!forceStatic) return;
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      scroller.scrollTo(location);
+    },
+    [forceStatic],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => {
+      if (forceStatic) {
+        return {
+          scrollToIndex: (location) => fallbackScrollToIndex(location),
+          scrollTo: (location) => fallbackScrollTo(location),
+          getScrollerElement: () => scrollerRef.current,
+          isAtBottom: () => atBottomRef.current,
+        } as VirtualizedListHandle;
+      }
+      return {
+        scrollToIndex: (...args) => {
+          virtuosoRef.current?.scrollToIndex(...args);
+        },
+        scrollTo: (...args) => {
+          virtuosoRef.current?.scrollTo(...args);
+        },
+        getScrollerElement: () => scrollerRef.current,
+        isAtBottom: () => atBottomRef.current,
+      } as VirtualizedListHandle;
+    },
+    [fallbackScrollTo, fallbackScrollToIndex, forceStatic],
+  );
+
+  useEffect(() => {
+    if (!forceStatic) return;
+    itemRefs.current = itemRefs.current.slice(0, items.length);
+  }, [forceStatic, items.length]);
+
+  useEffect(() => {
+    if (!forceStatic) return;
+    if (followMode === false) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const behavior = followMode === 'smooth' ? 'smooth' : 'auto';
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior });
+    const isAtBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 1;
+    if (isAtBottom !== atBottomRef.current) {
+      atBottomRef.current = isAtBottom;
+      onAtBottomChange?.(isAtBottom);
+    }
+  }, [followMode, forceStatic, items.length, onAtBottomChange]);
+
+  useEffect(() => {
+    if (!forceStatic) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const handleScroll = () => {
+      const isAtBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 1;
+      if (isAtBottom !== atBottomRef.current) {
+        atBottomRef.current = isAtBottom;
+        onAtBottomChange?.(isAtBottom);
+      }
+    };
+
+    handleScroll();
+
+    scroller.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', handleScroll);
+    };
+  }, [forceStatic, onAtBottomChange, items.length]);
+
+  const Scroller = useMemo(
+    () =>
+      forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function VirtualizedListScroller(props, forward) {
+        return (
+          <div
+            {...props}
+            ref={(node) => {
+              scrollerRef.current = node ?? null;
+              if (typeof forward === 'function') {
+                forward(node);
+              } else if (forward) {
+                (forward as MutableRefObject<HTMLDivElement | null>).current = node;
+              }
+            }}
+          />
+        );
+      }),
+    [],
+  );
+
+  if (forceStatic) {
+    return (
+      <div className={className} style={style}>
+        <div
+          ref={(node) => {
+            scrollerRef.current = node ?? null;
+          }}
+          style={{ overflowY: 'auto', height: '100%' }}
+        >
+          {header}
+          {items.length === 0 && emptyPlaceholder}
+          {items.map((item, index) => {
+            const key = getItemKey ? getItemKey(item) : index;
+            return (
+              <div
+                key={key}
+                ref={(element) => {
+                  itemRefs.current[index] = element;
+                }}
+              >
+                {renderItem(index, item)}
+              </div>
+            );
+          })}
+          {footer}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={className} style={style}>
       <Virtuoso
@@ -77,10 +249,15 @@ export function VirtualizedList<T>({
         firstItemIndex={firstItemIndex}
         initialTopMostItemIndex={firstItemIndex + items.length - 1}
         followOutput={(isAtBottom) => {
-          return isAtBottom ? 'smooth' : false;
+          atBottomRef.current = isAtBottom;
+          if (followMode === 'smooth' || followMode === 'auto') {
+            return isAtBottom ? followMode : false;
+          }
+          return false;
         }}
         atBottomStateChange={(isAtBottom) => {
           atBottomRef.current = isAtBottom;
+          onAtBottomChange?.(isAtBottom);
         }}
         startReached={() => {
           if (hasMore && !isLoadingMore) {
@@ -95,8 +272,13 @@ export function VirtualizedList<T>({
           Header: header ? () => <>{header}</> : undefined,
           Footer: footer ? () => <>{footer}</> : undefined,
           EmptyPlaceholder: emptyPlaceholder ? () => <>{emptyPlaceholder}</> : undefined,
+          Scroller,
         }}
       />
     </div>
   );
 }
+
+export const VirtualizedList = forwardRef(VirtualizedListInner) as <T>(
+  props: VirtualizedListProps<T> & { ref?: ForwardedRef<VirtualizedListHandle> },
+) => React.ReactElement;

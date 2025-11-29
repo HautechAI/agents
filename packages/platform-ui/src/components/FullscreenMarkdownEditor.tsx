@@ -153,8 +153,16 @@ const useScrollSync = ({
     const editor = editorRef.current;
     const preview = previewScrollRef.current;
 
-    if (!editor || !preview || previewIgnoreRef.current) {
+    if (!editor || !preview) {
       return;
+    }
+
+    if (previewIgnoreRef.current) {
+      if (previewRafRef.current !== null) {
+        window.cancelAnimationFrame(previewRafRef.current);
+        previewRafRef.current = null;
+      }
+      previewIgnoreRef.current = false;
     }
 
     const ratio = getScrollRatio(preview);
@@ -181,7 +189,6 @@ const useScrollSync = ({
 
     editor.addEventListener('scroll', onEditorScroll, { passive: true });
     preview.addEventListener('scroll', onPreviewScroll, { passive: true });
-
     reapplyAlignment();
 
     return () => {
