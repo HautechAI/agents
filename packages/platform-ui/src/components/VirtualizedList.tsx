@@ -1,5 +1,14 @@
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { useRef, useEffect, useState, useCallback, forwardRef, type ReactNode, type MutableRefObject } from 'react';
+import {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  forwardRef,
+  type ReactNode,
+  type MutableRefObject,
+} from 'react';
 
 export interface VirtualizedListProps<T> {
   items: T[];
@@ -86,12 +95,24 @@ export function VirtualizedList<T>({
     prevItemsLengthRef.current = currentLength;
   }, [items, getItemKey]);
 
-  const shouldCustomizeScroller = Boolean(scrollerProps || scrollerRef);
+  const resolvedScrollerProps = useMemo<React.HTMLAttributes<HTMLDivElement>>(() => {
+    if (scrollerProps) {
+      if (scrollerProps.role && scrollerProps.role !== 'listbox') {
+        return { ...scrollerProps };
+      }
+
+      return { role: 'listbox', ...scrollerProps };
+    }
+
+    return { role: 'listbox' };
+  }, [scrollerProps]);
+
+  const shouldCustomizeScroller = Boolean(resolvedScrollerProps || scrollerRef);
 
   const ScrollerComponent = shouldCustomizeScroller
     ? forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => {
         const { className: incomingClassName, ...restProps } = props;
-        const { className: providedClassName, ...providedRest } = scrollerProps ?? {};
+        const { className: providedClassName, ...providedRest } = resolvedScrollerProps;
         const mergedClassName = [incomingClassName, providedClassName].filter(Boolean).join(' ');
 
         return (
@@ -100,6 +121,9 @@ export function VirtualizedList<T>({
             {...providedRest}
             className={mergedClassName}
             ref={(node) => {
+              if (node && resolvedScrollerProps.role) {
+                node.setAttribute('role', resolvedScrollerProps.role);
+              }
               if (typeof ref === 'function') {
                 ref(node);
               } else if (ref) {
@@ -114,7 +138,7 @@ export function VirtualizedList<T>({
 
   if (ScrollerComponent) {
     (ScrollerComponent as unknown as { __agynProvidedScrollerProps?: React.HTMLAttributes<HTMLDivElement> }).__agynProvidedScrollerProps =
-      scrollerProps ?? {};
+      resolvedScrollerProps;
   }
 
   return (

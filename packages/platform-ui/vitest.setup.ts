@@ -226,6 +226,18 @@ vi.mock('react-virtuoso', () => {
       const hasIncreased = !isInitialRender && itemCount > previousCount;
 
       if (shouldSignalInitial || hasIncreased) {
+        if (shouldSignalInitial) {
+          console.debug('[virtuoso-mock] initial items render; firing atBottomStateChange and endReached', {
+            itemCount,
+            lastIndex,
+          });
+        } else {
+          console.debug('[virtuoso-mock] item count increased; firing endReached', {
+            previousCount,
+            nextCount: itemCount,
+            lastIndex,
+          });
+        }
         atBottomStateChangeRef.current?.(true);
         endReachedRef.current?.(lastIndex);
         syncListboxScrollPositions();
@@ -354,11 +366,12 @@ vi.mock('react-virtuoso', () => {
             atBottomStateChangeRef.current?.(false);
           });
 
-          if (resolvedIndex <= 0) {
-            startReachedRef.current?.(0);
-          } else {
-            startReachedRef.current?.(firstItemIndex);
-          }
+          const startIndex = resolvedIndex <= 0 ? 0 : firstItemIndex;
+          console.debug('[virtuoso-mock] scrollToIndex triggered startReached', {
+            requestedIndex: resolvedIndex,
+            emittedIndex: startIndex,
+          });
+          startReachedRef.current?.(startIndex);
         }
       },
       [firstItemIndex],

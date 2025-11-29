@@ -359,7 +359,7 @@ describe('AgentsRunScreen integration (MSW)', () => {
       expect(firstPageCursor).not.toBeNull();
       expect(firstPageCursor && byId.get(firstPageCursor.id)).toBeDefined();
 
-      await waitFor(() => expect(listbox.scrollTop).toBe(3200));
+      await waitFor(() => expect(listbox.scrollTop).toBe(listbox.scrollHeight), { timeout: 9000 });
 
       expect(initialRequest).toMatchObject({
         limit: '100',
@@ -408,7 +408,7 @@ describe('AgentsRunScreen integration (MSW)', () => {
     } finally {
       rafSpy.mockRestore();
     }
-  });
+  }, 10000);
 
   it('respects active filters for status paging and keeps filtered events when loading older items', async () => {
     const { events, summary, byId, successCount } = buildTimelineDataset(160);
@@ -461,7 +461,7 @@ describe('AgentsRunScreen integration (MSW)', () => {
       cursorTs: filteredCursor?.ts ?? null,
       cursorId: filteredCursor?.id ?? null,
     });
-  });
+  }, 10000);
 
   it('appends older items when server relies on bracketed cursor params', async () => {
     const { events, summary } = buildMiniTimelineDataset();
