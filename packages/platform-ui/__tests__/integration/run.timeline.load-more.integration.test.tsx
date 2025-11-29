@@ -390,21 +390,7 @@ describe('AgentsRunScreen integration (MSW)', () => {
 
       await waitFor(() => expect(screen.getByText(/beginning of timeline/i)).toBeInTheDocument());
 
-      const refreshButton = screen.getByRole('button', { name: /refresh/i });
-      const requestsBeforeRefresh = requests.length;
-      await userEvent.click(refreshButton);
-
-      await waitFor(() => expect(requests.length).toBeGreaterThan(requestsBeforeRefresh));
-      await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(150));
-
-      const refreshRequest = requests[requestsBeforeRefresh];
-
-      expect(refreshRequest).toMatchObject({
-        limit: '100',
-        order: 'desc',
-        cursorTs: null,
-        cursorId: null,
-      });
+      expect(screen.queryByRole('button', { name: /refresh/i })).toBeNull();
     } finally {
       rafSpy.mockRestore();
     }

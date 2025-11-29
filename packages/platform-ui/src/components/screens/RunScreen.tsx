@@ -107,8 +107,8 @@ export default function RunScreen({
   onTokensPopoverOpenChange,
   onRunsPopoverOpenChange,
   onLoadMoreEvents,
-  onRefreshEvents,
-  isRefreshingEvents = false,
+  onRefreshEvents: _onRefreshEvents,
+  isRefreshingEvents: _isRefreshingEvents = false,
   onTerminate,
   isDesktopLayout = true,
   onClearSelection,
@@ -637,22 +637,6 @@ export default function RunScreen({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-
-                  {onRefreshEvents && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={onRefreshEvents}
-                      disabled={isRefreshingEvents}
-                      className="whitespace-nowrap"
-                    >
-                      {isRefreshingEvents && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                      )}
-                      Refresh
-                    </Button>
-                  )}
 
                   {onLoadMoreEvents && (
                     <Button
