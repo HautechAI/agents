@@ -62,18 +62,29 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
   }
 
   private resolveAgentTitle(agent: AgentNode): string {
-    let rawTitle: string | undefined;
+    let config: AgentNode['config'];
     try {
-      rawTitle = agent.config.title;
+      config = agent.config;
     } catch (_err) {
       throw new Error('ManageToolNode: worker agent missing configuration');
     }
 
-    const trimmed = rawTitle?.trim();
-    if (!trimmed) {
-      throw new Error('ManageToolNode: worker agent requires non-empty title');
-    }
-    return trimmed;
+    const normalize = (value?: string | null): string => (typeof value === 'string' ? value.trim() : '');
+
+    const title = normalize(config.title);
+    if (title) return title;
+
+    const name = normalize(config.name);
+    const role = normalize(config.role);
+
+    if (name && role) return `${name} (${role})`;
+    if (name) return name;
+    if (role) return role;
+
+    const fallbackId = agent.getAgentNodeId()?.trim();
+    if (fallbackId) return fallbackId;
+
+    return 'unknown agent';
   }
 
   protected createTool() {
