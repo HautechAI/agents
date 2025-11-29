@@ -487,8 +487,8 @@ export class AgentsPersistenceService {
       result.metrics = metrics[thread.id] ?? defaultMetrics;
     }
 
-    result.agentRole = descriptor?.role ?? null;
-    result.agentName = descriptor?.name ?? null;
+    result.agentRole = descriptor?.role ?? undefined;
+    result.agentName = descriptor?.name ?? undefined;
 
     if (includeAgentTitles) {
       result.agentTitle = descriptor?.title ?? fallbackTitle;

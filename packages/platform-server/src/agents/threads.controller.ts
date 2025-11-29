@@ -197,8 +197,8 @@ export class AgentsThreadsController {
       const descriptor = descriptors[t.id];
       return {
         ...t,
-        agentRole: descriptor?.role ?? null,
-        agentName: descriptor?.name ?? null,
+        agentRole: descriptor?.role ?? undefined,
+        agentName: descriptor?.name ?? undefined,
         ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
         ...(includeAgentTitles ? { agentTitle: descriptor?.title ?? fallbackTitle } : {}),
       };
@@ -227,8 +227,8 @@ export class AgentsThreadsController {
         const descriptor = descriptors[t.id];
         return {
           ...t,
-          agentRole: descriptor?.role ?? null,
-          agentName: descriptor?.name ?? null,
+          agentRole: descriptor?.role ?? undefined,
+          agentName: descriptor?.name ?? undefined,
           ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
           ...(includeAgentTitles ? { agentTitle: descriptor?.title ?? fallbackTitle } : {}),
         };
@@ -247,8 +247,8 @@ export class AgentsThreadsController {
     const fallbackTitle = '(unknown agent)';
     return {
       ...thread,
-      agentRole: thread.agentRole ?? null,
-      agentName: thread.agentName ?? null,
+      agentRole: thread.agentRole ?? undefined,
+      agentName: thread.agentName ?? undefined,
       ...(includeMetrics ? { metrics: thread.metrics ?? defaultMetrics } : {}),
       ...(includeAgentTitles ? { agentTitle: thread.agentTitle ?? fallbackTitle } : {}),
     };
