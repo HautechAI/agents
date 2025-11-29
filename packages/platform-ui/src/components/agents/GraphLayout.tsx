@@ -10,8 +10,7 @@ import { useGraphData } from '@/features/graph/hooks/useGraphData';
 import { useGraphSocket } from '@/features/graph/hooks/useGraphSocket';
 import { useNodeStatus } from '@/features/graph/hooks/useNodeStatus';
 import { useNodeAction } from '@/features/graph/hooks/useNodeAction';
-import { useMcpNodeState, useTemplates } from '@/lib/graph/hooks';
-import { mapTemplatesToSidebarItems } from '@/lib/graph/sidebarNodeItems';
+import { useMcpNodeState } from '@/lib/graph/hooks';
 import type { GraphNodeConfig, GraphNodeStatus, GraphPersistedEdge } from '@/features/graph/types';
 import type { NodeStatus as ApiNodeStatus } from '@/api/types/graph';
 
@@ -161,7 +160,6 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     applyNodeStatus,
     applyNodeState,
     setEdges,
-    removeNodes,
   } = useGraphData();
 
   const providerDebounceMs = 275;
@@ -380,63 +378,28 @@ export function GraphLayout({ services }: GraphLayoutProps) {
 
   const [flowNodes, setFlowNodes] = useState<FlowNode[]>([]);
   const [flowEdges, setFlowEdges] = useState<FlowEdge[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const selectedIdsRef = useRef<Set<string>>(new Set());
-  const singleSelectedIdRef = useRef<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const selectedNodeIdRef = useRef<string | null>(null);
   const flowNodesRef = useRef<FlowNode[]>([]);
   const flowEdgesRef = useRef<FlowEdge[]>([]);
   const lastActionAtRef = useRef<number>(0);
 
   const edgeTypes = useMemo<EdgeTypes>(() => ({ gradient: GradientEdge }), []);
   const fallbackEnabledTools = useMemo<string[]>(() => [], []);
-  const templatesQuery = useTemplates();
-  const sidebarNodeItems = useMemo(
-    () => mapTemplatesToSidebarItems(templatesQuery.data),
-    [templatesQuery.data],
-  );
-  const sidebarStatusMessage = useMemo(() => {
-    if (templatesQuery.isLoading) {
-      return 'Loading templates...';
-    }
-    if (templatesQuery.isError && sidebarNodeItems.length === 0) {
-      return 'Failed to load templates.';
-    }
-    if (!templatesQuery.isLoading && sidebarNodeItems.length === 0) {
-      return 'No templates available.';
-    }
-    return undefined;
-  }, [sidebarNodeItems.length, templatesQuery.isError, templatesQuery.isLoading]);
 
   useEffect(() => {
-    selectedIdsRef.current = selectedIds;
-    if (selectedIds.size === 1) {
-      const iterator = selectedIds.values().next();
-      singleSelectedIdRef.current = iterator.done ? null : iterator.value ?? null;
-    } else {
-      singleSelectedIdRef.current = null;
-    }
-  }, [selectedIds]);
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
 
   useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) {
-        return prev;
-      }
-      const validIds = new Set(nodes.map((node) => node.id));
-      let changed = false;
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (validIds.has(id)) {
-          next.add(id);
-        } else {
-          changed = true;
-        }
-      });
-      if (!changed) {
-        return prev;
-      }
-      return next;
-    });
+    const currentSelected = selectedNodeIdRef.current;
+    if (!currentSelected) {
+      return;
+    }
+    const exists = nodes.some((node) => node.id === currentSelected);
+    if (!exists) {
+      setSelectedNodeId(null);
+    }
   }, [nodes]);
 
   useEffect(() => {
@@ -445,10 +408,9 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       let changed = prev.length !== nodes.length;
       const next: FlowNode[] = nodes.map((node, index) => {
         const existing = prevById.get(node.id);
-        const isSelected = selectedIdsRef.current.has(node.id);
         if (!existing) {
           changed = true;
-          return { ...toFlowNode(node), selected: isSelected } satisfies FlowNode;
+          return toFlowNode(node);
         }
         const basePosition = existing.position ?? { x: node.x, y: node.y };
         const dataMatches =
@@ -478,9 +440,6 @@ export function GraphLayout({ services }: GraphLayoutProps) {
             position: basePosition,
           } satisfies FlowNode;
         }
-        if (nextNode.selected !== isSelected) {
-          nextNode = { ...nextNode, selected: isSelected } satisfies FlowNode;
-        }
         if (nextNode !== existing) {
           changed = true;
         }
@@ -495,6 +454,24 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       return next;
     });
   }, [nodes]);
+
+  useEffect(() => {
+    setFlowNodes((prev) => {
+      let changed = false;
+      const next = prev.map((node) => {
+        const shouldSelect = node.id === selectedNodeId;
+        if (node.selected === shouldSelect) {
+          return node;
+        }
+        changed = true;
+        return { ...node, selected: shouldSelect };
+      });
+      if (!changed) {
+        return prev;
+      }
+      return next;
+    });
+  }, [selectedNodeId]);
 
   useEffect(() => {
     flowNodesRef.current = flowNodes;
@@ -547,20 +524,12 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     });
   }, [edges, nodes]);
 
-  const singleSelectedId = useMemo(() => {
-    if (selectedIds.size !== 1) {
-      return null;
-    }
-    const iterator = selectedIds.values().next();
-    return iterator.done ? null : iterator.value ?? null;
-  }, [selectedIds]);
-
   const selectedNode = useMemo(
-    () => (singleSelectedId ? nodes.find((node) => node.id === singleSelectedId) ?? null : null),
-    [nodes, singleSelectedId],
+    () => (selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) ?? null : null),
+    [nodes, selectedNodeId],
   );
 
-  const statusQuery = useNodeStatus(singleSelectedId ?? '');
+  const statusQuery = useNodeStatus(selectedNodeId ?? '');
   const actionNodeId = selectedNode?.id ?? null;
   const nodeAction = useNodeAction(actionNodeId);
   const { mutateAsync: runNodeAction, isPending: isActionPending } = nodeAction;
@@ -588,70 +557,36 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     [mcpEnabledTools, mcpNodeId, setMcpEnabledTools],
   );
 
-  const handleNodesChange = useCallback(
-    (changes: Parameters<typeof applyNodeChanges>[0]) => {
-      const nextSelected = new Set(selectedIdsRef.current);
-      const removedIds: string[] = [];
-      let selectionChanged = false;
-
-      for (const change of changes) {
-        if (change.type === 'select' && 'id' in change) {
-          if (change.selected) {
-            if (!nextSelected.has(change.id)) {
-              nextSelected.add(change.id);
-              selectionChanged = true;
-            }
-          } else if (nextSelected.delete(change.id)) {
-            selectionChanged = true;
-          }
-        }
-
-        if (change.type === 'remove' && 'id' in change) {
-          removedIds.push(change.id);
-          if (nextSelected.delete(change.id)) {
-            selectionChanged = true;
-          }
+  const handleNodesChange = useCallback((changes: Parameters<typeof applyNodeChanges>[0]) => {
+    let nextSelectedId = selectedNodeIdRef.current;
+    for (const change of changes) {
+      if (change.type === 'select' && 'id' in change) {
+        if (change.selected) {
+          nextSelectedId = change.id;
+        } else if (nextSelectedId === change.id) {
+          nextSelectedId = null;
         }
       }
+    }
 
-      if (removedIds.length > 0) {
-        removeNodes(removedIds);
-      }
+    setSelectedNodeId(nextSelectedId ?? null);
 
-      if (selectionChanged) {
-        const updatedSelection = new Set(nextSelected);
-        selectedIdsRef.current = updatedSelection;
-        if (updatedSelection.size === 1) {
-          const iterator = updatedSelection.values().next();
-          singleSelectedIdRef.current = iterator.done ? null : iterator.value ?? null;
-        } else {
-          singleSelectedIdRef.current = null;
-        }
-        setSelectedIds(updatedSelection);
-      }
+    const previousNodes = flowNodesRef.current;
+    const applied = applyNodeChanges(changes, previousNodes) as FlowNode[];
+    if (applied !== previousNodes) {
+      flowNodesRef.current = applied;
+      setFlowNodes(applied);
+    }
 
-      const previousNodes = flowNodesRef.current;
-      const applied = applyNodeChanges(changes, previousNodes) as FlowNode[];
-      if (applied !== previousNodes) {
-        flowNodesRef.current = applied;
-        setFlowNodes(applied);
+    for (const change of changes) {
+      if (change.type === 'position' && (change.dragging === false || change.dragging === undefined) && 'id' in change) {
+        const moved = applied.find((node) => node.id === change.id);
+        if (!moved) continue;
+        const { x, y } = moved.position ?? { x: 0, y: 0 };
+        updateNodeRef.current(change.id, { x, y });
       }
-
-      for (const change of changes) {
-        if (
-          change.type === 'position' &&
-          (change.dragging === false || change.dragging === undefined) &&
-          'id' in change
-        ) {
-          const moved = applied.find((node) => node.id === change.id);
-          if (!moved) continue;
-          const { x, y } = moved.position ?? { x: 0, y: 0 };
-          updateNodeRef.current(change.id, { x, y });
-        }
-      }
-    },
-    [removeNodes],
-  );
+    }
+  }, []);
 
   const handleEdgesChange = useCallback((changes: Parameters<typeof applyEdgeChanges>[0]) => {
     const current = flowEdgesRef.current;
@@ -722,10 +657,9 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     }
     const baseConfig = selectedNode.config ?? {};
     return {
-      ...baseConfig,
       kind: selectedNode.kind,
       title: selectedNode.title,
-      template: selectedNode.template,
+      ...baseConfig,
     } satisfies SidebarNodeConfig;
   }, [selectedNode]);
 
@@ -733,7 +667,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
 
   const handleConfigChange = useCallback(
     (nextConfig: Partial<SidebarNodeConfig>) => {
-      const nodeId = singleSelectedIdRef.current;
+      const nodeId = selectedNodeIdRef.current;
       if (!nodeId) return;
       const node = nodesRef.current.find((item) => item.id === nodeId);
       if (!node) return;
@@ -805,10 +739,11 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           savingErrorMessage={savingErrorMessage ?? undefined}
         />
       </div>
-      {selectedNode && sidebarConfig && selectedIds.size === 1 ? (
+      {selectedNode && sidebarConfig ? (
         <NodePropertiesSidebar
           config={sidebarConfig}
           state={sidebarState}
+          template={selectedNode.template}
           onConfigChange={handleConfigChange}
           onProvision={handleProvision}
           onDeprovision={handleDeprovision}
@@ -827,7 +762,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           providerDebounceMs={providerDebounceMs}
         />
       ) : (
-        <EmptySelectionSidebar nodeItems={sidebarNodeItems} statusMessage={sidebarStatusMessage} />
+        <EmptySelectionSidebar />
       )}
     </div>
   );

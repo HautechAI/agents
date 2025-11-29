@@ -23,7 +23,6 @@ const hookMocks = vi.hoisted(() => ({
   useNodeStatus: vi.fn(),
   useMcpNodeState: vi.fn(),
   useNodeAction: vi.fn(),
-  useTemplates: vi.fn(),
 }));
 
 vi.mock('@/components/GraphCanvas', () => ({
@@ -55,7 +54,6 @@ vi.mock('@/features/graph/hooks/useNodeStatus', () => ({
 
 vi.mock('@/lib/graph/hooks', () => ({
   useMcpNodeState: hookMocks.useMcpNodeState,
-  useTemplates: hookMocks.useTemplates,
 }));
 
 vi.mock('@/features/graph/hooks/useNodeAction', () => ({
@@ -106,12 +104,6 @@ describe('GraphLayout', () => {
       setEnabledTools: vi.fn(),
       isLoading: false,
     });
-    hookMocks.useTemplates.mockReturnValue({
-      data: [],
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    });
     nodeActionMutate = vi.fn().mockResolvedValue(undefined);
     hookMocks.useNodeAction.mockReturnValue({ mutateAsync: nodeActionMutate, isPending: false });
     canvasSpy.mockReset();
@@ -123,7 +115,6 @@ describe('GraphLayout', () => {
     const applyNodeStatus = vi.fn();
     const applyNodeState = vi.fn();
     const setEdges = vi.fn();
-    const removeNodes = vi.fn();
 
     hookMocks.useGraphData.mockReturnValue({
       nodes: [
@@ -147,7 +138,6 @@ describe('GraphLayout', () => {
       applyNodeStatus,
       applyNodeState,
       setEdges,
-      removeNodes,
     });
 
     hookMocks.useGraphSocket.mockImplementation(({ onStatus, onState }) => {
@@ -237,14 +227,11 @@ describe('GraphLayout', () => {
     expect(typeof sidebar.canDeprovision).toBe('boolean');
     expect(typeof sidebar.isActionPending).toBe('boolean');
 
-    expect(sidebar.config).toEqual(
-      expect.objectContaining({
-        kind: 'Agent',
-        title: 'Agent Node',
-        template: 'agent-template',
-        systemPrompt: 'You are helpful.',
-      }),
-    );
+    expect(sidebar.config).toEqual({
+      kind: 'Agent',
+      title: 'Agent Node',
+      systemPrompt: 'You are helpful.',
+    });
 
     expect(sidebar.state).toEqual({ status: 'ready' });
     expect(sidebar.canProvision).toBe(false);
@@ -280,7 +267,6 @@ describe('GraphLayout', () => {
   it('persists node position updates when drag ends', async () => {
     const updateNode = vi.fn();
     const setEdges = vi.fn();
-    const removeNodes = vi.fn();
 
     hookMocks.useGraphData.mockReturnValue({
       nodes: [
@@ -304,7 +290,6 @@ describe('GraphLayout', () => {
       applyNodeStatus: vi.fn(),
       applyNodeState: vi.fn(),
       setEdges,
-      removeNodes,
     });
 
     hookMocks.useGraphSocket.mockReturnValue(undefined);
@@ -351,7 +336,6 @@ describe('GraphLayout', () => {
   it('persists edges when connecting and removing', async () => {
     const updateNode = vi.fn();
     const setEdges = vi.fn();
-    const removeNodes = vi.fn();
 
     hookMocks.useGraphData.mockReturnValue({
       nodes: [
@@ -386,7 +370,6 @@ describe('GraphLayout', () => {
       applyNodeStatus: vi.fn(),
       applyNodeState: vi.fn(),
       setEdges,
-      removeNodes,
     });
 
     hookMocks.useGraphSocket.mockReturnValue(undefined);
@@ -433,65 +416,9 @@ describe('GraphLayout', () => {
     await waitFor(() => expect(setEdges).toHaveBeenCalledWith([]));
   });
 
-  it('invokes removeNodes when nodes are deleted', async () => {
-    const updateNode = vi.fn();
-    const setEdges = vi.fn();
-    const removeNodes = vi.fn();
-
-    hookMocks.useGraphData.mockReturnValue({
-      nodes: [
-        {
-          id: 'node-1',
-          template: 'agent-template',
-          kind: 'Agent',
-          title: 'Agent Node',
-          x: 0,
-          y: 0,
-          status: 'not_ready',
-          config: { title: 'Agent Node' },
-          ports: { inputs: [], outputs: [] },
-        },
-      ],
-      edges: [],
-      loading: false,
-      savingState: { status: 'saved', error: null },
-      savingErrorMessage: null,
-      updateNode,
-      applyNodeStatus: vi.fn(),
-      applyNodeState: vi.fn(),
-      setEdges,
-      removeNodes,
-    });
-
-    hookMocks.useGraphSocket.mockReturnValue(undefined);
-    hookMocks.useNodeStatus.mockReturnValue({ data: null, refetch: vi.fn() });
-
-    render(<GraphLayout services={services} />);
-
-    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
-    const props = canvasSpy.mock.calls.at(-1)?.[0] as {
-      onNodesChange?: (changes: any[]) => void;
-    };
-
-    act(() => {
-      props.onNodesChange?.([
-        { id: 'node-1', type: 'select', selected: true },
-      ]);
-    });
-
-    act(() => {
-      props.onNodesChange?.([
-        { id: 'node-1', type: 'remove' },
-      ]);
-    });
-
-    await waitFor(() => expect(removeNodes).toHaveBeenCalledWith(['node-1']));
-  });
-
   it('wires MCP tools state into the sidebar and toggles enabled tools', async () => {
     const updateNode = vi.fn();
     const setEdges = vi.fn();
-    const removeNodes = vi.fn();
     const setEnabledTools = vi.fn();
 
     hookMocks.useGraphData.mockReturnValue({
@@ -516,7 +443,6 @@ describe('GraphLayout', () => {
       applyNodeStatus: vi.fn(),
       applyNodeState: vi.fn(),
       setEdges,
-      removeNodes,
     });
 
     hookMocks.useGraphSocket.mockReturnValue(undefined);
@@ -576,7 +502,6 @@ describe('GraphLayout', () => {
     const applyNodeStatus = vi.fn();
     const applyNodeState = vi.fn();
     const setEdges = vi.fn();
-    const removeNodes = vi.fn();
 
     hookMocks.useGraphData.mockReturnValue({
       nodes: [
@@ -611,7 +536,6 @@ describe('GraphLayout', () => {
       applyNodeStatus,
       applyNodeState,
       setEdges,
-      removeNodes,
     });
 
     hookMocks.useGraphSocket.mockReturnValue(undefined);
@@ -663,97 +587,11 @@ describe('GraphLayout', () => {
     );
   });
 
-  it('shows template sidebar when multiple nodes are selected', async () => {
-    const updateNode = vi.fn();
-    const applyNodeStatus = vi.fn();
-    const applyNodeState = vi.fn();
-    const setEdges = vi.fn();
-    const removeNodes = vi.fn();
-
-    hookMocks.useGraphData.mockReturnValue({
-      nodes: [
-        {
-          id: 'agent-1',
-          template: 'agent-template',
-          kind: 'Agent',
-          title: 'Agent Node',
-          x: 0,
-          y: 0,
-          status: 'not_ready',
-          config: { title: 'Agent Node' },
-          ports: { inputs: [], outputs: [] },
-        },
-        {
-          id: 'tool-1',
-          template: 'tool-template',
-          kind: 'Tool',
-          title: 'Tool Node',
-          x: 200,
-          y: 200,
-          status: 'not_ready',
-          config: { title: 'Tool Node' },
-          ports: { inputs: [], outputs: [] },
-        },
-      ],
-      edges: [],
-      loading: false,
-      savingState: { status: 'saved', error: null },
-      savingErrorMessage: null,
-      updateNode,
-      applyNodeStatus,
-      applyNodeState,
-      setEdges,
-      removeNodes,
-    });
-
-    hookMocks.useGraphSocket.mockReturnValue(undefined);
-    hookMocks.useNodeStatus.mockReturnValue({ data: null, refetch: vi.fn() });
-    hookMocks.useTemplates.mockReturnValue({
-      data: [
-        {
-          name: 'agent-template',
-          title: 'Agent Template',
-          kind: 'agent',
-          description: 'Agent template description',
-        },
-      ],
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    });
-
-    render(<GraphLayout services={services} />);
-
-    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
-    const props = canvasSpy.mock.calls.at(-1)?.[0] as {
-      onNodesChange?: (changes: any[]) => void;
-    };
-
-    await act(async () => {
-      props.onNodesChange?.([
-        { id: 'agent-1', type: 'select', selected: true },
-      ]);
-    });
-
-    await waitFor(() => expect(screen.getByTestId('node-sidebar-mock')).toBeInTheDocument());
-    sidebarProps.length = 0;
-
-    await act(async () => {
-      props.onNodesChange?.([
-        { id: 'tool-1', type: 'select', selected: true },
-      ]);
-    });
-
-    await waitFor(() => expect(screen.queryByTestId('node-sidebar-mock')).not.toBeInTheDocument());
-    expect(screen.getByText('Agent Template')).toBeInTheDocument();
-  });
-
   it('wires sidebar providers through graph services', async () => {
     const updateNode = vi.fn();
     const applyNodeStatus = vi.fn();
     const applyNodeState = vi.fn();
     const setEdges = vi.fn();
-    const removeNodes = vi.fn();
 
     hookMocks.useGraphData.mockReturnValue({
       nodes: [
@@ -777,7 +615,6 @@ describe('GraphLayout', () => {
       applyNodeStatus,
       applyNodeState,
       setEdges,
-      removeNodes,
     });
 
     hookMocks.useGraphSocket.mockReturnValue(undefined);
@@ -872,7 +709,6 @@ describe('GraphLayout', () => {
     const applyNodeStatus = vi.fn();
     const applyNodeState = vi.fn();
     const setEdges = vi.fn();
-    const removeNodes = vi.fn();
 
     const graphState = {
       nodes: [
@@ -896,7 +732,6 @@ describe('GraphLayout', () => {
       applyNodeStatus,
       applyNodeState,
       setEdges,
-      removeNodes,
     };
 
     hookMocks.useGraphData.mockImplementation(() => graphState);

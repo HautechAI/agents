@@ -16,6 +16,63 @@ const nodeKindConfig = {
   Workspace: { color: 'var(--agyn-purple)', bgColor: 'var(--agyn-bg-purple)' },
 };
 
+const defaultNodeItems: DraggableNodeItem[] = [
+  {
+    id: 'trigger-http',
+    kind: 'Trigger',
+    title: 'HTTP Trigger',
+    description: 'Start a workflow with an HTTP request',
+  },
+  {
+    id: 'trigger-schedule',
+    kind: 'Trigger',
+    title: 'Schedule Trigger',
+    description: 'Run workflows on a schedule',
+  },
+  {
+    id: 'agent-gpt4',
+    kind: 'Agent',
+    title: 'GPT-4 Agent',
+    description: 'AI agent powered by GPT-4',
+  },
+  {
+    id: 'agent-claude',
+    kind: 'Agent',
+    title: 'Claude Agent',
+    description: 'AI agent powered by Claude',
+  },
+  {
+    id: 'tool-search',
+    kind: 'Tool',
+    title: 'Web Search',
+    description: 'Search the web for information',
+  },
+  {
+    id: 'tool-calculator',
+    kind: 'Tool',
+    title: 'Calculator',
+    description: 'Perform mathematical calculations',
+  },
+  {
+    id: 'mcp-database',
+    kind: 'MCP',
+    title: 'Database MCP',
+    description: 'Connect to databases via MCP',
+  },
+  {
+    id: 'mcp-files',
+    kind: 'MCP',
+    title: 'File System MCP',
+    description: 'Access file system operations',
+  },
+  {
+    id: 'workspace-dev',
+    kind: 'Workspace',
+    title: 'Development Workspace',
+    description: 'Isolated environment for development',
+  },
+];
+
 interface EmptySelectionSidebarProps {
   nodeItems?: DraggableNodeItem[];
   onNodeDragStart?: (nodeType: string) => void;
@@ -23,7 +80,7 @@ interface EmptySelectionSidebarProps {
 }
 
 export default function EmptySelectionSidebar({
-  nodeItems = [],
+  nodeItems = defaultNodeItems,
   onNodeDragStart,
   statusMessage,
 }: EmptySelectionSidebarProps) {
