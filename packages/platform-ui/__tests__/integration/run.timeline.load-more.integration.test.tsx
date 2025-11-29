@@ -419,8 +419,12 @@ describe('AgentsRunScreen integration (MSW)', () => {
     await waitFor(() => expect(requests.length).toBeGreaterThanOrEqual(1));
     await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(100));
 
-    const successFilter = screen.getByRole('button', { name: /^success$/i });
-    await userEvent.click(successFilter);
+    const filtersTrigger = screen.getByRole('button', { name: /filter events/i });
+    await userEvent.click(filtersTrigger);
+
+    const finishedFilter = await screen.findByRole('menuitem', { name: /^finished/i });
+    await userEvent.click(finishedFilter);
+    await userEvent.keyboard('{Escape}');
 
     await waitFor(() => expect(requests.length).toBeGreaterThan(1));
     await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(100));

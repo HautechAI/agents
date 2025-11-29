@@ -130,7 +130,8 @@ export function mapTimelineEventToRunEvent(event: RunTimelineEvent): RunEvent {
         response: event.llmCall?.responseText ?? undefined,
         tokens,
         cost: '$0',
-        context: (event.llmCall?.contextItemIds ?? []).map((id) => ({ id })),
+        context: [...(event.llmCall?.contextItemIds ?? [])],
+        newContextCount: event.llmCall?.newContextItemCount ?? 0,
         toolCalls: event.llmCall?.toolCalls,
       },
     };

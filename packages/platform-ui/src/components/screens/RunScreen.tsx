@@ -1,7 +1,6 @@
 import * as Popover from '@radix-ui/react-popover';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import {
-  ArrowLeft,
   Bot,
   Eye,
   EyeOff,
@@ -82,7 +81,7 @@ interface RunScreenProps {
 }
 
 export default function RunScreen({
-  runId,
+  runId: _runId,
   status,
   createdAt,
   duration,
@@ -111,7 +110,6 @@ export default function RunScreen({
   onRefreshEvents,
   isRefreshingEvents = false,
   onTerminate,
-  onBack,
   isDesktopLayout = true,
   onClearSelection,
   className = '',
@@ -264,13 +262,6 @@ export default function RunScreen({
 
   return (
     <div className={`flex h-screen flex-col bg-[var(--agyn-bg-light)] ${className}`}>
-      {onBack && (
-        <div className="flex h-[40px] items-center gap-3 border-b border-[var(--agyn-border-subtle)] bg-[var(--agyn-dark)] px-4">
-          <IconButton icon={<ArrowLeft />} onClick={onBack} variant="ghost" size="sm" />
-          <span className="text-sm text-white">Run • {runId}</span>
-        </div>
-      )}
-
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-[var(--agyn-border-subtle)] bg-white px-4 py-3 md:flex-row md:items-center md:justify-between md:gap-6 md:px-6">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -471,7 +462,7 @@ export default function RunScreen({
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <div>
-                          <IconButton icon={<Settings2 />} variant="ghost" size="sm" />
+                          <IconButton icon={<Settings2 />} variant="ghost" size="sm" aria-label="Filter events" />
                         </div>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
@@ -681,34 +672,12 @@ export default function RunScreen({
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Status filters">
-                  {(['running', 'finished', 'failed', 'terminated'] as StatusFilter[]).map((filter) => {
-                    const active = statusFilterSet.has(filter);
-                    const label = filter === 'finished' ? 'Success' : filter.charAt(0).toUpperCase() + filter.slice(1);
-                    return (
-                      <Button
-                        key={filter}
-                        type="button"
-                        variant={active ? 'primary' : 'outline'}
-                        size="sm"
-                        onClick={() => handleToggleStatusFilter(filter)}
-                        aria-pressed={active}
-                        className="flex items-center gap-2"
-                      >
-                        <span aria-hidden="true">
-                          <StatusIndicator status={filter} size="sm" showTooltip={false} />
-                        </span>
-                        <span>{label}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-hidden">
-                {renderEventsList()}
-              </div>
             </div>
+
+            <div className="flex-1 overflow-hidden">
+              {renderEventsList()}
+            </div>
+          </div>
 
           <div className="hidden flex-1 flex-col overflow-hidden bg-white md:flex">
             {renderEventDetails()}

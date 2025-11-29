@@ -6,12 +6,10 @@ import { JsonViewer } from './JsonViewer';
 import { MarkdownContent } from './MarkdownContent';
 import { Dropdown } from './Dropdown';
 import { StatusIndicator, type Status } from './StatusIndicator';
+import { LLMContextViewer } from './agents/LLMContextViewer';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const asRecordArray = (value: unknown): Record<string, unknown>[] =>
-  Array.isArray(value) ? value.filter(isRecord) : [];
 
 const asString = (value: unknown, fallback = ''): string =>
   typeof value === 'string' ? value : fallback;
@@ -27,6 +25,39 @@ const safeJsonParse = (value: string): unknown => {
   }
 };
 
+const extractContextId = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (isRecord(value) && typeof value.id === 'string') {
+    const trimmed = value.id.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  return null;
+};
+
+const toContextIds = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    const ids = value
+      .map((item) => extractContextId(item))
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    return Array.from(new Set(ids));
+  }
+
+  const single = extractContextId(value);
+  return single ? [single] : [];
+};
+
+const getHighlightCount = (value: unknown): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return Math.floor(value);
+};
+
 export interface RunEventData extends Record<string, unknown> {
   messageSubtype?: MessageSubtype;
   content?: unknown;
@@ -34,6 +65,7 @@ export interface RunEventData extends Record<string, unknown> {
   toolName?: string;
   response?: string;
   context?: unknown;
+  newContextCount?: number;
   tokens?: {
     total?: number;
     [key: string]: unknown;
@@ -200,11 +232,12 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
   };
 
   const renderLLMEvent = () => {
-    const context = asRecordArray(event.data.context);
+    const contextIds = toContextIds(event.data.context);
     const response = asString(event.data.response);
     const totalTokens = asNumber(event.data.tokens?.total);
     const cost = typeof event.data.cost === 'string' ? event.data.cost : '';
     const model = asString(event.data.model);
+    const highlightContextCount = getHighlightCount(event.data.newContextCount);
 
     return (
       <div className="space-y-6 h-full flex flex-col">
@@ -265,16 +298,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
                 <span className="text-sm text-[var(--agyn-gray)]">Context</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0 border border-[var(--agyn-border-subtle)] rounded-[10px] p-4">
-                {context.length > 0 ? (
-                  <div>
-                    <button className="w-full text-sm text-[var(--agyn-blue)] hover:text-[var(--agyn-blue)]/80 py-2 mb-4 border border-[var(--agyn-border-subtle)] rounded-[6px] transition-colors">
-                      Load older context
-                    </button>
-                    {renderContextMessages(context)}
-                  </div>
-                ) : (
-                  <div className="text-sm text-[var(--agyn-gray)]">No context messages</div>
-                )}
+                <LLMContextViewer ids={contextIds} highlightLastCount={highlightContextCount} />
               </div>
             </div>
           </div>
