@@ -65,6 +65,7 @@ export function Conversation({
   const lastAutoScrolledThreadIdRef = useRef<string | null>(null);
   const scrollRequestIdRef = useRef(0);
   const [runHeights, setRunHeights] = useState<Map<string, number>>(new Map());
+  const totalMessageCount = runs.reduce((sum, run) => sum + run.messages.length, 0);
 
   // Use controlled or uncontrolled state
   const isCollapsed = collapsed ?? defaultCollapsed;
@@ -97,7 +98,7 @@ export function Conversation({
       return undefined;
     }
 
-    if (runs.length === 0) {
+    if (totalMessageCount === 0) {
       return undefined;
     }
 
@@ -117,7 +118,7 @@ export function Conversation({
     return () => {
       cancelled = true;
     };
-  }, [runs, activeThreadId]);
+  }, [totalMessageCount, activeThreadId]);
 
   const hasQueueOrReminders = queuedMessages.length > 0 || reminders.length > 0;
 

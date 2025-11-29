@@ -75,16 +75,8 @@ describe('Conversation auto-scroll behavior', () => {
     expect(scrollTopValue).toBe(960);
   });
 
-  it('scrolls after runs load asynchronously for the selected thread', async () => {
-    let resolveWait: (() => void) = () => {
-      throw new Error('resolve not set');
-    };
-    waitForStableScrollHeightMock.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveWait = resolve;
-        }),
-    );
+  it('scrolls only after transcript hydration when runs start empty', async () => {
+    waitForStableScrollHeightMock.mockImplementation(() => Promise.resolve());
 
     const { rerender } = render(
       <Conversation
@@ -114,13 +106,40 @@ describe('Conversation auto-scroll behavior', () => {
 
     rerender(
       <Conversation
-        runs={createRuns()}
+        runs={[
+          {
+            id: 'run-1',
+            status: 'finished',
+            messages: [],
+          },
+        ]}
         activeThreadId="thread-1"
         className="h-full"
       />,
     );
 
+    expect(waitForStableScrollHeightMock).not.toHaveBeenCalled();
+    expect(scrollTopValue).toBe(0);
+
+    let resolveWait: (() => void) = () => {
+      throw new Error('resolve not set');
+    };
+    waitForStableScrollHeightMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWait = resolve;
+        }),
+    );
+
     scrollHeightValue = 720;
+
+    rerender(
+      <Conversation
+        runs={createRuns()}
+        activeThreadId="thread-1"
+        className="h-full"
+      />,
+    );
 
     await act(async () => {
       resolveWait();
