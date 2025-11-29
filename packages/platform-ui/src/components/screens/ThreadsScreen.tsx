@@ -150,10 +150,10 @@ export default function ThreadsScreen({
     const nextStatus = resolvedSelectedThread.isOpen ? 'closed' : 'open';
     const toggleLabel = resolvedSelectedThread.isOpen ? 'Close' : 'Reopen';
     const toggleDisabled = !onToggleThreadStatus || isToggleThreadStatusPending;
-    const agentTitle = resolvedSelectedThread.agentTitle?.trim().length
-      ? resolvedSelectedThread.agentTitle.trim()
-      : resolvedSelectedThread.agentName;
-    const agentRole = resolvedSelectedThread.agentRole?.trim();
+    const agentDisplayName = resolvedSelectedThread.agentName?.trim().length
+      ? resolvedSelectedThread.agentName.trim()
+      : resolvedSelectedThread.agentTitle?.trim() ?? '';
+    const agentDisplayRole = resolvedSelectedThread.agentRole?.trim();
 
     return (
       <>
@@ -162,17 +162,22 @@ export default function ThreadsScreen({
             <div className="flex-1">
               <div className="mb-1 flex items-center gap-2">
                 <StatusIndicator status={resolvedSelectedThread.status} size="sm" showTooltip={false} />
-                <span className="text-xs text-[var(--agyn-gray)]">{agentTitle}</span>
+                {agentDisplayName ? (
+                  <span className="text-xs text-[var(--agyn-gray)]">{agentDisplayName}</span>
+                ) : null}
+                {agentDisplayRole ? (
+                  <>
+                    <span className="text-xs text-[var(--agyn-gray)]">•</span>
+                    <span className="text-xs text-[var(--agyn-gray)]" data-testid="thread-detail-role">
+                      {agentDisplayRole}
+                    </span>
+                  </>
+                ) : null}
                 <span className="text-xs text-[var(--agyn-gray)]">•</span>
                 <span className="text-xs text-[var(--agyn-gray)]" title={createdAtTitle}>
                   {createdAtRelative}
                 </span>
               </div>
-              {agentRole ? (
-                <p className="mt-0.5 truncate text-xs text-[var(--agyn-gray)]" title={agentRole} data-testid="thread-agent-role">
-                  {agentRole}
-                </p>
-              ) : null}
               <h3 className="mt-1 text-[var(--agyn-dark)]">{resolvedSelectedThread.summary}</h3>
             </div>
             <Button

@@ -110,6 +110,48 @@ describe('GraphLayout', () => {
     services = createServiceMocks();
   });
 
+  it('renders agent fallback title when persisted title is empty', async () => {
+    const updateNode = vi.fn();
+    const applyNodeStatus = vi.fn();
+    const applyNodeState = vi.fn();
+    const setEdges = vi.fn();
+
+    hookMocks.useGraphData.mockReturnValue({
+      nodes: [
+        {
+          id: 'agent-1',
+          template: 'agent-template',
+          kind: 'Agent',
+          title: '   ',
+          x: 10,
+          y: 20,
+          status: 'not_ready',
+          config: { title: '', name: '  Delta  ', role: '  Navigator  ' },
+          ports: { inputs: [], outputs: [] },
+        },
+      ],
+      edges: [],
+      loading: false,
+      savingState: { status: 'saved', error: null },
+      savingErrorMessage: null,
+      updateNode,
+      applyNodeStatus,
+      applyNodeState,
+      setEdges,
+    });
+
+    hookMocks.useGraphSocket.mockReturnValue(undefined);
+    hookMocks.useNodeStatus.mockReturnValue({ data: null, refetch: vi.fn() });
+
+    render(<GraphLayout services={services} />);
+
+    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
+    const props = canvasSpy.mock.calls.at(-1)?.[0] as { nodes?: Array<{ data?: { title?: string; kind?: string } }> };
+
+    expect(props?.nodes?.[0]?.data?.kind).toBe('Agent');
+    expect(props?.nodes?.[0]?.data?.title).toBe('Delta (Navigator)');
+  });
+
   it('passes sidebar config/state and persists config updates', async () => {
     const updateNode = vi.fn();
     const applyNodeStatus = vi.fn();

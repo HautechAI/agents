@@ -53,13 +53,31 @@ export interface GraphLayoutProps {
 }
 
 function toFlowNode(node: GraphNodeConfig): FlowNode {
+  const rawTitle = typeof node.title === 'string' ? node.title : '';
+  let displayTitle = rawTitle;
+
+  if (node.kind === 'Agent') {
+    const config = (node.config ?? {}) as Record<string, unknown>;
+    const trimmed = rawTitle.trim();
+    if (trimmed.length > 0) {
+      displayTitle = trimmed;
+    } else {
+      const name = typeof config['name'] === 'string' ? (config['name'] as string) : undefined;
+      const role = typeof config['role'] === 'string' ? (config['role'] as string) : undefined;
+      displayTitle = computeAgentDefaultTitle(name, role, 'Agent');
+    }
+  } else {
+    const trimmed = rawTitle.trim();
+    displayTitle = trimmed.length > 0 ? trimmed : rawTitle;
+  }
+
   return {
     id: node.id,
     type: 'graphNode',
     position: { x: node.x, y: node.y },
     data: {
       kind: node.kind,
-      title: node.title,
+      title: displayTitle,
       inputs: node.ports.inputs,
       outputs: node.ports.outputs,
       avatarSeed: node.avatarSeed,

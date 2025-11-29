@@ -193,13 +193,16 @@ export class AgentsThreadsController {
     ]);
     const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
     const fallbackTitle = '(unknown agent)';
-    const items = threads.map((t) => ({
-      ...t,
-      ...(descriptors[t.id]?.role ? { agentRole: descriptors[t.id].role } : {}),
-      ...(descriptors[t.id]?.name ? { agentName: descriptors[t.id].name } : {}),
-      ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
-      ...(includeAgentTitles ? { agentTitle: descriptors[t.id]?.title ?? fallbackTitle } : {}),
-    }));
+    const items = threads.map((t) => {
+      const descriptor = descriptors[t.id];
+      return {
+        ...t,
+        agentRole: descriptor?.role ?? null,
+        agentName: descriptor?.name ?? null,
+        ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
+        ...(includeAgentTitles ? { agentTitle: descriptor?.title ?? fallbackTitle } : {}),
+      };
+    });
     return { items };
   }
 
@@ -220,13 +223,16 @@ export class AgentsThreadsController {
     const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
     const fallbackTitle = '(unknown agent)';
     return {
-      items: items.map((t) => ({
-        ...t,
-        ...(descriptors[t.id]?.role ? { agentRole: descriptors[t.id].role } : {}),
-        ...(descriptors[t.id]?.name ? { agentName: descriptors[t.id].name } : {}),
-        ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
-        ...(includeAgentTitles ? { agentTitle: descriptors[t.id]?.title ?? fallbackTitle } : {}),
-      })),
+      items: items.map((t) => {
+        const descriptor = descriptors[t.id];
+        return {
+          ...t,
+          agentRole: descriptor?.role ?? null,
+          agentName: descriptor?.name ?? null,
+          ...(includeMetrics ? { metrics: { ...defaultMetrics, ...(metrics[t.id] ?? {}) } } : {}),
+          ...(includeAgentTitles ? { agentTitle: descriptor?.title ?? fallbackTitle } : {}),
+        };
+      }),
     };
   }
 
@@ -241,6 +247,8 @@ export class AgentsThreadsController {
     const fallbackTitle = '(unknown agent)';
     return {
       ...thread,
+      agentRole: thread.agentRole ?? null,
+      agentName: thread.agentName ?? null,
       ...(includeMetrics ? { metrics: thread.metrics ?? defaultMetrics } : {}),
       ...(includeAgentTitles ? { agentTitle: thread.agentTitle ?? fallbackTitle } : {}),
     };
