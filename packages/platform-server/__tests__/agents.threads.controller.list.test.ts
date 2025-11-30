@@ -85,6 +85,8 @@ describe('AgentsThreadsController list endpoints', () => {
         { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: vi.fn() } },
         { provide: RunEventsService, useValue: runEventsStub },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 
@@ -152,6 +154,8 @@ describe('AgentsThreadsController list endpoints', () => {
         { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: vi.fn() } },
         { provide: RunEventsService, useValue: runEventsStub },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 
@@ -270,6 +274,8 @@ describe('AgentsThreadsController list endpoints', () => {
         { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: vi.fn() } },
         { provide: RunEventsService, useValue: runEventsStub },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 

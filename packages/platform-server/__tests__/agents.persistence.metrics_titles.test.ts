@@ -112,8 +112,6 @@ describe('AgentsPersistenceService metrics and agent titles', () => {
         edges: [],
       }),
     };
-    const svc = createService(stub, { templateRegistry, graphRepo });
-
     const threadConfigured = (await stub.thread.create({ data: { alias: 'config' } })).id;
     const threadProfile = (await stub.thread.create({ data: { alias: 'profile' } })).id;
     const threadTemplate = (await stub.thread.create({ data: { alias: 'tmpl' } })).id;
@@ -122,6 +120,11 @@ describe('AgentsPersistenceService metrics and agent titles', () => {
 
     await stub.thread.update({ where: { id: threadConfigured }, data: { assignedAgentNodeId: 'agent-configured' } });
     await stub.thread.update({ where: { id: threadAssignedOnly }, data: { assignedAgentNodeId: 'agent-assigned' } });
+
+    const linking = createLinkingStub({
+      resolveLinkedAgentNodes: async () => ({ [threadAssignedOnly]: 'agent-assigned' }),
+    });
+    const svc = createService(stub, { templateRegistry, graphRepo, linking });
 
     stub.conversationState._push({ threadId: threadConfigured, nodeId: 'agent-configured', state: {}, updatedAt: new Date('2024-04-02T00:00:00Z') });
     // Older state should be ignored in favour of more recent entry
