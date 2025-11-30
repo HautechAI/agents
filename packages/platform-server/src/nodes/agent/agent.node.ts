@@ -30,7 +30,6 @@ import { Signal } from '../../signal';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { RunSignalsRegistry } from '../../agents/run-signals.service';
 import { ThreadOutboxService } from '../../messaging/threadOutbox.service';
-import { ThreadOutboxService } from '../../messaging/threadOutbox.service';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';

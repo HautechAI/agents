@@ -4,6 +4,7 @@ import type { PrismaService } from '../src/core/services/prisma.service';
 import type { SlackAdapter } from '../src/messaging/slack/slack.adapter';
 import type { ManageAdapter } from '../src/messaging/manage/manage.adapter';
 import type { AgentIngressService } from '../src/messaging/manage/agentIngress.service';
+import type { LiveGraphRuntime } from '../src/graph-core/liveGraph.manager';
 
 describe('ChannelRouter manage routes', () => {
   const PARENT_THREAD_ID = '11111111-1111-1111-8111-111111111111';
@@ -24,6 +25,10 @@ describe('ChannelRouter manage routes', () => {
   const makeIngress = () => ({ enqueueToAgent: vi.fn() }) as unknown as AgentIngressService & {
     enqueueToAgent: ReturnType<typeof vi.fn>;
   };
+  const makeRuntime = (instance?: unknown) =>
+    ({
+      getNodeInstance: vi.fn(() => instance),
+    }) as unknown as LiveGraphRuntime & { getNodeInstance: ReturnType<typeof vi.fn> };
 
   it('returns ok without forwarding for sync mode', async () => {
     const descriptor = {
@@ -35,10 +40,11 @@ describe('ChannelRouter manage routes', () => {
     };
     const prisma = makePrisma(descriptor);
     const slack = makeSlack();
+    const runtime = makeRuntime(slack);
     const manage = makeManage();
     const ingress = makeIngress();
 
-    const router = new ChannelRouter(prisma, slack, manage, ingress);
+    const router = new ChannelRouter(prisma, runtime, manage, ingress);
     const adapter = await router.getAdapter(CHILD_THREAD_ID);
     expect(adapter).not.toBeNull();
     const res = await adapter!.sendText({
@@ -52,6 +58,7 @@ describe('ChannelRouter manage routes', () => {
     expect(manage.computeForwardingInfo).not.toHaveBeenCalled();
     expect(ingress.enqueueToAgent).not.toHaveBeenCalled();
     expect(slack.sendText).not.toHaveBeenCalled();
+    expect(runtime.getNodeInstance).not.toHaveBeenCalled();
   });
 
   it('delegates to agent ingress for async mode', async () => {
@@ -64,6 +71,7 @@ describe('ChannelRouter manage routes', () => {
     };
     const prisma = makePrisma(descriptor);
     const slack = makeSlack();
+    const runtime = makeRuntime(slack);
     const manage = makeManage();
     manage.computeForwardingInfo.mockResolvedValue({
       ok: true,
@@ -78,7 +86,7 @@ describe('ChannelRouter manage routes', () => {
     const ingress = makeIngress();
     ingress.enqueueToAgent.mockResolvedValue({ ok: true });
 
-    const router = new ChannelRouter(prisma, slack, manage, ingress);
+    const router = new ChannelRouter(prisma, runtime, manage, ingress);
     const adapter = await router.getAdapter(CHILD_THREAD_ID);
     expect(adapter).not.toBeNull();
 
@@ -107,5 +115,6 @@ describe('ChannelRouter manage routes', () => {
       showCorrelationInOutput: true,
     });
     expect(slack.sendText).not.toHaveBeenCalled();
+    expect(runtime.getNodeInstance).not.toHaveBeenCalled();
   });
 });
