@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import { AgentsThreads } from '../src/pages/AgentsThreads';
@@ -100,6 +101,8 @@ describe('AgentsThreads conversation view', () => {
   it('renders conversation messages and run info, and navigates to run timeline', async () => {
     setupThreadData();
 
+    const user = userEvent.setup();
+
     render(
       <TestProviders>
         <MemoryRouter>
@@ -109,7 +112,7 @@ describe('AgentsThreads conversation view', () => {
     );
 
     const threadRow = await screen.findByText('Thread A');
-    fireEvent.click(threadRow);
+    await user.click(threadRow);
 
     const conversation = await screen.findByTestId('conversation');
     const messages = await within(conversation).findAllByTestId('conversation-message');
@@ -122,12 +125,14 @@ describe('AgentsThreads conversation view', () => {
     const runInfo = await within(conversation).findByTestId('run-info');
     expect(runInfo).toHaveTextContent('Finished');
     const viewRunButton = within(runInfo).getByRole('button', { name: /View Run/i });
-    fireEvent.click(viewRunButton);
+    await user.click(viewRunButton);
     expect(navigateMock).toHaveBeenCalledWith('/agents/threads/th1/runs/run1/timeline');
   });
 
   it('loads subthreads when expanding a thread', async () => {
     setupThreadData();
+
+    const user = userEvent.setup();
 
     const childThread = {
       id: 'th-child',
@@ -158,7 +163,7 @@ describe('AgentsThreads conversation view', () => {
     const expandButton = await screen.findByRole('button', { name: /Show subthreads/i });
     expect(expandButton).toBeInTheDocument();
 
-    fireEvent.click(expandButton);
+    await user.click(expandButton);
 
     const childRow = await screen.findByText('Child thread');
     expect(childRow).toBeInTheDocument();
@@ -228,6 +233,8 @@ describe('AgentsThreads conversation view', () => {
   it('reuses cached conversation content when returning to a thread', async () => {
     setupTwoThreadData();
 
+    const user = userEvent.setup();
+
     render(
       <TestProviders>
         <MemoryRouter>
@@ -237,19 +244,19 @@ describe('AgentsThreads conversation view', () => {
     );
 
     const threadARow = await screen.findByText('Thread A');
-    fireEvent.click(threadARow);
+    await user.click(threadARow);
 
     const conversation = await screen.findByTestId('conversation');
     const threadAInitialMessages = await within(conversation).findAllByText('Thread A says hello');
     expect(threadAInitialMessages.length).toBeGreaterThan(0);
 
     const threadBRow = await screen.findByText('Thread B');
-    fireEvent.click(threadBRow);
+    await user.click(threadBRow);
     const conversationB = await screen.findByTestId('conversation');
     const threadBMessages = await within(conversationB).findAllByText('Thread B checking in');
     expect(threadBMessages.length).toBeGreaterThan(0);
 
-    fireEvent.click(threadARow);
+    await user.click(threadARow);
     const conversationAfterReturn = await screen.findByTestId('conversation');
     expect(within(conversationAfterReturn).getAllByText('Thread A says hello').length).toBeGreaterThan(0);
   });
