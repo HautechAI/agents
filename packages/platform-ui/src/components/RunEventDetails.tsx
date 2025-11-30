@@ -41,6 +41,24 @@ const safeStringify = (value: unknown): string => {
   }
 };
 
+const formatToolCallArguments = (value: unknown): string => {
+  const serialized = safeStringify(value ?? {});
+  return serialized.length > 0 ? serialized : '{}';
+};
+
+const extractToolCallArguments = (call: Record<string, unknown>): unknown => {
+  if ('arguments' in call) {
+    return (call as { arguments?: unknown }).arguments;
+  }
+
+  const functionField = (call as { function?: unknown }).function;
+  if (isRecord(functionField) && 'arguments' in functionField) {
+    return (functionField as { arguments?: unknown }).arguments;
+  }
+
+  return undefined;
+};
+
 const extractContextId = (value: unknown): string | null => {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -95,6 +113,10 @@ export interface RunEventData extends Record<string, unknown> {
   context?: unknown;
   newContextCount?: number;
   tokens?: {
+    input?: number;
+    cached?: number;
+    output?: number;
+    reasoning?: number;
     total?: number;
     [key: string]: unknown;
   };
@@ -105,7 +127,7 @@ export interface RunEventData extends Record<string, unknown> {
   command?: string;
   workingDir?: string;
   tool_calls?: unknown[];
-  toolCalls?: unknown[];
+  toolCalls?: Array<{ callId?: string; name?: string; arguments?: unknown }>;
   additional_kwargs?: {
     tool_calls?: unknown[];
     [key: string]: unknown;
@@ -367,6 +389,42 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
     const hasContextSource = Array.isArray(llmContextIds) ? llmContextIds.length > 0 : false;
     const hasContextMessages = llmContextMessages.length > 0;
     const displayedContextCount = Math.min(targetContextItems, totalContextItems);
+    type ToolCallDisplay = { key: string; name: string; callId?: string; arguments: string };
+    const toolCallGroups = [event.data.toolCalls, event.data.tool_calls, event.data.additional_kwargs?.tool_calls];
+    const toolCalls: ToolCallDisplay[] = [];
+
+    toolCallGroups.forEach((group) => {
+      if (!Array.isArray(group)) return;
+      group.forEach((call) => {
+        if (!isRecord(call)) return;
+        const name = asString(call.name, 'Tool Call');
+        const callIdCandidate = asString((call as { callId?: unknown; id?: unknown }).callId ?? (call as { id?: unknown }).id);
+        const argumentsValue = extractToolCallArguments(call);
+        const formattedArguments = formatToolCallArguments(argumentsValue);
+        const key = callIdCandidate.length > 0 ? callIdCandidate : `tool-call-${toolCalls.length}`;
+        toolCalls.push({
+          key,
+          name,
+          callId: callIdCandidate.length > 0 ? callIdCandidate : undefined,
+          arguments: formattedArguments,
+        });
+      });
+    });
+
+    const hasToolCalls = toolCalls.length > 0;
+
+    const tokens = event.data.tokens;
+    const tokenEntries = [
+      { key: 'input', label: 'Input', value: typeof tokens?.input === 'number' ? tokens.input : undefined },
+      { key: 'cached', label: 'Cached', value: typeof tokens?.cached === 'number' ? tokens.cached : undefined },
+      { key: 'output', label: 'Output', value: typeof tokens?.output === 'number' ? tokens.output : undefined },
+      { key: 'reasoning', label: 'Reasoning', value: typeof tokens?.reasoning === 'number' ? tokens.reasoning : undefined },
+      { key: 'total', label: 'Total', value: typeof tokens?.total === 'number' ? tokens.total : undefined },
+    ] as const;
+
+    const hasTokenMetrics = tokenEntries.some(({ value }) => typeof value === 'number');
+
+    const formatTokenValue = (value: number | undefined) => (typeof value === 'number' ? value.toLocaleString() : '—');
 
     return (
       <div className="space-y-6 h-full flex flex-col">
@@ -477,13 +535,70 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               <IconButton icon={<Copy className="w-3 h-3" />} size="sm" variant="ghost" />
             </div>
             <div className="flex-1 overflow-y-auto min-h-0 border border-[var(--agyn-border-subtle)] rounded-[10px] p-4">
-              {response ? (
-                <div className="prose prose-sm max-w-none">
-                  <MarkdownContent content={response} />
-                </div>
-              ) : (
-                <div className="text-sm text-[var(--agyn-gray)]">No response available</div>
-              )}
+              <div className="flex flex-col gap-4">
+                <section>
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm text-[var(--agyn-gray)]">Response</span>
+                  </div>
+                  {response ? (
+                    <div className="prose prose-sm max-w-none">
+                      <MarkdownContent content={response} />
+                    </div>
+                  ) : (
+                    <div className="text-sm text-[var(--agyn-gray)]">No response available</div>
+                  )}
+                </section>
+
+                {hasToolCalls && (
+                  <section>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm text-[var(--agyn-gray)]">Tool Calls</span>
+                    </div>
+                    <div className="space-y-3">
+                      {toolCalls.map((call) => (
+                        <div
+                          key={call.key}
+                          className="rounded-[8px] border border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)]/40 p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-[var(--agyn-dark)]">{call.name}</p>
+                              {call.callId && (
+                                <p className="text-xs text-[var(--agyn-gray)] mt-0.5">Call ID: {call.callId}</p>
+                              )}
+                            </div>
+                          </div>
+                          <pre
+                            className="mt-2 max-h-48 overflow-auto rounded-[6px] bg-[var(--agyn-dark)]/5 p-2 text-xs text-[var(--agyn-dark)] whitespace-pre-wrap"
+                            style={{ wordBreak: 'break-word' }}
+                          >
+                            {call.arguments}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {hasTokenMetrics && (
+                  <section>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm text-[var(--agyn-gray)]">Token Usage</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                      {tokenEntries.map(({ key, label, value }) => (
+                        <div
+                          key={key}
+                          className="rounded-[8px] border border-[var(--agyn-border-subtle)] bg-white p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                        >
+                          <div className="text-xs text-[var(--agyn-gray)]">{label}</div>
+                          <div className="text-sm font-semibold text-[var(--agyn-dark)]">{formatTokenValue(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
             </div>
           </div>
         </div>

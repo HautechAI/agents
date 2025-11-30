@@ -1,16 +1,17 @@
+import type { ComponentProps } from 'react';
 import { useArgs } from 'storybook/preview-api';
 import { action } from 'storybook/actions';
 import type { Meta, StoryObj } from '@storybook/react';
 import { rest } from 'msw';
 import RunScreen from '../src/components/screens/RunScreen';
 import type { RunEvent } from '../src/components/RunEventsList';
-import type { EventType } from '../src/components/RunEventDetails';
-import type { ContextItem } from '../src/api/types/agents';
+import type { ContextItem, RunTimelineEvent, RunTimelineEventsResponse, RunTimelineSummary, RunEventType, RunEventStatus } from '../src/api/types/agents';
+import { aggregateLlmUsage, mapTimelineEventToRunEvent } from '../src/pages/utils/timelineEventToRunEvent';
 import { type Status } from '../src/components/StatusIndicator';
 import { withMainLayout } from './decorators/withMainLayout';
 import { withQueryClient } from './decorators/withQueryClient';
 
-type RunScreenProps = React.ComponentProps<typeof RunScreen>;
+type RunScreenProps = ComponentProps<typeof RunScreen>;
 
 const meta: Meta<typeof RunScreen> = {
   title: 'Screens/Run',
@@ -25,6 +26,9 @@ const meta: Meta<typeof RunScreen> = {
 export default meta;
 
 type Story = StoryObj<typeof RunScreen>;
+
+const SAMPLE_RUN_ID = 'run-001';
+const SAMPLE_THREAD_ID = 'thread-001';
 
 const sampleContextItems: ContextItem[] = [
   {
@@ -52,8 +56,8 @@ const sampleContextItems: ContextItem[] = [
     role: 'tool',
     contentText: null,
     contentJson: {
-      command: 'npm install jsonwebtoken',
-      result: 'added 12 packages',
+      command: 'pnpm test --filter auth',
+      result: 'Passed 24 tests in 3s',
     },
     metadata: {},
     sizeBytes: 640,
@@ -63,102 +67,181 @@ const sampleContextItems: ContextItem[] = [
 
 const sampleContextItemMap = new Map(sampleContextItems.map((item) => [item.id, item]));
 
-const sampleEvents: RunEvent[] = [
+const sampleTimelineEvents: RunTimelineEvent[] = [
   {
     id: 'evt-1',
-    type: 'message' as EventType,
-    timestamp: '2024-07-10T19:34:12.000Z',
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    type: 'invocation_message',
+    status: 'success',
+    ts: '2024-07-10T19:34:12.000Z',
     startedAt: '2024-07-10T19:34:12.000Z',
-    endedAt: null,
-    durationMs: null,
-    status: 'finished',
-    data: {
-      messageSubtype: 'source',
-      content:
-        'Can you help me implement a user authentication system with JWT tokens and OAuth 2.0 integration?',
+    endedAt: '2024-07-10T19:34:12.000Z',
+    durationMs: 0,
+    nodeId: 'node-1',
+    sourceKind: 'internal',
+    sourceSpanId: 'span-evt-1',
+    metadata: null,
+    errorCode: null,
+    errorMessage: null,
+    message: {
+      messageId: 'msg-1',
+      role: 'user',
+      kind: 'source',
+      text: 'Can you help me implement a secure authentication system?',
+      source: null,
+      createdAt: '2024-07-10T19:34:12.000Z',
     },
+    attachments: [],
   },
   {
     id: 'evt-2',
-    type: 'llm' as EventType,
-    timestamp: '2024-07-10T19:34:15.000Z',
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    type: 'llm_call',
+    status: 'success',
+    ts: '2024-07-10T19:34:15.000Z',
     startedAt: '2024-07-10T19:34:13.000Z',
     endedAt: '2024-07-10T19:34:15.300Z',
     durationMs: 2300,
-    status: 'finished',
-    data: {
-      context: ['ctx-1', 'ctx-2', 'ctx-3'],
-      newContextCount: 1,
-      response:
-        "I'll help you implement a comprehensive authentication system. Let me break this down into steps and create the necessary files.",
-      model: 'gpt-4-turbo',
-      tokens: {
-        input: 1234,
-        cached: 120,
-        output: 856,
-        reasoning: 64,
-        total: 2274,
+    nodeId: 'node-2',
+    sourceKind: 'internal',
+    sourceSpanId: 'span-evt-2',
+    metadata: null,
+    errorCode: null,
+    errorMessage: null,
+    llmCall: {
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      temperature: 0,
+      topP: 1,
+      stopReason: 'stop',
+      contextItemIds: ['ctx-1', 'ctx-2', 'ctx-3'],
+      newContextItemCount: 2,
+      responseText:
+        "I'll help you implement a comprehensive authentication system. Let's break the work into steps and generate the required files.",
+      rawResponse: null,
+      toolCalls: [
+        {
+          callId: 'call-1',
+          name: 'file_write',
+          arguments: {
+            path: '/src/auth/jwt.ts',
+            content:
+              'import jwt from "jsonwebtoken";\n\nexport function generateToken(payload: any) {\n  return jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: "1h" });\n}',
+          },
+        },
+        {
+          callId: 'call-2',
+          name: 'shell',
+          arguments: {
+            command: 'pnpm test --filter auth',
+          },
+        },
+      ],
+      usage: {
+        inputTokens: 1234,
+        cachedInputTokens: 120,
+        outputTokens: 856,
+        reasoningTokens: 64,
+        totalTokens: 2274,
       },
-      cost: '$0.0234',
     },
+    attachments: [],
   },
   {
     id: 'evt-3',
-    type: 'tool' as EventType,
-    timestamp: '2024-07-10T19:34:17.000Z',
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    type: 'tool_execution',
+    status: 'success',
+    ts: '2024-07-10T19:34:17.000Z',
     startedAt: '2024-07-10T19:34:16.000Z',
     endedAt: '2024-07-10T19:34:17.200Z',
     durationMs: 1200,
-    status: 'finished',
-    data: {
+    nodeId: 'node-3',
+    sourceKind: 'internal',
+    sourceSpanId: 'span-evt-3',
+    metadata: null,
+    errorCode: null,
+    errorMessage: null,
+    toolExecution: {
       toolName: 'file_write',
-      toolSubtype: 'generic',
+      toolCallId: 'call-1',
+      execStatus: 'success',
       input: {
         path: '/src/auth/jwt.ts',
         content:
-          'import jwt from "jsonwebtoken";\n\nexport function generateToken(payload: any) {\n  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });\n}',
+          'import jwt from "jsonwebtoken";\n\nexport function generateToken(payload: any) {\n  return jwt.sign(payload, process.env.JWT_SECRET!, { expiresIn: "1h" });\n}',
       },
       output: {
         success: true,
         path: '/src/auth/jwt.ts',
         bytesWritten: 234,
       },
+      errorMessage: null,
+      raw: null,
     },
+    attachments: [],
   },
   {
     id: 'evt-4',
-    type: 'tool' as EventType,
-    timestamp: '2024-07-10T19:34:19.200Z',
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    type: 'tool_execution',
+    status: 'success',
+    ts: '2024-07-10T19:34:19.200Z',
     startedAt: '2024-07-10T19:34:18.400Z',
     endedAt: '2024-07-10T19:34:19.200Z',
     durationMs: 800,
-    status: 'finished',
-    data: {
+    nodeId: 'node-4',
+    sourceKind: 'internal',
+    sourceSpanId: 'span-evt-4',
+    metadata: null,
+    errorCode: null,
+    errorMessage: null,
+    toolExecution: {
       toolName: 'shell',
-      toolSubtype: 'shell',
-      command: 'npm install jsonwebtoken bcrypt express-session passport passport-jwt',
-      output:
-        'added 12 packages, and audited 200 packages in 2s\n\nfound 0 vulnerabilities',
-      exitCode: 0,
-      workingDir: '/home/user/project',
+      toolCallId: 'call-2',
+      execStatus: 'success',
+      input: {
+        command: 'pnpm test --filter auth',
+        cwd: '/workspace/project',
+      },
+      output: {
+        stdout: 'Running 24 tests...\nAll tests passed.\n',
+        exitCode: 0,
+      },
+      errorMessage: null,
+      raw: null,
     },
+    attachments: [],
   },
   {
     id: 'evt-4a',
-    type: 'tool' as EventType,
-    timestamp: '2024-07-10T19:34:21.500Z',
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    type: 'tool_execution',
+    status: 'success',
+    ts: '2024-07-10T19:34:21.500Z',
     startedAt: '2024-07-10T19:34:18.000Z',
     endedAt: '2024-07-10T19:34:21.500Z',
     durationMs: 3500,
-    status: 'finished',
-    data: {
+    nodeId: 'node-5',
+    sourceKind: 'internal',
+    sourceSpanId: 'span-evt-5',
+    metadata: null,
+    errorCode: null,
+    errorMessage: null,
+    toolExecution: {
       toolName: 'manage',
-      toolSubtype: 'manage',
+      toolCallId: 'call-3',
+      execStatus: 'success',
       input: {
         command: 'send_message',
         worker: 'agent-ops',
         message:
-          'Deploy the updated authentication service to staging environment and run integration tests.',
+          'Deploy the updated authentication service to staging and run integration tests.',
         threadAlias: 'deploy-auth-staging',
       },
       output: {
@@ -167,39 +250,130 @@ const sampleEvents: RunEvent[] = [
         runId: 'run-xyz-456',
         message: 'Message sent to worker agent-ops in thread deploy-auth-staging',
       },
+      errorMessage: null,
+      raw: null,
     },
+    attachments: [],
   },
   {
     id: 'evt-5',
-    type: 'summarization' as EventType,
-    timestamp: '2024-07-10T19:34:38.000Z',
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    type: 'summarization',
+    status: 'success',
+    ts: '2024-07-10T19:34:38.000Z',
     startedAt: '2024-07-10T19:34:36.500Z',
     endedAt: '2024-07-10T19:34:38.300Z',
     durationMs: 1800,
-    status: 'finished',
-    data: {
-      summary:
-        'Implemented JWT-based authentication with OAuth 2.0 integration, added security best practices, and identified one failing test related to empty JWT_SECRET handling.',
-      newContext: ['Resolved configuration drift', 'Updated deployment checklist'],
-      oldContext: [],
+    nodeId: 'node-6',
+    sourceKind: 'internal',
+    sourceSpanId: 'span-evt-6',
+    metadata: null,
+    errorCode: null,
+    errorMessage: null,
+    summarization: {
+      summaryText:
+        'Implemented JWT-based authentication with OAuth 2.0 integration, added security best practices, and confirmed test coverage for empty secret handling.',
       newContextCount: 2,
+      oldContextTokens: 2847,
+      raw: null,
     },
+    attachments: [],
   },
   {
     id: 'evt-6',
-    type: 'message' as EventType,
-    timestamp: '2024-07-10T19:34:45.000Z',
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    type: 'invocation_message',
+    status: 'success',
+    ts: '2024-07-10T19:34:45.000Z',
     startedAt: '2024-07-10T19:34:45.000Z',
-    endedAt: null,
-    durationMs: null,
-    status: 'finished',
-    data: {
-      messageSubtype: 'result',
-      content:
+    endedAt: '2024-07-10T19:34:45.000Z',
+    durationMs: 0,
+    nodeId: 'node-7',
+    sourceKind: 'internal',
+    sourceSpanId: 'span-evt-7',
+    metadata: null,
+    errorCode: null,
+    errorMessage: null,
+    message: {
+      messageId: 'msg-2',
+      role: 'assistant',
+      kind: 'result',
+      text:
         'Authentication system implementation complete! All tests passing. JWT token generation, OAuth 2.0 providers, and security best practices are in place.',
+      source: null,
+      createdAt: '2024-07-10T19:34:45.000Z',
     },
+    attachments: [],
   },
 ];
+
+const sampleRunEventsResponse: RunTimelineEventsResponse = {
+  items: sampleTimelineEvents,
+  nextCursor: null,
+};
+
+const firstTimelineEvent = sampleTimelineEvents[0] ?? null;
+const lastTimelineEvent = sampleTimelineEvents.length > 0 ? sampleTimelineEvents[sampleTimelineEvents.length - 1] : null;
+
+const sampleRunSummary: RunTimelineSummary = (() => {
+  const countsByType: Record<RunEventType, number> = {
+    invocation_message: 0,
+    injection: 0,
+    llm_call: 0,
+    tool_execution: 0,
+    summarization: 0,
+  };
+
+  const countsByStatus: Record<RunEventStatus, number> = {
+    pending: 0,
+    running: 0,
+    success: 0,
+    error: 0,
+    cancelled: 0,
+  };
+
+  for (const event of sampleTimelineEvents) {
+    countsByType[event.type] += 1;
+    countsByStatus[event.status] += 1;
+  }
+
+  return {
+    runId: SAMPLE_RUN_ID,
+    threadId: SAMPLE_THREAD_ID,
+    status: 'running',
+    createdAt: '2024-07-10T19:34:00.000Z',
+    updatedAt: '2024-07-10T19:35:00.000Z',
+    firstEventAt: firstTimelineEvent ? firstTimelineEvent.ts : null,
+    lastEventAt: lastTimelineEvent ? lastTimelineEvent.ts : null,
+    countsByType,
+    countsByStatus,
+    totalEvents: sampleTimelineEvents.length,
+  };
+})();
+
+const sampleEvents: RunEvent[] = sampleTimelineEvents.map(mapTimelineEventToRunEvent);
+
+const baseTokensAggregate = aggregateLlmUsage(sampleTimelineEvents);
+
+const baseTokens = {
+  input: baseTokensAggregate.input,
+  cached: baseTokensAggregate.cached,
+  output: baseTokensAggregate.output,
+  reasoning: baseTokensAggregate.reasoning,
+  total: baseTokensAggregate.total,
+};
+
+const baseStatistics = {
+  totalEvents: sampleEvents.length,
+  messages: sampleEvents.filter((event) => event.type === 'message').length,
+  llm: sampleEvents.filter((event) => event.type === 'llm').length,
+  tools: sampleEvents.filter((event) => event.type === 'tool').length,
+  summaries: sampleEvents.filter((event) => event.type === 'summarization').length,
+};
+
+const defaultSelectedEventId = sampleEvents.find((event) => event.type === 'llm')?.id ?? sampleEvents[0]?.id ?? null;
 
 const contextItemsHandler = rest.get('/api/agents/context-items', (req, res, ctx) => {
   const ids = req.url.searchParams.getAll('ids');
@@ -208,6 +382,14 @@ const contextItemsHandler = rest.get('/api/agents/context-items', (req, res, ctx
     .map((id) => sampleContextItemMap.get(id))
     .filter((item): item is ContextItem => Boolean(item));
   return res(ctx.json({ items }));
+});
+
+const runSummaryHandler = rest.get('/api/agents/runs/:runId/summary', (_req, res, ctx) => {
+  return res(ctx.json(sampleRunSummary));
+});
+
+const runEventsHandler = rest.get('/api/agents/runs/:runId/events', (_req, res, ctx) => {
+  return res(ctx.json(sampleRunEventsResponse));
 });
 
 const ControlledRender: Story['render'] = () => {
@@ -265,32 +447,16 @@ const ControlledRender: Story['render'] = () => {
   );
 };
 
-const baseStatistics = {
-  totalEvents: sampleEvents.length,
-  messages: 2,
-  llm: 1,
-  tools: 3,
-  summaries: 1,
-};
-
-const baseTokens = {
-  input: 500,
-  cached: 0,
-  output: 300,
-  reasoning: 0,
-  total: 800,
-};
-
 export const Populated: Story = {
   args: {
-    runId: 'run-001',
+    runId: SAMPLE_RUN_ID,
     status: 'running' as Status,
-    createdAt: new Date().toISOString(),
+    createdAt: sampleRunSummary.createdAt,
     duration: '2m 45s',
     statistics: baseStatistics,
     tokens: baseTokens,
     events: sampleEvents,
-    selectedEventId: sampleEvents[0].id,
+    selectedEventId: defaultSelectedEventId,
     isFollowing: true,
     eventFilters: [],
     statusFilters: [],
@@ -305,7 +471,7 @@ export const Populated: Story = {
   parameters: {
     selectedMenuItem: 'threads',
     msw: {
-      handlers: [contextItemsHandler],
+      handlers: [contextItemsHandler, runSummaryHandler, runEventsHandler],
     },
   },
 };
@@ -323,7 +489,7 @@ export const Empty: Story = {
       tools: 0,
       summaries: 0,
     },
-    tokens: baseTokens,
+    tokens: { input: 0, cached: 0, output: 0, reasoning: 0, total: 0 },
     events: [],
     selectedEventId: null,
     isFollowing: false,
@@ -340,21 +506,21 @@ export const Empty: Story = {
   parameters: {
     selectedMenuItem: 'threads',
     msw: {
-      handlers: [contextItemsHandler],
+      handlers: [contextItemsHandler, runSummaryHandler, runEventsHandler],
     },
   },
 };
 
 export const Loading: Story = {
   args: {
-    runId: 'run-003',
+    runId: SAMPLE_RUN_ID,
     status: 'running' as Status,
     createdAt: new Date().toISOString(),
     duration: '—',
     statistics: baseStatistics,
     tokens: baseTokens,
     events: sampleEvents,
-    selectedEventId: sampleEvents[0].id,
+    selectedEventId: defaultSelectedEventId,
     isFollowing: true,
     eventFilters: [],
     statusFilters: [],
@@ -369,21 +535,21 @@ export const Loading: Story = {
   parameters: {
     selectedMenuItem: 'threads',
     msw: {
-      handlers: [contextItemsHandler],
+      handlers: [contextItemsHandler, runSummaryHandler, runEventsHandler],
     },
   },
 };
 
 export const Error: Story = {
   args: {
-    runId: 'run-004',
+    runId: SAMPLE_RUN_ID,
     status: 'failed' as Status,
     createdAt: new Date().toISOString(),
     duration: '1m 12s',
     statistics: baseStatistics,
     tokens: baseTokens,
     events: sampleEvents,
-    selectedEventId: sampleEvents[0].id,
+    selectedEventId: defaultSelectedEventId,
     isFollowing: false,
     eventFilters: [],
     statusFilters: [],
@@ -399,7 +565,7 @@ export const Error: Story = {
   parameters: {
     selectedMenuItem: 'threads',
     msw: {
-      handlers: [contextItemsHandler],
+      handlers: [contextItemsHandler, runSummaryHandler, runEventsHandler],
     },
   },
 };

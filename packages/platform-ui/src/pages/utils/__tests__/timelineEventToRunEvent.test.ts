@@ -34,8 +34,18 @@ describe('timelineEventToRunEvent utilities', () => {
       type: 'llm_call',
       llmCall: {
         id: 'llm-1',
+        provider: 'openai',
         model: 'gpt-test',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: ['ctx-1', 'ctx-2'],
+        newContextItemCount: 1,
         responseText: 'Hello',
+        rawResponse: null,
+        toolCalls: [
+          { callId: 'tool-1', name: 'http_request', arguments: { url: 'https://example.com', method: 'GET' } },
+        ],
         usage: {
           inputTokens: 10,
           cachedInputTokens: 2,
@@ -50,6 +60,12 @@ describe('timelineEventToRunEvent utilities', () => {
     expect(runEvent.type).toBe('llm');
     expect(runEvent.data?.tokens).toEqual({ input: 10, cached: 2, output: 5, reasoning: 1, total: 18 });
     expect(runEvent.data?.cost).toBe('$0');
+    expect(runEvent.data?.response).toBe('Hello');
+    expect(runEvent.data?.context).toEqual(['ctx-1', 'ctx-2']);
+    expect(runEvent.data?.newContextCount).toBe(1);
+    expect(runEvent.data?.toolCalls).toEqual([
+      { callId: 'tool-1', name: 'http_request', arguments: { url: 'https://example.com', method: 'GET' } },
+    ]);
     expect(runEvent.timestamp).toBe(event.ts);
     expect(runEvent.startedAt).toBeNull();
     expect(runEvent.durationMs).toBe(event.durationMs ?? null);
