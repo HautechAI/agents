@@ -21,7 +21,7 @@ describe('AgentsThreadsController list endpoints', () => {
         { id: 't1', alias: 'a1', summary: 'Summary', status: 'open', createdAt: now, parentId: null },
       ]),
       getThreadsMetrics: vi.fn(async () => ({ t1: { remindersCount: 5, containersCount: 1, activity: 'working', runsCount: 2 } })),
-      getThreadsAgentTitles: vi.fn(async () => ({ t1: 'Agent One' })),
+      getThreadsAgentDescriptors: vi.fn(async () => ({ t1: { title: 'Agent One', role: 'Planner', name: 'Alpha' } })),
       listChildren: vi.fn(),
       listRuns: vi.fn(),
       listRunMessages: vi.fn(),
@@ -45,7 +45,7 @@ describe('AgentsThreadsController list endpoints', () => {
 
     expect((persistence.listThreads as any).mock.calls.length).toBe(1);
     expect((persistence.getThreadsMetrics as any).mock.calls[0][0]).toEqual(['t1']);
-    expect((persistence.getThreadsAgentTitles as any).mock.calls[0][0]).toEqual(['t1']);
+    expect((persistence.getThreadsAgentDescriptors as any).mock.calls[0][0]).toEqual(['t1']);
     expect(res).toMatchObject({
       items: [
         {
@@ -56,10 +56,47 @@ describe('AgentsThreadsController list endpoints', () => {
           parentId: null,
           metrics: { remindersCount: 5, containersCount: 1, activity: 'working', runsCount: 2 },
           agentTitle: 'Agent One',
+          agentRole: 'Planner',
+          agentName: 'Alpha',
         },
       ],
     });
     expect(res.items[0].createdAt).toBeInstanceOf(Date);
+  });
+
+  it('includes agentRole without requiring metrics or titles flags', async () => {
+    const now = new Date();
+    const persistence = {
+      listThreads: vi.fn(async () => [
+        { id: 't1', alias: 'a1', summary: 'Summary', status: 'open', createdAt: now, parentId: null },
+      ]),
+      getThreadsAgentDescriptors: vi.fn(async () => ({ t1: { title: 'Agent One', role: 'Support', name: 'Beta' } })),
+      getThreadsMetrics: vi.fn(),
+      listChildren: vi.fn(),
+      listRuns: vi.fn(),
+      listRunMessages: vi.fn(),
+      updateThread: vi.fn(),
+    } as unknown as AgentsPersistenceService;
+
+    const module = await Test.createTestingModule({
+      controllers: [AgentsThreadsController],
+      providers: [
+        { provide: AgentsPersistenceService, useValue: persistence },
+        { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: vi.fn() } },
+        { provide: RunEventsService, useValue: runEventsStub },
+        { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
+      ],
+    }).compile();
+
+    const ctrl = await module.resolve(AgentsThreadsController);
+    const res = await ctrl.listThreads({} as any);
+
+    expect((persistence.getThreadsMetrics as any).mock?.calls?.length ?? 0).toBe(0);
+    expect(res.items[0]).toMatchObject({ agentRole: 'Support', agentName: 'Beta' });
+    expect(res.items[0]).not.toHaveProperty('agentTitle');
+    expect(res.items[0]).not.toHaveProperty('metrics');
   });
 
   it('fills defaults when service omits metrics or titles for children', async () => {
@@ -69,7 +106,7 @@ describe('AgentsThreadsController list endpoints', () => {
         { id: 'c1', alias: 'child', summary: null, status: 'open', createdAt: now, parentId: 't1' },
       ]),
       getThreadsMetrics: vi.fn(async () => ({})),
-      getThreadsAgentTitles: vi.fn(async () => ({})),
+      getThreadsAgentDescriptors: vi.fn(async () => ({})),
       listThreads: vi.fn(),
       listRuns: vi.fn(),
       listRunMessages: vi.fn(),
@@ -93,6 +130,40 @@ describe('AgentsThreadsController list endpoints', () => {
 
     expect(res.items[0].metrics).toEqual({ remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 });
     expect(res.items[0].agentTitle).toBe('(unknown agent)');
+    expect(res.items[0].agentRole).toBeUndefined();
+  });
+
+  it('listChildren forwards agent name and role descriptors', async () => {
+    const now = new Date();
+    const persistence = {
+      listChildren: vi.fn(async () => [
+        { id: 'c2', alias: 'child', summary: null, status: 'open', createdAt: now, parentId: 't1' },
+      ]),
+      getThreadsAgentDescriptors: vi.fn(async () => ({ c2: { title: 'Agent Child', role: 'Helper', name: 'Child' } })),
+      getThreadsMetrics: vi.fn(async () => ({})),
+      listThreads: vi.fn(),
+      listRuns: vi.fn(),
+      listRunMessages: vi.fn(),
+      updateThread: vi.fn(),
+    } as unknown as AgentsPersistenceService;
+
+    const module = await Test.createTestingModule({
+      controllers: [AgentsThreadsController],
+      providers: [
+        { provide: AgentsPersistenceService, useValue: persistence },
+        { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: vi.fn() } },
+        { provide: RunEventsService, useValue: runEventsStub },
+        { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
+      ],
+    }).compile();
+
+    const ctrl = await module.resolve(AgentsThreadsController);
+    const res = await ctrl.listChildren('t1', {} as any);
+
+    expect(res.items[0]).toMatchObject({ agentName: 'Child', agentRole: 'Helper' });
+    expect(res.items[0].createdAt).toBeInstanceOf(Date);
   });
 
   it('getThreadMetrics returns default metrics including runsCount when missing', async () => {
@@ -103,7 +174,7 @@ describe('AgentsThreadsController list endpoints', () => {
       listRuns: vi.fn(),
       listRunMessages: vi.fn(),
       updateThread: vi.fn(),
-      getThreadsAgentTitles: vi.fn(),
+      getThreadsAgentDescriptors: vi.fn(),
       getThreadById: vi.fn(),
     } as unknown as AgentsPersistenceService;
 
@@ -143,7 +214,7 @@ describe('AgentsThreadsController list endpoints', () => {
       listThreads: vi.fn(),
       listChildren: vi.fn(),
       getThreadsMetrics: vi.fn(),
-      getThreadsAgentTitles: vi.fn(),
+      getThreadsAgentDescriptors: vi.fn(),
       listRuns: vi.fn(),
       listRunMessages: vi.fn(),
       updateThread: vi.fn(),
@@ -174,13 +245,53 @@ describe('AgentsThreadsController list endpoints', () => {
     expect(result.createdAt).toBeInstanceOf(Date);
   });
 
+  it('getThread forwards agent name and role without optional flags', async () => {
+    const now = new Date();
+    const persistence = {
+      getThreadById: vi.fn(async () => ({
+        id: 't2',
+        alias: 'alias',
+        summary: 'Summary',
+        status: 'open',
+        createdAt: now,
+        parentId: null,
+        agentName: 'Agent X',
+        agentRole: 'Planner',
+      })),
+      listThreads: vi.fn(),
+      listChildren: vi.fn(),
+      getThreadsMetrics: vi.fn(),
+      getThreadsAgentDescriptors: vi.fn(),
+      listRuns: vi.fn(),
+      listRunMessages: vi.fn(),
+      updateThread: vi.fn(),
+    } as unknown as AgentsPersistenceService;
+
+    const module = await Test.createTestingModule({
+      controllers: [AgentsThreadsController],
+      providers: [
+        { provide: AgentsPersistenceService, useValue: persistence },
+        { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: vi.fn() } },
+        { provide: RunEventsService, useValue: runEventsStub },
+        { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
+      ],
+    }).compile();
+
+    const ctrl = await module.resolve(AgentsThreadsController);
+    const result = await ctrl.getThread('t2', {} as any);
+
+    expect(result).toMatchObject({ agentName: 'Agent X', agentRole: 'Planner' });
+  });
+
   it('getThread throws when persistence returns null', async () => {
     const persistence = {
       getThreadById: vi.fn(async () => null),
       listThreads: vi.fn(),
       listChildren: vi.fn(),
       getThreadsMetrics: vi.fn(),
-      getThreadsAgentTitles: vi.fn(),
+      getThreadsAgentDescriptors: vi.fn(),
       listRuns: vi.fn(),
       listRunMessages: vi.fn(),
       updateThread: vi.fn(),

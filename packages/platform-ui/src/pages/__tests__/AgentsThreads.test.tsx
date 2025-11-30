@@ -20,6 +20,8 @@ type ThreadMock = {
   parentId: string | null;
   metrics: { remindersCount: number; containersCount: number; activity: 'idle' | 'waiting' | 'working'; runsCount: number };
   agentTitle?: string | null;
+  agentRole?: string | null;
+  agentName?: string | null;
 };
 
 type RunMock = {
@@ -51,6 +53,8 @@ function makeThread(overrides: Partial<ThreadMock> = {}): ThreadMock {
     parentId: null,
     metrics: { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 },
     agentTitle: 'Agent Uno',
+    agentRole: 'Lead Planner',
+    agentName: 'Planner Uno',
     ...overrides,
   };
 }
@@ -174,6 +178,33 @@ describe('AgentsThreads page', () => {
 
     expect(await screen.findByRole('heading', { name: thread.summary })).toBeInTheDocument();
     expect(screen.getByTestId('threads-list')).toBeInTheDocument();
+    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
+    const detailContainer = detailHeading.parentElement as HTMLElement;
+    expect(within(detailContainer).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    if (thread.agentRole) {
+      expect(within(detailContainer).getByTestId('thread-detail-role')).toHaveTextContent(thread.agentRole ?? '');
+    } else {
+      expect(within(detailContainer).queryByTestId('thread-detail-role')).toBeNull();
+    }
+    const list = screen.getByTestId('threads-list');
+    expect(within(list).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    expect(within(list).getByTestId('thread-item-role')).toHaveTextContent(thread.agentRole ?? '');
+  });
+
+  it('hides agent role display when not provided', async () => {
+    const thread = makeThread({ agentRole: null });
+    registerThreadScenario({ thread, runs: [], children: [] });
+
+    renderAt(`/agents/threads/${thread.id}`);
+
+    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
+    const detailContainer = detailHeading.parentElement as HTMLElement;
+    expect(within(detailContainer).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    expect(within(detailContainer).queryByTestId('thread-detail-role')).toBeNull();
+
+    const list = screen.getByTestId('threads-list');
+    expect(within(list).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    expect(within(list).queryByTestId('thread-item-role')).toBeNull();
   });
 
   it('shows a friendly error when the thread is missing', async () => {
