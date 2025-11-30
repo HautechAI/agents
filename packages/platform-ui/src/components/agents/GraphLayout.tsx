@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeTypes, type Node } from '@xyflow/react';
+import {
+  addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Edge,
+  type EdgeTypes,
+  type Node,
+  type OnNodesDelete,
+} from '@xyflow/react';
 
 import { GraphCanvas, type GraphNodeData } from '../GraphCanvas';
 import { GradientEdge } from './edges/GradientEdge';
@@ -219,6 +227,30 @@ export function GraphLayout({ services }: GraphLayoutProps) {
   const updateNodeRef = useRef(updateNode);
   const setEdgesRef = useRef(setEdges);
   const nodesRef = useRef(nodes);
+  const processedRemovedNodeIdsRef = useRef<Set<string>>(new Set());
+
+  const filterUnprocessedRemovedNodeIds = useCallback((ids: string[]): string[] => {
+    if (ids.length === 0) {
+      return ids;
+    }
+    const processed = processedRemovedNodeIdsRef.current;
+    const next: string[] = [];
+    for (const id of ids) {
+      if (!processed.has(id)) {
+        processed.add(id);
+        next.push(id);
+      }
+    }
+    if (next.length > 0) {
+      setTimeout(() => {
+        const registry = processedRemovedNodeIdsRef.current;
+        for (const id of next) {
+          registry.delete(id);
+        }
+      }, 0);
+    }
+    return next;
+  }, []);
 
   const ensureVaultMounts = useCallback(async (): Promise<string[]> => {
     if (vaultMountsRef.current) {
@@ -651,7 +683,10 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     }
 
     if (removedIds.length > 0) {
-      removeNodes(removedIds);
+      const uniqueIds = filterUnprocessedRemovedNodeIds(removedIds);
+      if (uniqueIds.length > 0) {
+        removeNodes(uniqueIds);
+      }
     }
 
     for (const change of changes) {
@@ -662,7 +697,21 @@ export function GraphLayout({ services }: GraphLayoutProps) {
         updateNodeRef.current(change.id, { x, y });
       }
     }
-  }, [removeNodes]);
+  }, [filterUnprocessedRemovedNodeIds, removeNodes]);
+
+  const handleNodesDelete = useCallback<OnNodesDelete<FlowNode>>((deletedNodes) => {
+    if (!deletedNodes || deletedNodes.length === 0) {
+      return;
+    }
+    const ids = deletedNodes
+      .map((node) => node.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    const uniqueIds = filterUnprocessedRemovedNodeIds(ids);
+    if (uniqueIds.length === 0) {
+      return;
+    }
+    removeNodes(uniqueIds);
+  }, [filterUnprocessedRemovedNodeIds, removeNodes]);
 
   const handleEdgesChange = useCallback((changes: Parameters<typeof applyEdgeChanges>[0]) => {
     const current = flowEdgesRef.current;
@@ -835,6 +884,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           nodes={flowNodes}
           edges={flowEdges}
           onNodesChange={handleNodesChange}
+          onNodesDelete={handleNodesDelete}
           onEdgesChange={handleEdgesChange}
           onConnect={handleConnect}
           edgeTypes={edgeTypes}
