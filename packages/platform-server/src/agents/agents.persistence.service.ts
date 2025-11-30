@@ -30,6 +30,7 @@ type DeveloperMessagePlain = {
   text: string;
   toPlain(): ResponseInputItem.Message;
 };
+type AgentDescriptor = { title: string; role?: string; name?: string };
 
 @Injectable()
 export class AgentsPersistenceService {
@@ -485,6 +486,8 @@ export class AgentsPersistenceService {
         assignedAgentNodeId: string | null;
         metrics?: ThreadMetrics;
         agentTitle?: string;
+        agentRole?: string;
+        agentName?: string;
       })
     | null
   > {
@@ -515,6 +518,8 @@ export class AgentsPersistenceService {
       assignedAgentNodeId: string | null;
       metrics?: ThreadMetrics;
       agentTitle?: string;
+      agentRole?: string;
+      agentName?: string;
     } = {
       ...thread,
       parentId: thread.parentId ?? null,
@@ -524,14 +529,22 @@ export class AgentsPersistenceService {
     const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
     const fallbackTitle = '(unknown agent)';
 
+    const [metrics, descriptors] = await Promise.all([
+      includeMetrics ? this.getThreadsMetrics([thread.id]) : Promise.resolve<Record<string, ThreadMetrics>>({}),
+      this.getThreadsAgentDescriptors([thread.id]),
+    ]);
+
+    const descriptor = descriptors[thread.id];
+
     if (includeMetrics) {
-      const metrics = await this.getThreadsMetrics([thread.id]);
       result.metrics = metrics[thread.id] ?? defaultMetrics;
     }
 
+    result.agentRole = descriptor?.role ?? undefined;
+    result.agentName = descriptor?.name ?? undefined;
+
     if (includeAgentTitles) {
-      const titles = await this.getThreadsAgentTitles([thread.id]);
-      result.agentTitle = titles[thread.id] ?? fallbackTitle;
+      result.agentTitle = descriptor?.title ?? fallbackTitle;
     }
 
     return result;
@@ -602,41 +615,41 @@ export class AgentsPersistenceService {
     return out;
   }
 
-  async getThreadsAgentTitles(ids: string[]): Promise<Record<string, string>> {
+  async getThreadsAgentDescriptors(ids: string[]): Promise<Record<string, AgentDescriptor>> {
     if (!ids || ids.length === 0) return {};
     try {
-      const threads = await this.prisma.thread.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, assignedAgentNodeId: true },
-      });
-      const assignedNodeIds = Array.from(
-        new Set(
-          threads
-            .map((thread) => thread.assignedAgentNodeId)
-            .filter((value): value is string => typeof value === 'string' && value.length > 0),
-        ),
-      );
-      const assignedTitles = await this.resolveAgentNodeTitles(assignedNodeIds);
-      const titles: Record<string, string> = {};
-      for (const thread of threads) {
-        const assignedId = thread.assignedAgentNodeId;
-        if (!assignedId) continue;
-        const title = assignedTitles[assignedId];
-        if (title) titles[thread.id] = title;
-      }
-
-      const unresolvedIds = ids.filter((id) => !titles[id]);
-      if (unresolvedIds.length === 0) return titles;
-
-      const fallbackTitles = await this.resolveAgentTitles(unresolvedIds);
-      return { ...titles, ...fallbackTitles };
+      return await this.resolveAgentDescriptors(ids);
     } catch (err) {
       this.logger.error(
-        `AgentsPersistenceService failed to resolve agent titles ${this.format({ error: this.errorInfo(err) })}`,
+        `AgentsPersistenceService failed to resolve agent descriptors ${this.format({ error: this.errorInfo(err) })}`,
       );
       const fallback = '(unknown agent)';
-      return Object.fromEntries(ids.map((id) => [id, fallback]));
+      return Object.fromEntries(ids.map((id) => [id, { title: fallback } as AgentDescriptor]));
     }
+  }
+
+  async getThreadsAgentTitles(ids: string[]): Promise<Record<string, string>> {
+    if (!ids || ids.length === 0) return {};
+    const descriptors = await this.getThreadsAgentDescriptors(ids);
+    const fallback = '(unknown agent)';
+    const out: Record<string, string> = {};
+    for (const id of ids) {
+      out[id] = descriptors[id]?.title ?? fallback;
+    }
+    return out;
+  }
+
+  async getThreadsAgentRoles(ids: string[]): Promise<Record<string, string>> {
+    if (!ids || ids.length === 0) return {};
+    const descriptors = await this.getThreadsAgentDescriptors(ids);
+    const out: Record<string, string> = {};
+    for (const id of ids) {
+      const role = descriptors[id]?.role;
+      if (role) {
+        out[id] = role;
+      }
+    }
+    return out;
   }
 
   async getThreadAgentTitle(threadId: string): Promise<string | null> {
@@ -746,72 +759,94 @@ export class AgentsPersistenceService {
     for (const row of grouped) out[row.threadId] = row._count._all;
     return out;
   }
-
-  private async resolveAgentNodeTitles(nodeIds: string[]): Promise<Record<string, string>> {
-    if (!nodeIds || nodeIds.length === 0) return {};
-    const graph = await this.graphs.get('main');
-    if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return {};
-
-    const agentNodes = graph.nodes.filter((node) => isAgentTemplate(node.template, this.templateRegistry));
-    if (agentNodes.length === 0) return {};
-
-    const nodeById = new Map<string, PersistedGraphNode>(agentNodes.map((node) => [node.id, node]));
+  private async resolveAgentDescriptors(threadIds: string[]): Promise<Record<string, AgentDescriptor>> {
     const fallback = '(unknown agent)';
-    const titles: Record<string, string> = {};
+    const descriptors: Record<string, AgentDescriptor> = Object.fromEntries(
+      threadIds.map((id) => [id, { title: fallback } as AgentDescriptor]),
+    );
+    if (!threadIds || threadIds.length === 0) return descriptors;
 
-    for (const nodeId of new Set(nodeIds)) {
-      const node = nodeById.get(nodeId);
-      if (!node) continue;
+    const graph = await this.graphs.get('main');
+    if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return descriptors;
+
+    const computeDescriptor = (node: PersistedGraphNode): AgentDescriptor => {
       const config = (node.config as Record<string, unknown> | undefined) ?? undefined;
+      const rawName = typeof config?.['name'] === 'string' ? (config['name'] as string) : undefined;
+      const name = rawName?.trim();
+      const rawRole = typeof config?.['role'] === 'string' ? (config['role'] as string) : undefined;
+      const role = rawRole?.trim();
+
       const rawTitle = typeof config?.['title'] === 'string' ? (config['title'] as string) : undefined;
       const configTitle = rawTitle?.trim();
       const templateMeta = this.templateRegistry.getMeta(node.template);
-      const templateTitle = templateMeta?.title ?? node.template;
-      const resolved = configTitle && configTitle.length > 0
-        ? configTitle
-        : templateTitle && templateTitle.trim().length > 0
-          ? templateTitle
-          : fallback;
-      titles[nodeId] = resolved;
-    }
+      const templateTitleRaw = templateMeta?.title ?? node.template;
+      const templateTitle = typeof templateTitleRaw === 'string' ? templateTitleRaw.trim() : undefined;
+      const profileFallback =
+        name && name.length > 0 && role && role.length > 0
+          ? `${name} (${role})`
+          : name && name.length > 0
+            ? name
+            : role && role.length > 0
+              ? role
+              : undefined;
+      const resolvedTitle =
+        configTitle && configTitle.length > 0
+          ? configTitle
+          : profileFallback && profileFallback.length > 0
+            ? profileFallback
+            : templateTitle && templateTitle.length > 0
+              ? templateTitle
+              : fallback;
 
-    return titles;
-  }
+      const descriptor: AgentDescriptor = { title: resolvedTitle };
+      if (name && name.length > 0) {
+        descriptor.name = name;
+      }
+      if (role && role.length > 0) {
+        descriptor.role = role;
+      }
+      return descriptor;
+    };
 
-  private async resolveAgentTitles(threadIds: string[]): Promise<Record<string, string>> {
-    const fallback = '(unknown agent)';
-    const empty = Object.fromEntries(threadIds.map((id) => [id, fallback]));
-    const graph = await this.graphs.get('main');
-    if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return empty;
-
-    const agentNodes = graph.nodes.filter((node) => isAgentTemplate(node.template, this.templateRegistry));
-    if (agentNodes.length === 0) return empty;
+    const agentNodes = graph.nodes.filter((node) => {
+      const meta = this.templateRegistry.getMeta(node.template);
+      if (meta) return meta.kind === 'agent';
+      return node.template === 'agent';
+    });
+    if (agentNodes.length === 0) return descriptors;
 
     const nodeById = new Map<string, PersistedGraphNode>(agentNodes.map((node) => [node.id, node]));
     const agentIds = agentNodes.map((node) => node.id);
-    if (agentIds.length === 0) return empty;
+    if (agentIds.length === 0) return descriptors;
 
     const states = await this.prisma.conversationState.findMany({
       where: { threadId: { in: threadIds }, nodeId: { in: agentIds } },
       orderBy: { updatedAt: 'desc' },
     });
 
-    const titles: Record<string, string> = {};
     const seen = new Set<string>();
     for (const state of states) {
       if (seen.has(state.threadId)) continue;
       const node = nodeById.get(state.nodeId);
-      const config = (node?.config as Record<string, unknown> | undefined) ?? undefined;
-      const rawTitle = typeof config?.['title'] === 'string' ? (config['title'] as string) : undefined;
-      const configTitle = rawTitle?.trim();
-      const templateName = node ? this.templateRegistry.getMeta(node.template)?.title ?? node.template : undefined;
-      const resolved = configTitle && configTitle.length > 0 ? configTitle : templateName && templateName.length > 0 ? templateName : fallback;
-      titles[state.threadId] = resolved;
+      if (!node) continue;
+      descriptors[state.threadId] = computeDescriptor(node);
       seen.add(state.threadId);
     }
 
-    for (const id of threadIds) if (!titles[id]) titles[id] = fallback;
-    return titles;
+    const unresolved = threadIds.filter((id) => !seen.has(id));
+    if (unresolved.length > 0) {
+      const linkedNodes = await this.callAgentLinking.resolveLinkedAgentNodes(unresolved);
+      for (const threadId of unresolved) {
+        const nodeId = linkedNodes[threadId];
+        if (!nodeId) continue;
+        const node = nodeById.get(nodeId);
+        if (!node) continue;
+        descriptors[threadId] = computeDescriptor(node);
+        seen.add(threadId);
+      }
+    }
+
+    return descriptors;
   }
   private getRunEventDelegate(tx: Prisma.TransactionClient): RunEventDelegate | undefined {
     const candidate = (tx as { runEvent?: RunEventDelegate }).runEvent;

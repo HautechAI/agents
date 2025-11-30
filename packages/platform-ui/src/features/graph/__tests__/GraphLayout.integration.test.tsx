@@ -110,6 +110,48 @@ describe('GraphLayout', () => {
     services = createServiceMocks();
   });
 
+  it('renders agent fallback title when persisted title is empty', async () => {
+    const updateNode = vi.fn();
+    const applyNodeStatus = vi.fn();
+    const applyNodeState = vi.fn();
+    const setEdges = vi.fn();
+
+    hookMocks.useGraphData.mockReturnValue({
+      nodes: [
+        {
+          id: 'agent-1',
+          template: 'agent-template',
+          kind: 'Agent',
+          title: '   ',
+          x: 10,
+          y: 20,
+          status: 'not_ready',
+          config: { title: '', name: '  Delta  ', role: '  Navigator  ' },
+          ports: { inputs: [], outputs: [] },
+        },
+      ],
+      edges: [],
+      loading: false,
+      savingState: { status: 'saved', error: null },
+      savingErrorMessage: null,
+      updateNode,
+      applyNodeStatus,
+      applyNodeState,
+      setEdges,
+    });
+
+    hookMocks.useGraphSocket.mockReturnValue(undefined);
+    hookMocks.useNodeStatus.mockReturnValue({ data: null, refetch: vi.fn() });
+
+    render(<GraphLayout services={services} />);
+
+    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
+    const props = canvasSpy.mock.calls.at(-1)?.[0] as { nodes?: Array<{ data?: { title?: string; kind?: string } }> };
+
+    expect(props?.nodes?.[0]?.data?.kind).toBe('Agent');
+    expect(props?.nodes?.[0]?.data?.title).toBe('Delta (Navigator)');
+  });
+
   it('passes sidebar config/state and persists config updates', async () => {
     const updateNode = vi.fn();
     const applyNodeStatus = vi.fn();
@@ -227,11 +269,15 @@ describe('GraphLayout', () => {
     expect(typeof sidebar.canDeprovision).toBe('boolean');
     expect(typeof sidebar.isActionPending).toBe('boolean');
 
-    expect(sidebar.config).toEqual({
-      kind: 'Agent',
-      title: 'Agent Node',
-      systemPrompt: 'You are helpful.',
-    });
+    expect(sidebar.config).toEqual(
+      expect.objectContaining({
+        kind: 'Agent',
+        title: 'Agent Node',
+        systemPrompt: 'You are helpful.',
+        template: 'agent-template',
+      }),
+    );
+    expect(sidebar).toHaveProperty('displayTitle', 'Agent Node');
 
     expect(sidebar.state).toEqual({ status: 'ready' });
     expect(sidebar.canProvision).toBe(false);
@@ -240,19 +286,13 @@ describe('GraphLayout', () => {
 
     sidebar.onConfigChange?.({ title: 'Updated Agent', systemPrompt: 'New prompt' });
 
-    await waitFor(() =>
-      expect(updateNode).toHaveBeenCalledWith(
-        'node-1',
-        expect.objectContaining({
-          config: expect.objectContaining({
-            kind: 'Agent',
-            title: 'Updated Agent',
-            systemPrompt: 'New prompt',
-          }),
-          title: 'Updated Agent',
-        }),
-      ),
-    );
+    await waitFor(() => expect(updateNode).toHaveBeenCalled());
+    const lastCall = updateNode.mock.calls.at(-1);
+    expect(lastCall?.[0]).toBe('node-1');
+    expect(lastCall?.[1]).toEqual({
+      config: { systemPrompt: 'New prompt' },
+      title: 'Updated Agent',
+    });
 
     act(() => {
       sidebar.onProvision?.();
@@ -262,6 +302,81 @@ describe('GraphLayout', () => {
     await waitFor(() => expect(refetchStatus).toHaveBeenCalled());
 
     unmount();
+  });
+
+  it('keeps agent title placeholder when cleared in sidebar', async () => {
+    const updateNode = vi.fn();
+    const applyNodeStatus = vi.fn();
+    const applyNodeState = vi.fn();
+    const setEdges = vi.fn();
+
+    hookMocks.useGraphData.mockReturnValue({
+      nodes: [
+        {
+          id: 'node-1',
+          template: 'agent-template',
+          kind: 'Agent',
+          title: 'Agent',
+          x: 0,
+          y: 0,
+          status: 'not_ready',
+          config: { title: '', name: 'Atlas', role: 'Navigator' },
+          ports: { inputs: [], outputs: [] },
+        },
+      ],
+      edges: [],
+      loading: false,
+      savingState: { status: 'saved', error: null },
+      savingErrorMessage: null,
+      updateNode,
+      applyNodeStatus,
+      applyNodeState,
+      setEdges,
+    });
+
+    hookMocks.useGraphSocket.mockReturnValue(undefined);
+    hookMocks.useNodeStatus.mockReturnValue({ data: null, refetch: vi.fn() });
+
+    render(<GraphLayout services={services} />);
+
+    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
+
+    const canvasProps = canvasSpy.mock.calls.at(-1)?.[0] as {
+      onNodesChange?: (changes: any[]) => void;
+    };
+
+    act(() => {
+      canvasProps.onNodesChange?.([
+        {
+          id: 'node-1',
+          type: 'select',
+          selected: true,
+        },
+      ]);
+    });
+
+    await waitFor(() => expect(sidebarProps.length).toBeGreaterThan(0));
+
+    const sidebar = sidebarProps.at(-1) as {
+      onConfigChange?: (next: Record<string, unknown>) => void;
+    };
+
+    act(() => {
+      sidebar.onConfigChange?.({ title: '   ' });
+    });
+
+    await waitFor(() => expect(updateNode).toHaveBeenCalled());
+    const payload = updateNode.mock.calls.at(-1)?.[1] as { config: Record<string, unknown>; title?: string };
+    expect(payload).toBeDefined();
+    expect(payload?.config).toEqual({ name: 'Atlas', role: 'Navigator' });
+    expect(payload?.title).toBe('');
+
+    await waitFor(() => {
+      const latest = canvasSpy.mock.calls.at(-1)?.[0] as {
+        nodes?: Array<{ data?: { title?: string } }>;
+      };
+      expect(latest?.nodes?.[0]?.data?.title).toBe('Atlas (Navigator)');
+    });
   });
 
   it('persists node position updates when drag ends', async () => {
@@ -764,5 +879,92 @@ describe('GraphLayout', () => {
 
     await waitFor(() => expect(screen.getByText('Build Your AI Team')).toBeInTheDocument());
     expect(screen.queryByTestId('node-sidebar-mock')).not.toBeInTheDocument();
+  });
+
+  it('omits UI-only keys when persisting agent config updates', async () => {
+    const updateNode = vi.fn();
+    const applyNodeStatus = vi.fn();
+    const applyNodeState = vi.fn();
+    const setEdges = vi.fn();
+
+    hookMocks.useGraphData.mockReturnValue({
+      nodes: [
+        {
+          id: 'agent-2',
+          template: 'agent-template',
+          kind: 'Agent',
+          title: 'Agent Node',
+          x: 0,
+          y: 0,
+          status: 'not_ready',
+          config: {
+            systemPrompt: 'Original prompt',
+            role: 'Navigator',
+            kind: 'Agent',
+            template: 'agent-template',
+          },
+          ports: { inputs: [], outputs: [] },
+        },
+      ],
+      edges: [],
+      loading: false,
+      savingState: { status: 'saved', error: null },
+      savingErrorMessage: null,
+      updateNode,
+      applyNodeStatus,
+      applyNodeState,
+      setEdges,
+    });
+
+    hookMocks.useGraphSocket.mockReturnValue(undefined);
+    hookMocks.useNodeStatus.mockReturnValue({ data: null, refetch: vi.fn() });
+
+    render(<GraphLayout services={services} />);
+
+    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
+    const canvasProps = canvasSpy.mock.calls.at(-1)?.[0] as {
+      onNodesChange?: (changes: Array<{ id: string; type: string; selected: boolean }>) => void;
+    };
+
+    act(() => {
+      canvasProps.onNodesChange?.([
+        {
+          id: 'agent-2',
+          type: 'select',
+          selected: true,
+        },
+      ]);
+    });
+
+    await waitFor(() => expect(screen.getByTestId('node-sidebar-mock')).toBeInTheDocument());
+
+    const sidebar = sidebarProps.at(-1) as {
+      onConfigChange?: (cfg: Partial<Record<string, unknown>>) => void;
+    };
+
+    act(() => {
+      sidebar.onConfigChange?.({
+        kind: 'Agent',
+        template: 'agent-template',
+        title: '  Updated Agent  ',
+        systemPrompt: 'Updated prompt',
+        debounceMs: 325,
+      });
+    });
+
+    await waitFor(() => expect(updateNode).toHaveBeenCalled());
+
+    const lastCall = updateNode.mock.calls.at(-1);
+    expect(lastCall?.[0]).toBe('agent-2');
+    const payload = lastCall?.[1] as { config: Record<string, unknown>; title?: string };
+    expect(payload.title).toBe('Updated Agent');
+    expect(payload.config).toMatchObject({
+      systemPrompt: 'Updated prompt',
+      debounceMs: 325,
+      role: 'Navigator',
+    });
+    expect(payload.config).not.toHaveProperty('kind');
+    expect(payload.config).not.toHaveProperty('title');
+    expect(payload.config).not.toHaveProperty('template');
   });
 });

@@ -5,7 +5,7 @@ import { createRunEventsStub } from './helpers/runEvents.stub';
 import { createEventsBusStub } from './helpers/eventsBus.stub';
 import { CallAgentLinkingService } from '../src/agents/call-agent-linking.service';
 
-const createLinkingStub = () =>
+const createLinkingStub = (overrides?: Partial<CallAgentLinkingService>) =>
   ({
     buildInitialMetadata: (params: { toolName: string; parentThreadId: string; childThreadId: string }) => ({
       tool: params.toolName === 'call_engineer' ? 'call_engineer' : 'call_agent',
@@ -21,9 +21,14 @@ const createLinkingStub = () =>
     onChildRunStarted: async () => null,
     onChildRunMessage: async () => null,
     onChildRunCompleted: async () => null,
+    resolveLinkedAgentNodes: async () => ({}),
+    ...overrides,
   }) as unknown as CallAgentLinkingService;
 
-function createService(stub: any, overrides?: { metrics?: any; templateRegistry?: any; graphRepo?: any }) {
+function createService(
+  stub: any,
+  overrides?: { metrics?: any; templateRegistry?: any; graphRepo?: any; linking?: CallAgentLinkingService },
+) {
   const metrics =
     overrides?.metrics ??
     ({
@@ -46,7 +51,7 @@ function createService(stub: any, overrides?: { metrics?: any; templateRegistry?
     templateRegistry,
     graphRepo,
     createRunEventsStub() as any,
-    createLinkingStub(),
+    overrides?.linking ?? createLinkingStub(),
     eventsBusStub,
   );
   return svc;
@@ -91,16 +96,24 @@ describe('AgentsPersistenceService metrics and agent titles', () => {
         version: 1,
         updatedAt: new Date().toISOString(),
         nodes: [
-          { id: 'agent-configured', template: 'templateA', config: { title: '  Configured Agent  ' } },
+          {
+            id: 'agent-configured',
+            template: 'templateA',
+            config: { title: '  Configured Agent  ', name: '  Casey  ', role: '  Lead Engineer  ' },
+          },
+          {
+            id: 'agent-profile',
+            template: 'templateA',
+            config: { name: '  Delta  ', role: '  Support  ' },
+          },
           { id: 'agent-template', template: 'templateB' },
           { id: 'agent-assigned', template: 'templateA', config: { title: 'Assigned Only' } },
         ],
         edges: [],
       }),
     };
-    const svc = createService(stub, { templateRegistry, graphRepo });
-
     const threadConfigured = (await stub.thread.create({ data: { alias: 'config' } })).id;
+    const threadProfile = (await stub.thread.create({ data: { alias: 'profile' } })).id;
     const threadTemplate = (await stub.thread.create({ data: { alias: 'tmpl' } })).id;
     const threadFallback = (await stub.thread.create({ data: { alias: 'miss' } })).id;
     const threadAssignedOnly = (await stub.thread.create({ data: { alias: 'assigned' } })).id;
@@ -108,15 +121,92 @@ describe('AgentsPersistenceService metrics and agent titles', () => {
     await stub.thread.update({ where: { id: threadConfigured }, data: { assignedAgentNodeId: 'agent-configured' } });
     await stub.thread.update({ where: { id: threadAssignedOnly }, data: { assignedAgentNodeId: 'agent-assigned' } });
 
+    const linking = createLinkingStub({
+      resolveLinkedAgentNodes: async () => ({ [threadAssignedOnly]: 'agent-assigned' }),
+    });
+    const svc = createService(stub, { templateRegistry, graphRepo, linking });
+
     stub.conversationState._push({ threadId: threadConfigured, nodeId: 'agent-configured', state: {}, updatedAt: new Date('2024-04-02T00:00:00Z') });
     // Older state should be ignored in favour of more recent entry
     stub.conversationState._push({ threadId: threadConfigured, nodeId: 'agent-template', state: {}, updatedAt: new Date('2023-01-01T00:00:00Z') });
+    stub.conversationState._push({ threadId: threadProfile, nodeId: 'agent-profile', state: {}, updatedAt: new Date('2024-03-10T00:00:00Z') });
     stub.conversationState._push({ threadId: threadTemplate, nodeId: 'agent-template', state: {}, updatedAt: new Date('2024-03-01T00:00:00Z') });
 
-    const titles = await svc.getThreadsAgentTitles([threadConfigured, threadTemplate, threadFallback, threadAssignedOnly]);
+    const titles = await svc.getThreadsAgentTitles([
+      threadConfigured,
+      threadProfile,
+      threadTemplate,
+      threadFallback,
+      threadAssignedOnly,
+    ]);
     expect(titles[threadConfigured]).toBe('Configured Agent');
+    expect(titles[threadProfile]).toBe('Delta (Support)');
     expect(titles[threadTemplate]).toBe('Template B');
     expect(titles[threadFallback]).toBe('(unknown agent)');
     expect(titles[threadAssignedOnly]).toBe('Assigned Only');
+
+    const roles = await svc.getThreadsAgentRoles([
+      threadConfigured,
+      threadProfile,
+      threadTemplate,
+      threadFallback,
+      threadAssignedOnly,
+    ]);
+    expect(roles[threadConfigured]).toBe('Lead Engineer');
+    expect(roles[threadProfile]).toBe('Support');
+    expect(roles[threadTemplate]).toBeUndefined();
+    expect(roles[threadFallback]).toBeUndefined();
+    expect(roles[threadAssignedOnly]).toBeUndefined();
+
+    const descriptors = await svc.getThreadsAgentDescriptors([
+      threadConfigured,
+      threadProfile,
+      threadTemplate,
+      threadFallback,
+    ]);
+    expect(descriptors[threadConfigured]).toEqual({ title: 'Configured Agent', role: 'Lead Engineer', name: 'Casey' });
+    expect(descriptors[threadProfile]).toEqual({ title: 'Delta (Support)', role: 'Support', name: 'Delta' });
+    expect(descriptors[threadTemplate]).toEqual({ title: 'Template B' });
+    expect(descriptors[threadFallback]).toEqual({ title: '(unknown agent)' });
+  });
+
+  it('resolves agent descriptors using call-agent linkage when state missing', async () => {
+    const stub = createPrismaStub();
+    const templateRegistry = {
+      toSchema: async () => [
+        { name: 'templateA', title: 'Template A', kind: 'agent', sourcePorts: [], targetPorts: [] },
+      ],
+      getMeta: (template: string) => {
+        if (template === 'templateA') return { title: 'Template A', kind: 'agent' };
+        return undefined;
+      },
+    };
+    const graphRepo = {
+      get: async () => ({
+        name: 'main',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        nodes: [
+          {
+            id: 'agent-linked',
+            template: 'templateA',
+            config: { title: '', name: '  Orion  ', role: '  Strategist  ' },
+          },
+        ],
+        edges: [],
+      }),
+    };
+
+    const threadLinked = (await stub.thread.create({ data: { alias: 'linked' } })).id;
+
+    const linking = createLinkingStub({
+      resolveLinkedAgentNodes: async (ids: string[]) =>
+        ids.includes(threadLinked) ? { [threadLinked]: 'agent-linked' } : {},
+    });
+
+    const svc = createService(stub, { templateRegistry, graphRepo, linking });
+
+    const descriptors = await svc.getThreadsAgentDescriptors([threadLinked]);
+    expect(descriptors[threadLinked]).toEqual({ title: 'Orion (Strategist)', role: 'Strategist', name: 'Orion' });
   });
 });
