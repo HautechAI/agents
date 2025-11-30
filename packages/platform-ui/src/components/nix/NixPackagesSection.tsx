@@ -54,6 +54,19 @@ function displayRepository(repository: string): string {
 
 type SelectedPkg = { name: string };
 
+function isFlakeRepoCandidate(value: Partial<NixPackageSelection>): value is Partial<FlakeRepoSelection> {
+  return (
+    (typeof value.kind === 'string' && value.kind === 'flakeRepo') ||
+    'repository' in value ||
+    'commitHash' in value ||
+    'attributePath' in value
+  );
+}
+
+function isNixpkgsCandidate(value: Partial<NixPackageSelection>): value is Partial<NixpkgsSelection> {
+  return (typeof value.kind === 'string' && value.kind === 'nixpkgs') || 'name' in value;
+}
+
 //
 
 type ControlledProps = { value: NixPackageSelection[]; onChange: (next: NixPackageSelection[]) => void };
@@ -116,14 +129,15 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
 
     for (const entry of incoming) {
       if (!entry || typeof entry !== 'object') continue;
-      const candidate = entry as Partial<FlakeRepoSelection & NixpkgsSelection>;
+      const candidate = entry as Partial<NixPackageSelection>;
       const kind = typeof candidate.kind === 'string' ? candidate.kind : undefined;
-      if (kind === 'flakeRepo' || (typeof candidate.repository === 'string' && kind !== 'nixpkgs')) {
-        const repository = typeof candidate.repository === 'string' ? candidate.repository : '';
-        const commitHash = typeof candidate.commitHash === 'string' ? candidate.commitHash : '';
-        const attributePath = typeof candidate.attributePath === 'string' ? candidate.attributePath : '';
+      if (kind === 'flakeRepo' || (kind !== 'nixpkgs' && isFlakeRepoCandidate(candidate))) {
+        const repoCandidate = candidate as Partial<FlakeRepoSelection>;
+        const repository = typeof repoCandidate.repository === 'string' ? repoCandidate.repository : '';
+        const commitHash = typeof repoCandidate.commitHash === 'string' ? repoCandidate.commitHash : '';
+        const attributePath = typeof repoCandidate.attributePath === 'string' ? repoCandidate.attributePath : '';
         if (!repository || !commitHash || !attributePath) continue;
-        const refValue = typeof candidate.ref === 'string' ? candidate.ref.trim() : '';
+        const refValue = typeof repoCandidate.ref === 'string' ? repoCandidate.ref.trim() : '';
         nextRepos.push({
           kind: 'flakeRepo',
           repository,
@@ -133,11 +147,13 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
         });
         continue;
       }
-      const name = typeof candidate.name === 'string' ? candidate.name : '';
+      if (!isNixpkgsCandidate(candidate)) continue;
+      const pkgCandidate = candidate as Partial<NixpkgsSelection>;
+      const name = typeof pkgCandidate.name === 'string' ? pkgCandidate.name : '';
       if (!name) continue;
-      const version = typeof candidate.version === 'string' ? candidate.version : '';
-      const commitHash = typeof candidate.commitHash === 'string' ? candidate.commitHash : '';
-      const attributePath = typeof candidate.attributePath === 'string' ? candidate.attributePath : '';
+      const version = typeof pkgCandidate.version === 'string' ? pkgCandidate.version : '';
+      const commitHash = typeof pkgCandidate.commitHash === 'string' ? pkgCandidate.commitHash : '';
+      const attributePath = typeof pkgCandidate.attributePath === 'string' ? pkgCandidate.attributePath : '';
       nextStandard.push({ name, version, commitHash, attributePath });
     }
 
