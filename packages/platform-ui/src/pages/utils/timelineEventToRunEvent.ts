@@ -5,7 +5,6 @@ import type {
 } from '@/api/types/agents';
 import type { RunEvent } from '@/components/RunEventsList';
 import type { Status } from '@/components/StatusIndicator';
-import { formatDuration } from '@/components/agents/runTimelineFormatting';
 import type { EventFilter, StatusFilter } from '@/components/screens/RunScreen';
 
 type TokenAggregate = {
@@ -30,28 +29,11 @@ const SUMMARY_STATUS_MAP: Record<NonNullable<RunTimelineSummary['status']>, Stat
   terminated: 'terminated',
 };
 
-const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
-  year: 'numeric',
-  month: 'short',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-};
-
 const TOOL_SUBTYPE_GUARDS: Array<{ keyword: string; subtype: 'shell' | 'manage' }> = [
   { keyword: 'shell', subtype: 'shell' },
   { keyword: 'terminal', subtype: 'shell' },
   { keyword: 'manage', subtype: 'manage' },
 ];
-
-function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString('en-US', DATE_OPTIONS);
-}
 
 function coerceString(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -106,8 +88,16 @@ export function toStatusFilter(status: RunEventStatus): StatusFilter {
 export function mapTimelineEventToRunEvent(event: RunTimelineEvent): RunEvent {
   const filterType = toEventFilter(event);
   const type: RunEvent['type'] = filterType === 'summary' ? 'summarization' : filterType;
-  const duration = formatDuration(event.durationMs ?? null);
   const status = STATUS_FILTER_MAP[event.status];
+  const base = {
+    id: event.id,
+    type,
+    timestamp: event.ts,
+    startedAt: event.startedAt ?? null,
+    endedAt: event.endedAt ?? null,
+    durationMs: event.durationMs ?? null,
+    status,
+  } satisfies Omit<RunEvent, 'data'>;
 
   if (type === 'llm') {
     const usage = event.llmCall?.usage;
@@ -120,11 +110,7 @@ export function mapTimelineEventToRunEvent(event: RunTimelineEvent): RunEvent {
     };
 
     return {
-      id: event.id,
-      type,
-      timestamp: formatTimestamp(event.ts),
-      duration,
-      status,
+      ...base,
       data: {
         model: event.llmCall?.model ?? undefined,
         response: event.llmCall?.responseText ?? undefined,
@@ -140,11 +126,7 @@ export function mapTimelineEventToRunEvent(event: RunTimelineEvent): RunEvent {
   if (type === 'tool') {
     const toolName = event.toolExecution?.toolName ?? 'Tool';
     return {
-      id: event.id,
-      type,
-      timestamp: formatTimestamp(event.ts),
-      duration,
-      status,
+      ...base,
       data: {
         toolName,
         toolSubtype: deriveToolSubtype(toolName),
@@ -161,11 +143,7 @@ export function mapTimelineEventToRunEvent(event: RunTimelineEvent): RunEvent {
 
   if (type === 'summarization') {
     return {
-      id: event.id,
-      type,
-      timestamp: formatTimestamp(event.ts),
-      duration,
-      status,
+      ...base,
       data: {
         summary: event.summarization?.summaryText ?? '',
         newContextCount: event.summarization?.newContextCount ?? 0,
@@ -178,18 +156,14 @@ export function mapTimelineEventToRunEvent(event: RunTimelineEvent): RunEvent {
 
   const message = deriveMessageContent(event);
   return {
-    id: event.id,
-    type,
-    timestamp: formatTimestamp(event.ts),
-    duration,
-      status,
-      data: {
-        messageSubtype: message.subtype,
-        content: message.content,
-        messageId: event.message?.messageId ?? undefined,
-        role: event.message?.role ?? undefined,
-      },
-    };
+    ...base,
+    data: {
+      messageSubtype: message.subtype,
+      content: message.content,
+      messageId: event.message?.messageId ?? undefined,
+      role: event.message?.role ?? undefined,
+    },
+  };
 }
 
 export function aggregateLlmUsage(events: RunTimelineEvent[]): TokenAggregate {

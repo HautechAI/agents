@@ -8,7 +8,9 @@ function buildEvent(overrides: Partial<RunEvent> = {}): RunEvent {
     id: overrides.id ?? `event-${Math.random().toString(36).slice(2)}`,
     type: overrides.type ?? 'message',
     timestamp: overrides.timestamp ?? '2024-01-01T00:00:00.000Z',
-    duration: overrides.duration,
+    startedAt: overrides.startedAt ?? overrides.timestamp ?? '2024-01-01T00:00:00.000Z',
+    endedAt: overrides.endedAt ?? null,
+    durationMs: overrides.durationMs ?? null,
     status: overrides.status,
     data: {
       messageSubtype: 'source',

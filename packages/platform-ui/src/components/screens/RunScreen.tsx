@@ -28,6 +28,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { useNow } from '@/hooks/useNow';
+import { formatAbsoluteTimestamp, formatRelativeTimeShort } from '@/utils/time';
 
 export type EventFilter = 'message' | 'llm' | 'tool' | 'summary';
 export type StatusFilter = 'running' | 'finished' | 'failed' | 'terminated';
@@ -707,6 +709,9 @@ function MobileEventDialog({ event, onClose }: MobileEventDialogProps) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useMemo(() => `mobile-run-event-${event.id}`, [event.id]);
   const descriptionId = useMemo(() => `mobile-run-event-description-${event.id}`, [event.id]);
+  const now = useNow();
+  const timestampLabel = formatRelativeTimeShort(event.timestamp, now);
+  const timestampAbsolute = formatAbsoluteTimestamp(event.timestamp);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -778,7 +783,7 @@ function MobileEventDialog({ event, onClose }: MobileEventDialogProps) {
                 {describeMobileEvent(event)}
               </p>
               <p id={descriptionId} className="text-xs text-[var(--agyn-text-subtle)]">
-                {event.timestamp}
+                <span title={timestampAbsolute}>{timestampLabel}</span>
               </p>
             </div>
             <button

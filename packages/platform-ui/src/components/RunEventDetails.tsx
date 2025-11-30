@@ -7,6 +7,8 @@ import { MarkdownContent } from './MarkdownContent';
 import { Dropdown } from './Dropdown';
 import { StatusIndicator, type Status } from './StatusIndicator';
 import { useContextItems } from '@/api/hooks/contextItems';
+import { useNow } from '@/hooks/useNow';
+import { computeDurationMs, formatAbsoluteTimestamp, formatDurationShort, formatRelativeTimeShort } from '@/utils/time';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -72,7 +74,17 @@ const getHighlightCount = (value: unknown): number | undefined => {
   return Math.floor(value);
 };
 
-const CONTEXT_HIGHLIGHT_ROLES: ReadonlySet<string> = new Set(['user', 'assistant', 'tool']);
+const CONTEXT_HIGHLIGHT_ROLES: ReadonlySet<ContextMessageRole> = new Set<ContextMessageRole>(['user', 'assistant', 'tool']);
+type ContextMessageRole = 'system' | 'user' | 'assistant' | 'tool' | 'other';
+
+const normalizeContextMessageRole = (value: unknown): ContextMessageRole => {
+  if (typeof value !== 'string') return 'other';
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'system' || normalized === 'user' || normalized === 'assistant' || normalized === 'tool') {
+    return normalized;
+  }
+  return 'other';
+};
 
 export interface RunEventData extends Record<string, unknown> {
   messageSubtype?: MessageSubtype;
@@ -109,6 +121,27 @@ export type ToolSubtype = 'generic' | 'shell' | 'manage' | string;
 export type MessageSubtype = 'source' | 'intermediate' | 'result';
 export type OutputViewMode = 'text' | 'terminal' | 'markdown' | 'json' | 'yaml';
 
+const EVENTS_WITHOUT_DURATION: ReadonlySet<EventType> = new Set<EventType>(['message']);
+
+const shouldDisplayEventDuration = (event: RunEvent): boolean => !EVENTS_WITHOUT_DURATION.has(event.type);
+
+const deriveDurationLabel = (event: RunEvent, now: number): string | null => {
+  if (!shouldDisplayEventDuration(event)) return null;
+  const isRunning = event.status === 'running';
+  const durationMs = computeDurationMs(
+    {
+      startedAt: event.startedAt ?? event.timestamp,
+      endedAt: isRunning ? undefined : event.endedAt,
+      durationMs: isRunning ? null : event.durationMs,
+    },
+    now,
+    { fallbackToNow: isRunning },
+  );
+
+  if (durationMs === null) return null;
+  return formatDurationShort(durationMs);
+};
+
 export interface RunEventDetailsProps {
   event: RunEvent;
 }
@@ -117,12 +150,18 @@ export interface RunEvent {
   id: string;
   type: EventType;
   timestamp: string;
-  duration?: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationMs?: number | null;
   status?: Status;
   data: RunEventData;
 }
 
 export function RunEventDetails({ event }: RunEventDetailsProps) {
+  const now = useNow();
+  const timestampLabel = formatRelativeTimeShort(event.timestamp, now);
+  const timestampAbsolute = formatAbsoluteTimestamp(event.timestamp);
+  const durationLabel = deriveDurationLabel(event, now);
   const [outputViewMode, setOutputViewMode] = useState<OutputViewMode>('text');
   const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
 
@@ -138,7 +177,11 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
     });
   };
 
-  const llmContextIds = event.type === 'llm' ? toContextIds(event.data.context) : [];
+  const llmContextIds = useMemo<readonly string[] | undefined>(() => {
+    if (event.type !== 'llm') return undefined;
+    const ids = toContextIds(event.data.context);
+    return ids.length > 0 ? ids : [];
+  }, [event.data, event.type]);
   const {
     items: llmContextItems,
     total: totalContextItems,
@@ -161,7 +204,8 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
     for (let index = llmContextItems.length - 1; index >= 0 && remaining > 0; index -= 1) {
       const item = llmContextItems[index];
       if (!item) continue;
-      if (!CONTEXT_HIGHLIGHT_ROLES.has(item.role)) continue;
+      const role = normalizeContextMessageRole(item.role);
+      if (!CONTEXT_HIGHLIGHT_ROLES.has(role)) continue;
       ids.add(item.id);
       remaining -= 1;
     }
@@ -171,27 +215,28 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
   const llmContextMessages = useMemo(() => {
     if (llmContextItems.length === 0) return [] as Record<string, unknown>[];
     return llmContextItems.map((item) => {
+      const normalizedRole = normalizeContextMessageRole(item.role);
       const hasText = typeof item.contentText === 'string' && item.contentText.trim().length > 0;
       let contentValue: unknown = '';
       if (hasText) {
         contentValue = item.contentText ?? '';
       } else if (item.contentJson !== null && item.contentJson !== undefined) {
-        contentValue = item.role === 'assistant' || item.role === 'tool' ? item.contentJson : safeStringify(item.contentJson);
+        contentValue = normalizedRole === 'assistant' || normalizedRole === 'tool' ? item.contentJson : safeStringify(item.contentJson);
       }
 
       const message: Record<string, unknown> = {
         id: item.id,
-        role: item.role,
+        role: normalizedRole,
         timestamp: item.createdAt,
         content: contentValue,
         contextItemId: item.id,
       };
 
-      if (item.role === 'assistant') {
+      if (normalizedRole === 'assistant') {
         message.response = hasText && item.contentText ? item.contentText : item.contentJson ?? '';
       }
 
-      if (item.role === 'tool') {
+      if (normalizedRole === 'tool') {
         message.tool_result = item.contentJson ?? item.contentText ?? '';
       }
 
@@ -294,7 +339,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               <h3 className="text-[var(--agyn-dark)] mb-1">Message • {getMessageLabel()}</h3>
               <div className="flex items-center gap-2 text-xs text-[var(--agyn-gray)]">
                 <Clock className="w-3 h-3" />
-                <span>{event.timestamp}</span>
+                <span title={timestampAbsolute}>{timestampLabel}</span>
               </div>
             </div>
           </div>
@@ -317,7 +362,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
     const totalTokens = asNumber(event.data.tokens?.total);
     const cost = typeof event.data.cost === 'string' ? event.data.cost : '';
     const model = asString(event.data.model);
-    const hasContextSource = llmContextIds.length > 0;
+    const hasContextSource = Array.isArray(llmContextIds) ? llmContextIds.length > 0 : false;
     const hasContextMessages = llmContextMessages.length > 0;
     const displayedContextCount = Math.min(targetContextItems, totalContextItems);
 
@@ -333,11 +378,11 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               <h3 className="text-[var(--agyn-dark)] mb-1">LLM Call</h3>
               <div className="flex items-center gap-2 text-xs text-[var(--agyn-gray)]">
                 <Clock className="w-3 h-3" />
-                <span>{event.timestamp}</span>
-                {event.duration && (
+                <span title={timestampAbsolute}>{timestampLabel}</span>
+                {durationLabel && (
                   <>
                     <span>•</span>
-                    <span>{event.duration}</span>
+                    <span>{durationLabel}</span>
                   </>
                 )}
                 {totalTokens !== undefined && (
@@ -446,8 +491,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
 
   const renderContextMessages = (contextArray: Record<string, unknown>[]) =>
     contextArray.map((message, index) => {
-      const roleValue = asString(message.role).toLowerCase();
-      const role = roleValue || 'user';
+      const role = normalizeContextMessageRole((message as { role?: unknown }).role);
       const contextItemId = asString((message as { contextItemId?: string }).contextItemId);
       const isHighlighted = Boolean((message as { __highlight?: boolean }).__highlight);
 
@@ -551,7 +595,11 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
           <div className={`flex items-center gap-1.5 ${roleConfig.color} mb-2`}>
             {roleConfig.icon}
             <span className={`text-xs font-medium ${role === 'tool' ? '' : 'capitalize'}`}>
-              {role === 'tool' ? asString(message.name, 'Tool') : role}
+              {role === 'tool'
+                ? asString(message.name, 'Tool')
+                : role === 'other'
+                  ? asString(message.role, 'Other')
+                  : role}
             </span>
             {timestamp && (
               <span className="text-xs text-[var(--agyn-gray)] ml-1">{timestamp}</span>
@@ -953,11 +1001,11 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               </div>
               <div className="flex items-center gap-2 text-xs text-[var(--agyn-gray)]">
                 <Clock className="w-3 h-3" />
-                <span>{event.timestamp}</span>
-                {event.duration && (
+                <span title={timestampAbsolute}>{timestampLabel}</span>
+                {durationLabel && (
                   <>
                     <span>•</span>
-                    <span>{event.duration}</span>
+                    <span>{durationLabel}</span>
                   </>
                 )}
               </div>
@@ -991,11 +1039,11 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               <h3 className="text-[var(--agyn-dark)] mb-1">Summarization</h3>
               <div className="flex items-center gap-2 text-xs text-[var(--agyn-gray)]">
                 <Clock className="w-3 h-3" />
-                <span>{event.timestamp}</span>
-                {event.duration && (
+                <span title={timestampAbsolute}>{timestampLabel}</span>
+                {durationLabel && (
                   <>
                     <span>•</span>
-                    <span>{event.duration}</span>
+                    <span>{durationLabel}</span>
                   </>
                 )}
               </div>

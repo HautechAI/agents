@@ -50,6 +50,9 @@ describe('timelineEventToRunEvent utilities', () => {
     expect(runEvent.type).toBe('llm');
     expect(runEvent.data?.tokens).toEqual({ input: 10, cached: 2, output: 5, reasoning: 1, total: 18 });
     expect(runEvent.data?.cost).toBe('$0');
+    expect(runEvent.timestamp).toBe(event.ts);
+    expect(runEvent.startedAt).toBeNull();
+    expect(runEvent.durationMs).toBe(event.durationMs ?? null);
   });
 
   it('treats injections as message events with intermediate subtype', () => {
@@ -64,6 +67,7 @@ describe('timelineEventToRunEvent utilities', () => {
     expect(runEvent.type).toBe('message');
     expect(runEvent.status).toBe('running');
     expect(runEvent.data).toMatchObject({ messageSubtype: 'intermediate', content: 'manual override' });
+    expect(runEvent.timestamp).toBe(event.ts);
   });
 
   it('aggregates LLM usage totals across events', () => {

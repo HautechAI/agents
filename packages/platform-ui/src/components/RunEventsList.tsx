@@ -3,15 +3,42 @@ import { MessageSquare, Bot, Wrench, FileText, Terminal, Users, Loader2 } from '
 import { type EventType, type MessageSubtype, type RunEventData } from './RunEventDetails';
 import { StatusIndicator, type Status } from './StatusIndicator';
 import { VirtualizedList } from './VirtualizedList';
+import { useNow } from '@/hooks/useNow';
+import { computeDurationMs, formatAbsoluteTimestamp, formatDurationShort, formatRelativeTimeShort } from '@/utils/time';
 
 export interface RunEvent {
   id: string;
   type: EventType;
   timestamp: string;
-  duration?: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationMs?: number | null;
   status?: Status;
   data: RunEventData;
 }
+
+const EVENTS_WITHOUT_DURATION = new Set<EventType>(['message']);
+
+const shouldDisplayDuration = (event: RunEvent): boolean => {
+  if (EVENTS_WITHOUT_DURATION.has(event.type)) return false;
+  return true;
+};
+
+const resolveDurationLabel = (event: RunEvent, now: number): string | null => {
+  if (!shouldDisplayDuration(event)) return null;
+  const isRunning = event.status === 'running';
+  const durationMs = computeDurationMs(
+    {
+      startedAt: event.startedAt ?? event.timestamp,
+      endedAt: isRunning ? undefined : event.endedAt,
+      durationMs: isRunning ? null : event.durationMs,
+    },
+    now,
+    { fallbackToNow: isRunning },
+  );
+  if (durationMs === null) return null;
+  return formatDurationShort(durationMs);
+};
 
 export interface RunEventsListProps {
   events: RunEvent[];
@@ -97,6 +124,7 @@ export function RunEventsList({
   errorMessage,
   restoreFocusOnSelect = true,
 }: RunEventsListProps) {
+  const now = useNow();
   const listRef = useRef<HTMLDivElement | null>(null);
   const eventCount = events.length;
   const selectedIndex = useMemo(
@@ -180,28 +208,35 @@ export function RunEventsList({
     };
   }, [events, selectedEventId]);
 
-  const header = hasMore ? (
-    <div className="flex items-center justify-center p-4">
-      {isLoadingMore ? (
-        <div className="flex items-center gap-2 text-[var(--agyn-gray)]">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-xs">Loading more events…</span>
+  const header = eventCount > 0
+    ? (
+        <div className="flex items-center justify-center p-4">
+          {hasMore ? (
+            isLoadingMore ? (
+              <div className="flex items-center gap-2 text-[var(--agyn-gray)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-xs">Loading more events…</span>
+              </div>
+            ) : (
+              <div className="text-xs text-[var(--agyn-gray)]">Scroll up to load more</div>
+            )
+          ) : (
+            <div className="text-xs text-[var(--agyn-gray)]">Beginning of timeline</div>
+          )}
         </div>
-      ) : (
-        <div className="text-xs text-[var(--agyn-gray)]">Scroll up to load more</div>
-      )}
-    </div>
-  ) : null;
+      )
+    : null;
 
-  const footer = !hasMore && eventCount > 0 ? (
-    <div className="px-4 py-2 text-center text-xs text-[var(--agyn-gray)]">Beginning of timeline</div>
-  ) : null;
+  const footer = null;
 
   const renderEventItem = useCallback(
     (_index: number, event: RunEvent) => {
       const subtitle = getEventSubtitle(event);
       const isSelected = selectedEventId === event.id;
       const optionId = `run-events-option-${event.id}`;
+      const timestampLabel = formatRelativeTimeShort(event.timestamp, now);
+      const timestampAbsolute = formatAbsoluteTimestamp(event.timestamp);
+      const durationLabel = resolveDurationLabel(event, now);
 
       return (
         <button
@@ -228,15 +263,15 @@ export function RunEventsList({
               </div>
               {subtitle && <div className="mb-1 truncate text-xs text-[var(--agyn-gray)]">{subtitle}</div>}
               <div className="text-xs text-[var(--agyn-gray)]">
-                {event.timestamp}
-                {event.duration && ` • ${event.duration}`}
+                <span title={timestampAbsolute}>{timestampLabel}</span>
+                {durationLabel && ` • ${durationLabel}`}
               </div>
             </div>
           </div>
         </button>
       );
     },
-    [handleItemSelect, restoreFocusOnSelect, selectedEventId],
+    [handleItemSelect, now, restoreFocusOnSelect, selectedEventId],
   );
 
   return (

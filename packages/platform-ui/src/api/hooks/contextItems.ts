@@ -41,6 +41,7 @@ export function useContextItems(ids: readonly string[] | undefined, options?: Us
   }, [allIds, visibleCount]);
 
   useEffect(() => {
+    if (windowIds.length === 0) return;
     setCacheVersion((version) => version + 1);
   }, [windowIds]);
 

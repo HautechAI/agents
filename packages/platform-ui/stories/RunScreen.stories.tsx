@@ -1,18 +1,21 @@
+import { useArgs } from 'storybook/preview-api';
 import { action } from 'storybook/actions';
 import type { Meta, StoryObj } from '@storybook/react';
-import { useArgs } from 'storybook/preview-api';
+import { rest } from 'msw';
 import RunScreen from '../src/components/screens/RunScreen';
 import type { RunEvent } from '../src/components/RunEventsList';
 import type { EventType } from '../src/components/RunEventDetails';
+import type { ContextItem } from '../src/api/types/agents';
 import { type Status } from '../src/components/StatusIndicator';
 import { withMainLayout } from './decorators/withMainLayout';
+import { withQueryClient } from './decorators/withQueryClient';
 
 type RunScreenProps = React.ComponentProps<typeof RunScreen>;
 
 const meta: Meta<typeof RunScreen> = {
   title: 'Screens/Run',
   component: RunScreen,
-  decorators: [withMainLayout],
+  decorators: [withQueryClient, withMainLayout],
   parameters: {
     layout: 'fullscreen',
   },
@@ -23,11 +26,51 @@ export default meta;
 
 type Story = StoryObj<typeof RunScreen>;
 
+const sampleContextItems: ContextItem[] = [
+  {
+    id: 'ctx-1',
+    role: 'user',
+    contentText: 'Can you help me implement a secure authentication system?',
+    contentJson: null,
+    metadata: {},
+    sizeBytes: 220,
+    createdAt: '2024-07-10T19:34:00.000Z',
+  },
+  {
+    id: 'ctx-2',
+    role: 'assistant',
+    contentText: null,
+    contentJson: {
+      plan: ['Outline requirements', 'Draft implementation', 'Review tests'],
+    },
+    metadata: {},
+    sizeBytes: 512,
+    createdAt: '2024-07-10T19:34:08.000Z',
+  },
+  {
+    id: 'ctx-3',
+    role: 'tool',
+    contentText: null,
+    contentJson: {
+      command: 'npm install jsonwebtoken',
+      result: 'added 12 packages',
+    },
+    metadata: {},
+    sizeBytes: 640,
+    createdAt: '2024-07-10T19:34:12.500Z',
+  },
+];
+
+const sampleContextItemMap = new Map(sampleContextItems.map((item) => [item.id, item]));
+
 const sampleEvents: RunEvent[] = [
   {
     id: 'evt-1',
     type: 'message' as EventType,
-    timestamp: '2:34:12 PM',
+    timestamp: '2024-07-10T19:34:12.000Z',
+    startedAt: '2024-07-10T19:34:12.000Z',
+    endedAt: null,
+    durationMs: null,
     status: 'finished',
     data: {
       messageSubtype: 'source',
@@ -38,19 +81,23 @@ const sampleEvents: RunEvent[] = [
   {
     id: 'evt-2',
     type: 'llm' as EventType,
-    timestamp: '2:34:15 PM',
-    duration: '2.3s',
+    timestamp: '2024-07-10T19:34:15.000Z',
+    startedAt: '2024-07-10T19:34:13.000Z',
+    endedAt: '2024-07-10T19:34:15.300Z',
+    durationMs: 2300,
     status: 'finished',
     data: {
-      context:
-        'Previous conversation about JWT implementation and high-level architecture decisions...',
+      context: ['ctx-1', 'ctx-2', 'ctx-3'],
+      newContextCount: 1,
       response:
         "I'll help you implement a comprehensive authentication system. Let me break this down into steps and create the necessary files.",
       model: 'gpt-4-turbo',
       tokens: {
         input: 1234,
+        cached: 120,
         output: 856,
-        total: 2090,
+        reasoning: 64,
+        total: 2274,
       },
       cost: '$0.0234',
     },
@@ -58,8 +105,10 @@ const sampleEvents: RunEvent[] = [
   {
     id: 'evt-3',
     type: 'tool' as EventType,
-    timestamp: '2:34:17 PM',
-    duration: '1.2s',
+    timestamp: '2024-07-10T19:34:17.000Z',
+    startedAt: '2024-07-10T19:34:16.000Z',
+    endedAt: '2024-07-10T19:34:17.200Z',
+    durationMs: 1200,
     status: 'finished',
     data: {
       toolName: 'file_write',
@@ -79,8 +128,10 @@ const sampleEvents: RunEvent[] = [
   {
     id: 'evt-4',
     type: 'tool' as EventType,
-    timestamp: '2:34:19 PM',
-    duration: '0.8s',
+    timestamp: '2024-07-10T19:34:19.200Z',
+    startedAt: '2024-07-10T19:34:18.400Z',
+    endedAt: '2024-07-10T19:34:19.200Z',
+    durationMs: 800,
     status: 'finished',
     data: {
       toolName: 'shell',
@@ -95,8 +146,10 @@ const sampleEvents: RunEvent[] = [
   {
     id: 'evt-4a',
     type: 'tool' as EventType,
-    timestamp: '2:34:21 PM',
-    duration: '3.5s',
+    timestamp: '2024-07-10T19:34:21.500Z',
+    startedAt: '2024-07-10T19:34:18.000Z',
+    endedAt: '2024-07-10T19:34:21.500Z',
+    durationMs: 3500,
     status: 'finished',
     data: {
       toolName: 'manage',
@@ -119,19 +172,27 @@ const sampleEvents: RunEvent[] = [
   {
     id: 'evt-5',
     type: 'summarization' as EventType,
-    timestamp: '2:34:38 PM',
-    duration: '1.8s',
+    timestamp: '2024-07-10T19:34:38.000Z',
+    startedAt: '2024-07-10T19:34:36.500Z',
+    endedAt: '2024-07-10T19:34:38.300Z',
+    durationMs: 1800,
+    status: 'finished',
     data: {
       summary:
         'Implemented JWT-based authentication with OAuth 2.0 integration, added security best practices, and identified one failing test related to empty JWT_SECRET handling.',
-      tokensReduced: 2847,
-      compressionRatio: '4.2x',
+      newContext: ['Resolved configuration drift', 'Updated deployment checklist'],
+      oldContext: [],
+      newContextCount: 2,
     },
   },
   {
     id: 'evt-6',
     type: 'message' as EventType,
-    timestamp: '2:34:45 PM',
+    timestamp: '2024-07-10T19:34:45.000Z',
+    startedAt: '2024-07-10T19:34:45.000Z',
+    endedAt: null,
+    durationMs: null,
+    status: 'finished',
     data: {
       messageSubtype: 'result',
       content:
@@ -139,6 +200,15 @@ const sampleEvents: RunEvent[] = [
     },
   },
 ];
+
+const contextItemsHandler = rest.get('/api/agents/context-items', (req, res, ctx) => {
+  const ids = req.url.searchParams.getAll('ids');
+  const source = ids.length > 0 ? ids : Array.from(sampleContextItemMap.keys());
+  const items = source
+    .map((id) => sampleContextItemMap.get(id))
+    .filter((item): item is ContextItem => Boolean(item));
+  return res(ctx.json({ items }));
+});
 
 const ControlledRender: Story['render'] = () => {
   const [currentArgs, updateArgs] = useArgs<RunScreenProps>();
@@ -234,6 +304,9 @@ export const Populated: Story = {
   render: ControlledRender,
   parameters: {
     selectedMenuItem: 'threads',
+    msw: {
+      handlers: [contextItemsHandler],
+    },
   },
 };
 
@@ -266,6 +339,9 @@ export const Empty: Story = {
   render: ControlledRender,
   parameters: {
     selectedMenuItem: 'threads',
+    msw: {
+      handlers: [contextItemsHandler],
+    },
   },
 };
 
@@ -292,6 +368,9 @@ export const Loading: Story = {
   render: ControlledRender,
   parameters: {
     selectedMenuItem: 'threads',
+    msw: {
+      handlers: [contextItemsHandler],
+    },
   },
 };
 
@@ -319,5 +398,8 @@ export const Error: Story = {
   render: ControlledRender,
   parameters: {
     selectedMenuItem: 'threads',
+    msw: {
+      handlers: [contextItemsHandler],
+    },
   },
 };
