@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryKey } from '@tanstack/react-query';
 import ThreadsScreen from '@/components/screens/ThreadsScreen';
 import type { Thread } from '@/components/ThreadItem';
 import type { ConversationMessage, Run as ConversationRun } from '@/components/Conversation';
@@ -38,6 +39,13 @@ type ThreadChildrenEntry = {
 };
 
 type ThreadChildrenState = Record<string, ThreadChildrenEntry>;
+
+type ToggleThreadStatusContext = {
+  previousDetail: ThreadNode | undefined;
+  previousRoots: Array<[QueryKey, { items: ThreadNode[] } | undefined]>;
+  previousChildrenState: ThreadChildrenState;
+  previousOptimisticStatus?: 'open' | 'closed';
+};
 
 type SocketMessage = {
   id: string;
@@ -119,6 +127,61 @@ function resolveThreadAgentRole(node: ThreadNode): string | undefined {
 
 function containerDisplayName(container: ContainerItem): string {
   return container.name;
+}
+
+const THREAD_MESSAGE_MAX_LENGTH = 8000;
+
+const sendMessageErrorMap: Record<string, string> = {
+  bad_message_payload: 'Please enter a message up to 8000 characters.',
+  thread_not_found: 'Thread not found. It may have been removed.',
+  thread_closed: 'This thread is closed. Reopen it to send messages.',
+  agent_unavailable: 'Agent is not currently available for this thread.',
+  agent_unready: 'Agent is starting up. Try again shortly.',
+  send_failed: 'Failed to send the message. Please retry.',
+};
+
+function resolveSendMessageError(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const apiError = error as ApiError;
+    const payload = apiError.response?.data as { error?: unknown; message?: unknown } | undefined;
+    if (payload && typeof payload === 'object') {
+      const code = typeof payload.error === 'string' ? payload.error : undefined;
+      if (code && sendMessageErrorMap[code]) {
+        return sendMessageErrorMap[code];
+      }
+      const message = typeof payload.message === 'string' ? payload.message : undefined;
+      if (message) return message;
+    }
+    if (typeof apiError.message === 'string' && apiError.message.trim().length > 0) {
+      return apiError.message;
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return 'Failed to send the message.';
+}
+
+function updateThreadChildrenStatus(state: ThreadChildrenState, threadId: string, next: 'open' | 'closed'): ThreadChildrenState {
+  let changed = false;
+  const nextState: ThreadChildrenState = {};
+  for (const [id, entry] of Object.entries(state)) {
+    if (!entry) {
+      nextState[id] = entry;
+      continue;
+    }
+    if (entry.nodes.length === 0) {
+      nextState[id] = entry;
+      continue;
+    }
+    const nodes = entry.nodes.map((node) => {
+      if (node.id !== threadId) return node;
+      changed = true;
+      return { ...node, status: next };
+    });
+    nextState[id] = nodes === entry.nodes ? entry : { ...entry, nodes };
+  }
+  return changed ? nextState : state;
 }
 
 type StatusOverride = {
@@ -297,6 +360,7 @@ export function AgentsThreads() {
   const [filterMode, setFilterMode] = useState<FilterMode>('open');
   const [threadLimit, setThreadLimit] = useState<number>(INITIAL_THREAD_LIMIT);
   const [childrenState, setChildrenState] = useState<ThreadChildrenState>({});
+  const [optimisticStatus, setOptimisticStatus] = useState<Record<string, 'open' | 'closed'>>({});
   const [inputValue, setInputValue] = useState('');
   const [drafts, setDrafts] = useState<ThreadDraft[]>([]);
   const [selectedThreadIdState, setSelectedThreadIdState] = useState<string | null>(params.threadId ?? null);
@@ -858,15 +922,128 @@ export function AgentsThreads() {
   const selectedThreadRemindersCount = remindersQuery.data?.items?.length ?? 0;
   const selectedThreadHasPendingReminder = selectedThreadRemindersCount > 0;
 
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({ threadId, text }: { threadId: string; text: string }) => {
+      await threads.sendMessage(threadId, text);
+      return { threadId };
+    },
+    onSuccess: () => {
+      setInputValue('');
+    },
+    onError: (error: unknown) => {
+      notifyError(resolveSendMessageError(error));
+    },
+  });
+  const { mutate: sendThreadMessage, isPending: isSendMessagePending } = sendMessageMutation;
+
+  const toggleThreadStatusMutation = useMutation({
+    mutationFn: async ({ id, next }: { id: string; next: 'open' | 'closed' }) => {
+      await threads.patchStatus(id, next);
+      return { id, next };
+    },
+    onMutate: async ({ id, next }): Promise<ToggleThreadStatusContext> => {
+      await queryClient.cancelQueries({ queryKey: ['agents', 'threads'] });
+
+      const detailKey = ['agents', 'threads', 'by-id', id] as const;
+      const previousDetail = queryClient.getQueryData<ThreadNode>(detailKey);
+      const previousRoots = queryClient.getQueriesData<{ items: ThreadNode[] }>({ queryKey: ['agents', 'threads', 'roots'] });
+
+      let fallbackDetail = previousDetail;
+      if (!fallbackDetail) {
+        for (const [, data] of previousRoots) {
+          const match = data?.items.find((node) => node.id === id);
+          if (match) {
+            fallbackDetail = match;
+            break;
+          }
+        }
+      }
+
+      const previousChildrenState = childrenState;
+      const previousOptimisticStatus = optimisticStatus[id];
+
+      setOptimisticStatus((prev) => {
+        if (prev[id] === next) return prev;
+        return { ...prev, [id]: next };
+      });
+
+      queryClient.setQueryData(detailKey, (prev: ThreadNode | undefined) => {
+        if (prev) return { ...prev, status: next };
+        return fallbackDetail ? { ...fallbackDetail, status: next } : prev;
+      });
+
+      queryClient.setQueriesData<{ items: ThreadNode[] }>({ queryKey: ['agents', 'threads', 'roots'] }, (prev) => {
+        if (!prev) return prev;
+        let changed = false;
+        const items = prev.items.map((node) => {
+          if (node.id !== id) return node;
+          changed = true;
+          return { ...node, status: next };
+        });
+        return changed ? { ...prev, items } : prev;
+      });
+
+      setChildrenState((prev) => updateThreadChildrenStatus(prev, id, next));
+
+      return { previousDetail, previousRoots, previousChildrenState, previousOptimisticStatus };
+    },
+    onSuccess: async (_data, variables) => {
+      const { id, next } = variables;
+      setOptimisticStatus((prev) => {
+        if (!(id in prev)) return prev;
+        const { [id]: _removed, ...rest } = prev;
+        return rest;
+      });
+      setChildrenState((prev) => updateThreadChildrenStatus(prev, id, next));
+      queryClient.setQueryData(['agents', 'threads', 'by-id', id] as const, (prev: ThreadNode | undefined) =>
+        prev ? { ...prev, status: next } : prev,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['agents', 'threads'] }),
+        queryClient.invalidateQueries({ queryKey: ['agents', 'threads', 'by-id', id] }),
+      ]);
+    },
+    onError: (error: unknown, variables, ctx?: ToggleThreadStatusContext) => {
+      if (ctx?.previousChildrenState) {
+        setChildrenState(ctx.previousChildrenState);
+      }
+      if (ctx?.previousDetail !== undefined) {
+        queryClient.setQueryData(['agents', 'threads', 'by-id', variables.id] as const, ctx.previousDetail);
+      }
+      if (ctx?.previousRoots) {
+        for (const [key, data] of ctx.previousRoots) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      setOptimisticStatus((prev) => {
+        if (ctx?.previousOptimisticStatus !== undefined) {
+          if (prev[variables.id] === ctx.previousOptimisticStatus) return prev;
+          return { ...prev, [variables.id]: ctx.previousOptimisticStatus };
+        }
+        if (!(variables.id in prev)) return prev;
+        const { [variables.id]: _removed, ...rest } = prev;
+        return rest;
+      });
+      const message = error instanceof Error ? error.message : 'Failed to update thread status.';
+      notifyError(message);
+    },
+  });
+  const { mutate: toggleThreadStatus, isPending: isToggleThreadStatusPending } = toggleThreadStatusMutation;
+
   const statusOverrides = useMemo<StatusOverrides>(() => {
-    if (!selectedThreadId || isDraftThreadId(selectedThreadId)) return {};
-    return {
-      [selectedThreadId]: {
+    const overrides: StatusOverrides = {};
+    for (const [id, status] of Object.entries(optimisticStatus)) {
+      overrides[id] = { ...(overrides[id] ?? {}), status };
+    }
+    if (selectedThreadId && !isDraftThreadId(selectedThreadId)) {
+      overrides[selectedThreadId] = {
+        ...(overrides[selectedThreadId] ?? {}),
         hasRunningRun: selectedThreadHasRunningRun,
         hasPendingReminder: selectedThreadHasPendingReminder,
-      },
-    };
-  }, [selectedThreadId, selectedThreadHasRunningRun, selectedThreadHasPendingReminder]);
+      };
+    }
+    return overrides;
+  }, [optimisticStatus, selectedThreadId, selectedThreadHasRunningRun, selectedThreadHasPendingReminder]);
 
   const draftThreads = useMemo<Thread[]>(() => drafts.map((draft) => mapDraftToThread(draft)), [drafts]);
 
@@ -987,6 +1164,14 @@ export function AgentsThreads() {
     setThreadLimit((prev) => (prev >= MAX_THREAD_LIMIT ? prev : Math.min(MAX_THREAD_LIMIT, prev + THREAD_LIMIT_STEP)));
   }, []);
 
+  const handleToggleThreadStatus = useCallback(
+    (threadId: string, next: 'open' | 'closed') => {
+      if (isDraftThreadId(threadId)) return;
+      toggleThreadStatus({ id: threadId, next });
+    },
+    [toggleThreadStatus],
+  );
+
   const handleThreadExpand = useCallback(
     (threadId: string, isExpanded: boolean) => {
       if (isDraftThreadId(threadId)) return;
@@ -1086,10 +1271,24 @@ export function AgentsThreads() {
     navigate('/agents/threads');
   }, [selectedThreadId, rootNodes, childrenState, navigate]);
 
-  const handleSendMessage = useCallback((_value: string, context: { threadId: string | null }) => {
-    if (!context.threadId) return;
-    notifyError('Sending messages is not supported yet.');
-  }, []);
+  const handleSendMessage = useCallback(
+    (value: string, context: { threadId: string | null }) => {
+      if (!context.threadId) return;
+      if (isDraftThreadId(context.threadId)) return;
+      if (isSendMessagePending) return;
+      const trimmed = value.trim();
+      if (trimmed.length === 0) {
+        notifyError('Enter a message before sending.');
+        return;
+      }
+      if (trimmed.length > THREAD_MESSAGE_MAX_LENGTH) {
+        notifyError('Messages are limited to 8000 characters.');
+        return;
+      }
+      sendThreadMessage({ threadId: context.threadId, text: trimmed });
+    },
+    [isSendMessagePending, sendThreadMessage],
+  );
 
   const handleToggleRunsInfoCollapsed = useCallback((collapsed: boolean) => {
     setRunsInfoCollapsed(collapsed);
@@ -1133,8 +1332,11 @@ export function AgentsThreads() {
           onToggleRunsInfoCollapsed={handleToggleRunsInfoCollapsed}
           onInputValueChange={handleInputValueChange}
           onSendMessage={handleSendMessage}
+          isSendMessagePending={isSendMessagePending}
           onThreadsLoadMore={threadsHasMore ? handleThreadsLoadMore : undefined}
           onThreadExpand={handleThreadExpand}
+          onToggleThreadStatus={handleToggleThreadStatus}
+          isToggleThreadStatusPending={isToggleThreadStatusPending}
           selectedThread={selectedThreadForScreen}
           onCreateDraft={handleCreateDraft}
           onOpenContainerTerminal={handleOpenContainerTerminal}

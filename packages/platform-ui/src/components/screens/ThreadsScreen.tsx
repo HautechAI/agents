@@ -412,6 +412,7 @@ export default function ThreadsScreen({
                 disabled={!onSendMessage || !selectedThreadId || isSendMessagePending}
                 title="Send message"
                 aria-label="Send message"
+                aria-busy={isSendMessagePending || undefined}
               />
             </div>
           </div>
