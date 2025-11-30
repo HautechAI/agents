@@ -68,17 +68,16 @@ describe('NixPackagesSection (controlled)', () => {
     const repositoryLabel = within(dialog).getByText(/Repository/, { selector: 'span' });
     const repositoryStar = within(repositoryLabel).getByText('*');
     expect(repositoryStar).toHaveClass('text-[var(--agyn-status-failed)]');
-    const attributeLabel = within(dialog).getByText(/Package Attribute/, { selector: 'span' });
-    const attributeStar = within(attributeLabel).getByText('*');
-    expect(attributeStar).toHaveClass('text-[var(--agyn-status-failed)]');
+    const attributeLabel = within(dialog).getByText('Package Attribute', { selector: 'label' });
+    expect(attributeLabel.textContent).toBe('Package Attribute');
 
     const repositoryInput = within(dialog).getByLabelText('GitHub repository');
     expect(repositoryInput).toHaveAttribute('aria-required', 'true');
     const attributeInput = within(dialog).getByLabelText('Flake attribute');
-    expect(attributeInput).toHaveAttribute('aria-required', 'true');
+    expect(attributeInput).not.toHaveAttribute('aria-required');
+    expect(attributeInput).toHaveAttribute('placeholder', 'default');
 
     fireEvent.change(within(dialog).getByLabelText('GitHub repository'), { target: { value: 'agyn/example' } });
-    fireEvent.change(within(dialog).getByLabelText('Flake attribute'), { target: { value: 'packages.default' } });
     const cancelButton = within(dialog).getByRole('button', { name: 'Cancel' });
     const addButton = within(dialog).getByRole('button', { name: 'Add' });
     expect(cancelButton.className).toContain('px-4 py-2');
@@ -90,10 +89,10 @@ describe('NixPackagesSection (controlled)', () => {
     const selectedList = await screen.findByRole('list', { name: 'Selected Nix packages' });
     expect(selectedList).toBeInTheDocument();
 
-    const removeButton = screen.getByLabelText('Remove packages.default');
+    const removeButton = screen.getByLabelText('Remove default');
     expect(removeButton).toBeInTheDocument();
 
-    const sourceSelect = screen.getByLabelText('packages.default source') as HTMLSelectElement;
+    const sourceSelect = screen.getByLabelText('default source') as HTMLSelectElement;
     expect(sourceSelect.disabled).toBe(true);
     expect(sourceSelect.value).toContain('agyn/example');
 
@@ -101,11 +100,11 @@ describe('NixPackagesSection (controlled)', () => {
       const text = screen.getByTestId('nix-value').textContent ?? '';
       expect(text).toContain('"kind":"flakeRepo"');
       expect(text).toContain('"repository":"github:agyn/example"');
-      expect(text).toContain('"attributePath":"packages.default"');
+      expect(text).toContain('"attributePath":"default"');
     });
 
     fireEvent.click(removeButton);
-    await waitFor(() => expect(screen.queryByLabelText('packages.default source')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('default source')).not.toBeInTheDocument());
   });
 
   it('replaces an existing custom repo entry when re-added', async () => {

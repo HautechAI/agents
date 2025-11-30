@@ -32,7 +32,7 @@ const REPO_ERROR_MESSAGES: Record<string, string> = {
   server_error: 'Server error while resolving repository.',
 };
 
-const REQUIRED_FIELDS_ERROR = 'Repository and attribute are required.';
+const REPOSITORY_REQUIRED_ERROR = 'Repository is required.';
 
 function describeRepoError(err: unknown): string {
   if (isAxiosError(err)) {
@@ -102,9 +102,10 @@ export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
     const repository = form.repository.trim();
     const attr = form.attr.trim();
     const ref = form.ref.trim();
+    const attributeToResolve = attr || 'default';
 
-    if (!repository || !attr) {
-      setError(REQUIRED_FIELDS_ERROR);
+    if (!repository) {
+      setError(REPOSITORY_REQUIRED_ERROR);
       return;
     }
 
@@ -115,7 +116,7 @@ export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
     setError(null);
 
     try {
-      const result = await resolveRepo(repository, attr, ref || undefined, controller.signal);
+      const result = await resolveRepo(repository, attributeToResolve, ref || undefined, controller.signal);
       const nextEntry: FlakeRepoSelection = {
         kind: 'flakeRepo',
         repository: result.repository,
@@ -137,10 +138,9 @@ export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
     }
   }, [form.attr, form.repository, form.ref, handleDialogOpenChange, onAdd, submitting]);
 
-  const isRequiredError = error === REQUIRED_FIELDS_ERROR;
-  const repositoryError = isRequiredError && !form.repository.trim() ? 'Repository is required.' : undefined;
-  const attributeError = isRequiredError && !form.attr.trim() ? 'Package attribute is required.' : undefined;
-  const generalErrorMessage = !isRequiredError ? error : null;
+  const isRepositoryError = error === REPOSITORY_REQUIRED_ERROR;
+  const repositoryError = isRepositoryError ? REPOSITORY_REQUIRED_ERROR : undefined;
+  const generalErrorMessage = !isRepositoryError ? error : null;
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -176,7 +176,7 @@ export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
             onChange={(event) => updateField('repository', event.target.value)}
             placeholder="owner/repo or github:owner/repo"
             aria-label="GitHub repository"
-            aria-invalid={isRequiredError && !form.repository.trim() ? true : undefined}
+            aria-invalid={isRepositoryError && !form.repository.trim() ? true : undefined}
             aria-required="true"
             autoComplete="off"
             error={repositoryError}
@@ -192,15 +192,12 @@ export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
           />
           <Input
             id="nix-repo-attr"
-            label={<span>Package Attribute <span className="text-[var(--agyn-status-failed)]">*</span></span>}
+            label="Package Attribute"
             value={form.attr}
             onChange={(event) => updateField('attr', event.target.value)}
-            placeholder="packages.x86_64-linux.default"
+            placeholder="default"
             aria-label="Flake attribute"
-            aria-invalid={isRequiredError && !form.attr.trim() ? true : undefined}
-            aria-required="true"
             autoComplete="off"
-            error={attributeError}
           />
           {generalErrorMessage && (
             <p className="text-sm text-[var(--agyn-status-failed)]" role="alert">
