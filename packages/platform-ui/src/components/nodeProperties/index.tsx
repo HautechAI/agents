@@ -256,6 +256,18 @@ function NodePropertiesSidebar({
   const workspaceInitialScript =
     typeof configRecord.initialScript === 'string' ? (configRecord.initialScript as string) : '';
   const workspaceEnableDinD = configRecord.enableDinD === true;
+  const workspaceCpuLimit =
+    typeof configRecord.cpu_limit === 'string'
+      ? (configRecord.cpu_limit as string)
+      : typeof configRecord.cpu_limit === 'number'
+      ? String(configRecord.cpu_limit)
+      : undefined;
+  const workspaceMemoryLimit =
+    typeof configRecord.memory_limit === 'string'
+      ? (configRecord.memory_limit as string)
+      : typeof configRecord.memory_limit === 'number'
+      ? String(configRecord.memory_limit)
+      : undefined;
   const workspaceTtlSeconds = readNumber(configRecord.ttlSeconds);
   const volumesConfig = isRecord(configRecord.volumes) ? (configRecord.volumes as Record<string, unknown>) : {};
   const volumesEnabled = volumesConfig.enabled === true;
@@ -548,6 +560,20 @@ function NodePropertiesSidebar({
       onConfigChange?.({ restart: merged });
     },
     [restartConfig, onConfigChange],
+  );
+
+  const handleWorkspaceCpuLimitChange = useCallback(
+    (value: string | undefined) => {
+      onConfigChange?.({ cpu_limit: value });
+    },
+    [onConfigChange],
+  );
+
+  const handleWorkspaceMemoryLimitChange = useCallback(
+    (value: string | undefined) => {
+      onConfigChange?.({ memory_limit: value });
+    },
+    [onConfigChange],
   );
 
   const handleVolumesEnabledChange = useCallback(
@@ -862,6 +888,10 @@ function NodePropertiesSidebar({
               onVolumesEnabledChange={handleVolumesEnabledChange}
               volumesMountPath={volumesMountPath}
               onVolumesMountPathChange={handleVolumesMountPathChange}
+              cpuLimit={workspaceCpuLimit}
+              onCpuLimitChange={handleWorkspaceCpuLimitChange}
+              memoryLimit={workspaceMemoryLimit}
+              onMemoryLimitChange={handleWorkspaceMemoryLimitChange}
               ttlSeconds={workspaceTtlSeconds}
               onTtlChange={(value) => onConfigChange?.({ ttlSeconds: value })}
               nixProps={{

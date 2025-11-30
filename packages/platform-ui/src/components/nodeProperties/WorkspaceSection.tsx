@@ -45,6 +45,10 @@ interface WorkspaceSectionProps {
   onVolumesMountPathChange: (value: string) => void;
   ttlSeconds?: number;
   onTtlChange: (value: number | undefined) => void;
+  cpuLimit?: string;
+  onCpuLimitChange: (value: string | undefined) => void;
+  memoryLimit?: string;
+  onMemoryLimitChange: (value: string | undefined) => void;
   nixProps: WorkspaceNixProps;
   nixOpen: boolean;
   onNixOpenChange: (open: boolean) => void;
@@ -66,6 +70,10 @@ export function WorkspaceSection({
   onVolumesMountPathChange,
   ttlSeconds,
   onTtlChange,
+  cpuLimit,
+  onCpuLimitChange,
+  memoryLimit,
+  onMemoryLimitChange,
   nixProps,
   nixOpen,
   onNixOpenChange,
@@ -139,15 +147,43 @@ export function WorkspaceSection({
 
       <section>
         <h3 className="text-[var(--agyn-dark)] mb-4 font-semibold">Limits</h3>
-        <div>
-          <FieldLabel label="TTL" hint="Time-to-live for the workspace in seconds" />
-          <Input
-            type="number"
-            placeholder="3600"
-            value={ttlSeconds !== undefined ? String(ttlSeconds) : ''}
-            onChange={(event) => onTtlChange(toNumberOrUndefined(event.target.value))}
-            size="sm"
-          />
+        <div className="space-y-4">
+          <div>
+            <FieldLabel label="CPU Limit" hint="Examples: 0.5 or 500m" />
+            <Input
+              placeholder="0.5 or 500m"
+              value={cpuLimit ?? ''}
+              onChange={(event) => {
+                const rawValue = event.target.value;
+                const normalized = rawValue.trim();
+                onCpuLimitChange(normalized.length > 0 ? normalized : undefined);
+              }}
+              size="sm"
+            />
+          </div>
+          <div>
+            <FieldLabel label="Memory Limit" hint="Examples: 512Mi, 1Gi, 1024MB" />
+            <Input
+              placeholder="512Mi"
+              value={memoryLimit ?? ''}
+              onChange={(event) => {
+                const rawValue = event.target.value;
+                const normalized = rawValue.trim();
+                onMemoryLimitChange(normalized.length > 0 ? normalized : undefined);
+              }}
+              size="sm"
+            />
+          </div>
+          <div>
+            <FieldLabel label="TTL" hint="Time-to-live for the workspace in seconds" />
+            <Input
+              type="number"
+              placeholder="3600"
+              value={ttlSeconds !== undefined ? String(ttlSeconds) : ''}
+              onChange={(event) => onTtlChange(toNumberOrUndefined(event.target.value))}
+              size="sm"
+            />
+          </div>
         </div>
       </section>
 
