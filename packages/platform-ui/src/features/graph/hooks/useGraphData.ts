@@ -312,7 +312,7 @@ export function useGraphData(): UseGraphDataResult {
 
   const addNode = useCallback((node: GraphNodeConfig, metadata: GraphNodeMetadata) => {
     if (!node || typeof node.id !== 'string' || node.id.length === 0) {
-      return;
+      throw new Error('Graph node id is required');
     }
     const nodeId = node.id;
     const clonedMetadata: GraphNodeMetadata = {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type { GraphNodeConfig } from '@/features/graph/types';
+import type { GraphNodeConfig, GraphNodeMetadata } from '@/features/graph/types';
 import { useGraphData } from '../useGraphData';
 
 const apiMocks = vi.hoisted(() => ({
@@ -188,5 +188,17 @@ describe('useGraphData', () => {
     expect(persisted?.config).toEqual({ title: 'Agent Two' });
 
     vi.useRealTimers();
+  });
+
+  it('throws when addNode receives an invalid id', async () => {
+    const { result } = renderHook(() => useGraphData());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(() => {
+      act(() => {
+        result.current.addNode({} as GraphNodeConfig, {} as GraphNodeMetadata);
+      });
+    }).toThrow('Graph node id is required');
   });
 });
