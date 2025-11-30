@@ -4,6 +4,7 @@ import type { ContainerNixConfig, FlakeRepoSelection, NixPackageSelection, Nixpk
 import { useQuery } from '@tanstack/react-query';
 import { fetchPackages, fetchVersions, resolvePackage } from '@/api/modules/nix';
 import { NixRepoInstallSection } from './NixRepoInstallSection';
+import { displayRepository } from './utils';
 
 // Debounce helper
 function useDebounced<T>(value: T, delay = 300) {
@@ -50,6 +51,22 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
     },
     [],
   );
+  const handleRepoAdd = useCallback((entry: FlakeRepoSelection) => {
+    setRepoPackages((prev) => {
+      const existingIndex = prev.findIndex(
+        (current) => current.repository === entry.repository && current.attributePath === entry.attributePath,
+      );
+      if (existingIndex >= 0) {
+        const next = [...prev];
+        next[existingIndex] = entry;
+        return next;
+      }
+      return [...prev, entry];
+    });
+  }, []);
+  const handleRepoRemove = useCallback((index: number) => {
+    setRepoPackages((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
   const lastPushedJson = useRef<string>('');
   const lastPushedPackagesLen = useRef<number>(0);
   // Stable key of the packages array we most recently pushed upstream.
@@ -359,7 +376,11 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
         ) : null;
       })()}
 
-      {selected.length > 0 && (
+      <div className="pt-2">
+        <NixRepoInstallSection onAdd={handleRepoAdd} />
+      </div>
+
+      {(selected.length > 0 || repoPackages.length > 0) && (
         <ul className="space-y-2" aria-label="Selected Nix packages">
           {selected.map((p) => (
             <SelectedPackageItem
@@ -371,12 +392,15 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
               onRemove={() => removeSelected(p.name)}
             />
           ))}
+          {repoPackages.map((entry, index) => (
+            <RepoPackageItem
+              key={`${entry.repository}|${entry.attributePath}`}
+              entry={entry}
+              onRemove={() => handleRepoRemove(index)}
+            />
+          ))}
         </ul>
       )}
-
-      <div className="pt-4">
-        <NixRepoInstallSection entries={repoPackages} onChange={setRepoPackages} />
-      </div>
     </div>
   );
 }
@@ -461,6 +485,43 @@ function SelectedPackageItem({ pkg, chosen, onChoose, onRemove, onResolved }: { 
         )}
       </select>
       <Button type="button" size="sm" variant="outline" className="text-destructive" aria-label={`Remove ${label}`} onClick={onRemove}>
+        ×
+      </Button>
+    </li>
+  );
+}
+
+function RepoPackageItem({ entry, onRemove }: { entry: FlakeRepoSelection; onRemove: () => void }) {
+  const label = entry.attributePath;
+  const repoLabel = displayRepository(entry.repository);
+  const refSuffix = entry.ref ? `#${entry.ref}` : '';
+  const optionLabel = `${repoLabel}${refSuffix}`;
+  const commitShort = entry.commitHash.slice(0, 12);
+
+  return (
+    <li className="flex items-center gap-2">
+      <span
+        className="flex-1 text-sm"
+        title={`${repoLabel}${refSuffix ? ` ${refSuffix}` : ''} · ${entry.commitHash}`}
+      >
+        {label}
+      </span>
+      <select
+        aria-label={`${label} source`}
+        className="rounded border border-input bg-muted px-2 py-1 text-sm text-muted-foreground"
+        value={optionLabel}
+        disabled
+      >
+        <option value={optionLabel}>{`${optionLabel} · ${commitShort}`}</option>
+      </select>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="text-destructive"
+        aria-label={`Remove ${label}`}
+        onClick={onRemove}
+      >
         ×
       </Button>
     </li>

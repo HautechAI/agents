@@ -7,6 +7,15 @@ import { resolveRepo } from '@/api/modules/nix';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 const REPO_ERROR_MESSAGES: Record<string, string> = {
   invalid_repository: 'Repository must be a GitHub owner/repo URL or shorthand.',
@@ -20,6 +29,8 @@ const REPO_ERROR_MESSAGES: Record<string, string> = {
   timeout: 'Request timed out contacting GitHub.',
   server_error: 'Server error while resolving repository.',
 };
+
+const REQUIRED_FIELDS_ERROR = 'Repository and attribute are required.';
 
 function describeRepoError(err: unknown): string {
   if (isAxiosError(err)) {
@@ -41,24 +52,17 @@ function isCancellationError(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'AbortError';
 }
 
-function displayRepository(repository: string): string {
-  return repository.replace(/^github:/i, '').replace(/\.git$/i, '');
-}
-
 interface NixRepoInstallSectionProps {
-  entries: FlakeRepoSelection[];
-  onChange: (next: FlakeRepoSelection[]) => void;
+  onAdd: (entry: FlakeRepoSelection) => void;
 }
 
-export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSectionProps) {
-  const [form, setForm] = useState<{ repository: string; ref: string; attr: string }>({
-    repository: '',
-    ref: '',
-    attr: '',
-  });
+const INITIAL_FORM_STATE = { repository: '', ref: '', attr: '' } as const;
+
+export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(INITIAL_FORM_STATE);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [updatingIndex, setUpdatingIndex] = useState<number | null>(null);
   const resolveRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -72,21 +76,42 @@ export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSecti
     if (error) setError(null);
   }, [error]);
 
+  const resetForm = useCallback(() => {
+    if (resolveRef.current) {
+      resolveRef.current.abort();
+      resolveRef.current = null;
+    }
+    setForm(INITIAL_FORM_STATE);
+    setError(null);
+    setSubmitting(false);
+  }, []);
+
+  const handleDialogOpenChange = useCallback((nextOpen: boolean) => {
+    if (!nextOpen) {
+      resetForm();
+    }
+    setOpen(nextOpen);
+  }, [resetForm]);
+
   const handleSubmit = useCallback(async (event?: FormEvent<HTMLFormElement>) => {
     if (event) event.preventDefault();
     if (submitting) return;
+
     const repository = form.repository.trim();
     const attr = form.attr.trim();
     const ref = form.ref.trim();
+
     if (!repository || !attr) {
-      setError('Repository and attribute are required.');
+      setError(REQUIRED_FIELDS_ERROR);
       return;
     }
+
     resolveRef.current?.abort();
     const controller = new AbortController();
     resolveRef.current = controller;
     setSubmitting(true);
     setError(null);
+
     try {
       const result = await resolveRepo(repository, attr, ref || undefined, controller.signal);
       const nextEntry: FlakeRepoSelection = {
@@ -96,16 +121,8 @@ export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSecti
         attributePath: result.attributePath,
         ...(result.ref ? { ref: result.ref } : {}),
       };
-      const existingIndex = entries.findIndex(
-        (entry) => entry.repository === nextEntry.repository && entry.attributePath === nextEntry.attributePath,
-      );
-      if (existingIndex >= 0) {
-        const next = entries.map((entry, index) => (index === existingIndex ? nextEntry : entry));
-        onChange(next);
-      } else {
-        onChange([...entries, nextEntry]);
-      }
-      setForm({ repository: '', ref: '', attr: '' });
+      onAdd(nextEntry);
+      handleDialogOpenChange(false);
     } catch (err) {
       if (!isCancellationError(err)) {
         setError(describeRepoError(err));
@@ -116,140 +133,78 @@ export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSecti
         resolveRef.current = null;
       }
     }
-  }, [entries, form.attr, form.repository, form.ref, onChange, submitting]);
+  }, [form.attr, form.repository, form.ref, handleDialogOpenChange, onAdd, submitting]);
 
-  const handleRefresh = useCallback(async (index: number) => {
-    const entry = entries[index];
-    if (!entry) return;
-    if (updatingIndex !== null && updatingIndex !== index) return;
-    resolveRef.current?.abort();
-    const controller = new AbortController();
-    resolveRef.current = controller;
-    setUpdatingIndex(index);
-    setError(null);
-    try {
-      const result = await resolveRepo(entry.repository, entry.attributePath, entry.ref, controller.signal);
-      const nextEntry: FlakeRepoSelection = {
-        kind: 'flakeRepo',
-        repository: result.repository,
-        commitHash: result.commitHash,
-        attributePath: result.attributePath,
-        ...(result.ref ? { ref: result.ref } : {}),
-      };
-      const next = entries.map((current, idx) => (idx === index ? nextEntry : current));
-      onChange(next);
-    } catch (err) {
-      if (!isCancellationError(err)) {
-        setError(describeRepoError(err));
-      }
-    } finally {
-      if (resolveRef.current === controller) {
-        resolveRef.current = null;
-      }
-      setUpdatingIndex((prev) => (prev === index ? null : prev));
-    }
-  }, [entries, onChange, updatingIndex]);
-
-  const handleRemove = useCallback((index: number) => {
-    if (updatingIndex === index) {
-      resolveRef.current?.abort();
-      setUpdatingIndex(null);
-    }
-    onChange(entries.filter((_, idx) => idx !== index));
-  }, [entries, onChange, updatingIndex]);
+  const isRequiredError = error === REQUIRED_FIELDS_ERROR;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-xs font-medium text-[var(--agyn-gray)] uppercase tracking-wide">Install from Git repository (advanced)</p>
-      </div>
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="space-y-2">
-          <Label htmlFor="nix-repo-repository" className="text-sm font-medium text-[var(--agyn-dark)]">Repository<span className="text-[var(--agyn-status-failed)]">*</span></Label>
-          <Input
-            id="nix-repo-repository"
-            value={form.repository}
-            onChange={(event) => updateField('repository', event.target.value)}
-            placeholder="owner/repo or github:owner/repo"
-            aria-label="GitHub repository"
-            autoComplete="off"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="nix-repo-ref" className="text-sm font-medium text-[var(--agyn-dark)]">Branch/Ref (optional)</Label>
-          <Input
-            id="nix-repo-ref"
-            value={form.ref}
-            onChange={(event) => updateField('ref', event.target.value)}
-            placeholder="main"
-            aria-label="Git ref"
-            autoComplete="off"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="nix-repo-attr" className="text-sm font-medium text-[var(--agyn-dark)]">Package Attribute<span className="text-[var(--agyn-status-failed)]">*</span></Label>
-          <Input
-            id="nix-repo-attr"
-            value={form.attr}
-            onChange={(event) => updateField('attr', event.target.value)}
-            placeholder="packages.x86_64-linux.default"
-            aria-label="Flake attribute"
-            autoComplete="off"
-          />
-        </div>
-        <Button type="submit" size="sm" className="w-fit" disabled={submitting}>
-          {submitting ? 'Resolving…' : 'Install'}
-        </Button>
-      </form>
-      {error && (
-        <div className="text-xs text-[var(--agyn-status-failed)]" aria-live="polite">
-          {error}
-        </div>
-      )}
-      {entries.length > 0 && (
-        <ul className="space-y-2" aria-label="Custom flake repositories">
-          {entries.map((entry, index) => {
-            const isUpdating = updatingIndex === index;
-            const disableUpdate = submitting || isUpdating;
-            const disableRemove = submitting || isUpdating;
-            const shortSha = entry.commitHash.slice(0, 12);
-            return (
-              <li key={`${entry.repository}|${entry.attributePath}`} className="rounded border border-border p-2">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div className="space-y-1 text-xs">
-                    <div className="font-mono text-sm">{displayRepository(entry.repository)}#{entry.attributePath}</div>
-                    <div className="text-muted-foreground">
-                      Commit {shortSha}
-                      {entry.ref ? <span className="ml-2">(ref: {entry.ref})</span> : null}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 self-start md:self-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={disableUpdate}
-                      onClick={() => void handleRefresh(index)}
-                    >
-                      {isUpdating ? 'Updating…' : 'Refresh'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={disableRemove}
-                      onClick={() => handleRemove(index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">Add custom</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add custom Nix package</DialogTitle>
+          <DialogDescription>
+            Resolve a Git repository and add its package attribute to this configuration.
+          </DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-2">
+            <Label htmlFor="nix-repo-repository" className="text-sm font-medium text-[var(--agyn-dark)]">
+              Repository<span className="text-[var(--agyn-status-failed)]">*</span>
+            </Label>
+            <Input
+              id="nix-repo-repository"
+              value={form.repository}
+              onChange={(event) => updateField('repository', event.target.value)}
+              placeholder="owner/repo or github:owner/repo"
+              aria-label="GitHub repository"
+              aria-invalid={isRequiredError && !form.repository.trim() ? true : undefined}
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nix-repo-ref" className="text-sm font-medium text-[var(--agyn-dark)]">Branch/Ref (optional)</Label>
+            <Input
+              id="nix-repo-ref"
+              value={form.ref}
+              onChange={(event) => updateField('ref', event.target.value)}
+              placeholder="main"
+              aria-label="Git ref"
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nix-repo-attr" className="text-sm font-medium text-[var(--agyn-dark)]">
+              Package Attribute<span className="text-[var(--agyn-status-failed)]">*</span>
+            </Label>
+            <Input
+              id="nix-repo-attr"
+              value={form.attr}
+              onChange={(event) => updateField('attr', event.target.value)}
+              placeholder="packages.x86_64-linux.default"
+              aria-label="Flake attribute"
+              aria-invalid={isRequiredError && !form.attr.trim() ? true : undefined}
+              autoComplete="off"
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-[var(--agyn-status-failed)]" role="alert">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => handleDialogOpenChange(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Adding…' : 'Add'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

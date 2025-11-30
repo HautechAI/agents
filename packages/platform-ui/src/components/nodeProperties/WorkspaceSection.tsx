@@ -8,6 +8,7 @@ import { AutocompleteInput, type AutocompleteOption } from '../AutocompleteInput
 import { IconButton } from '../IconButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { NixRepoInstallSection } from '../nix/NixRepoInstallSection';
+import { displayRepository } from '../nix/utils';
 
 import type { EnvEditorProps } from './EnvEditor';
 import { EnvEditor } from './EnvEditor';
@@ -73,6 +74,24 @@ export function WorkspaceSection({
   nixOpen,
   onNixOpenChange,
 }: WorkspaceSectionProps) {
+  const handleRepoAdd = (entry: WorkspaceFlakeRepo) => {
+    const existingIndex = nixProps.repoEntries.findIndex(
+      (current) => current.repository === entry.repository && current.attributePath === entry.attributePath,
+    );
+    if (existingIndex >= 0) {
+      const next = [...nixProps.repoEntries];
+      next[existingIndex] = entry;
+      nixProps.onRepoEntriesChange(next);
+    } else {
+      nixProps.onRepoEntriesChange([...nixProps.repoEntries, entry]);
+    }
+  };
+
+  const handleRepoRemove = (index: number) => {
+    const next = nixProps.repoEntries.filter((_, idx) => idx !== index);
+    nixProps.onRepoEntriesChange(next);
+  };
+
   return (
     <>
       <section>
@@ -180,6 +199,7 @@ export function WorkspaceSection({
                 clearable
                 size="sm"
               />
+              <NixRepoInstallSection onAdd={handleRepoAdd} />
               <div className="space-y-3">
                 {nixProps.packages.map((pkg, index) => {
                   const versionList = nixProps.versionOptions[pkg.name] ?? [];
@@ -232,12 +252,52 @@ export function WorkspaceSection({
                     </div>
                   );
                 })}
+                {nixProps.repoEntries.map((entry, index) => (
+                  <WorkspaceRepoItem
+                    key={`${entry.repository}|${entry.attributePath}`}
+                    entry={entry}
+                    onRemove={() => handleRepoRemove(index)}
+                  />
+                ))}
               </div>
-              <NixRepoInstallSection entries={nixProps.repoEntries} onChange={nixProps.onRepoEntriesChange} />
             </div>
           </CollapsibleContent>
         </Collapsible>
       </section>
     </>
+  );
+}
+
+function WorkspaceRepoItem({ entry, onRemove }: { entry: WorkspaceFlakeRepo; onRemove: () => void }) {
+  const label = entry.attributePath;
+  const repoLabel = displayRepository(entry.repository);
+  const refSuffix = entry.ref ? `#${entry.ref}` : '';
+  const commitShort = entry.commitHash.slice(0, 12);
+
+  return (
+    <div>
+      <FieldLabel label={label} />
+      <div className="flex items-center gap-2">
+        <Input
+          value={`${repoLabel}${refSuffix}`}
+          readOnly
+          size="sm"
+          className="flex-1"
+        />
+        <div className="w-[40px] flex items-center justify-center">
+          <IconButton
+            icon={<Trash2 className="w-4 h-4" />}
+            variant="ghost"
+            size="sm"
+            onClick={onRemove}
+            className="hover:text-[var(--agyn-status-failed)]"
+          />
+        </div>
+      </div>
+      <div className="mt-1 text-[10px] text-[var(--agyn-gray)]">
+        {commitShort} · {repoLabel}
+        {refSuffix}
+      </div>
+    </div>
   );
 }

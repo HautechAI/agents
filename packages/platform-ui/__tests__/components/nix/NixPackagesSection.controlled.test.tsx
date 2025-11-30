@@ -1,7 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React, { useState } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { AxiosError } from 'axios';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { server, TestProviders } from '../../integration/testUtils';
 import NixPackagesSection from '@/components/nix/NixPackagesSection';
 import type { NixPackageSelection } from '@/components/nix/types';
@@ -50,19 +49,33 @@ describe('NixPackagesSection (controlled)', () => {
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Selected Nix packages' })).not.toBeInTheDocument());
   });
 
-  it('resolves and manages custom flake repositories', async () => {
+  it('opens the add custom modal and lists the resolved package alongside nixpkgs selections', async () => {
     render(<Harness />);
 
-    fireEvent.change(screen.getByLabelText('GitHub repository'), { target: { value: 'agyn/example' } });
-    fireEvent.change(screen.getByLabelText('Flake attribute'), {
-      target: { value: 'packages.default' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add custom' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add custom Nix package' });
+    const form = (within(dialog).getByLabelText('GitHub repository') as HTMLInputElement).closest('form');
+    if (!form) {
+      throw new Error('Modal form not found');
+    }
+    expect(form).toHaveClass('space-y-4');
 
-    const repoList = await screen.findByRole('list', { name: 'Custom flake repositories' });
-    expect(repoList).toBeInTheDocument();
-    expect(screen.getByText(/agyn\/example#packages\.default/i)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('GitHub repository'), { target: { value: 'agyn/example' } });
+    fireEvent.change(within(dialog).getByLabelText('Flake attribute'), { target: { value: 'packages.default' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    const selectedList = await screen.findByRole('list', { name: 'Selected Nix packages' });
+    expect(selectedList).toBeInTheDocument();
+
+    const removeButton = screen.getByLabelText('Remove packages.default');
+    expect(removeButton).toBeInTheDocument();
+
+    const sourceSelect = screen.getByLabelText('packages.default source') as HTMLSelectElement;
+    expect(sourceSelect.disabled).toBe(true);
+    expect(sourceSelect.value).toContain('agyn/example');
 
     await waitFor(() => {
       const text = screen.getByTestId('nix-value').textContent ?? '';
@@ -71,99 +84,57 @@ describe('NixPackagesSection (controlled)', () => {
       expect(text).toContain('"attributePath":"packages.default"');
     });
 
-    const refreshButton = screen.getByRole('button', { name: 'Refresh' }) as HTMLButtonElement;
-    fireEvent.click(refreshButton);
-    await waitFor(() => expect(refreshButton.disabled).toBeFalsy());
-
-    const removeButton = screen.getByRole('button', { name: 'Remove' });
     fireEvent.click(removeButton);
-    await waitFor(() => expect(screen.queryByRole('list', { name: 'Custom flake repositories' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('packages.default source')).not.toBeInTheDocument());
   });
 
-  it('keeps repo errors clear when cancelling an in-flight resolve', async () => {
+  it('replaces an existing custom repo entry when re-added', async () => {
     const resolveRepoSpy = vi.spyOn(nixApi, 'resolveRepo');
-    const initialCommit = '1234567890abcdef1234567890abcdef12345678';
-    const newCommit = '9999999999999999999999999999999999999999';
-    const cancellationError = new AxiosError('canceled', AxiosError.ERR_CANCELED);
-    cancellationError.code = AxiosError.ERR_CANCELED;
-    cancellationError.name = 'CanceledError';
-
-    const makeResponse = (repository: string, attr: string, commitHash: string, ref?: string) => {
+    const commits = [
+      '1234567890abcdef1234567890abcdef12345678',
+      '9999999999999999999999999999999999999999',
+    ];
+    resolveRepoSpy.mockImplementation(async (repository, attributePath, ref) => {
+      const commitHash = commits.shift() ?? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
       const canonicalRepo = repository.startsWith('github:') ? repository : `github:${repository}`;
-      const effectiveRef = ref && ref.trim().length > 0 ? ref.trim() : 'main';
       return {
         repository: canonicalRepo,
-        ref: effectiveRef,
+        ref: ref ?? 'main',
         commitHash,
-        attributePath: attr,
-        flakeUri: `${canonicalRepo}/${commitHash}#${attr}`,
+        attributePath,
+        flakeUri: `${canonicalRepo}/${commitHash}#${attributePath}`,
         attrCheck: 'ok' as const,
       };
-    };
-
-    let callCount = 0;
-    resolveRepoSpy.mockImplementation((repository, attr, ref, signal) => {
-      callCount += 1;
-      if (callCount === 1) {
-        return Promise.resolve(makeResponse(repository, attr, initialCommit, ref));
-      }
-      if (callCount === 2) {
-        return new Promise((_, reject) => {
-          const onAbort = () => {
-            signal?.removeEventListener('abort', onAbort);
-            reject(cancellationError);
-          };
-          if (!signal) {
-            reject(cancellationError);
-            return;
-          }
-          if (signal.aborted) {
-            onAbort();
-            return;
-          }
-          signal.addEventListener('abort', onAbort);
-          setTimeout(() => {
-            signal.removeEventListener('abort', onAbort);
-            reject(cancellationError);
-          }, 5000);
-        });
-      }
-      return Promise.resolve(makeResponse(repository, attr, newCommit, ref));
     });
+
+    const addCustomRepo = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add custom' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Add custom Nix package' });
+      fireEvent.change(within(dialog).getByLabelText('GitHub repository'), { target: { value: 'agyn/example' } });
+      fireEvent.change(within(dialog).getByLabelText('Flake attribute'), { target: { value: 'packages.default' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    };
 
     try {
       render(<Harness />);
 
-      fireEvent.change(screen.getByLabelText('GitHub repository'), { target: { value: 'agyn/example' } });
-      fireEvent.change(screen.getByLabelText('Flake attribute'), {
-        target: { value: 'packages.default' },
-      });
-      const installButton = screen.getByRole('button', { name: 'Install' });
-      fireEvent.click(installButton);
-
-      const repoList = await screen.findByRole('list', { name: 'Custom flake repositories' });
-      expect(repoList).toBeInTheDocument();
-
-      const refreshButton = screen.getByRole('button', { name: 'Refresh' });
-      fireEvent.click(refreshButton);
-
-      fireEvent.change(screen.getByLabelText('GitHub repository'), { target: { value: 'agyn/example' } });
-      fireEvent.change(screen.getByLabelText('Flake attribute'), {
-        target: { value: 'packages.default' },
-      });
-      fireEvent.click(installButton);
-
-      await waitFor(() => expect(refreshButton).not.toBeDisabled());
-      await waitFor(() => expect(callCount).toBeGreaterThanOrEqual(3));
-      await waitFor(() => expect(installButton).not.toBeDisabled());
+      await addCustomRepo();
       await waitFor(() => {
         const text = screen.getByTestId('nix-value').textContent ?? '';
-        expect(text).toContain(newCommit);
+        expect(text).toContain('1234567890abcdef1234567890abcdef12345678');
       });
 
-      expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/canceled/i)).not.toBeInTheDocument();
-      expect(callCount).toBeGreaterThanOrEqual(3);
+      await addCustomRepo();
+      await waitFor(() => {
+        const text = screen.getByTestId('nix-value').textContent ?? '';
+        expect(text).toContain('9999999999999999999999999999999999999999');
+        expect(text).not.toContain('1234567890abcdef1234567890abcdef12345678');
+      });
+
+      const list = await screen.findByRole('list', { name: 'Selected Nix packages' });
+      const items = within(list).getAllByRole('listitem');
+      expect(items).toHaveLength(1);
     } finally {
       resolveRepoSpy.mockRestore();
     }
