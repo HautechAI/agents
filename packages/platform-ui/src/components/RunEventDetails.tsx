@@ -189,9 +189,11 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
     hasMore: hasMoreContextItems,
     isInitialLoading: isContextInitialLoading,
     isFetching: isContextFetching,
-    error: contextError,
+    error: contextErrorRaw,
     loadMore: loadMoreContext,
   } = useContextItems(llmContextIds, { initialCount: 10 });
+
+  const hasContextError = Boolean(contextErrorRaw);
 
   const highlightContextCount = event.type === 'llm' ? getHighlightCount(event.data.newContextCount) : undefined;
 
@@ -459,7 +461,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
                       <div className="text-sm text-[var(--agyn-gray)]">Loading…</div>
                     )}
 
-                    {contextError && !isContextInitialLoading && (
+                    {hasContextError && !isContextInitialLoading && (
                       <div className="text-sm text-[var(--agyn-red)]">Failed to load context items</div>
                     )}
                   </div>
@@ -606,7 +608,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
             )}
             {isHighlighted && (
               <Badge
-                variant="outline"
+                variant="info"
                 className="ml-2 border-[var(--agyn-blue)] bg-transparent text-[10px] font-semibold uppercase text-[var(--agyn-blue)]"
               >
                 New
