@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AgentsRunScreen } from '../AgentsRunScreen';
@@ -189,6 +189,13 @@ type AgentsRunScreenWithTesting = typeof AgentsRunScreen & {
     extractLlmResponse: (event: RunTimelineEvent) => string;
   };
 };
+
+function latestRunScreenProps<T = Record<string, unknown>>(): T | undefined {
+  const calls = runScreenMocks.props.mock.calls;
+  if (calls.length === 0) return undefined;
+  const last = calls[calls.length - 1];
+  return (last?.[0] as T) ?? undefined;
+}
 
 describe('AgentsRunScreen', () => {
   it('normalizes stringified tool payloads to expose link targets', async () => {
@@ -664,5 +671,120 @@ describe('extractLlmResponse', () => {
     ];
     const extract = getExtract();
     expect(extract(event)).toBe('Attachment response');
+  });
+
+  it('returns empty string when no response sources are present', () => {
+    const event = baseEvent({});
+    const extract = getExtract();
+    expect(extract(event)).toBe('');
+  });
+});
+
+describe('keyboard navigation', () => {
+  const buildSequenceEvents = () => [
+    buildEvent({ id: 'event-a', ts: '2024-01-01T00:00:00.000Z' }),
+    buildEvent({ id: 'event-b', ts: '2024-01-01T00:00:01.000Z' }),
+    buildEvent({ id: 'event-c', ts: '2024-01-01T00:00:02.000Z' }),
+  ];
+
+  it('navigates events with arrow keys and disables follow on manual selection', async () => {
+    const events = buildSequenceEvents();
+    runsHookMocks.summary.mockReturnValue({
+      ...buildSummary(),
+      countsByType: {
+        invocation_message: 0,
+        injection: 0,
+        llm_call: 0,
+        tool_execution: events.length,
+        summarization: 0,
+      },
+      totalEvents: events.length,
+    });
+    runsHookMocks.events.mockReturnValue({ items: events, nextCursor: null });
+
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/threads/thread-1/runs/run-1?follow=true`]}>
+          <Routes>
+            <Route path="/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ selectedEventId?: string | null; isFollowing?: boolean }>();
+      expect(latest?.selectedEventId).toBe('event-c');
+      expect(latest?.isFollowing).toBe(true);
+    });
+
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ selectedEventId?: string | null; isFollowing?: boolean }>();
+      expect(latest?.selectedEventId).toBe('event-b');
+      expect(latest?.isFollowing).toBe(false);
+    });
+
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ selectedEventId?: string | null }>();
+      expect(latest?.selectedEventId).toBe('event-a');
+    });
+
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ selectedEventId?: string | null }>();
+      expect(latest?.selectedEventId).toBe('event-a');
+    });
+
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ selectedEventId?: string | null }>();
+      expect(latest?.selectedEventId).toBe('event-b');
+    });
+  });
+
+  it('ignores navigation when focus is on an editable element', async () => {
+    const events = buildSequenceEvents();
+    runsHookMocks.summary.mockReturnValue(buildSummary());
+    runsHookMocks.events.mockReturnValue({ items: events, nextCursor: null });
+
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/threads/thread-1/runs/run-1`]}>
+          <Routes>
+            <Route path="/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ events?: unknown[] }>();
+      expect(Array.isArray(latest?.events)).toBe(true);
+    });
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const before = latestRunScreenProps<{ selectedEventId?: string | null }>();
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ selectedEventId?: string | null }>();
+      expect(latest?.selectedEventId).toBe(before?.selectedEventId ?? null);
+    });
+
+    input.remove();
   });
 });

@@ -1406,6 +1406,40 @@ export function AgentsRunScreen() {
     return () => window.removeEventListener('keydown', handler);
   }, [toggleFollow]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+          return;
+        }
+      }
+      if (events.length === 0) return;
+
+      const currentIndex = selectedEventId ? events.findIndex((item) => item.id === selectedEventId) : -1;
+      let nextIndex = currentIndex;
+
+      if (event.key === 'ArrowDown') {
+        nextIndex = currentIndex < 0 ? 0 : Math.min(events.length - 1, currentIndex + 1);
+      } else {
+        nextIndex = currentIndex < 0 ? events.length - 1 : Math.max(0, currentIndex - 1);
+      }
+
+      if (nextIndex === currentIndex || nextIndex < 0 || nextIndex >= events.length) return;
+
+      event.preventDefault();
+      manualSelect(events[nextIndex].id);
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [events, selectedEventId, manualSelect]);
+
   const handleEventFiltersChange = useCallback(
     (filters: EventFilter[]) => {
       const sanitized = sanitizeEventFilters(filters);
