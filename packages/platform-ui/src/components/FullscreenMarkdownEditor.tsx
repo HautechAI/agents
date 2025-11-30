@@ -122,6 +122,7 @@ const useScrollSync = ({
     }
 
     const preferredSource = preferredSourceRef.current;
+    const hasPreferredSource = preferredSource !== null;
     if (preferredSource !== null) {
       lastSourceRef.current = preferredSource;
       preferredSourceRef.current = null;
@@ -131,6 +132,20 @@ const useScrollSync = ({
       const ratio = getScrollRatio(preview);
       lastPreviewRatioRef.current = ratio;
       lastEditorRatioRef.current = ratio;
+
+      const editorMaxScroll = editor.scrollHeight - editor.clientHeight;
+      const editorDesiredScroll = editorMaxScroll <= 0
+        ? 0
+        : (Number.isFinite(ratio) ? clampRatio(ratio) : 0) * editorMaxScroll;
+
+      if (
+        !hasPreferredSource
+        && ((editorMaxScroll <= 0 && editor.scrollTop === 0)
+          || Math.abs(editor.scrollTop - editorDesiredScroll) < 0.5)
+      ) {
+        return;
+      }
+
       scheduleScrollUpdate(editor, ratio, editorSuppressRef, editorRafRef);
       return;
     }
@@ -138,6 +153,20 @@ const useScrollSync = ({
     const ratio = getScrollRatio(editor);
     lastEditorRatioRef.current = ratio;
     lastPreviewRatioRef.current = ratio;
+
+    const previewMaxScroll = preview.scrollHeight - preview.clientHeight;
+    const previewDesiredScroll = previewMaxScroll <= 0
+      ? 0
+      : (Number.isFinite(ratio) ? clampRatio(ratio) : 0) * previewMaxScroll;
+
+    if (
+      !hasPreferredSource
+      && ((previewMaxScroll <= 0 && preview.scrollTop === 0)
+        || Math.abs(preview.scrollTop - previewDesiredScroll) < 0.5)
+    ) {
+      return;
+    }
+
     scheduleScrollUpdate(preview, ratio, previewSuppressRef, previewRafRef);
   }, [editorRef, previewScrollRef, isEnabled]);
 
