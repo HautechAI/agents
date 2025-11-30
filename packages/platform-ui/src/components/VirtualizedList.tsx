@@ -11,6 +11,7 @@ import {
   type ForwardedRef,
   type HTMLAttributes,
   type MutableRefObject,
+  type Key,
 } from 'react';
 
 export interface VirtualizedListScrollPosition {
@@ -192,6 +193,19 @@ function VirtualizedListInner<T>(
       scrollElement(scroller, location ?? { top: 0 });
     },
     [forceStatic, scrollElement],
+  );
+
+  const renderVirtualItem = useCallback(
+    (index: number, item: T): ReactNode => {
+      const arrayIndex = index - firstItemIndex;
+      return renderItem(arrayIndex, item);
+    },
+    [firstItemIndex, renderItem],
+  );
+
+  const resolveVirtualItemKey = useCallback(
+    (index: number, item: T, _context?: unknown): Key => (getItemKey ? getItemKey(item) : index),
+    [getItemKey],
   );
 
   const captureStaticPosition = useCallback((): VirtualizedListScrollPosition | null => {
@@ -406,11 +420,8 @@ function VirtualizedListInner<T>(
         ref={virtuosoRef}
         data={items}
         firstItemIndex={firstItemIndex}
-        itemContent={(index, item) => {
-          const arrayIndex = index - firstItemIndex;
-          return renderItem(arrayIndex, item);
-        }}
-        itemKey={(index, item) => (getItemKey ? getItemKey(item as T) : index)}
+        itemContent={renderVirtualItem}
+        computeItemKey={resolveVirtualItemKey}
         components={{
           Header: header ? () => <>{header}</> : undefined,
           Footer: footer ? () => <>{footer}</> : undefined,
