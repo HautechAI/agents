@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../core/services/prisma.service';
 import { ManageAdapter } from './manage/manage.adapter';
+import { AgentIngressService } from './manage/agentIngress.service';
 import { SlackAdapter } from './slack/slack.adapter';
 import {
   ChannelDescriptorSchema,
@@ -36,6 +37,7 @@ export class ChannelRouter {
     @Inject(PrismaService) private readonly prismaService: PrismaService,
     @Inject(SlackAdapter) private readonly slackAdapter: SlackAdapter,
     @Inject(ManageAdapter) private readonly manageAdapter: ManageAdapter,
+    @Inject(AgentIngressService) private readonly agentIngress: AgentIngressService,
   ) {}
 
   private format(context?: Record<string, unknown>): string {
@@ -104,7 +106,12 @@ export class ChannelRouter {
       const adapter: AdapterWithRoute = {
         route,
         sendText: async (payload: ThreadOutboxSendRequest): Promise<SendResult> => {
-          const forwarded = await this.manageAdapter.forwardChildMessage({
+          const mode = route.descriptor.meta?.mode === 'async' ? 'async' : 'sync';
+          if (mode === 'sync') {
+            return { ok: true } satisfies SendResult;
+          }
+
+          const info = await this.manageAdapter.computeForwardingInfo({
             childThreadId: payload.threadId,
             text: payload.text,
             source: payload.source,
@@ -112,24 +119,19 @@ export class ChannelRouter {
             prefix: payload.prefix,
           });
 
-          if (!forwarded.ok) {
-            return { ok: false, error: forwarded.error } satisfies SendResult;
+          if (!info.ok) {
+            return { ok: false, error: info.error } satisfies SendResult;
           }
 
-          const parentAdapter = await this.getAdapter(forwarded.parentThreadId);
-          if (!parentAdapter) {
-            return { ok: false, error: 'missing_parent_channel' } satisfies SendResult;
-          }
-
-          const nextPayload: ThreadOutboxSendRequest = {
-            threadId: forwarded.parentThreadId,
-            text: forwarded.forwardedText,
-            source: 'manage_forward',
-            prefix: undefined,
-            runId: payload.runId,
-          };
-
-          return parentAdapter.sendText(nextPayload);
+          return this.agentIngress.enqueueToAgent({
+            parentThreadId: info.parentThreadId,
+            text: info.forwardedText,
+            childThreadId: info.childThreadId,
+            childThreadAlias: info.childThreadAlias ?? undefined,
+            agentTitle: info.agentTitle,
+            runId: info.runId,
+            showCorrelationInOutput: info.showCorrelationInOutput,
+          });
         },
       };
       return adapter;

@@ -51,7 +51,7 @@ Thread messaging pipeline
 - ThreadOutboxService is the single write path for assistant-authored messages. Tools (send_message) and the agent auto-send flag call it with threadId, runId, source metadata, and optional prefix.
 - ChannelRouter validates the persisted Thread.channel descriptor and resolves the concrete adapter. It surfaces failures immediately (no retry or deduplication) and returns errors such as missing adapters.
 - Slack routes call SlackAdapter, which locates the SlackTrigger node recorded as channelNodeId and delegates delivery via SlackTrigger.sendToChannel using the stored descriptor.
-- Manage routes call ManageAdapter.forwardChildMessage. The adapter persists the forwarded text on the parent thread, prefixes it with the worker title (e.g. `From Operations Agent: `), and then re-enters ChannelRouter on the parent thread to reach the external channel.
+- Manage routes call ManageAdapter.computeForwardingInfo. The adapter builds the forwarded text (including prefixes/correlation metadata) and ChannelRouter hands it to AgentIngressService, which enqueues the message directly to the parent agent—no external adapters (Slack, etc.) are involved.
 - AgentsPersistenceService stamps inbound author roles: injected or ingress messages become `user`, while ThreadOutboxService (including Manage forwards) stores `assistant`.
 - Agents expose a static config toggle **Send LLM response to thread** (default `true`). When enabled the final model reply for a run is persisted through ThreadOutboxService with source `auto_response`.
 

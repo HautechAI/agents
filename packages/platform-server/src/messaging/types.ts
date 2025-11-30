@@ -31,6 +31,9 @@ export const ManageChannelDescriptorSchema = z
     meta: z
       .object({
         agentTitle: z.string().min(1).optional(),
+        mode: z.enum(['sync', 'async']).optional(),
+        asyncPrefix: z.string().optional(),
+        showCorrelationInOutput: z.boolean().optional(),
       })
       .strict()
       .optional(),

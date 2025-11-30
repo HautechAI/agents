@@ -98,6 +98,7 @@ const DEFAULT_TOKEN_FACTORIES = new Map<InjectionToken, () => unknown>([
     () =>
       new ManageFunctionTool(
         createDefaultStub('AgentsPersistenceService') as AgentsPersistenceService,
+        createDefaultStub('EventsBusService') as EventsBusService,
       ),
   ],
 ]);

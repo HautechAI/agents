@@ -13,6 +13,30 @@ export const ManageToolStaticConfigSchema = z
       .regex(/^[a-z0-9_]{1,64}$/)
       .optional()
       .describe('Optional tool name. Default: Manage'),
+    mode: z.enum(['sync', 'async']).default('sync').describe('Routing mode for worker responses.'),
+    syncTimeoutMs: z
+      .number()
+      .int()
+      .min(1000)
+      .max(300000)
+      .default(15000)
+      .describe('Maximum time to wait for worker responses in sync mode (ms).'),
+    syncMaxMessages: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .default(1)
+      .describe('Maximum assistant messages to collect before returning in sync mode.'),
+    asyncPrefix: z
+      .string()
+      .max(256)
+      .default('From {{agentTitle}}: ')
+      .describe('Prefix applied to worker responses forwarded in async mode. Supports {{agentTitle}} placeholder.'),
+    showCorrelationInOutput: z
+      .boolean()
+      .default(false)
+      .describe('Include child correlation metadata in tool output or forwarded messages.'),
   })
   .strict();
 
@@ -26,6 +50,11 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
   ) {
     super();
+  }
+
+  async setConfig(cfg: z.input<typeof ManageToolStaticConfigSchema>): Promise<void> {
+    const parsed = ManageToolStaticConfigSchema.parse(cfg ?? {});
+    await super.setConfig(parsed);
   }
 
   addWorker(agent: AgentNode): void {

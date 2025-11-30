@@ -644,6 +644,39 @@ export class AgentsPersistenceService {
     return titles[threadId] ?? null;
   }
 
+  async getThreadAgentNodeId(threadId: string): Promise<string | null> {
+    try {
+      const graph = await this.graphs.get('main');
+      if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return null;
+
+      const agentNodeIds = graph.nodes
+        .filter((node) => {
+          const meta = this.templateRegistry.getMeta(node.template);
+          if (meta) return meta.kind === 'agent';
+          return node.template === 'agent';
+        })
+        .map((node) => node.id);
+
+      if (agentNodeIds.length === 0) return null;
+
+      const state = await this.prisma.conversationState.findFirst({
+        where: { threadId, nodeId: { in: agentNodeIds } },
+        select: { nodeId: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      return state?.nodeId ?? null;
+    } catch (error) {
+      this.logger.error(
+        `AgentsPersistenceService failed to resolve agent node id${this.format({
+          threadId,
+          error: this.errorInfo(error),
+        })}`,
+      );
+      return null;
+    }
+  }
+
   async listRuns(
     threadId: string,
     take: number = 100,

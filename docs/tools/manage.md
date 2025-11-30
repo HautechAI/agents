@@ -8,6 +8,13 @@ Ports
 - targetPorts: { $self: { kind: 'instance' } }
 - sourcePorts: { agent: { kind: 'method', create: 'addWorker' } }
 
+Configuration
+- `mode`: `'sync'` (default) waits for the first assistant response before returning. `'async'` forwards worker responses back to the parent agent without waiting.
+- `syncTimeoutMs`: Maximum time (ms) to wait for the first worker response in sync mode. Default `15000`.
+- `syncMaxMessages`: Number of assistant messages to collect before returning in sync mode. Default `1`.
+- `asyncPrefix`: Text prefix applied to forwarded responses. Supports `{{agentTitle}}` placeholder. Default `From {{agentTitle}}: `.
+- `showCorrelationInOutput`: When enabled, prefixes forwarded responses with the worker alias and child thread id for easier correlation.
+
 Invocation schema
 ```
 {

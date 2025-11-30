@@ -1,9 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { PrismaService } from '../../core/services/prisma.service';
-import type { ThreadOutboxSource } from '../types';
+import {
+  ManageChannelDescriptorSchema,
+  type ThreadOutboxSource,
+} from '../types';
 
-interface ForwardChildMessageParams {
+interface ComputeForwardingInfoParams {
   childThreadId: string;
   text: string;
   source: ThreadOutboxSource;
@@ -11,13 +14,18 @@ interface ForwardChildMessageParams {
   prefix?: string;
 }
 
-interface ForwardChildMessageSuccess {
+interface ComputeForwardingInfoSuccess {
   ok: true;
   parentThreadId: string;
   forwardedText: string;
+  agentTitle: string;
+  childThreadId: string;
+  childThreadAlias?: string | null;
+  runId: string | null;
+  showCorrelationInOutput: boolean;
 }
 
-interface ForwardChildMessageFailure {
+interface ComputeForwardingInfoFailure {
   ok: false;
   error: string;
 }
@@ -42,7 +50,7 @@ export class ManageAdapter {
     return { message: String(error) };
   }
 
-  async forwardChildMessage(params: ForwardChildMessageParams): Promise<ForwardChildMessageSuccess | ForwardChildMessageFailure> {
+  async computeForwardingInfo(params: ComputeForwardingInfoParams): Promise<ComputeForwardingInfoSuccess | ComputeForwardingInfoFailure> {
     const { childThreadId, source, runId = null } = params;
     const text = params.text?.trim() ?? '';
     if (!text) {
@@ -51,7 +59,10 @@ export class ManageAdapter {
 
     try {
       const prisma = this.prismaService.getClient();
-      const thread = await prisma.thread.findUnique({ where: { id: childThreadId }, select: { parentId: true } });
+      const thread = await prisma.thread.findUnique({
+        where: { id: childThreadId },
+        select: { parentId: true, alias: true, channel: true },
+      });
       const parentThreadId = thread?.parentId ?? null;
       if (!parentThreadId) {
         this.logger.warn(
@@ -63,21 +74,28 @@ export class ManageAdapter {
       const agentTitleCandidate = await this.persistence.getThreadAgentTitle(childThreadId);
       const trimmedAgentTitle = typeof agentTitleCandidate === 'string' ? agentTitleCandidate.trim() : '';
       const agentTitle = trimmedAgentTitle.length > 0 ? trimmedAgentTitle : 'Subagent';
-      const resolvedPrefix = typeof params.prefix === 'string' && params.prefix.length > 0 ? params.prefix : `From ${agentTitle}: `;
-      const forwardedText = `${resolvedPrefix}${text}`;
+      const descriptorInfo = this.parseDescriptor(thread?.channel);
+      const resolvedPrefix = this.resolvePrefix(
+        typeof params.prefix === 'string' && params.prefix.length > 0 ? params.prefix : descriptorInfo?.asyncPrefix,
+        agentTitle,
+      );
+      const alias = this.extractAlias(thread?.alias);
+      const correlationLabel = descriptorInfo?.showCorrelationInOutput ? this.buildCorrelationLabel({ alias, childThreadId }) : null;
+      const forwardedText = this.composeForwardedText(resolvedPrefix, correlationLabel, text);
 
-      await this.persistence.recordOutboxMessage({
-        threadId: parentThreadId,
-        text: forwardedText,
-        role: 'assistant',
-        source: 'manage_forward',
+      return {
+        ok: true,
+        parentThreadId,
+        forwardedText,
+        agentTitle,
+        childThreadId,
+        childThreadAlias: alias,
         runId,
-      });
-
-      return { ok: true, parentThreadId, forwardedText };
+        showCorrelationInOutput: descriptorInfo?.showCorrelationInOutput ?? false,
+      } satisfies ComputeForwardingInfoSuccess;
     } catch (error) {
       this.logger.error(
-        `ManageAdapter: forwardChildMessage failed${this.format({
+        `ManageAdapter: computeForwardingInfo failed${this.format({
           childThreadId: params.childThreadId,
           source,
           runId,
@@ -87,5 +105,40 @@ export class ManageAdapter {
       const message = error instanceof Error && error.message ? error.message : 'manage_forward_failed';
       return { ok: false, error: message };
     }
+  }
+
+  private parseDescriptor(raw: unknown): { asyncPrefix?: string; showCorrelationInOutput?: boolean } | null {
+    if (!raw) return null;
+    const parsed = ManageChannelDescriptorSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const meta = parsed.data.meta ?? {};
+    return {
+      asyncPrefix: typeof meta.asyncPrefix === 'string' ? meta.asyncPrefix : undefined,
+      showCorrelationInOutput: meta.showCorrelationInOutput === true,
+    };
+  }
+
+  private resolvePrefix(raw: string | undefined, agentTitle: string): string {
+    const base = typeof raw === 'string' && raw.length > 0 ? raw : `From ${agentTitle}: `;
+    return base.replace(/{{\s*agentTitle\s*}}/gi, agentTitle);
+  }
+
+  private extractAlias(alias: unknown): string | null {
+    if (typeof alias !== 'string' || alias.length === 0) return null;
+    const lastSegment = alias.split(':').pop();
+    return (lastSegment ?? alias) || null;
+  }
+
+  private buildCorrelationLabel(context: { alias: string | null; childThreadId: string }): string {
+    const parts: string[] = [];
+    if (context.alias) parts.push(`alias=${context.alias}`);
+    parts.push(`thread=${context.childThreadId}`);
+    return `[${parts.join('; ')}]`;
+  }
+
+  private composeForwardedText(prefix: string, correlation: string | null, text: string): string {
+    const correlationSegment = correlation ? `${correlation} ` : '';
+    if (!prefix) return `${correlationSegment}${text}`.trimStart();
+    return `${prefix}${correlationSegment}${text}`;
   }
 }

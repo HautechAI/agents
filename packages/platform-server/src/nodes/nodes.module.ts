@@ -15,6 +15,7 @@ import { SlackAdapter } from '../messaging/slack/slack.adapter';
 import { ThreadOutboxService } from '../messaging/threadOutbox.service';
 import { ChannelRouter } from '../messaging/channelRouter.service';
 import { ManageAdapter } from '../messaging/manage/manage.adapter';
+import { AgentIngressService } from '../messaging/manage/agentIngress.service';
 import { LocalMCPServerNode } from './mcp';
 import { ManageToolNode } from './tools/manage/manage.node';
 import { ManageFunctionTool } from './tools/manage/manage.tool';
@@ -51,6 +52,7 @@ class NodesTemplateRegistrar implements OnModuleInit {
   providers: [
     SlackAdapter,
     ManageAdapter,
+    AgentIngressService,
     ChannelRouter,
     ThreadOutboxService,
     PostgresMemoryEntitiesRepository,
@@ -85,6 +87,7 @@ class NodesTemplateRegistrar implements OnModuleInit {
   exports: [
     SlackAdapter,
     ManageAdapter,
+    AgentIngressService,
     ChannelRouter,
     ThreadOutboxService,
     PostgresMemoryEntitiesRepository,

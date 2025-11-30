@@ -12,6 +12,7 @@ import DebugToolTriggerConfigView from './DebugToolTriggerConfigView';
 import SlackTriggerConfigView from './SlackTriggerConfigView';
 import MemoryServiceConfigView from './MemoryServiceConfigView';
 import MemoryConnectorConfigView from './MemoryConnectorConfigView';
+import ManageToolConfigView from './ManageToolConfigView';
 
 // Export an installer to avoid side-effect registration at import time
 export function installDefaultConfigViews(register: (entry: ConfigViewRegistration) => void) {
@@ -23,6 +24,7 @@ export function installDefaultConfigViews(register: (entry: ConfigViewRegistrati
   register({ template: 'shellTool', mode: 'static', component: ShellToolConfigView });
   register({ template: 'githubCloneRepoTool', mode: 'static', component: GithubCloneRepoToolConfigView });
   register({ template: 'sendSlackMessageTool', mode: 'static', component: SendSlackMessageToolConfigView });
+  register({ template: 'manageTool', mode: 'static', component: ManageToolConfigView });
   register({ template: 'callAgentTool', mode: 'static', component: CallAgentToolConfigView });
   register({ template: 'debugTool', mode: 'static', component: DebugToolTriggerConfigView });
   register({ template: 'slackTrigger', mode: 'static', component: SlackTriggerConfigView });
