@@ -14,10 +14,13 @@ import {
   type Key,
 } from 'react';
 
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
 export interface VirtualizedListScrollPosition {
-  topIndex: number | null;
-  offset: number;
-  scrollTop: number;
+  index?: number;
+  offset?: number;
+  scrollTop?: number;
+  atBottom?: boolean;
 }
 
 export interface VirtualizedListHandle {
@@ -213,41 +216,81 @@ function VirtualizedListInner<T>(
     if (!scroller) return null;
     const scrollTop = scroller.scrollTop;
     const entries = itemRefs.current;
-    let topIndex: number | null = null;
+    let index: number | undefined;
     let offset = 0;
-    for (let index = 0; index < entries.length; index += 1) {
-      const node = entries[index];
+
+    for (let i = 0; i < entries.length; i += 1) {
+      const node = entries[i];
       if (!node) continue;
       const nodeTop = node.offsetTop;
       const nodeBottom = nodeTop + node.offsetHeight;
       if (scrollTop < nodeBottom) {
-        topIndex = index;
+        index = i;
         offset = Math.max(0, scrollTop - nodeTop);
         break;
       }
     }
-    if (topIndex === null) {
-      topIndex = items.length > 0 ? items.length - 1 : 0;
+
+    if (index === undefined && items.length > 0) {
+      index = Math.max(0, items.length - 1);
       offset = 0;
     }
-    return { topIndex, offset, scrollTop };
+
+    const result: VirtualizedListScrollPosition = {};
+    if (index !== undefined) {
+      result.index = index;
+      if (offset > 0) {
+        result.offset = offset;
+      }
+    }
+    if (isFiniteNumber(scrollTop)) {
+      result.scrollTop = scrollTop;
+    }
+    const atBottom = Math.abs(scroller.scrollHeight - scroller.clientHeight - scrollTop) <= 1;
+    if (atBottom) {
+      result.atBottom = true;
+    }
+
+    if (result.index === undefined && result.scrollTop === undefined && !result.atBottom) {
+      return null;
+    }
+
+    return result;
   }, [items.length]);
 
   const restoreStaticPosition = useCallback(
     (position: VirtualizedListScrollPosition) => {
       const scroller = scrollerRef.current;
-      if (!scroller) return;
-      if (Number.isFinite(position.topIndex) && position.topIndex !== null) {
-        const node = itemRefs.current[position.topIndex] ?? null;
+      if (!scroller || !position) return;
+
+      if (isFiniteNumber(position.index) && items.length > 0) {
+        const raw = Math.floor(position.index as number);
+        const clampedIndex = Math.max(0, Math.min(items.length - 1, raw));
+        const node = itemRefs.current[clampedIndex] ?? null;
         if (node) {
-          const top = node.offsetTop + (Number.isFinite(position.offset) ? position.offset : 0);
+          const offsetValue = isFiniteNumber(position.offset) ? (position.offset as number) : 0;
+          const top = node.offsetTop + offsetValue;
           scrollElement(scroller, { top, behavior: 'auto' });
           return;
         }
       }
-      scrollElement(scroller, { top: position.scrollTop, behavior: 'auto' });
+
+      if (isFiniteNumber(position.scrollTop)) {
+        scrollElement(scroller, { top: position.scrollTop as number, behavior: 'auto' });
+        return;
+      }
+
+      if (position.atBottom && items.length > 0) {
+        const lastNode = itemRefs.current[Math.max(0, items.length - 1)] ?? null;
+        if (lastNode) {
+          const target = lastNode.offsetTop - (scroller.clientHeight - lastNode.offsetHeight);
+          scrollElement(scroller, { top: target, behavior: 'auto' });
+          return;
+        }
+        scrollElement(scroller, { top: scroller.scrollHeight, behavior: 'auto' });
+      }
     },
-    [scrollElement],
+    [items.length, scrollElement],
   );
 
   const captureScrollPosition = useCallback(async () => {
@@ -259,14 +302,30 @@ function VirtualizedListInner<T>(
     return new Promise<VirtualizedListScrollPosition | null>((resolve) => {
       instance.getState((snapshot: StateSnapshot) => {
         const range = snapshot.ranges[0];
-        resolve({
-          topIndex: range ? range.startIndex : null,
-          offset: 0,
-          scrollTop: snapshot.scrollTop,
-        });
+        const absoluteIndex = range ? range.startIndex : undefined;
+        const relative = isFiniteNumber(absoluteIndex) ? absoluteIndex - firstItemIndex : undefined;
+
+        const result: VirtualizedListScrollPosition = {};
+        if (isFiniteNumber(relative) && items.length > 0) {
+          const clamped = Math.max(0, Math.min(items.length - 1, Math.floor(relative as number)));
+          result.index = clamped;
+        }
+        if (isFiniteNumber(snapshot.scrollTop)) {
+          result.scrollTop = snapshot.scrollTop;
+        }
+        if (atBottomRef.current) {
+          result.atBottom = true;
+        }
+
+        if (result.index === undefined && result.scrollTop === undefined && !result.atBottom) {
+          resolve(null);
+          return;
+        }
+
+        resolve(result);
       });
     });
-  }, [captureStaticPosition, forceStatic]);
+  }, [captureStaticPosition, firstItemIndex, forceStatic, items.length]);
 
   const restoreScrollPosition = useCallback(
     (position: VirtualizedListScrollPosition) => {
@@ -277,17 +336,26 @@ function VirtualizedListInner<T>(
       }
       const instance = virtuosoRef.current;
       if (!instance) return;
-      if (Number.isFinite(position.topIndex) && position.topIndex !== null) {
-        instance.scrollToIndex({ index: position.topIndex, align: 'start', offset: position.offset ?? 0, behavior: 'auto' });
-      } else {
-        instance.scrollTo({ top: position.scrollTop, behavior: 'auto' });
+      if (isFiniteNumber(position.index) && items.length > 0) {
+        const raw = Math.floor(position.index as number);
+        const clampedIndex = Math.max(0, Math.min(items.length - 1, raw));
+        const absoluteIndex = firstItemIndex + clampedIndex;
+        const offsetValue = isFiniteNumber(position.offset) ? (position.offset as number) : 0;
+        instance.scrollToIndex({ index: absoluteIndex, align: 'start', offset: offsetValue, behavior: 'auto' });
+        if (isFiniteNumber(position.scrollTop)) {
+          instance.scrollTo({ top: position.scrollTop as number, behavior: 'auto' });
+        }
         return;
       }
-      if (Number.isFinite(position.scrollTop)) {
-        instance.scrollTo({ top: position.scrollTop, behavior: 'auto' });
+      if (isFiniteNumber(position.scrollTop)) {
+        instance.scrollTo({ top: position.scrollTop as number, behavior: 'auto' });
+        return;
+      }
+      if (position.atBottom && items.length > 0) {
+        instance.scrollToIndex({ index: firstItemIndex + items.length - 1, align: 'end', behavior: 'auto' });
       }
     },
-    [forceStatic, restoreStaticPosition],
+    [firstItemIndex, forceStatic, items.length, restoreStaticPosition],
   );
 
   useImperativeHandle(

@@ -544,7 +544,7 @@ export function AgentsThreads() {
       pendingMessagesRef.current = clonePendingMessagesMap(cached.pendingMessages);
       seenMessageIdsRef.current = cloneSeenMessagesMap(cached.seenMessageIds);
       runIdsRef.current = new Set(cached.runIds);
-      setConversationHydrationComplete(cached.hydrationComplete);
+      setConversationHydrationComplete(true);
     } else {
       setRunMessages({});
       setMessagesError(null);

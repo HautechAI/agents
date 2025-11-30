@@ -72,7 +72,72 @@ type ConversationListItem =
   | { type: 'queue' }
   | { type: 'spacer' };
 
-export type ConversationScrollState = VirtualizedListScrollPosition;
+export interface ConversationScrollState {
+  index?: number;
+  offset?: number;
+  scrollTop?: number;
+  atBottom?: boolean;
+}
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+const normalizeCapturedState = (
+  position: VirtualizedListScrollPosition | null,
+  atBottom: boolean,
+): ConversationScrollState | null => {
+  if (!position) {
+    return atBottom ? { atBottom: true } : null;
+  }
+
+  const rawIndex = (position as { index?: number; topIndex?: number }).index ?? (position as { index?: number; topIndex?: number }).topIndex;
+  const rawOffset = (position as { offset?: number }).offset;
+  const rawScrollTop = (position as { scrollTop?: number }).scrollTop;
+  const rawAtBottom = (position as { atBottom?: boolean }).atBottom;
+
+  const next: ConversationScrollState = {};
+  if (isFiniteNumber(rawIndex)) {
+    next.index = rawIndex;
+  }
+  if (isFiniteNumber(rawOffset) && next.index !== undefined) {
+    next.offset = rawOffset;
+  }
+  if (isFiniteNumber(rawScrollTop)) {
+    next.scrollTop = rawScrollTop;
+  }
+  if (rawAtBottom === true || atBottom) {
+    next.atBottom = true;
+  }
+
+  if (next.index === undefined && next.scrollTop === undefined && !next.atBottom) {
+    return null;
+  }
+
+  return next;
+};
+
+const sanitizeRestoreState = (state: ConversationScrollState | null): ConversationScrollState | null => {
+  if (!state) return null;
+
+  const next: ConversationScrollState = {};
+  if (isFiniteNumber(state.index)) {
+    next.index = state.index;
+  }
+  if (isFiniteNumber(state.offset) && next.index !== undefined) {
+    next.offset = state.offset;
+  }
+  if (isFiniteNumber(state.scrollTop)) {
+    next.scrollTop = state.scrollTop;
+  }
+  if (state.atBottom) {
+    next.atBottom = true;
+  }
+
+  if (next.index === undefined && next.scrollTop === undefined && !next.atBottom) {
+    return null;
+  }
+
+  return next;
+};
 
 export interface ConversationHandle {
   captureScrollState: () => Promise<ConversationScrollState | null>;
@@ -98,6 +163,8 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
   const listHandleRef = useRef<VirtualizedListHandle | null>(null);
   const scrollRequestIdRef = useRef(0);
   const rafIdRef = useRef<number | null>(null);
+  const pendingRestoreRef = useRef<ConversationScrollState | null>(null);
+  const restoreFrameRef = useRef<number | null>(null);
   const initialScrollRequestedRef = useRef(false);
   const initialScrollCompletedRef = useRef(false);
   const isAtBottomRef = useRef(true);
@@ -148,6 +215,11 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     if (previousThreadIdRef.current !== threadId) {
       previousThreadIdRef.current = threadId;
       prevTotalMessageCountRef.current = totalMessageCount;
+      pendingRestoreRef.current = null;
+      if (restoreFrameRef.current !== null) {
+        cancelAnimationFrame(restoreFrameRef.current);
+        restoreFrameRef.current = null;
+      }
     }
   }, [threadId, totalMessageCount]);
 
@@ -155,6 +227,9 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     () => () => {
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
+      }
+      if (restoreFrameRef.current !== null) {
+        cancelAnimationFrame(restoreFrameRef.current);
       }
     },
     [],
@@ -261,6 +336,68 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     },
     [hydrationComplete, isActive],
   );
+
+  const tryApplyPendingRestore = useCallback((): boolean => {
+    const state = pendingRestoreRef.current;
+    if (!state) return true;
+
+    const handle = listHandleRef.current;
+    if (!handle) {
+      return false;
+    }
+
+    const itemsLength = conversationItems.length;
+    if (itemsLength === 0) {
+      return false;
+    }
+
+    const hasIndex = isFiniteNumber(state.index);
+    const hasScrollTop = isFiniteNumber(state.scrollTop);
+    const hasOffset = isFiniteNumber(state.offset) && hasIndex;
+
+    if (hasIndex) {
+      const raw = Math.floor(state.index as number);
+      const clampedIndex = Math.max(0, Math.min(itemsLength - 1, raw));
+      const offsetValue = hasOffset ? (state.offset as number) : 0;
+      handle.scrollToIndex({ index: clampedIndex, align: 'start', offset: offsetValue, behavior: 'auto' });
+      if (hasScrollTop) {
+        handle.scrollTo({ top: state.scrollTop as number, behavior: 'auto' });
+      }
+    } else if (hasScrollTop) {
+      handle.scrollTo({ top: state.scrollTop as number, behavior: 'auto' });
+    } else if (state.atBottom && itemsLength > 0) {
+      handle.scrollToIndex({ index: itemsLength - 1, align: 'end', behavior: 'auto' });
+    }
+
+    pendingRestoreRef.current = null;
+    initialScrollRequestedRef.current = true;
+    initialScrollCompletedRef.current = true;
+    setIsLoaderVisible(false);
+    return true;
+  }, [conversationItems.length]);
+
+  const schedulePendingRestore = useCallback(() => {
+    if (!pendingRestoreRef.current) return;
+    if (restoreFrameRef.current !== null) {
+      cancelAnimationFrame(restoreFrameRef.current);
+    }
+    restoreFrameRef.current = requestAnimationFrame(() => {
+      restoreFrameRef.current = null;
+      tryApplyPendingRestore();
+    });
+  }, [tryApplyPendingRestore]);
+
+  useEffect(() => {
+    if (pendingRestoreRef.current && conversationItems.length > 0) {
+      schedulePendingRestore();
+    }
+  }, [conversationItems.length, schedulePendingRestore]);
+
+  useEffect(() => {
+    if (pendingRestoreRef.current && isActive) {
+      schedulePendingRestore();
+    }
+  }, [isActive, schedulePendingRestore]);
 
   const getItemKey = useCallback((item: ConversationListItem) => {
     if (item.type === 'run') return item.run.id;
@@ -382,19 +519,27 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
       captureScrollState: async () => {
         const handle = listHandleRef.current;
         if (!handle) return null;
-        return handle.captureScrollPosition();
+        const position = await handle.captureScrollPosition();
+        return normalizeCapturedState(position, handle.isAtBottom());
       },
       restoreScrollState: (state) => {
-        if (!state) return;
-        const handle = listHandleRef.current;
+        const normalized = sanitizeRestoreState(state);
+        if (!normalized) {
+          pendingRestoreRef.current = null;
+          return;
+        }
+
+        pendingRestoreRef.current = normalized;
         initialScrollRequestedRef.current = true;
-        initialScrollCompletedRef.current = true;
-        setIsLoaderVisible(false);
-        handle?.restoreScrollPosition(state);
+        initialScrollCompletedRef.current = false;
+        if (isActive) {
+          setIsLoaderVisible(true);
+        }
+        schedulePendingRestore();
       },
       isAtBottom: () => isAtBottomRef.current,
     }),
-    [],
+    [isActive, schedulePendingRestore],
   );
 
   return (
@@ -412,6 +557,9 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
         <VirtualizedList
           ref={(handle) => {
             listHandleRef.current = handle;
+            if (handle && pendingRestoreRef.current) {
+              schedulePendingRestore();
+            }
           }}
           items={conversationItems}
           renderItem={renderItem}

@@ -17,7 +17,7 @@ vi.mock('../../Conversation', () => {
     }
 
     const captureSpy = useMemo(
-      () => vi.fn(async () => ({ topIndex: instanceIdRef.current, offset: 4, scrollTop: 42 })),
+      () => vi.fn(async () => ({ index: instanceIdRef.current ?? 0, offset: 4, scrollTop: 42 })),
       [],
     );
     const restoreSpy = useMemo(() => vi.fn(), []);
@@ -227,6 +227,7 @@ describe('ConversationsHost', () => {
     expect(spiesForA).toBeDefined();
     expect(spiesForA?.capture).toHaveBeenCalledTimes(1);
     const capturedState = await spiesForA!.capture.mock.results[0].value;
+    expect(capturedState).toMatchObject({ index: expect.any(Number), offset: 4, scrollTop: 42 });
 
     await act(async () => {
       rerender(
