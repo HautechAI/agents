@@ -1,12 +1,12 @@
 import { Clock, MessageSquare, Bot, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, ExternalLink } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from './Badge';
 import { IconButton } from './IconButton';
 import { JsonViewer } from './JsonViewer';
 import { MarkdownContent } from './MarkdownContent';
 import { Dropdown } from './Dropdown';
 import { StatusIndicator, type Status } from './StatusIndicator';
-import { LLMContextViewer } from './agents/LLMContextViewer';
+import { useContextItems } from '@/api/hooks/contextItems';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -22,6 +22,20 @@ const safeJsonParse = (value: string): unknown => {
     return JSON.parse(value);
   } catch {
     return value;
+  }
+};
+
+const safeStringify = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
   }
 };
 
@@ -57,6 +71,8 @@ const getHighlightCount = (value: unknown): number | undefined => {
   }
   return Math.floor(value);
 };
+
+const CONTEXT_HIGHLIGHT_ROLES: ReadonlySet<string> = new Set(['user', 'assistant', 'tool']);
 
 export interface RunEventData extends Record<string, unknown> {
   messageSubtype?: MessageSubtype;
@@ -121,6 +137,71 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
       return next;
     });
   };
+
+  const llmContextIds = event.type === 'llm' ? toContextIds(event.data.context) : [];
+  const {
+    items: llmContextItems,
+    total: totalContextItems,
+    targetCount: targetContextItems,
+    hasMore: hasMoreContextItems,
+    isInitialLoading: isContextInitialLoading,
+    isFetching: isContextFetching,
+    error: contextError,
+    loadMore: loadMoreContext,
+  } = useContextItems(llmContextIds, { initialCount: 10 });
+
+  const highlightContextCount = event.type === 'llm' ? getHighlightCount(event.data.newContextCount) : undefined;
+
+  const highlightedContextIds = useMemo(() => {
+    if (!highlightContextCount || highlightContextCount <= 0 || llmContextItems.length === 0) {
+      return new Set<string>();
+    }
+    const ids = new Set<string>();
+    let remaining = highlightContextCount;
+    for (let index = llmContextItems.length - 1; index >= 0 && remaining > 0; index -= 1) {
+      const item = llmContextItems[index];
+      if (!item) continue;
+      if (!CONTEXT_HIGHLIGHT_ROLES.has(item.role)) continue;
+      ids.add(item.id);
+      remaining -= 1;
+    }
+    return ids;
+  }, [highlightContextCount, llmContextItems]);
+
+  const llmContextMessages = useMemo(() => {
+    if (llmContextItems.length === 0) return [] as Record<string, unknown>[];
+    return llmContextItems.map((item) => {
+      const hasText = typeof item.contentText === 'string' && item.contentText.trim().length > 0;
+      let contentValue: unknown = '';
+      if (hasText) {
+        contentValue = item.contentText ?? '';
+      } else if (item.contentJson !== null && item.contentJson !== undefined) {
+        contentValue = item.role === 'assistant' || item.role === 'tool' ? item.contentJson : safeStringify(item.contentJson);
+      }
+
+      const message: Record<string, unknown> = {
+        id: item.id,
+        role: item.role,
+        timestamp: item.createdAt,
+        content: contentValue,
+        contextItemId: item.id,
+      };
+
+      if (item.role === 'assistant') {
+        message.response = hasText && item.contentText ? item.contentText : item.contentJson ?? '';
+      }
+
+      if (item.role === 'tool') {
+        message.tool_result = item.contentJson ?? item.contentText ?? '';
+      }
+
+      if (highlightedContextIds.has(item.id)) {
+        message.__highlight = true;
+      }
+
+      return message;
+    });
+  }, [llmContextItems, highlightedContextIds]);
 
   const renderOutputContent = (output: unknown) => {
     const outputString = typeof output === 'string'
@@ -232,12 +313,13 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
   };
 
   const renderLLMEvent = () => {
-    const contextIds = toContextIds(event.data.context);
     const response = asString(event.data.response);
     const totalTokens = asNumber(event.data.tokens?.total);
     const cost = typeof event.data.cost === 'string' ? event.data.cost : '';
     const model = asString(event.data.model);
-    const highlightContextCount = getHighlightCount(event.data.newContextCount);
+    const hasContextSource = llmContextIds.length > 0;
+    const hasContextMessages = llmContextMessages.length > 0;
+    const displayedContextCount = Math.min(targetContextItems, totalContextItems);
 
     return (
       <div className="space-y-6 h-full flex flex-col">
@@ -298,7 +380,45 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
                 <span className="text-sm text-[var(--agyn-gray)]">Context</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0 border border-[var(--agyn-border-subtle)] rounded-[10px] p-4">
-                <LLMContextViewer ids={contextIds} highlightLastCount={highlightContextCount} />
+                {!hasContextSource ? (
+                  <div className="text-sm text-[var(--agyn-gray)]">No context messages</div>
+                ) : (
+                  <div className="space-y-4">
+                    {hasMoreContextItems && (
+                      <button
+                        type="button"
+                        className="w-full text-sm text-[var(--agyn-blue)] hover:text-[var(--agyn-blue)]/80 py-2 border border-[var(--agyn-border-subtle)] rounded-[6px] transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+                        onClick={loadMoreContext}
+                        disabled={isContextFetching}
+                      >
+                        Load older context
+                        {totalContextItems > 0 && (
+                          <span className="ml-1 text-xs text-[var(--agyn-gray)]">
+                            ({displayedContextCount} of {totalContextItems})
+                          </span>
+                        )}
+                      </button>
+                    )}
+
+                    {isContextInitialLoading && (
+                      <div className="text-sm text-[var(--agyn-gray)]">Loading context…</div>
+                    )}
+
+                    {hasContextMessages && renderContextMessages(llmContextMessages)}
+
+                    {!isContextInitialLoading && !isContextFetching && !hasContextMessages && (
+                      <div className="text-sm text-[var(--agyn-gray)]">No context messages</div>
+                    )}
+
+                    {isContextFetching && !isContextInitialLoading && (
+                      <div className="text-sm text-[var(--agyn-gray)]">Loading…</div>
+                    )}
+
+                    {contextError && !isContextInitialLoading && (
+                      <div className="text-sm text-[var(--agyn-red)]">Failed to load context items</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -328,6 +448,20 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
     contextArray.map((message, index) => {
       const roleValue = asString(message.role).toLowerCase();
       const role = roleValue || 'user';
+      const contextItemId = asString((message as { contextItemId?: string }).contextItemId);
+      const isHighlighted = Boolean((message as { __highlight?: boolean }).__highlight);
+
+      const bodyClasses = ['ml-5', 'space-y-3'];
+      if (isHighlighted) {
+        bodyClasses.push(
+          'rounded-[8px]',
+          'border',
+          'border-[var(--agyn-blue)]/30',
+          'bg-[var(--agyn-blue)]/5',
+          'px-3',
+          'py-3'
+        );
+      }
 
       const getRoleConfig = () => {
         switch (role) {
@@ -413,7 +547,7 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
       };
 
       return (
-        <div key={index} className="mb-4 last:mb-0">
+        <div key={contextItemId || index} className="mb-4 last:mb-0">
           <div className={`flex items-center gap-1.5 ${roleConfig.color} mb-2`}>
             {roleConfig.icon}
             <span className={`text-xs font-medium ${role === 'tool' ? '' : 'capitalize'}`}>
@@ -421,6 +555,14 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
             </span>
             {timestamp && (
               <span className="text-xs text-[var(--agyn-gray)] ml-1">{timestamp}</span>
+            )}
+            {isHighlighted && (
+              <Badge
+                variant="outline"
+                className="ml-2 border-[var(--agyn-blue)] bg-transparent text-[10px] font-semibold uppercase text-[var(--agyn-blue)]"
+              >
+                New
+              </Badge>
             )}
             {role === 'tool' && (
               <div className="ml-auto">
@@ -445,7 +587,12 @@ export function RunEventDetails({ event }: RunEventDetailsProps) {
               </Badge>
             )}
           </div>
-          <div className="ml-5 space-y-3">
+          <div
+            className={bodyClasses.join(' ')}
+            data-context-item-id={contextItemId || undefined}
+            data-context-item-role={role}
+            data-new-context={isHighlighted ? 'true' : undefined}
+          >
             {(role === 'system' || role === 'user') && (
               <div className="prose prose-sm max-w-none">
                 <MarkdownContent content={asString(message.content)} />
