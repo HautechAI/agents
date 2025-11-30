@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Button, Input } from '@agyn/ui';
 import { AxiosError, isAxiosError } from 'axios';
 
 import type { FlakeRepoSelection } from './types';
 import { resolveRepo } from '@/api/modules/nix';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const REPO_ERROR_MESSAGES: Record<string, string> = {
   invalid_repository: 'Repository must be a GitHub owner/repo URL or shorthand.',
@@ -157,11 +159,13 @@ export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSecti
   }, [entries, onChange, updatingIndex]);
 
   return (
-    <div className="space-y-2">
-      <div className="text-[10px] uppercase text-muted-foreground">Install from Git repository (advanced)</div>
-      <form className="flex flex-col gap-2 md:flex-row md:items-end" onSubmit={handleSubmit}>
-        <div className="flex-1">
-          <label htmlFor="nix-repo-repository" className="block text-xs mb-1">Repository</label>
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs font-medium text-[var(--agyn-gray)] uppercase tracking-wide">Install from Git repository (advanced)</p>
+      </div>
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <Label htmlFor="nix-repo-repository" className="text-sm font-medium text-[var(--agyn-dark)]">Repository<span className="text-[var(--agyn-status-failed)]">*</span></Label>
           <Input
             id="nix-repo-repository"
             value={form.repository}
@@ -171,8 +175,8 @@ export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSecti
             autoComplete="off"
           />
         </div>
-        <div className="md:w-36">
-          <label htmlFor="nix-repo-ref" className="block text-xs mb-1">Branch/Ref (optional)</label>
+        <div className="space-y-2">
+          <Label htmlFor="nix-repo-ref" className="text-sm font-medium text-[var(--agyn-dark)]">Branch/Ref (optional)</Label>
           <Input
             id="nix-repo-ref"
             value={form.ref}
@@ -182,8 +186,8 @@ export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSecti
             autoComplete="off"
           />
         </div>
-        <div className="md:w-64">
-          <label htmlFor="nix-repo-attr" className="block text-xs mb-1">Package Attribute</label>
+        <div className="space-y-2">
+          <Label htmlFor="nix-repo-attr" className="text-sm font-medium text-[var(--agyn-dark)]">Package Attribute<span className="text-[var(--agyn-status-failed)]">*</span></Label>
           <Input
             id="nix-repo-attr"
             value={form.attr}
@@ -193,12 +197,12 @@ export function NixRepoInstallSection({ entries, onChange }: NixRepoInstallSecti
             autoComplete="off"
           />
         </div>
-        <Button type="submit" disabled={submitting} className="md:w-28">
+        <Button type="submit" size="sm" className="w-fit" disabled={submitting}>
           {submitting ? 'Resolving…' : 'Install'}
         </Button>
       </form>
       {error && (
-        <div className="text-xs text-destructive" aria-live="polite">
+        <div className="text-xs text-[var(--agyn-status-failed)]" aria-live="polite">
           {error}
         </div>
       )}
