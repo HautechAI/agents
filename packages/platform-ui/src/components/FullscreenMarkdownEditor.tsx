@@ -192,6 +192,7 @@ const useScrollSync = ({
     lastEditorRatioRef.current = ratio;
     lastPreviewRatioRef.current = ratio;
     scheduleScrollUpdate(preview, ratio, previewSuppressRef, previewRafRef);
+    preferredSourceRef.current = null;
   }, [editorRef, previewScrollRef, isEnabled]);
 
   const handlePreviewScroll = useCallback(() => {
@@ -216,6 +217,7 @@ const useScrollSync = ({
     lastPreviewRatioRef.current = ratio;
     lastEditorRatioRef.current = ratio;
     scheduleScrollUpdate(editor, ratio, editorSuppressRef, editorRafRef);
+    preferredSourceRef.current = null;
   }, [editorRef, previewScrollRef, isEnabled]);
 
   useEffect(() => {
