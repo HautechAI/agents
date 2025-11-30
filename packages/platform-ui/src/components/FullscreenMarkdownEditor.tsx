@@ -40,7 +40,7 @@ const getScrollRatio = (element: HTMLElement): number => {
 const scheduleScrollUpdate = (
   target: HTMLElement,
   ratio: number,
-  ignoreRef: MutableRefObject<boolean>,
+  suppressRef: MutableRefObject<number>,
   rafRef: MutableRefObject<number | null>
 ) => {
   if (typeof window === 'undefined') {
@@ -50,31 +50,45 @@ const scheduleScrollUpdate = (
   if (rafRef.current !== null) {
     window.cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
-    ignoreRef.current = false;
+    if (suppressRef.current > 0) {
+      suppressRef.current -= 1;
+    }
   }
 
-  ignoreRef.current = true;
+  const maxScroll = target.scrollHeight - target.clientHeight;
+  const safeRatio = Number.isFinite(ratio) ? clampRatio(ratio) : 0;
+  const desiredScrollTop = maxScroll <= 0 ? 0 : safeRatio * maxScroll;
+
+  if (maxScroll <= 0 || Math.abs(target.scrollTop - desiredScrollTop) < 0.5) {
+    target.scrollTop = desiredScrollTop;
+    return;
+  }
+
+  suppressRef.current += 1;
+
+  const settle = () => {
+    if (suppressRef.current > 0) {
+      suppressRef.current -= 1;
+    }
+    rafRef.current = null;
+  };
 
   const firstFrame = window.requestAnimationFrame(() => {
-    const maxScroll = target.scrollHeight - target.clientHeight;
-    const safeRatio = Number.isFinite(ratio) ? clampRatio(ratio) : 0;
+    const nextMaxScroll = target.scrollHeight - target.clientHeight;
+    const nextRatio = Number.isFinite(ratio) ? clampRatio(ratio) : 0;
+    const nextScrollTop = nextMaxScroll <= 0 ? 0 : nextRatio * nextMaxScroll;
 
-    if (maxScroll <= 0) {
-      target.scrollTop = 0;
-      ignoreRef.current = false;
-      rafRef.current = null;
-      return;
-    }
-
-    target.scrollTop = safeRatio * maxScroll;
-
-    rafRef.current = window.requestAnimationFrame(() => {
-      ignoreRef.current = false;
-      rafRef.current = null;
-    });
+    target.scrollTop = nextScrollTop;
+    rafRef.current = window.requestAnimationFrame(settle);
   });
 
   rafRef.current = firstFrame;
+
+  window.requestAnimationFrame(() => {
+    if (suppressRef.current > 0) {
+      suppressRef.current -= 1;
+    }
+  });
 };
 
 interface ScrollSyncOptions {
@@ -92,13 +106,14 @@ const useScrollSync = ({
   isEnabled,
   content
 }: ScrollSyncOptions) => {
-  const editorIgnoreRef = useRef(false);
-  const previewIgnoreRef = useRef(false);
+  const editorSuppressRef = useRef(0);
+  const previewSuppressRef = useRef(0);
   const editorRafRef = useRef<number | null>(null);
   const previewRafRef = useRef<number | null>(null);
   const lastEditorRatioRef = useRef(0);
   const lastPreviewRatioRef = useRef(0);
   const lastSourceRef = useRef<ScrollSource>('editor');
+  const preferredSourceRef = useRef<ScrollSource | null>(null);
 
   const reapplyAlignment = useCallback(() => {
     if (!isEnabled || typeof window === 'undefined') {
@@ -112,18 +127,24 @@ const useScrollSync = ({
       return;
     }
 
+    const preferredSource = preferredSourceRef.current;
+    if (preferredSource !== null) {
+      lastSourceRef.current = preferredSource;
+      preferredSourceRef.current = null;
+    }
+
     if (lastSourceRef.current === 'preview') {
       const ratio = getScrollRatio(preview);
       lastPreviewRatioRef.current = ratio;
       lastEditorRatioRef.current = ratio;
-      scheduleScrollUpdate(editor, ratio, editorIgnoreRef, editorRafRef);
+      scheduleScrollUpdate(editor, ratio, editorSuppressRef, editorRafRef);
       return;
     }
 
     const ratio = getScrollRatio(editor);
     lastEditorRatioRef.current = ratio;
     lastPreviewRatioRef.current = ratio;
-    scheduleScrollUpdate(preview, ratio, previewIgnoreRef, previewRafRef);
+    scheduleScrollUpdate(preview, ratio, previewSuppressRef, previewRafRef);
   }, [editorRef, previewScrollRef, isEnabled]);
 
   const handleEditorScroll = useCallback(() => {
@@ -134,15 +155,21 @@ const useScrollSync = ({
     const editor = editorRef.current;
     const preview = previewScrollRef.current;
 
-    if (!editor || !preview || editorIgnoreRef.current) {
+    if (!editor || !preview) {
+      return;
+    }
+
+    if (editorSuppressRef.current > 0) {
+      editorSuppressRef.current -= 1;
       return;
     }
 
     const ratio = getScrollRatio(editor);
     lastSourceRef.current = 'editor';
+    preferredSourceRef.current = 'editor';
     lastEditorRatioRef.current = ratio;
     lastPreviewRatioRef.current = ratio;
-    scheduleScrollUpdate(preview, ratio, previewIgnoreRef, previewRafRef);
+    scheduleScrollUpdate(preview, ratio, previewSuppressRef, previewRafRef);
   }, [editorRef, previewScrollRef, isEnabled]);
 
   const handlePreviewScroll = useCallback(() => {
@@ -157,19 +184,17 @@ const useScrollSync = ({
       return;
     }
 
-    if (previewIgnoreRef.current) {
-      if (previewRafRef.current !== null) {
-        window.cancelAnimationFrame(previewRafRef.current);
-        previewRafRef.current = null;
-      }
-      previewIgnoreRef.current = false;
+    if (previewSuppressRef.current > 0) {
+      previewSuppressRef.current -= 1;
+      return;
     }
 
     const ratio = getScrollRatio(preview);
     lastSourceRef.current = 'preview';
+    preferredSourceRef.current = 'preview';
     lastPreviewRatioRef.current = ratio;
     lastEditorRatioRef.current = ratio;
-    scheduleScrollUpdate(editor, ratio, editorIgnoreRef, editorRafRef);
+    scheduleScrollUpdate(editor, ratio, editorSuppressRef, editorRafRef);
   }, [editorRef, previewScrollRef, isEnabled]);
 
   useEffect(() => {
@@ -205,8 +230,8 @@ const useScrollSync = ({
         previewRafRef.current = null;
       }
 
-      editorIgnoreRef.current = false;
-      previewIgnoreRef.current = false;
+      editorSuppressRef.current = 0;
+      previewSuppressRef.current = 0;
     };
   }, [editorRef, previewScrollRef, isEnabled, handleEditorScroll, handlePreviewScroll, reapplyAlignment]);
 
@@ -265,7 +290,14 @@ const useScrollSync = ({
 
   const markEditorAsSource = useCallback(() => {
     lastSourceRef.current = 'editor';
-  }, []);
+    preferredSourceRef.current = 'editor';
+    const editor = editorRef.current;
+    if (editor) {
+      const ratio = getScrollRatio(editor);
+      lastEditorRatioRef.current = ratio;
+      lastPreviewRatioRef.current = ratio;
+    }
+  }, [editorRef]);
 
   return { markEditorAsSource };
 };
