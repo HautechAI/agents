@@ -184,6 +184,12 @@ function buildSummary(): RunTimelineSummary {
   };
 }
 
+type AgentsRunScreenWithTesting = typeof AgentsRunScreen & {
+  __testing__?: {
+    extractLlmResponse: (event: RunTimelineEvent) => string;
+  };
+};
+
 describe('AgentsRunScreen', () => {
   it('normalizes stringified tool payloads to expose link targets', async () => {
     const toolInput = JSON.stringify({
@@ -461,5 +467,202 @@ describe('AgentsRunScreen', () => {
     expect(toolCalls?.[0]?.name).toBe('delegate_agent');
     expect(toolCalls?.[0]?.arguments).toEqual({ target: 'agent-security' });
     expect(assistant['reasoning']).toEqual({ tokens: 55, score: 0.42 });
+  });
+
+  it('omits assistant content when context lacks textual fields but exposes tool calls and reasoning', async () => {
+    const assistantContext: ContextItem = {
+      id: 'ctx-structured',
+      role: 'assistant',
+      contentText: null,
+      contentJson: {
+        tool_calls: [
+          {
+            name: 'lookup_status',
+            arguments: { ticket: 'INC-42' },
+          },
+        ],
+        metadata: { extra: true },
+      },
+      metadata: {
+        reasoning: { tokens: 12 },
+      },
+      sizeBytes: 128,
+      createdAt: '2024-01-01T00:00:04.000Z',
+    };
+
+    const event = buildEvent({
+      type: 'llm_call',
+      toolExecution: undefined,
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-4-mini',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [assistantContext.id],
+        newContextItemCount: 1,
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [],
+        usage: undefined,
+      },
+      metadata: {},
+      attachments: [],
+    });
+
+    runsHookMocks.summary.mockReturnValue({
+      ...buildSummary(),
+      countsByType: {
+        invocation_message: 0,
+        injection: 0,
+        llm_call: 1,
+        tool_execution: 0,
+        summarization: 0,
+      },
+      countsByStatus: {
+        pending: 0,
+        running: 0,
+        success: 1,
+        error: 0,
+        cancelled: 0,
+      },
+      totalEvents: 1,
+    });
+    runsHookMocks.events.mockReturnValue({ items: [event], nextCursor: null });
+    contextItemsMocks.getMany.mockImplementation(async () => [assistantContext]);
+
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/threads/${event.threadId}/runs/${event.runId}`]}>
+          <Routes>
+            <Route path="/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalledWith([assistantContext.id]));
+
+    let capturedProps: { events: Array<{ data: Record<string, unknown> }> } | undefined;
+    await waitFor(() => {
+      const call = [...runScreenMocks.props.mock.calls]
+        .reverse()
+        .find(([callProps]) => {
+          const events = (callProps as { events?: unknown[] }).events;
+          if (!Array.isArray(events) || events.length === 0) return false;
+          const candidate = events[0] as { data?: { context?: unknown[] } };
+          return Array.isArray(candidate.data?.context) && candidate.data.context.length > 0;
+        });
+      expect(call).toBeDefined();
+      capturedProps = call?.[0] as { events: Array<{ data: Record<string, unknown> }> };
+    });
+
+    if (!capturedProps) {
+      throw new Error('RunScreen props were not captured.');
+    }
+
+    const [capturedEvent] = capturedProps.events;
+    const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
+    expect(context).toHaveLength(1);
+    const assistant = context[0];
+
+    expect(assistant.role).toBe('assistant');
+    expect(assistant['content']).toBeUndefined();
+    expect(assistant['response']).toBeUndefined();
+    expect(assistant['tool_calls']).toEqual([
+      expect.objectContaining({ name: 'lookup_status', arguments: { ticket: 'INC-42' } }),
+    ]);
+    expect(assistant['reasoning']).toEqual({ tokens: 12 });
+  });
+});
+
+describe('extractLlmResponse', () => {
+  const getExtract = () => {
+    const helper = (AgentsRunScreen as AgentsRunScreenWithTesting).__testing__?.extractLlmResponse;
+    if (!helper) {
+      throw new Error('extractLlmResponse helper not available');
+    }
+    return helper;
+  };
+
+  const baseEvent = (overrides: Partial<RunTimelineEvent>): RunTimelineEvent =>
+    ({
+      id: 'event-resp',
+      runId: 'run-1',
+      threadId: 'thread-1',
+      type: 'llm_call',
+      status: 'success',
+      ts: '2024-01-01T00:00:00.000Z',
+      startedAt: null,
+      endedAt: null,
+      durationMs: null,
+      nodeId: null,
+      sourceKind: 'internal',
+      sourceSpanId: null,
+      metadata: {},
+      errorCode: null,
+      errorMessage: null,
+      toolExecution: undefined,
+      summarization: undefined,
+      injection: undefined,
+      message: undefined,
+      attachments: [],
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-test',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [],
+        newContextItemCount: 0,
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [],
+        usage: undefined,
+      },
+      ...overrides,
+    } satisfies RunTimelineEvent);
+
+  it('prefers responseText when present', () => {
+    const event = baseEvent({});
+    if (!event.llmCall) throw new Error('llmCall missing');
+    event.llmCall.responseText = 'Direct response';
+    const extract = getExtract();
+    expect(extract(event)).toBe('Direct response');
+  });
+
+  it('extracts text from rawResponse choices payloads', () => {
+    const event = baseEvent({});
+    if (!event.llmCall) throw new Error('llmCall missing');
+    event.llmCall.rawResponse = {
+      choices: [
+        {
+          message: {
+            content: 'From choices',
+          },
+        },
+      ],
+    };
+
+    const extract = getExtract();
+    expect(extract(event)).toBe('From choices');
+  });
+
+  it('falls back to response attachments when other sources are empty', () => {
+    const event = baseEvent({});
+    event.attachments = [
+      {
+        id: 'att-1',
+        kind: 'response',
+        isGzip: false,
+        sizeBytes: 10,
+        contentJson: { content: 'Attachment response' },
+        contentText: null,
+      },
+    ];
+    const extract = getExtract();
+    expect(extract(event)).toBe('Attachment response');
   });
 });

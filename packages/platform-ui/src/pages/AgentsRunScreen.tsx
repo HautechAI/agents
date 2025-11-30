@@ -320,25 +320,7 @@ function parseContextItemContent(item: ContextItem): {
   if (typeof parsedContent === 'string' && parsedContent.length > 0) stringCandidates.push(parsedContent);
   if (isNonEmptyString(item.contentText)) stringCandidates.push(item.contentText);
 
-  let text: string | null = null;
-  for (const candidate of stringCandidates) {
-    if (typeof candidate === 'string' && candidate.length > 0) {
-      text = candidate;
-      break;
-    }
-  }
-
-  if (text === null && parsedContent !== undefined) {
-    if (typeof parsedContent === 'string') {
-      text = parsedContent;
-    } else {
-      try {
-        text = JSON.stringify(parsedContent, null, 2);
-      } catch (_error) {
-        text = String(parsedContent);
-      }
-    }
-  }
+  const text = stringCandidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0) ?? null;
 
   return { parsed: parsedContent, record, text };
 }
@@ -418,6 +400,115 @@ function extractReasoning(
   return undefined;
 }
 
+function extractTextFromRawResponse(raw: unknown): string | null {
+  const visited = new WeakSet<object>();
+
+  const extract = (value: unknown): string | null => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? value : null;
+    }
+
+    if (Array.isArray(value)) {
+      const parts: string[] = [];
+      for (const item of value) {
+        const text = extract(item);
+        if (typeof text === 'string' && text.length > 0) {
+          parts.push(text);
+        }
+      }
+      if (parts.length > 0) {
+        return parts.join('\n\n');
+      }
+      return null;
+    }
+
+    const record = coerceRecord(value);
+    if (!record) return null;
+    if (visited.has(record)) return null;
+    visited.add(record);
+
+    const directKeys: Array<keyof typeof record> = ['content', 'text', 'output_text', 'outputText'];
+    for (const key of directKeys) {
+      if (key in record) {
+        const text = extract(record[key]);
+        if (typeof text === 'string' && text.length > 0) return text;
+      }
+    }
+
+    if ('message' in record) {
+      const text = extract((record as Record<string, unknown>).message);
+      if (typeof text === 'string' && text.length > 0) return text;
+    }
+
+    if ('messages' in record) {
+      const text = extract((record as Record<string, unknown>).messages);
+      if (typeof text === 'string' && text.length > 0) return text;
+    }
+
+    const arrayKeys: Array<keyof typeof record> = ['choices', 'outputs', 'output', 'responses'];
+    for (const key of arrayKeys) {
+      if (Array.isArray(record[key])) {
+        for (const entry of record[key] as unknown[]) {
+          const text = extract(entry);
+          if (typeof text === 'string' && text.length > 0) return text;
+        }
+      }
+    }
+
+    if ('delta' in record) {
+      const text = extract((record as Record<string, unknown>).delta);
+      if (typeof text === 'string' && text.length > 0) return text;
+    }
+
+    const nestedKeys: Array<keyof typeof record> = ['data', 'body', 'result', 'response', 'value'];
+    for (const key of nestedKeys) {
+      if (key in record) {
+        const text = extract(record[key]);
+        if (typeof text === 'string' && text.length > 0) return text;
+      }
+    }
+
+    return null;
+  };
+
+  return extract(raw);
+}
+
+function extractLlmResponse(event: RunTimelineEvent): string {
+  const llmCall = event.llmCall;
+  if (!llmCall) return '';
+
+  const responseText = llmCall.responseText;
+  if (isNonEmptyString(responseText)) return responseText;
+
+  const rawText = extractTextFromRawResponse(llmCall.rawResponse);
+  if (isNonEmptyString(rawText)) return rawText;
+
+  if (Array.isArray(event.attachments)) {
+    for (const attachment of event.attachments) {
+      if (!attachment || attachment.kind !== 'response') continue;
+
+      const candidates: unknown[] = [];
+      if (attachment.contentText !== undefined && attachment.contentText !== null) {
+        const parsedText = typeof attachment.contentText === 'string' ? parseMaybeJson(attachment.contentText) : attachment.contentText;
+        candidates.push(parsedText);
+      }
+      if (attachment.contentJson !== undefined && attachment.contentJson !== null) {
+        const parsedJson = typeof attachment.contentJson === 'string' ? parseMaybeJson(attachment.contentJson) : attachment.contentJson;
+        candidates.push(parsedJson);
+      }
+
+      for (const candidate of candidates) {
+        const text = extractTextFromRawResponse(candidate);
+        if (isNonEmptyString(text)) return text;
+      }
+    }
+  }
+
+  return '';
+}
+
 function toContextRecord(item: ContextItem, fallbackToolCalls?: readonly LlmToolCall[]): Record<string, unknown> {
   const metadataRecord = normalizeMetadata(item.metadata);
   const metadataAdditionalKwargs = metadataRecord ? coerceRecord(metadataRecord.additional_kwargs) : null;
@@ -433,15 +524,35 @@ function toContextRecord(item: ContextItem, fallbackToolCalls?: readonly LlmTool
   result.timestamp = result.timestamp ?? item.createdAt;
   result.sizeBytes = item.sizeBytes;
   result.contentJson = parsedContent;
-  result.contentText = isNonEmptyString(item.contentText) ? item.contentText : textContent;
   result.metadata = metadataRecord ?? item.metadata;
 
-  if (textContent !== null && textContent !== undefined) {
-    if (result.content === undefined) {
-      result.content = textContent;
+  const normalizedText = typeof textContent === 'string' && textContent.length > 0
+    ? textContent
+    : isNonEmptyString(item.contentText)
+      ? item.contentText
+      : null;
+
+  if (normalizedText !== null) {
+    result.contentText = normalizedText;
+  } else if ('contentText' in result && typeof result.contentText !== 'string') {
+    delete result.contentText;
+  }
+
+  const hasStringContent = typeof normalizedText === 'string' && normalizedText.length > 0;
+
+  if (result.role === 'assistant') {
+    if (hasStringContent) {
+      result.content = normalizedText;
+      if (typeof result.response !== 'string' || result.response.length === 0) {
+        result.response = normalizedText;
+      }
+    } else {
+      if (typeof result.content !== 'string') delete result.content;
+      if (typeof result.response !== 'string') delete result.response;
     }
-    if (result.response === undefined && result.role === 'assistant') {
-      result.response = textContent;
+  } else if (hasStringContent) {
+    if (typeof result.content !== 'string' || result.content.length === 0) {
+      result.content = normalizedText;
     }
   }
 
@@ -577,6 +688,7 @@ function createUiEvent(event: RunTimelineEvent, options?: CreateUiEventOptions):
     const usage = event.llmCall?.usage;
     const fallbackContext = toRecordArray(event.metadata);
     const context = options?.context && options.context.length > 0 ? options.context : fallbackContext;
+    const response = extractLlmResponse(event);
     return {
       id: event.id,
       type: 'llm',
@@ -585,7 +697,7 @@ function createUiEvent(event: RunTimelineEvent, options?: CreateUiEventOptions):
       status,
       data: {
         context,
-        response: event.llmCall?.responseText ?? '',
+        response,
         model: event.llmCall?.model ?? undefined,
         tokens: usage
           ? {
@@ -1427,3 +1539,13 @@ export function AgentsRunScreen() {
     </>
   );
 }
+
+type AgentsRunScreenComponent = typeof AgentsRunScreen & {
+  __testing__?: {
+    extractLlmResponse: typeof extractLlmResponse;
+  };
+};
+
+(AgentsRunScreen as AgentsRunScreenComponent).__testing__ = {
+  extractLlmResponse,
+};

@@ -11,7 +11,8 @@ import { useGraphData } from '@/features/graph/hooks/useGraphData';
 import { useGraphSocket } from '@/features/graph/hooks/useGraphSocket';
 import { useNodeStatus } from '@/features/graph/hooks/useNodeStatus';
 import { useNodeAction } from '@/features/graph/hooks/useNodeAction';
-import { useMcpNodeState } from '@/lib/graph/hooks';
+import { useMcpNodeState, useTemplates } from '@/lib/graph/hooks';
+import { mapTemplatesToSidebarItems } from '@/lib/graph/sidebarNodeItems';
 import type { GraphNodeConfig, GraphNodeStatus, GraphPersistedEdge } from '@/features/graph/types';
 import type { NodeStatus as ApiNodeStatus } from '@/api/types/graph';
 
@@ -207,6 +208,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     applyNodeStatus,
     applyNodeState,
     setEdges,
+    removeNodes,
   } = useGraphData();
 
   const providerDebounceMs = 275;
@@ -433,6 +435,20 @@ export function GraphLayout({ services }: GraphLayoutProps) {
 
   const edgeTypes = useMemo<EdgeTypes>(() => ({ gradient: GradientEdge }), []);
   const fallbackEnabledTools = useMemo<string[]>(() => [], []);
+  const templatesQuery = useTemplates();
+  const sidebarNodeItems = useMemo(() => mapTemplatesToSidebarItems(templatesQuery.data), [templatesQuery.data]);
+  const sidebarStatusMessage = useMemo(() => {
+    if (templatesQuery.isLoading) {
+      return 'Loading templates...';
+    }
+    if (templatesQuery.isError && sidebarNodeItems.length === 0) {
+      return 'Failed to load templates.';
+    }
+    if (!templatesQuery.isLoading && sidebarNodeItems.length === 0) {
+      return 'No templates available.';
+    }
+    return undefined;
+  }, [sidebarNodeItems.length, templatesQuery.isError, templatesQuery.isLoading]);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -607,11 +623,19 @@ export function GraphLayout({ services }: GraphLayoutProps) {
 
   const handleNodesChange = useCallback((changes: Parameters<typeof applyNodeChanges>[0]) => {
     let nextSelectedId = selectedNodeIdRef.current;
+    const removedIds: string[] = [];
     for (const change of changes) {
       if (change.type === 'select' && 'id' in change) {
         if (change.selected) {
           nextSelectedId = change.id;
         } else if (nextSelectedId === change.id) {
+          nextSelectedId = null;
+        }
+      }
+
+      if (change.type === 'remove' && 'id' in change) {
+        removedIds.push(change.id);
+        if (nextSelectedId === change.id) {
           nextSelectedId = null;
         }
       }
@@ -626,6 +650,10 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       setFlowNodes(applied);
     }
 
+    if (removedIds.length > 0) {
+      removeNodes(removedIds);
+    }
+
     for (const change of changes) {
       if (change.type === 'position' && (change.dragging === false || change.dragging === undefined) && 'id' in change) {
         const moved = applied.find((node) => node.id === change.id);
@@ -634,7 +662,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
         updateNodeRef.current(change.id, { x, y });
       }
     }
-  }, []);
+  }, [removeNodes]);
 
   const handleEdgesChange = useCallback((changes: Parameters<typeof applyEdgeChanges>[0]) => {
     const current = flowEdgesRef.current;
@@ -837,7 +865,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           providerDebounceMs={providerDebounceMs}
         />
       ) : (
-        <EmptySelectionSidebar />
+        <EmptySelectionSidebar nodeItems={sidebarNodeItems} statusMessage={sidebarStatusMessage} />
       )}
     </div>
   );
