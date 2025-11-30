@@ -22,6 +22,7 @@ import {
   isRecord,
   mergeWithDefined,
   readEnvList,
+  readNixFlakeRepos,
   readNixPackages,
   readNumber,
   readQueueConfig,
@@ -38,6 +39,7 @@ import type {
   NodeConfig,
   NodePropertiesSidebarProps,
   NodeState,
+  WorkspaceFlakeRepo,
   WorkspaceNixPackage,
 } from './types';
 
@@ -274,6 +276,7 @@ function NodePropertiesSidebar({
   const volumesMountPath =
     typeof volumesConfig.mountPath === 'string' ? (volumesConfig.mountPath as string) : '/workspace';
   const workspaceNixPackages = useMemo(() => readNixPackages(configRecord.nix), [configRecord.nix]);
+  const workspaceFlakeRepos = useMemo(() => readNixFlakeRepos(configRecord.nix), [configRecord.nix]);
 
   const setVersionLoading = useCallback((name: string, loading: boolean) => {
     setNixVersionLoading((prev) => {
@@ -496,14 +499,20 @@ function NodePropertiesSidebar({
       }
       const nextPackages: WorkspaceNixPackage[] = [
         ...workspaceNixPackages,
-        { name: option.value, version: '', commitHash: '', attributePath: '' },
+        {
+          kind: 'nixpkgs',
+          name: option.value,
+          version: '',
+          commitHash: '',
+          attributePath: '',
+        },
       ];
-      onConfigChange?.(applyNixUpdate(config, nextPackages));
+      onConfigChange?.(applyNixUpdate(config, nextPackages, workspaceFlakeRepos));
       setNixErrors((prev) => ({ ...prev, [option.value]: null }));
       setNixPackageQuery('');
       await loadPackageVersions(option.value);
     },
-    [workspaceNixPackages, onConfigChange, config, loadPackageVersions],
+    [workspaceNixPackages, workspaceFlakeRepos, onConfigChange, config, loadPackageVersions],
   );
 
   const handleNixRemove = useCallback(
@@ -511,10 +520,10 @@ function NodePropertiesSidebar({
       const pkg = workspaceNixPackages[index];
       if (!pkg) return;
       const next = workspaceNixPackages.filter((_, idx) => idx !== index);
-      onConfigChange?.(applyNixUpdate(config, next));
+      onConfigChange?.(applyNixUpdate(config, next, workspaceFlakeRepos));
       clearPackageState(pkg.name);
     },
-    [workspaceNixPackages, onConfigChange, config, clearPackageState],
+    [workspaceNixPackages, workspaceFlakeRepos, onConfigChange, config, clearPackageState],
   );
 
   const handleNixVersionChange = useCallback(
@@ -524,7 +533,7 @@ function NodePropertiesSidebar({
       const staged = workspaceNixPackages.map((entry, idx) =>
         idx === index ? { ...entry, version: value, commitHash: '', attributePath: '' } : entry,
       );
-      onConfigChange?.(applyNixUpdate(config, staged));
+      onConfigChange?.(applyNixUpdate(config, staged, workspaceFlakeRepos));
 
       if (!resolveNixPackageSelection) {
         return;
@@ -537,21 +546,28 @@ function NodePropertiesSidebar({
         const nextResolved = staged.map((entry, idx) =>
           idx === index
             ? {
-                name: entry.name,
+                ...entry,
                 version: resolved.version,
                 commitHash: resolved.commitHash,
                 attributePath: resolved.attributePath,
               }
             : entry,
         );
-        onConfigChange?.(applyNixUpdate(config, nextResolved));
+        onConfigChange?.(applyNixUpdate(config, nextResolved, workspaceFlakeRepos));
       } catch {
         setNixErrors((prev) => ({ ...prev, [pkg.name]: 'Failed to resolve package' }));
       } finally {
         setPackageResolving(pkg.name, false);
       }
     },
-    [workspaceNixPackages, onConfigChange, config, resolveNixPackageSelection, setPackageResolving],
+    [workspaceNixPackages, workspaceFlakeRepos, onConfigChange, config, resolveNixPackageSelection, setPackageResolving],
+  );
+
+  const handleRepoPackagesChange = useCallback(
+    (nextRepos: WorkspaceFlakeRepo[]) => {
+      onConfigChange?.(applyNixUpdate(config, workspaceNixPackages, nextRepos));
+    },
+    [config, onConfigChange, workspaceNixPackages],
   );
 
   const handleRestartChange = useCallback(
@@ -899,6 +915,7 @@ function NodePropertiesSidebar({
                 onQueryChange: setNixPackageQuery,
                 fetchOptions: fetchNixPackageOptions,
                 packages: workspaceNixPackages,
+                repoEntries: workspaceFlakeRepos,
                 versionOptions: nixVersionOptions,
                 versionLoading: nixVersionLoading,
                 resolutionLoading: nixResolutionLoading,
@@ -906,6 +923,7 @@ function NodePropertiesSidebar({
                 onSelectOption: handleNixSelect,
                 onRemove: handleNixRemove,
                 onVersionChange: handleNixVersionChange,
+                onRepoEntriesChange: handleRepoPackagesChange,
               }}
               nixOpen={nixPackagesOpen}
               onNixOpenChange={setNixPackagesOpen}
