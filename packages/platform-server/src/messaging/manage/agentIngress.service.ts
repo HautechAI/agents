@@ -1,6 +1,7 @@
 import { HumanMessage } from '@agyn/llm';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
+import type { AgentsPersistenceService } from '../../agents/agents.persistence.service';
+import { AGENTS_PERSISTENCE_READER } from '../../agents/tokens';
 import { LiveGraphRuntime } from '../../graph-core/liveGraph.manager';
 import { AgentNode } from '../../nodes/agent/agent.node';
 import type { SendResult } from '../types';
@@ -20,7 +21,8 @@ export class AgentIngressService {
   private readonly logger = new Logger(AgentIngressService.name);
 
   constructor(
-    @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
+    @Inject(AGENTS_PERSISTENCE_READER)
+    private readonly persistence: Pick<AgentsPersistenceService, 'getThreadAgentNodeId'>,
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
   ) {}
 

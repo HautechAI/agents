@@ -1,6 +1,7 @@
 import { forwardRef, Inject, Injectable, Module, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CoreModule } from '../core/core.module';
+import { AgentsPersistenceService } from '../agents/agents.persistence.service';
 import { EnvModule } from '../env/env.module';
 import { EventsModule } from '../events/events.module';
 import { InfraModule } from '../infra/infra.module';
@@ -35,6 +36,7 @@ import { EnvService } from '../env/env.service';
 import { GraphCoreModule } from '../graph-core/graph-core.module';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
 import { registerDefaultTemplates } from '../templates';
+import { AGENTS_PERSISTENCE_READER, AGENTS_PERSISTENCE_WRITER } from '../agents/tokens';
 
 @Injectable()
 class NodesTemplateRegistrar implements OnModuleInit {
@@ -73,6 +75,16 @@ class NodesTemplateRegistrar implements OnModuleInit {
     GithubCloneRepoNode,
     RemindMeNode,
     NodesTemplateRegistrar,
+    {
+      provide: AGENTS_PERSISTENCE_READER,
+      useFactory: (persistence: AgentsPersistenceService) => persistence,
+      inject: [AgentsPersistenceService],
+    },
+    {
+      provide: AGENTS_PERSISTENCE_WRITER,
+      useFactory: (persistence: AgentsPersistenceService) => persistence,
+      inject: [AgentsPersistenceService],
+    },
     {
       provide: WorkspaceNode,
       useFactory: (

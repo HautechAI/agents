@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
+import type { AgentsPersistenceService } from '../../agents/agents.persistence.service';
+import { AGENTS_PERSISTENCE_READER } from '../../agents/tokens';
 import { PrismaService } from '../../core/services/prisma.service';
 import {
   ManageChannelDescriptorSchema,
@@ -35,8 +36,9 @@ export class ManageAdapter {
   private readonly logger = new Logger(ManageAdapter.name);
 
   constructor(
-    @Inject(PrismaService) private readonly prismaService: PrismaService,
-    @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AGENTS_PERSISTENCE_READER)
+    private readonly persistence: Pick<AgentsPersistenceService, 'getThreadAgentTitle' | 'getThreadAgentNodeId'>,
   ) {}
 
   private format(context?: Record<string, unknown>): string {
@@ -58,7 +60,7 @@ export class ManageAdapter {
     }
 
     try {
-      const prisma = this.prismaService.getClient();
+      const prisma = this.prisma.getClient();
       const thread = await prisma.thread.findUnique({
         where: { id: childThreadId },
         select: { parentId: true, alias: true, channel: true },

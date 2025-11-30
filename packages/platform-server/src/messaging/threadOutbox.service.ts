@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { AgentsPersistenceService } from '../agents/agents.persistence.service';
+import type { AgentsPersistenceService } from '../agents/agents.persistence.service';
+import { AGENTS_PERSISTENCE_WRITER } from '../agents/tokens';
 import { ChannelRouter } from './channelRouter.service';
 import type { SendResult, ThreadOutboxSendRequest } from './types';
 
@@ -8,7 +9,8 @@ export class ThreadOutboxService {
   private readonly logger = new Logger(ThreadOutboxService.name);
 
   constructor(
-    @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
+    @Inject(AGENTS_PERSISTENCE_WRITER)
+    private readonly persistence: Pick<AgentsPersistenceService, 'recordOutboxMessage'>,
     @Inject(ChannelRouter) private readonly channelRouter: ChannelRouter,
   ) {}
 
