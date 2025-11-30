@@ -309,8 +309,9 @@ export const DraftModePreview: Story = {
     selectedThreadId: defaultDraftThread.id,
     selectedThread: defaultDraftThread,
     draftMode: true,
-    draftRecipientId: null,
-    draftRecipientLabel: null,
+    draftRecipientId: defaultDraftRecipients[0].id,
+    draftRecipientLabel: defaultDraftRecipients[0].title,
+    inputValue: 'Draft message preview',
   },
   render: ControlledRender,
   parameters: {

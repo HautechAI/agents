@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -662,7 +662,7 @@ describe('AgentsThreads page', () => {
         expect(searchInput).toHaveValue('Agent Cirrus');
       });
     });
-    it('shows guidance message without composer controls in draft mode', async () => {
+    it('shows draft composer and enforces send button state', async () => {
       const user = userEvent.setup();
       const thread = makeThread();
       registerThreadScenario({ thread, runs: [] });
@@ -673,8 +673,37 @@ describe('AgentsThreads page', () => {
       await user.click(await screen.findByRole('button', { name: 'New thread' }));
 
       expect(screen.getByText(/Start your new conversation with the agent/i)).toBeInTheDocument();
-      expect(screen.queryByPlaceholderText('Type a message...')).not.toBeInTheDocument();
-      expect(screen.queryByTitle('Send message')).not.toBeInTheDocument();
+
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      const textarea = await screen.findByPlaceholderText('Type a message...');
+      const sendButton = screen.getByTitle('Send message');
+
+      expect(sendButton).toBeDisabled();
+
+      await user.click(searchInput);
+      const option = await screen.findByRole('button', { name: 'Agent Nimbus' });
+      await user.click(option);
+
+      await waitFor(() => {
+        expect(searchInput).toHaveValue('Agent Nimbus');
+      });
+
+      expect(sendButton).toBeDisabled();
+
+      await user.type(textarea, 'Hello draft');
+      await waitFor(() => {
+        expect(sendButton).toBeEnabled();
+      });
+
+      fireEvent.change(textarea, { target: { value: 'a'.repeat(8001) } });
+      await waitFor(() => {
+        expect(sendButton).toBeDisabled();
+      });
+
+      fireEvent.change(textarea, { target: { value: 'Ready to send' } });
+      await waitFor(() => {
+        expect(sendButton).toBeEnabled();
+      });
     });
 
     it('does not fetch thread or run data when a draft is selected', async () => {

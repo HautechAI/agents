@@ -12,6 +12,8 @@ import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { StatusIndicator } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
 
+const THREAD_MESSAGE_MAX_LENGTH = 8000;
+
 interface ThreadsScreenProps {
   threads: Thread[];
   runs: Run[];
@@ -169,6 +171,34 @@ export default function ThreadsScreen({
     );
   };
 
+  const renderComposer = (sendDisabled: boolean) => (
+    <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] p-4">
+      <div className="relative">
+        <AutosizeTextarea
+          placeholder="Type a message..."
+          value={inputValue}
+          onChange={(event) => onInputValueChange?.(event.target.value)}
+          size="sm"
+          minLines={1}
+          maxLines={8}
+          className="pr-12"
+        />
+        <div className="absolute bottom-[11px] right-[5px]">
+          <IconButton
+            icon={<Send className="h-4 w-4" />}
+            variant="primary"
+            size="sm"
+            onClick={() => onSendMessage?.(inputValue, { threadId: selectedThreadId })}
+            disabled={sendDisabled}
+            title="Send message"
+            aria-label="Send message"
+            aria-busy={isSendMessagePending || undefined}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   const renderDetailContent = () => {
     if (detailError) {
       return (
@@ -188,6 +218,14 @@ export default function ThreadsScreen({
     }
 
     if (draftMode) {
+      const trimmedInputValue = inputValue.trim();
+      const hasRecipient = Boolean(draftRecipientId);
+      const hasMessage = trimmedInputValue.length > 0;
+      const withinLengthLimit = inputValue.length <= THREAD_MESSAGE_MAX_LENGTH;
+      const baseDisabled = !onSendMessage || !selectedThreadId || isSendMessagePending;
+      const draftSendDisabled =
+        baseDisabled || !hasRecipient || !hasMessage || !withinLengthLimit;
+
       return (
         <>
           <div className="border-b border-[var(--agyn-border-subtle)] bg-white p-4">
@@ -215,6 +253,7 @@ export default function ThreadsScreen({
           <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-[var(--agyn-gray)]">
             Start your new conversation with the agent
           </div>
+          {renderComposer(draftSendDisabled)}
         </>
       );
     }
@@ -392,31 +431,7 @@ export default function ThreadsScreen({
           <Conversation runs={runs} className="h-full rounded-none border-none" collapsed={isRunsInfoCollapsed} />
         </div>
 
-        <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] p-4">
-          <div className="relative">
-            <AutosizeTextarea
-              placeholder="Type a message..."
-              value={inputValue}
-              onChange={(event) => onInputValueChange?.(event.target.value)}
-              size="sm"
-              minLines={1}
-              maxLines={8}
-              className="pr-12"
-            />
-            <div className="absolute bottom-[11px] right-[5px]">
-              <IconButton
-                icon={<Send className="h-4 w-4" />}
-                variant="primary"
-                size="sm"
-                onClick={() => onSendMessage?.(inputValue, { threadId: selectedThreadId })}
-                disabled={!onSendMessage || !selectedThreadId || isSendMessagePending}
-                title="Send message"
-                aria-label="Send message"
-                aria-busy={isSendMessagePending || undefined}
-              />
-            </div>
-          </div>
-        </div>
+        {renderComposer(!onSendMessage || !selectedThreadId || isSendMessagePending)}
       </>
     );
   };
