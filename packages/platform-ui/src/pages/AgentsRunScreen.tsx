@@ -103,6 +103,15 @@ function matchesFilters(event: RunTimelineEvent, types: RunEventType[], statuses
   return includeType && includeStatus;
 }
 
+function areEventListsEqual(a: RunTimelineEvent[], b: RunTimelineEvent[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 function buildCursorAttemptModes(preferred: 'both' | 'plain' | 'bracketed'): Array<'both' | 'plain' | 'bracketed'> {
   if (preferred === 'both') return ['both', 'plain'];
   const fallback = preferred === 'plain' ? 'bracketed' : 'plain';
@@ -403,6 +412,7 @@ export function AgentsRunScreen() {
   const [tokensPopoverOpen, setTokensPopoverOpen] = useState(false);
   const [runsPopoverOpen, setRunsPopoverOpen] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
+  const [allEvents, setAllEvents] = useState<RunTimelineEvent[]>([]);
   const [events, setEvents] = useState<RunTimelineEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<RunTimelineEventsCursor | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -547,30 +557,19 @@ export function AgentsRunScreen() {
     [runId],
   );
 
-  const updateEventsState = useCallback(
-    (incoming: RunTimelineEvent[]) => {
-      setEvents((prev) => {
-        const map = new Map<string, RunTimelineEvent>();
-        for (const event of prev) {
-          if (matchesFilters(event, selectedTypes, selectedStatuses)) {
-            map.set(event.id, event);
-          }
-        }
-        for (const event of incoming) {
-          if (matchesFilters(event, selectedTypes, selectedStatuses)) {
-            map.set(event.id, event);
-          } else {
-            map.delete(event.id);
-          }
-        }
-        const next = sortEvents(Array.from(map.values()));
-        const latest = next[next.length - 1];
-        if (latest) updateCursor(toCursor(latest));
-        return next;
-      });
-    },
-    [selectedTypes, selectedStatuses, updateCursor],
-  );
+  const updateEventsState = useCallback((incoming: RunTimelineEvent[]) => {
+    if (incoming.length === 0) return;
+    setAllEvents((prev) => {
+      const map = new Map<string, RunTimelineEvent>();
+      for (const event of prev) {
+        map.set(event.id, event);
+      }
+      for (const event of incoming) {
+        map.set(event.id, event);
+      }
+      return sortEvents(Array.from(map.values()));
+    });
+  }, []);
 
   const updateOlderCursor = useCallback(
     (
@@ -587,6 +586,14 @@ export function AgentsRunScreen() {
   );
 
   useEffect(() => {
+    setEvents((prev) => {
+      const next = allEvents.filter((event) => matchesFilters(event, selectedTypes, selectedStatuses));
+      if (areEventListsEqual(prev, next)) return prev;
+      return next;
+    });
+  }, [allEvents, selectedTypes, selectedStatuses]);
+
+  useEffect(() => {
     const currentFilterKey = JSON.stringify([eventFilters, statusFilters]);
     const previousRunId = lastRunIdRef.current;
     const previousFilterKey = lastFilterKeyRef.current;
@@ -595,6 +602,7 @@ export function AgentsRunScreen() {
     lastFilterKeyRef.current = currentFilterKey;
 
     if (!runId) {
+      setAllEvents([]);
       setEvents([]);
       cursorRef.current = null;
       return;
@@ -608,6 +616,7 @@ export function AgentsRunScreen() {
       setLoadingOlder(false);
       loadingOlderRef.current = false;
       catchUpRef.current = null;
+      setAllEvents([]);
       setEvents([]);
       cursorRef.current = null;
       updateOlderCursor(null);
@@ -623,7 +632,6 @@ export function AgentsRunScreen() {
       catchUpRef.current = null;
       updateCursor(null, { force: true });
       updateOlderCursor(null);
-      setEvents((prev) => prev.filter((event) => matchesFilters(event, selectedTypes, selectedStatuses)));
     }
   }, [runId, eventFilters, statusFilters, updateCursor, updateOlderCursor, selectedTypes, selectedStatuses]);
 
@@ -635,13 +643,12 @@ export function AgentsRunScreen() {
 
     setLoadOlderError(null);
     if (replaceEventsRef.current) {
+      setAllEvents([]);
       setEvents([]);
       replaceEventsRef.current = false;
     }
     if (incoming.length > 0) {
       updateEventsState(incoming);
-    } else if (!events.length) {
-      updateEventsState([]);
     }
     if (newestIncoming) {
       updateCursor(toCursor(newestIncoming), { force: true });
@@ -658,7 +665,7 @@ export function AgentsRunScreen() {
         return compareCursors(queryCursor, prev) < 0 ? queryCursor : prev;
       });
     }
-  }, [eventsQuery.data, updateEventsState, updateCursor, updateOlderCursor, events.length]);
+  }, [eventsQuery.data, updateEventsState, updateCursor, updateOlderCursor]);
 
   const fetchSinceCursor = useCallback(() => {
     if (!runId) return Promise.resolve();
@@ -977,13 +984,13 @@ export function AgentsRunScreen() {
     };
   }, [runSummary]);
 
-  const tokenTotals = useMemo(() => aggregateTokens(events), [events]);
+  const tokenTotals = useMemo(() => aggregateTokens(allEvents), [allEvents]);
 
   const uiEvents = useMemo<UiRunEvent[]>(() => events.map((event) => createUiEvent(event)), [events]);
 
   const isLoading = eventsQuery.isLoading || summaryQuery.isLoading;
   const hasMoreEvents = Boolean(nextCursor);
-  const isEmpty = !events.length && !isLoading;
+  const isEmpty = allEvents.length === 0 && !isLoading;
 
   const primaryError = (eventsQuery.error as Error | undefined) ?? (summaryQuery.error as Error | undefined);
   const errorMessage = primaryError?.message ?? loadOlderError ?? undefined;
