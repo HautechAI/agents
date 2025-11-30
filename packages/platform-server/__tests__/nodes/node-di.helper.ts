@@ -13,6 +13,7 @@ import { PrismaService } from '../../src/core/services/prisma.service';
 import { EventsBusService } from '../../src/events/events-bus.service';
 import { RunEventsService } from '../../src/events/run-events.service';
 import { LiveGraphRuntime } from '../../src/graph-core/liveGraph.manager';
+import { TemplateRegistry } from '../../src/graph-core/templateRegistry';
 import { EnvService } from '../../src/env/env.service';
 import { ArchiveService } from '../../src/infra/archive/archive.service';
 import { ContainerService } from '../../src/infra/container/container.service';
@@ -89,6 +90,7 @@ const DEFAULT_TOKEN_FACTORIES = new Map<InjectionToken, () => unknown>([
   [SlackAdapter, () => createDefaultStub('SlackAdapter')],
   [CallAgentLinkingService, () => createDefaultStub('CallAgentLinkingService')],
   [LiveGraphRuntime, () => createDefaultStub('LiveGraphRuntime')],
+  [TemplateRegistry, () => createDefaultStub('TemplateRegistry', { getMeta: vi.fn(() => undefined) })],
   [
     ManageFunctionTool,
     () =>

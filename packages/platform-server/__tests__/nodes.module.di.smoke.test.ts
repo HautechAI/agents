@@ -33,6 +33,7 @@ const vaultServiceStub = makeStub({
 const persistenceStub = makeStub({
   getOrCreateThreadByAlias: vi.fn().mockResolvedValue('thread-123'),
   updateThreadChannelDescriptor: vi.fn().mockResolvedValue(undefined),
+  ensureAssignedAgent: vi.fn().mockResolvedValue(undefined),
 });
 
 const prismaClientStub = makeStub({
@@ -56,6 +57,15 @@ const eventsBusStub = makeStub({
   emitReminderCount: vi.fn(),
 });
 
+const runtimeStub = makeStub({
+  getOutboundNodeIds: vi.fn(() => []),
+  getNodes: vi.fn(() => []),
+});
+
+const templateRegistryStub = makeStub({
+  getMeta: vi.fn(() => undefined),
+});
+
 if (!shouldRunDbTests) {
   describe.skip('NodesModule DI smoke test', () => {
     it('skipped because RUN_DB_TESTS is not true', () => {
@@ -70,6 +80,8 @@ if (!shouldRunDbTests) {
         persistenceStub as unknown as AgentsPersistenceService,
         prismaStub as unknown as PrismaService,
         slackAdapterStub as unknown as SlackAdapter,
+        runtimeStub as unknown as import('../src/graph-core/liveGraph.manager').LiveGraphRuntime,
+        templateRegistryStub as unknown as import('../src/graph-core/templateRegistry').TemplateRegistry,
       );
       expect(slackTrigger).toBeInstanceOf(SlackTrigger);
 

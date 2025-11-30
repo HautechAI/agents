@@ -5,6 +5,8 @@ import { AgentsPersistenceService } from '../src/agents/agents.persistence.servi
 import { RunSignalsRegistry } from '../src/agents/run-signals.service';
 import { ThreadCleanupCoordinator } from '../src/agents/threadCleanup.coordinator';
 import { RunEventsService } from '../src/events/run-events.service';
+import { LiveGraphRuntime } from '../src/graph-core/liveGraph.manager';
+import { TemplateRegistry } from '../src/graph-core/templateRegistry';
 
 const runEventsStub = {
   getRunSummary: async () => ({
@@ -51,6 +53,8 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
         },
         { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: closeCascade } },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 
@@ -86,6 +90,8 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
         { provide: RunEventsService, useValue: runEventsStub },
         { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: closeCascade } },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 
@@ -115,6 +121,8 @@ describe('AgentsThreadsController PATCH threads/:id', () => {
         { provide: RunEventsService, useValue: runEventsStub },
         { provide: ThreadCleanupCoordinator, useValue: { closeThreadWithCascade: closeCascade } },
         { provide: RunSignalsRegistry, useValue: { register: vi.fn(), activateTerminate: vi.fn(), clear: vi.fn() } },
+        { provide: LiveGraphRuntime, useValue: { getNodes: vi.fn(() => []) } },
+        { provide: TemplateRegistry, useValue: { getMeta: vi.fn(() => undefined) } satisfies Pick<TemplateRegistry, 'getMeta'> },
       ],
     }).compile();
 

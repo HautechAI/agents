@@ -199,6 +199,63 @@ describe('AgentsThreads page', () => {
     ).toBeInTheDocument();
   });
 
+  it('sends a message and clears the composer input', async () => {
+    const thread = makeThread();
+    registerThreadScenario({ thread, runs: [], children: [] });
+
+    const requests: Array<{ params: Record<string, string>; body: unknown }> = [];
+    const pendingResolvers: Array<() => void> = [];
+    const holdResponse = () =>
+      new Promise<void>((resolve) => {
+        pendingResolvers.push(resolve);
+      });
+    server.use(
+      http.post('*/api/agents/threads/:threadId/messages', async ({ params, request }) => {
+        const json = await request.json();
+        requests.push({ params: params as Record<string, string>, body: json });
+        await holdResponse();
+        return HttpResponse.json({ ok: true });
+      }),
+      http.post(abs('/api/agents/threads/:threadId/messages'), async ({ params, request }) => {
+        const json = await request.json();
+        requests.push({ params: params as Record<string, string>, body: json });
+        await holdResponse();
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+
+    renderAt(`/agents/threads/${thread.id}`);
+
+    const input = await screen.findByPlaceholderText('Type a message...');
+    await userEvent.clear(input);
+    await userEvent.type(input, '  hello agent  ');
+
+    const sendButton = screen.getByRole('button', { name: 'Send message' });
+    await userEvent.click(sendButton);
+
+    await waitFor(() => {
+      expect(sendButton).toBeDisabled();
+    });
+
+    await waitFor(() => {
+      expect(pendingResolvers.length).toBeGreaterThan(0);
+    });
+
+    pendingResolvers.splice(0).forEach((resolve) => resolve());
+
+    await waitFor(() => {
+      expect(requests.length).toBeGreaterThan(0);
+    });
+    const first = requests[0];
+    expect(first.params.threadId).toBe(thread.id);
+    expect(first.body).toEqual({ text: 'hello agent' });
+
+    await waitFor(() => {
+      expect(input).toHaveValue('');
+      expect(sendButton).not.toBeDisabled();
+    });
+  });
+
   it('shows Running when any run is active', async () => {
     const thread = makeThread();
     const runs = [
