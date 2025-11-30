@@ -116,11 +116,26 @@ export function ConversationsHost({
   const cacheRef = useRef(cache);
   const conversationRefs = useRef<Map<string, ConversationHandle>>(new Map());
   const pendingRestoresRef = useRef<Map<string, ConversationScrollState>>(new Map());
+  const restoreFrameRefs = useRef<Map<string, number>>(new Map());
   const previousActiveRef = useRef<string>(activeThreadId);
 
   useEffect(() => {
     cacheRef.current = cache;
   }, [cache]);
+
+  useEffect(() => {
+    const frameMap = restoreFrameRefs.current;
+    const pendingMap = pendingRestoresRef.current;
+    const handleMap = conversationRefs.current;
+    return () => {
+      for (const frameId of frameMap.values()) {
+        cancelAnimationFrame(frameId);
+      }
+      frameMap.clear();
+      pendingMap.clear();
+      handleMap.clear();
+    };
+  }, []);
 
   useEffect(() => {
     setCache((prev) => {
@@ -148,6 +163,11 @@ export function ConversationsHost({
         for (const id of removed) {
           pendingRestoresRef.current.delete(id);
           conversationRefs.current.delete(id);
+          const frameId = restoreFrameRefs.current.get(id);
+          if (typeof frameId === 'number') {
+            cancelAnimationFrame(frameId);
+            restoreFrameRefs.current.delete(id);
+          }
         }
         return { order: trimmed, entries: trimmedEntries };
       }
@@ -181,14 +201,44 @@ export function ConversationsHost({
     [storeScrollState],
   );
 
-  const requestRestore = useCallback((threadId: string, state: ConversationScrollState) => {
-    const handle = conversationRefs.current.get(threadId);
-    if (handle) {
-      handle.restoreScrollState(state);
-      return;
+  const scheduleRestoreFrame = useCallback((threadId: string, state: ConversationScrollState) => {
+    const frames = restoreFrameRefs.current;
+    const pending = pendingRestoresRef.current;
+    pending.set(threadId, state);
+    const previousFrame = frames.get(threadId);
+    if (typeof previousFrame === 'number') {
+      cancelAnimationFrame(previousFrame);
     }
-    pendingRestoresRef.current.set(threadId, state);
+
+    const frameId = requestAnimationFrame(() => {
+      frames.delete(threadId);
+      const pendingState = pending.get(threadId);
+      if (!pendingState) {
+        return;
+      }
+      const handle = conversationRefs.current.get(threadId);
+      if (!handle) {
+        return;
+      }
+      pending.delete(threadId);
+      handle.restoreScrollState(pendingState);
+    });
+
+    frames.set(threadId, frameId);
   }, []);
+
+  const requestRestore = useCallback(
+    (threadId: string, state: ConversationScrollState | null | undefined) => {
+      if (!state) return;
+      const handle = conversationRefs.current.get(threadId);
+      if (handle) {
+        scheduleRestoreFrame(threadId, state);
+        return;
+      }
+      pendingRestoresRef.current.set(threadId, state);
+    },
+    [scheduleRestoreFrame],
+  );
 
   useEffect(() => {
     const previousId = previousActiveRef.current;
@@ -226,11 +276,15 @@ export function ConversationsHost({
             conversationRefs.current.set(threadId, handle);
             const pending = pendingRestoresRef.current.get(threadId);
             if (pending) {
-              handle.restoreScrollState(pending);
-              pendingRestoresRef.current.delete(threadId);
+              scheduleRestoreFrame(threadId, pending);
             }
           } else {
             conversationRefs.current.delete(threadId);
+            const frameId = restoreFrameRefs.current.get(threadId);
+            if (typeof frameId === 'number') {
+              cancelAnimationFrame(frameId);
+              restoreFrameRefs.current.delete(threadId);
+            }
           }
         };
 

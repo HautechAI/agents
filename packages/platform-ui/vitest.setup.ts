@@ -10,6 +10,16 @@ import {
   Response as UndiciResponse,
 } from 'undici';
 
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const originalConsoleError = console.error;
+console.error = (...args: unknown[]) => {
+  if (typeof args[0] === 'string' && args[0].includes('act(...')) {
+    return;
+  }
+  originalConsoleError(...args);
+};
+
 const rafTimers = new Map<number, ReturnType<typeof setTimeout>>();
 let rafHandleSeed = 1;
 

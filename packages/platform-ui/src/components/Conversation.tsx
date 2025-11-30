@@ -351,21 +351,29 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
       return false;
     }
 
-    const hasIndex = isFiniteNumber(state.index);
-    const hasScrollTop = isFiniteNumber(state.scrollTop);
-    const hasOffset = isFiniteNumber(state.offset) && hasIndex;
+    const idx = state?.index;
+    const top = state?.scrollTop;
+    const offset = state?.offset;
+    const wasAtBottom = state?.atBottom === true;
 
-    if (hasIndex) {
-      const raw = Math.floor(state.index as number);
-      const clampedIndex = Math.max(0, Math.min(itemsLength - 1, raw));
-      const offsetValue = hasOffset ? (state.offset as number) : 0;
-      handle.scrollToIndex({ index: clampedIndex, align: 'start', offset: offsetValue, behavior: 'auto' });
-      if (hasScrollTop) {
-        handle.scrollTo({ top: state.scrollTop as number, behavior: 'auto' });
+    if (Number.isFinite(idx) && itemsLength > 0) {
+      const rawIndex = Math.floor(idx as number);
+      const clampedIndex = Math.max(0, Math.min(itemsLength - 1, rawIndex));
+      const location: { index: number; align: 'start'; behavior: 'auto'; offset?: number } = {
+        index: clampedIndex,
+        align: 'start',
+        behavior: 'auto',
+      };
+      if (Number.isFinite(offset)) {
+        location.offset = offset as number;
       }
-    } else if (hasScrollTop) {
-      handle.scrollTo({ top: state.scrollTop as number, behavior: 'auto' });
-    } else if (state.atBottom && itemsLength > 0) {
+      handle.scrollToIndex(location);
+      if (Number.isFinite(top)) {
+        handle.scrollTo({ top: top as number, behavior: 'auto' });
+      }
+    } else if (Number.isFinite(top)) {
+      handle.scrollTo({ top: top as number, behavior: 'auto' });
+    } else if (wasAtBottom && itemsLength > 0) {
       handle.scrollToIndex({ index: itemsLength - 1, align: 'end', behavior: 'auto' });
     }
 

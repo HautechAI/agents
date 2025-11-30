@@ -456,4 +456,5 @@ describe('Conversation scroll restoration', () => {
     expect(matchingCall).toBeDefined();
     expect(instance.scrollTo).not.toHaveBeenCalled();
   });
+
 });

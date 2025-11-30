@@ -590,6 +590,9 @@ export function AgentsThreads() {
     queryKey: threadsQueryKey,
     queryFn: () => threads.roots(filterMode, threadLimit),
     placeholderData: (previousData) => previousData,
+    staleTime: 15000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const rootNodes = useMemo<ThreadNode[]>(() => {

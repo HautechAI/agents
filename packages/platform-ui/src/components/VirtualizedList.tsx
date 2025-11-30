@@ -336,23 +336,39 @@ function VirtualizedListInner<T>(
       }
       const instance = virtuosoRef.current;
       if (!instance) return;
-      if (isFiniteNumber(position.index) && items.length > 0) {
-        const raw = Math.floor(position.index as number);
-        const clampedIndex = Math.max(0, Math.min(items.length - 1, raw));
+
+      const idx = position?.index;
+      const top = position?.scrollTop;
+      const offset = position?.offset;
+      const wasAtBottom = position?.atBottom === true;
+      const itemsLength = items.length;
+
+      if (Number.isFinite(idx) && itemsLength > 0) {
+        const raw = Math.floor(idx as number);
+        const clampedIndex = Math.max(0, Math.min(itemsLength - 1, raw));
         const absoluteIndex = firstItemIndex + clampedIndex;
-        const offsetValue = isFiniteNumber(position.offset) ? (position.offset as number) : 0;
-        instance.scrollToIndex({ index: absoluteIndex, align: 'start', offset: offsetValue, behavior: 'auto' });
-        if (isFiniteNumber(position.scrollTop)) {
-          instance.scrollTo({ top: position.scrollTop as number, behavior: 'auto' });
+        const location: { index: number; align: 'start'; behavior: 'auto'; offset?: number } = {
+          index: absoluteIndex,
+          align: 'start',
+          behavior: 'auto',
+        };
+        if (Number.isFinite(offset)) {
+          location.offset = offset as number;
+        }
+        instance.scrollToIndex(location);
+        if (Number.isFinite(top)) {
+          instance.scrollTo({ top: top as number, behavior: 'auto' });
         }
         return;
       }
-      if (isFiniteNumber(position.scrollTop)) {
-        instance.scrollTo({ top: position.scrollTop as number, behavior: 'auto' });
+
+      if (Number.isFinite(top)) {
+        instance.scrollTo({ top: top as number, behavior: 'auto' });
         return;
       }
-      if (position.atBottom && items.length > 0) {
-        instance.scrollToIndex({ index: firstItemIndex + items.length - 1, align: 'end', behavior: 'auto' });
+
+      if (wasAtBottom && itemsLength > 0) {
+        instance.scrollToIndex({ index: firstItemIndex + itemsLength - 1, align: 'end', behavior: 'auto' });
       }
     },
     [firstItemIndex, forceStatic, items.length, restoreStaticPosition],
