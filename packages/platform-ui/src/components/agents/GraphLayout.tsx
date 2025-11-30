@@ -1,18 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addEdge, applyEdgeChanges, applyNodeChanges, type Edge, type EdgeTypes, type Node } from '@xyflow/react';
+import {
+  addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Edge,
+  type EdgeTypes,
+  type Node,
+  type OnNodesDelete,
+} from '@xyflow/react';
 
-import { GraphCanvas, type GraphNodeData } from '../GraphCanvas';
+import { GraphCanvas, type GraphCanvasDropHandler, type GraphNodeData } from '../GraphCanvas';
 import { GradientEdge } from './edges/GradientEdge';
 import EmptySelectionSidebar from '../EmptySelectionSidebar';
 import NodePropertiesSidebar, { type NodeConfig as SidebarNodeConfig } from '../NodePropertiesSidebar';
+import { computeAgentDefaultTitle } from '../../utils/agentDisplay';
 
 import { useGraphData } from '@/features/graph/hooks/useGraphData';
 import { useGraphSocket } from '@/features/graph/hooks/useGraphSocket';
 import { useNodeStatus } from '@/features/graph/hooks/useNodeStatus';
 import { useNodeAction } from '@/features/graph/hooks/useNodeAction';
-import { useMcpNodeState } from '@/lib/graph/hooks';
+import { useMcpNodeState, useTemplates } from '@/lib/graph/hooks';
+import { mapTemplatesToSidebarItems } from '@/lib/graph/sidebarNodeItems';
+import { buildGraphNodeFromTemplate } from '@/features/graph/mappers';
 import type { GraphNodeConfig, GraphNodeStatus, GraphPersistedEdge } from '@/features/graph/types';
-import type { NodeStatus as ApiNodeStatus } from '@/api/types/graph';
+import type { TemplateSchema, NodeStatus as ApiNodeStatus } from '@/api/types/graph';
 
 type FlowNode = Node<GraphNodeData>;
 
@@ -51,6 +62,52 @@ export interface GraphLayoutProps {
   services: GraphLayoutServices;
 }
 
+function resolveAgentDisplayTitle(node: GraphNodeConfig): string {
+  const config = (node.config ?? {}) as Record<string, unknown>;
+  const rawConfigTitle = typeof config.title === 'string' ? config.title : '';
+  const trimmedConfigTitle = rawConfigTitle.trim();
+  if (trimmedConfigTitle.length > 0) {
+    return trimmedConfigTitle;
+  }
+
+  const fallbackTemplate =
+    typeof node.template === 'string' && node.template.trim().length > 0 ? node.template.trim() : 'Agent';
+  const basePlaceholder = computeAgentDefaultTitle(undefined, undefined, 'Agent');
+  const storedTitleRaw = typeof node.title === 'string' ? node.title : '';
+  const storedTitle = storedTitleRaw.trim();
+  const profileFallback = computeAgentDefaultTitle(
+    typeof config.name === 'string' ? (config.name as string) : undefined,
+    typeof config.role === 'string' ? (config.role as string) : undefined,
+    fallbackTemplate,
+  );
+  const isPlaceholderTitle =
+    storedTitle.length > 0 &&
+    (storedTitle === basePlaceholder || storedTitle === fallbackTemplate || storedTitle === node.template);
+
+  if (storedTitle.length > 0 && !isPlaceholderTitle) {
+    return storedTitle;
+  }
+
+  if (profileFallback.length > 0) {
+    return profileFallback;
+  }
+
+  if (storedTitle.length > 0) {
+    return storedTitle;
+  }
+
+  return basePlaceholder;
+}
+
+function resolveDisplayTitle(node: GraphNodeConfig): string {
+  if (node.kind === 'Agent') {
+    return resolveAgentDisplayTitle(node);
+  }
+  const rawTitle = typeof node.title === 'string' ? node.title : '';
+  const trimmed = rawTitle.trim();
+  return trimmed.length > 0 ? trimmed : rawTitle;
+}
+
 function toFlowNode(node: GraphNodeConfig): FlowNode {
   return {
     id: node.id,
@@ -58,7 +115,7 @@ function toFlowNode(node: GraphNodeConfig): FlowNode {
     position: { x: node.x, y: node.y },
     data: {
       kind: node.kind,
-      title: node.title,
+      title: resolveDisplayTitle(node),
       inputs: node.ports.inputs,
       outputs: node.ports.outputs,
       avatarSeed: node.avatarSeed,
@@ -88,6 +145,19 @@ function buildEdgeId(
   targetHandle: string | null | undefined,
 ): string {
   return `${source}-${encodeHandle(sourceHandle)}__${target}-${encodeHandle(targetHandle)}`;
+}
+
+function generateGraphNodeId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // fall through to fallback
+  }
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 10);
+  return `node-${timestamp}-${random}`;
 }
 
 function makeEdgeData(
@@ -160,6 +230,9 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     applyNodeStatus,
     applyNodeState,
     setEdges,
+    removeNodes,
+    addNode,
+    scheduleSave,
   } = useGraphData();
 
   const providerDebounceMs = 275;
@@ -170,6 +243,30 @@ export function GraphLayout({ services }: GraphLayoutProps) {
   const updateNodeRef = useRef(updateNode);
   const setEdgesRef = useRef(setEdges);
   const nodesRef = useRef(nodes);
+  const processedRemovedNodeIdsRef = useRef<Set<string>>(new Set());
+
+  const filterUnprocessedRemovedNodeIds = useCallback((ids: string[]): string[] => {
+    if (ids.length === 0) {
+      return ids;
+    }
+    const processed = processedRemovedNodeIdsRef.current;
+    const next: string[] = [];
+    for (const id of ids) {
+      if (!processed.has(id)) {
+        processed.add(id);
+        next.push(id);
+      }
+    }
+    if (next.length > 0) {
+      setTimeout(() => {
+        const registry = processedRemovedNodeIdsRef.current;
+        for (const id of next) {
+          registry.delete(id);
+        }
+      }, 0);
+    }
+    return next;
+  }, []);
 
   const ensureVaultMounts = useCallback(async (): Promise<string[]> => {
     if (vaultMountsRef.current) {
@@ -386,6 +483,38 @@ export function GraphLayout({ services }: GraphLayoutProps) {
 
   const edgeTypes = useMemo<EdgeTypes>(() => ({ gradient: GradientEdge }), []);
   const fallbackEnabledTools = useMemo<string[]>(() => [], []);
+  const templatesQuery = useTemplates();
+  const sidebarNodeItems = useMemo(() => mapTemplatesToSidebarItems(templatesQuery.data), [templatesQuery.data]);
+  const templatesByName = useMemo(() => {
+    if (!Array.isArray(templatesQuery.data) || templatesQuery.data.length === 0) {
+      return null;
+    }
+    const map = new Map<string, TemplateSchema>();
+    for (const tpl of templatesQuery.data) {
+      if (!tpl || typeof tpl !== 'object') {
+        continue;
+      }
+      const name = typeof tpl.name === 'string' ? tpl.name.trim() : '';
+      if (!name) {
+        continue;
+      }
+      map.set(name, tpl);
+    }
+    return map.size > 0 ? map : null;
+  }, [templatesQuery.data]);
+  const canAcceptDrop = !templatesQuery.isLoading && !!templatesByName && templatesByName.size > 0;
+  const sidebarStatusMessage = useMemo(() => {
+    if (templatesQuery.isLoading) {
+      return 'Loading templates...';
+    }
+    if (templatesQuery.isError && sidebarNodeItems.length === 0) {
+      return 'Failed to load templates.';
+    }
+    if (!templatesQuery.isLoading && sidebarNodeItems.length === 0) {
+      return 'No templates available.';
+    }
+    return undefined;
+  }, [sidebarNodeItems.length, templatesQuery.isError, templatesQuery.isLoading]);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -408,30 +537,31 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       let changed = prev.length !== nodes.length;
       const next: FlowNode[] = nodes.map((node, index) => {
         const existing = prevById.get(node.id);
+        const nextData = {
+          kind: node.kind,
+          title: resolveDisplayTitle(node),
+          inputs: node.ports.inputs,
+          outputs: node.ports.outputs,
+          avatarSeed: node.avatarSeed,
+        } satisfies FlowNode['data'];
         if (!existing) {
           changed = true;
           return toFlowNode(node);
         }
         const basePosition = existing.position ?? { x: node.x, y: node.y };
         const dataMatches =
-          existing.data.kind === node.kind &&
-          existing.data.title === node.title &&
-          existing.data.avatarSeed === node.avatarSeed &&
-          existing.data.inputs === node.ports.inputs &&
-          existing.data.outputs === node.ports.outputs;
+          existing.data.kind === nextData.kind &&
+          existing.data.title === nextData.title &&
+          existing.data.avatarSeed === nextData.avatarSeed &&
+          existing.data.inputs === nextData.inputs &&
+          existing.data.outputs === nextData.outputs;
         const positionMatches =
           existing.position?.x === basePosition.x && existing.position?.y === basePosition.y;
         let nextNode = existing;
         if (!dataMatches) {
           nextNode = {
             ...existing,
-            data: {
-              kind: node.kind,
-              title: node.title,
-              inputs: node.ports.inputs,
-              outputs: node.ports.outputs,
-              avatarSeed: node.avatarSeed,
-            },
+            data: nextData,
           } satisfies FlowNode;
         }
         if (!positionMatches) {
@@ -559,11 +689,19 @@ export function GraphLayout({ services }: GraphLayoutProps) {
 
   const handleNodesChange = useCallback((changes: Parameters<typeof applyNodeChanges>[0]) => {
     let nextSelectedId = selectedNodeIdRef.current;
+    const removedIds: string[] = [];
     for (const change of changes) {
       if (change.type === 'select' && 'id' in change) {
         if (change.selected) {
           nextSelectedId = change.id;
         } else if (nextSelectedId === change.id) {
+          nextSelectedId = null;
+        }
+      }
+
+      if (change.type === 'remove' && 'id' in change) {
+        removedIds.push(change.id);
+        if (nextSelectedId === change.id) {
           nextSelectedId = null;
         }
       }
@@ -578,6 +716,13 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       setFlowNodes(applied);
     }
 
+    if (removedIds.length > 0) {
+      const uniqueIds = filterUnprocessedRemovedNodeIds(removedIds);
+      if (uniqueIds.length > 0) {
+        removeNodes(uniqueIds);
+      }
+    }
+
     for (const change of changes) {
       if (change.type === 'position' && (change.dragging === false || change.dragging === undefined) && 'id' in change) {
         const moved = applied.find((node) => node.id === change.id);
@@ -586,7 +731,21 @@ export function GraphLayout({ services }: GraphLayoutProps) {
         updateNodeRef.current(change.id, { x, y });
       }
     }
-  }, []);
+  }, [filterUnprocessedRemovedNodeIds, removeNodes]);
+
+  const handleNodesDelete = useCallback<OnNodesDelete<FlowNode>>((deletedNodes) => {
+    if (!deletedNodes || deletedNodes.length === 0) {
+      return;
+    }
+    const ids = deletedNodes
+      .map((node) => node.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    const uniqueIds = filterUnprocessedRemovedNodeIds(ids);
+    if (uniqueIds.length === 0) {
+      return;
+    }
+    removeNodes(uniqueIds);
+  }, [filterUnprocessedRemovedNodeIds, removeNodes]);
 
   const handleEdgesChange = useCallback((changes: Parameters<typeof applyEdgeChanges>[0]) => {
     const current = flowEdgesRef.current;
@@ -651,17 +810,30 @@ export function GraphLayout({ services }: GraphLayoutProps) {
 
   const canDeprovision = sidebarStatus === 'ready' || sidebarStatus === 'provisioning';
 
-  const sidebarConfig = useMemo(() => {
+  const sidebarEntry = useMemo(() => {
     if (!selectedNode) {
       return null;
     }
-    const baseConfig = selectedNode.config ?? {};
-    return {
-      kind: selectedNode.kind,
-      title: selectedNode.title,
+    const baseConfig = (selectedNode.config ?? {}) as Record<string, unknown>;
+    const rawTitleFromConfig = typeof baseConfig.title === 'string' ? (baseConfig.title as string) : null;
+    const resolvedTitle =
+      rawTitleFromConfig ?? (typeof selectedNode.title === 'string' ? selectedNode.title : '');
+
+    const config: SidebarNodeConfig = {
       ...baseConfig,
-    } satisfies SidebarNodeConfig;
+      kind: selectedNode.kind,
+      title: resolvedTitle,
+      template: selectedNode.template,
+    };
+
+    return {
+      config,
+      displayTitle: resolveDisplayTitle(selectedNode),
+    };
   }, [selectedNode]);
+
+  const sidebarConfig = sidebarEntry?.config ?? null;
+  const sidebarDisplayTitle = sidebarEntry?.displayTitle ?? '';
 
   const sidebarState = useMemo(() => ({ status: sidebarStatus }), [sidebarStatus]);
 
@@ -672,21 +844,35 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       const node = nodesRef.current.find((item) => item.id === nodeId);
       if (!node) return;
 
+      const baseConfig = { ...(node.config ?? {}) } as Record<string, unknown>;
+      delete baseConfig.kind;
+      delete baseConfig.title;
+      delete baseConfig.template;
+
+      const patch = { ...(nextConfig ?? {}) } as Record<string, unknown>;
+      const rawTitleUpdate = typeof patch.title === 'string' ? (patch.title as string) : undefined;
+      delete patch.kind;
+      delete patch.title;
+      delete patch.template;
+
       const updatedConfig: Record<string, unknown> = {
-        kind: node.kind,
-        title: node.title,
-        ...(node.config ?? {}),
-        ...nextConfig,
+        ...baseConfig,
+        ...patch,
       };
 
-      const nextTitle = typeof updatedConfig.title === 'string' ? updatedConfig.title : node.title;
-      updatedConfig.kind = node.kind;
-      updatedConfig.title = nextTitle;
-
-      updateNodeRef.current(nodeId, {
+      const updates: { config: Record<string, unknown>; title?: string } = {
         config: updatedConfig,
-        ...(nextTitle !== node.title ? { title: nextTitle } : {}),
-      });
+      };
+
+      if (rawTitleUpdate !== undefined) {
+        const trimmedTitle = rawTitleUpdate.trim();
+        const currentTitle = typeof node.title === 'string' ? node.title : '';
+        if (trimmedTitle !== currentTitle) {
+          updates.title = trimmedTitle;
+        }
+      }
+
+      updateNodeRef.current(nodeId, updates);
     },
     [],
   );
@@ -717,6 +903,30 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     handleNodeAction('deprovision');
   }, [handleNodeAction]);
 
+  const handleDrop = useCallback<GraphCanvasDropHandler>((_event, { data, position }) => {
+    if (!templatesByName) {
+      return;
+    }
+    const template = templatesByName.get(data.id);
+    if (!template) {
+      return;
+    }
+    const x = Number.isFinite(position?.x) ? position.x : 0;
+    const y = Number.isFinite(position?.y) ? position.y : 0;
+    const nodeId = generateGraphNodeId();
+    const rawTitle = typeof data.title === 'string' ? data.title.trim() : '';
+    const config = rawTitle.length > 0 ? { title: rawTitle } : undefined;
+    const { node, metadata } = buildGraphNodeFromTemplate(template, {
+      id: nodeId,
+      position: { x, y },
+      title: rawTitle || undefined,
+      config,
+    });
+
+    addNode(node, metadata);
+    scheduleSave();
+  }, [addNode, scheduleSave, templatesByName]);
+
   if (loading && nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -732,9 +942,11 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           nodes={flowNodes}
           edges={flowEdges}
           onNodesChange={handleNodesChange}
+          onNodesDelete={handleNodesDelete}
           onEdgesChange={handleEdgesChange}
           onConnect={handleConnect}
           edgeTypes={edgeTypes}
+          onDrop={canAcceptDrop ? handleDrop : undefined}
           savingStatus={savingState.status}
           savingErrorMessage={savingErrorMessage ?? undefined}
         />
@@ -743,7 +955,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
         <NodePropertiesSidebar
           config={sidebarConfig}
           state={sidebarState}
-          template={selectedNode.template}
+          displayTitle={sidebarDisplayTitle}
           onConfigChange={handleConfigChange}
           onProvision={handleProvision}
           onDeprovision={handleDeprovision}
@@ -762,7 +974,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
           providerDebounceMs={providerDebounceMs}
         />
       ) : (
-        <EmptySelectionSidebar />
+        <EmptySelectionSidebar nodeItems={sidebarNodeItems} statusMessage={sidebarStatusMessage} />
       )}
     </div>
   );

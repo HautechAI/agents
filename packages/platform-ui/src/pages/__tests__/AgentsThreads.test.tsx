@@ -1,11 +1,13 @@
 import React from 'react';
-import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { AgentsThreads } from '../AgentsThreads';
 import { TestProviders, server, abs } from '../../../__tests__/integration/testUtils';
+import type { PersistedGraph } from '@agyn/shared';
+import type { TemplateSchema } from '@/api/types/graph';
 
 function t(offsetMs: number) {
   return new Date(1700000000000 + offsetMs).toISOString();
@@ -20,6 +22,8 @@ type ThreadMock = {
   parentId: string | null;
   metrics: { remindersCount: number; containersCount: number; activity: 'idle' | 'waiting' | 'working'; runsCount: number };
   agentTitle?: string | null;
+  agentRole?: string | null;
+  agentName?: string | null;
 };
 
 type RunMock = {
@@ -51,6 +55,8 @@ function makeThread(overrides: Partial<ThreadMock> = {}): ThreadMock {
     parentId: null,
     metrics: { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 },
     agentTitle: 'Agent Uno',
+    agentRole: 'Lead Planner',
+    agentName: 'Planner Uno',
     ...overrides,
   };
 }
@@ -130,9 +136,44 @@ function registerThreadScenario({
   );
 }
 
+function registerGraphAgents(agents: Array<{ id: string; template: string; title: string }>) {
+  const graphPayload = {
+    name: 'agents',
+    version: 1,
+    updatedAt: t(0),
+    nodes: agents.map((agent) => ({
+      id: agent.id,
+      template: agent.template,
+      config: { title: agent.title },
+    })),
+    edges: [],
+  } satisfies PersistedGraph;
+
+  const templatePayload = agents.map(
+    (agent) =>
+      ({
+        name: agent.template,
+        title: agent.title,
+        kind: 'agent',
+        sourcePorts: [] as string[],
+        targetPorts: [] as string[],
+      } satisfies TemplateSchema),
+  );
+
+  server.use(
+    http.get('*/api/graph', () => HttpResponse.json(graphPayload)),
+    http.get(abs('/api/graph'), () => HttpResponse.json(graphPayload)),
+    http.get('*/api/graph/templates', () => HttpResponse.json(templatePayload)),
+    http.get(abs('/api/graph/templates'), () => HttpResponse.json(templatePayload)),
+  );
+}
+
 describe('AgentsThreads page', () => {
-  beforeAll(() => server.listen());
-  afterEach(() => server.resetHandlers());
+  beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+  afterEach(() => {
+    vi.restoreAllMocks();
+    server.resetHandlers();
+  });
   afterAll(() => server.close());
 
   function renderAt(path: string) {
@@ -174,6 +215,34 @@ describe('AgentsThreads page', () => {
 
     expect(await screen.findByRole('heading', { name: thread.summary })).toBeInTheDocument();
     expect(screen.getByTestId('threads-list')).toBeInTheDocument();
+    expect(screen.getByText('Agents / Threads')).toBeInTheDocument();
+    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
+    const detailContainer = detailHeading.parentElement as HTMLElement;
+    expect(within(detailContainer).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    if (thread.agentRole) {
+      expect(within(detailContainer).getByTestId('thread-detail-role')).toHaveTextContent(thread.agentRole ?? '');
+    } else {
+      expect(within(detailContainer).queryByTestId('thread-detail-role')).toBeNull();
+    }
+    const list = screen.getByTestId('threads-list');
+    expect(within(list).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    expect(within(list).getByTestId('thread-item-role')).toHaveTextContent(thread.agentRole ?? '');
+  });
+
+  it('hides agent role display when not provided', async () => {
+    const thread = makeThread({ agentRole: null });
+    registerThreadScenario({ thread, runs: [], children: [] });
+
+    renderAt(`/agents/threads/${thread.id}`);
+
+    const detailHeading = await screen.findByRole('heading', { name: thread.summary });
+    const detailContainer = detailHeading.parentElement as HTMLElement;
+    expect(within(detailContainer).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    expect(within(detailContainer).queryByTestId('thread-detail-role')).toBeNull();
+
+    const list = screen.getByTestId('threads-list');
+    expect(within(list).getByText(thread.agentName ?? '')).toBeInTheDocument();
+    expect(within(list).queryByTestId('thread-item-role')).toBeNull();
   });
 
   it('shows a friendly error when the thread is missing', async () => {
@@ -503,5 +572,194 @@ describe('AgentsThreads page', () => {
     expect(callCount).toBe(1);
 
     expect(await screen.findByText(/Failed to load subthreads/i)).toBeInTheDocument();
+  });
+
+  describe('draft thread creation flow', () => {
+    beforeEach(() => {
+      Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        writable: true,
+        value: vi.fn(),
+      });
+    });
+
+    it('creates and selects a draft thread when clicking New', async () => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([]);
+
+      renderAt('/agents/threads');
+
+      const newButton = await screen.findByRole('button', { name: 'New thread' });
+      await user.click(newButton);
+
+      const list = await screen.findByTestId('threads-list');
+      expect(within(list).getByText('(new conversation)')).toBeInTheDocument();
+
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      expect(searchInput).toBeInTheDocument();
+
+      expect(screen.getByText(/Start your new conversation with the agent/i)).toBeInTheDocument();
+    });
+
+    it('allows selecting a recipient and cancel removes the draft', async () => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([
+        { id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' },
+        { id: 'agent-2', template: 'agent.template.two', title: 'Agent Cirrus' },
+      ]);
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      const option = await screen.findByRole('button', { name: 'Agent Nimbus' });
+      await user.click(option);
+
+      await waitFor(() => {
+        expect(searchInput).toHaveValue('Agent Nimbus');
+      });
+
+      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(within(screen.getByTestId('threads-list')).queryByText('(new conversation)')).not.toBeInTheDocument();
+      });
+      expect(screen.getByText(/Select a thread to view details/i)).toBeInTheDocument();
+    });
+
+    it('filters recipients by visible name when searching', async () => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([
+        { id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' },
+        { id: 'agent-2', template: 'agent.template.two', title: 'Agent Cirrus' },
+      ]);
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      await screen.findByRole('button', { name: 'Agent Nimbus' });
+
+      await user.type(searchInput, 'Cirrus');
+
+      const visibleOption = await screen.findByRole('button', { name: 'Agent Cirrus' });
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Agent Nimbus' })).not.toBeInTheDocument();
+      });
+
+      await user.click(visibleOption);
+
+      await waitFor(() => {
+        expect(searchInput).toHaveValue('Agent Cirrus');
+      });
+    });
+    it('shows draft composer and enforces send button state', async () => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+
+      expect(screen.getByText(/Start your new conversation with the agent/i)).toBeInTheDocument();
+
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      const textarea = await screen.findByPlaceholderText('Type a message...');
+      const sendButton = screen.getByTitle('Send message');
+
+      expect(sendButton).toBeDisabled();
+
+      await user.click(searchInput);
+      const option = await screen.findByRole('button', { name: 'Agent Nimbus' });
+      await user.click(option);
+
+      await waitFor(() => {
+        expect(searchInput).toHaveValue('Agent Nimbus');
+      });
+
+      expect(sendButton).toBeDisabled();
+
+      await user.type(textarea, 'Hello draft');
+      await waitFor(() => {
+        expect(sendButton).toBeEnabled();
+      });
+
+      fireEvent.change(textarea, { target: { value: 'a'.repeat(8001) } });
+      await waitFor(() => {
+        expect(sendButton).toBeDisabled();
+      });
+
+      fireEvent.change(textarea, { target: { value: 'Ready to send' } });
+      await waitFor(() => {
+        expect(sendButton).toBeEnabled();
+      });
+    });
+
+    it('does not fetch thread or run data when a draft is selected', async () => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([]);
+
+      const draftThreadRequests: string[] = [];
+      const draftRunsRequests: string[] = [];
+
+      server.use(
+        http.get('*/api/agents/threads/:threadId', ({ params }) => {
+          const id = params.threadId as string;
+          if (id.startsWith('draft:')) {
+            draftThreadRequests.push(id);
+            return HttpResponse.json({});
+          }
+          return undefined;
+        }),
+        http.get(abs('/api/agents/threads/:threadId'), ({ params }) => {
+          const id = params.threadId as string;
+          if (id.startsWith('draft:')) {
+            draftThreadRequests.push(id);
+            return HttpResponse.json({});
+          }
+          return undefined;
+        }),
+        http.get('*/api/agents/threads/:threadId/runs', ({ params }) => {
+          const id = params.threadId as string;
+          if (id.startsWith('draft:')) {
+            draftRunsRequests.push(id);
+            return HttpResponse.json({ items: [] });
+          }
+          return undefined;
+        }),
+        http.get(abs('/api/agents/threads/:threadId/runs'), ({ params }) => {
+          const id = params.threadId as string;
+          if (id.startsWith('draft:')) {
+            draftRunsRequests.push(id);
+            return HttpResponse.json({ items: [] });
+          }
+          return undefined;
+        }),
+      );
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+
+      await screen.findByPlaceholderText('Search agents...');
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(draftThreadRequests).toHaveLength(0);
+      expect(draftRunsRequests).toHaveLength(0);
+    });
   });
 });

@@ -225,27 +225,44 @@ describe('ManageTool unit', () => {
     expect(status.childThreadIds.length).toBe(0);
   });
 
-  it('ManageToolNode enforces titled workers and handles retitle/removal', async () => {
+  it('ManageToolNode derives worker titles from profile fields and handles retitle/removal', async () => {
     const harness = await createHarness();
 
-    const first = await addWorker(harness.module, harness.node, 'Alpha');
+    const explicit = await addWorker(harness.module, harness.node, 'Alpha');
     expect(harness.node.listWorkers()).toEqual(['Alpha']);
-    expect(() => harness.node.addWorker(first)).not.toThrow();
+    expect(() => harness.node.addWorker(explicit)).not.toThrow();
 
-    const noTitle = await harness.module.resolve(FakeAgent);
-    await noTitle.setConfig({});
-    expect(() => harness.node.addWorker(noTitle)).toThrow('ManageToolNode: worker agent requires non-empty title');
+    const profile = await harness.module.resolve(FakeAgent);
+    await profile.setConfig({ name: ' Bravo ', role: ' Strategist ' });
+    harness.node.addWorker(profile);
+    expect(harness.node.listWorkers()).toEqual(['Alpha', 'Bravo (Strategist)']);
+
+    const noProfile = await harness.module.resolve(FakeAgent);
+    await noProfile.setConfig({});
+    expect(() => harness.node.addWorker(noProfile)).toThrow(
+      'ManageToolNode: worker agent requires non-empty title',
+    );
+
+    const nameOnly = await harness.module.resolve(FakeAgent);
+    await nameOnly.setConfig({ name: 'Gamma' });
+    harness.node.addWorker(nameOnly);
+    expect(harness.node.listWorkers()).toEqual(['Alpha', 'Bravo (Strategist)', 'Gamma']);
+
+    const roleOnly = await harness.module.resolve(FakeAgent);
+    await roleOnly.setConfig({ role: 'Dispatcher' });
+    harness.node.addWorker(roleOnly);
+    expect(harness.node.listWorkers()).toEqual(['Alpha', 'Bravo (Strategist)', 'Gamma', 'Dispatcher']);
 
     const dup = await harness.module.resolve(FakeAgent);
-    await dup.setConfig({ title: '  Alpha  ' });
-    expect(() => harness.node.addWorker(dup)).toThrow('ManageToolNode: worker with title "Alpha" already exists');
+    await dup.setConfig({ name: 'Bravo', role: 'Strategist' });
+    expect(() => harness.node.addWorker(dup)).toThrow('ManageToolNode: worker with title "Bravo (Strategist)" already exists');
 
-    await first.setConfig({ title: ' Beta ' });
-    expect(harness.node.listWorkers()).toEqual(['Beta']);
-    expect(harness.node.getWorkerByTitle('Beta')).toBe(first);
+    await explicit.setConfig({ title: ' Beta ' });
+    expect(harness.node.listWorkers()).toEqual(['Beta', 'Bravo (Strategist)', 'Gamma', 'Dispatcher']);
+    expect(harness.node.getWorkerByTitle('Beta')).toBe(explicit);
 
-    harness.node.removeWorker(first);
-    expect(harness.node.listWorkers()).toEqual([]);
+    harness.node.removeWorker(explicit);
+    expect(harness.node.listWorkers()).toEqual(['Bravo (Strategist)', 'Gamma', 'Dispatcher']);
   });
 
   it('send_message: surfaces child agent failure', async () => {

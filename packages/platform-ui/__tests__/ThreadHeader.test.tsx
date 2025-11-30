@@ -86,12 +86,15 @@ describe('ThreadHeader', () => {
       createdAt: '2025-11-14T10:00:00.000Z',
       metrics: { remindersCount: 1, containersCount: 1, activity: 'idle', runsCount: 1 },
       agentTitle: 'Incident Agent',
+      agentRole: 'Incident Commander',
+      agentName: 'Ops L1',
     };
 
     render(<ThreadHeader thread={thread} runsCount={5} />);
 
     expect(screen.getByTestId('thread-header-summary')).toHaveTextContent('Investigate alerts');
     expect(screen.getByText('Incident Agent')).toBeInTheDocument();
+    expect(screen.queryByText('Incident Commander')).toBeNull();
     expect(screen.getByText(/Status: Open/i)).toBeInTheDocument();
     const stats = screen.getByTestId('thread-header-stats');
     expect(stats).toHaveTextContent('Runs 5');
@@ -102,6 +105,60 @@ describe('ThreadHeader', () => {
     expect(screen.getByLabelText('Runs total: 5')).toHaveTextContent('Runs 5');
     // Activity indicator should not render in header
     expect(screen.queryByLabelText(/Activity:/)).toBeNull();
+  });
+
+  it('falls back to name and role when title is blank', () => {
+    const thread: ThreadNode = {
+      id: 't-fallback',
+      alias: 'root',
+      summary: 'Summarize weekly report',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+      agentName: 'Casey',
+      agentRole: 'Planner',
+      agentTitle: '   ',
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    expect(screen.getByText('Casey (Planner)')).toBeInTheDocument();
+  });
+
+  it('uses global fallback when name and role missing', () => {
+    const thread: ThreadNode = {
+      id: 't-fallback-2',
+      alias: 'root',
+      summary: 'Handle incident',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    expect(screen.getByText('(unknown agent)')).toBeInTheDocument();
+  });
+
+  it('omits agent role text when provided', () => {
+    const thread: ThreadNode = {
+      id: 't2',
+      alias: 'root',
+      summary: 'Review incidents',
+      status: 'open',
+      parentId: null,
+      createdAt: '2025-11-14T10:00:00.000Z',
+      metrics: mockMetrics,
+      agentTitle: 'Incident Agent',
+      agentName: 'Ops L2',
+      agentRole: 'Coordinator',
+    };
+
+    render(<ThreadHeader thread={thread} runsCount={0} />);
+
+    expect(screen.queryByText('Coordinator')).toBeNull();
   });
 
   it('shows reminders in popover when opened', async () => {
@@ -115,6 +172,7 @@ describe('ThreadHeader', () => {
       createdAt: '2025-11-14T10:00:00.000Z',
       metrics: mockMetrics,
       agentTitle: 'Incident Agent',
+      agentName: 'Ops L1',
     };
 
     render(<ThreadHeader thread={thread} runsCount={0} />);
@@ -139,6 +197,7 @@ describe('ThreadHeader', () => {
       createdAt: '2025-11-14T10:00:00.000Z',
       metrics: mockMetrics,
       agentTitle: 'Incident Agent',
+      agentName: 'Ops L1',
     };
 
     render(<ThreadHeader thread={thread} runsCount={0} />);
@@ -167,6 +226,7 @@ describe('ThreadHeader', () => {
       createdAt: '2025-11-14T10:00:00.000Z',
       metrics: mockMetrics,
       agentTitle: 'Incident Agent',
+      agentName: 'Ops L1',
     };
 
     render(<ThreadHeader thread={thread} runsCount={0} />);
