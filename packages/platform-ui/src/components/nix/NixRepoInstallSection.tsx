@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { X } from 'lucide-react';
 import { AxiosError, isAxiosError } from 'axios';
 
 import type { FlakeRepoSelection } from './types';
 import { resolveRepo } from '@/api/modules/nix';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/Button';
+import { IconButton } from '@/components/IconButton';
+import { Input } from '@/components/Input';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -136,69 +138,78 @@ export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
   }, [form.attr, form.repository, form.ref, handleDialogOpenChange, onAdd, submitting]);
 
   const isRequiredError = error === REQUIRED_FIELDS_ERROR;
+  const repositoryError = isRequiredError && !form.repository.trim() ? 'Repository is required.' : undefined;
+  const attributeError = isRequiredError && !form.attr.trim() ? 'Package attribute is required.' : undefined;
+  const generalErrorMessage = !isRequiredError ? error : null;
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">Add custom</Button>
+        <Button type="button" variant="link">
+          or add custom
+        </Button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add custom Nix package</DialogTitle>
-          <DialogDescription>
-            Resolve a Git repository and add its package attribute to this configuration.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent hideCloseButton>
+        <div className="flex items-start justify-between gap-4">
+          <DialogHeader className="flex-1">
+            <DialogTitle>Add custom Nix package</DialogTitle>
+            <DialogDescription>
+              Resolve a Git repository and add its package attribute to this configuration.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogClose asChild>
+            <IconButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Close"
+              rounded
+              icon={<X className="h-4 w-4" />}
+            />
+          </DialogClose>
+        </div>
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <Label htmlFor="nix-repo-repository" className="text-sm font-medium text-[var(--agyn-dark)]">
-              Repository<span className="text-[var(--agyn-status-failed)]">*</span>
-            </Label>
-            <Input
-              id="nix-repo-repository"
-              value={form.repository}
-              onChange={(event) => updateField('repository', event.target.value)}
-              placeholder="owner/repo or github:owner/repo"
-              aria-label="GitHub repository"
-              aria-invalid={isRequiredError && !form.repository.trim() ? true : undefined}
-              autoComplete="off"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="nix-repo-ref" className="text-sm font-medium text-[var(--agyn-dark)]">Branch/Ref (optional)</Label>
-            <Input
-              id="nix-repo-ref"
-              value={form.ref}
-              onChange={(event) => updateField('ref', event.target.value)}
-              placeholder="main"
-              aria-label="Git ref"
-              autoComplete="off"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="nix-repo-attr" className="text-sm font-medium text-[var(--agyn-dark)]">
-              Package Attribute<span className="text-[var(--agyn-status-failed)]">*</span>
-            </Label>
-            <Input
-              id="nix-repo-attr"
-              value={form.attr}
-              onChange={(event) => updateField('attr', event.target.value)}
-              placeholder="packages.x86_64-linux.default"
-              aria-label="Flake attribute"
-              aria-invalid={isRequiredError && !form.attr.trim() ? true : undefined}
-              autoComplete="off"
-            />
-          </div>
-          {error && (
+          <Input
+            id="nix-repo-repository"
+            label="Repository *"
+            value={form.repository}
+            onChange={(event) => updateField('repository', event.target.value)}
+            placeholder="owner/repo or github:owner/repo"
+            aria-label="GitHub repository"
+            aria-invalid={isRequiredError && !form.repository.trim() ? true : undefined}
+            autoComplete="off"
+            error={repositoryError}
+          />
+          <Input
+            id="nix-repo-ref"
+            label="Branch/Ref (optional)"
+            value={form.ref}
+            onChange={(event) => updateField('ref', event.target.value)}
+            placeholder="main"
+            aria-label="Git ref"
+            autoComplete="off"
+          />
+          <Input
+            id="nix-repo-attr"
+            label="Package Attribute *"
+            value={form.attr}
+            onChange={(event) => updateField('attr', event.target.value)}
+            placeholder="packages.x86_64-linux.default"
+            aria-label="Flake attribute"
+            aria-invalid={isRequiredError && !form.attr.trim() ? true : undefined}
+            autoComplete="off"
+            error={attributeError}
+          />
+          {generalErrorMessage && (
             <p className="text-sm text-[var(--agyn-status-failed)]" role="alert">
-              {error}
+              {generalErrorMessage}
             </p>
           )}
           <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => handleDialogOpenChange(false)} disabled={submitting}>
+            <Button type="button" variant="ghost" onClick={() => handleDialogOpenChange(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" variant="primary" disabled={submitting}>
               {submitting ? 'Adding…' : 'Add'}
             </Button>
           </DialogFooter>

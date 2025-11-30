@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Input } from '@agyn/ui';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
 import type { ContainerNixConfig, FlakeRepoSelection, NixPackageSelection, NixpkgsSelection } from './types';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPackages, fetchVersions, resolvePackage } from '@/api/modules/nix';
@@ -315,26 +316,27 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
   return (
     <div className="space-y-2">
       <div className="text-[10px] uppercase text-muted-foreground">Nix Packages (beta)</div>
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setIsOpen(suggestions.length > 0 || isSearching)}
-          onBlur={() => setTimeout(() => setIsOpen(false), 150)}
-          onKeyDown={onKeyDown}
-          placeholder="Search Nix packages..."
-          role="combobox"
-          aria-expanded={isOpen}
-          aria-controls="nix-search-listbox"
-          aria-autocomplete="list"
-          aria-haspopup="listbox"
-          aria-activedescendant={isOpen ? `nix-opt-${activeIndex}` : undefined}
-          aria-label="Search Nix packages"
-        />
-        {isOpen && (
-          <ul
+      <div className="space-y-1">
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setIsOpen(suggestions.length > 0 || isSearching)}
+            onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+            onKeyDown={onKeyDown}
+            placeholder="Search Nix packages..."
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-controls="nix-search-listbox"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-activedescendant={isOpen ? `nix-opt-${activeIndex}` : undefined}
+            aria-label="Search Nix packages"
+          />
+          {isOpen && (
+            <ul
             id="nix-search-listbox"
             role="listbox"
             ref={listboxRef}
@@ -363,20 +365,18 @@ export function NixPackagesSection(props: ControlledProps | UncontrolledProps) {
                   </li>
                 );
               }))}
-          </ul>
-        )}
-      </div>
+            </ul>
+          )}
+        </div>
 
-      {(() => {
-        const err = qPkgs.error as unknown;
-        const isAbort = (e: unknown): boolean => e instanceof DOMException && (e as DOMException).name === 'AbortError';
-        const showError = !!err && !isAbort(err);
-        return showError ? (
-          <div className="text-xs text-destructive" aria-live="polite">Error searching Nix packages. Please retry.</div>
-        ) : null;
-      })()}
-
-      <div className="pt-2">
+        {(() => {
+          const err = qPkgs.error as unknown;
+          const isAbort = (e: unknown): boolean => e instanceof DOMException && (e as DOMException).name === 'AbortError';
+          const showError = !!err && !isAbort(err);
+          return showError ? (
+            <div className="text-xs text-destructive" aria-live="polite">Error searching Nix packages. Please retry.</div>
+          ) : null;
+        })()}
         <NixRepoInstallSection onAdd={handleRepoAdd} />
       </div>
 
@@ -508,7 +508,7 @@ function RepoPackageItem({ entry, onRemove }: { entry: FlakeRepoSelection; onRem
       </span>
       <select
         aria-label={`${label} source`}
-        className="rounded border border-input bg-muted px-2 py-1 text-sm text-muted-foreground"
+        className="rounded border border-input bg-background px-2 py-1 text-sm"
         value={optionLabel}
         disabled
       >

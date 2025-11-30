@@ -52,9 +52,11 @@ describe('NixPackagesSection (controlled)', () => {
   it('opens the add custom modal and lists the resolved package alongside nixpkgs selections', async () => {
     render(<Harness />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add custom' }));
+    fireEvent.click(screen.getByRole('button', { name: 'or add custom' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Add custom Nix package' });
+    const closeButton = within(dialog).getByRole('button', { name: 'Close' });
+    expect(closeButton).toHaveClass('rounded-full');
     const form = (within(dialog).getByLabelText('GitHub repository') as HTMLInputElement).closest('form');
     if (!form) {
       throw new Error('Modal form not found');
@@ -108,7 +110,7 @@ describe('NixPackagesSection (controlled)', () => {
     });
 
     const addCustomRepo = async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Add custom' }));
+      fireEvent.click(screen.getByRole('button', { name: 'or add custom' }));
       const dialog = await screen.findByRole('dialog', { name: 'Add custom Nix package' });
       fireEvent.change(within(dialog).getByLabelText('GitHub repository'), { target: { value: 'agyn/example' } });
       fireEvent.change(within(dialog).getByLabelText('Flake attribute'), { target: { value: 'packages.default' } });
