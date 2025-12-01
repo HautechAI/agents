@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { threads } from '@/api/modules/threads';
 import type { ApiError } from '@/api/http';
 import { listContainers } from '@/api/modules/containers';
@@ -8,6 +9,13 @@ import type { ThreadMetrics, ThreadNode, ThreadReminder, AgentQueueItem } from '
 import type { ContainerItem } from '@/api/modules/containers';
 
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+export const threadQueueQueryKey = (threadId: string | undefined) => ['agents', 'threads', threadId, 'queue'] as const;
+
+export function invalidateThreadQueue(queryClient: QueryClient, threadId: string | undefined): Promise<void> {
+  if (!threadId) return Promise.resolve();
+  return queryClient.invalidateQueries({ queryKey: threadQueueQueryKey(threadId) });
+}
 
 export function useThreadRoots(status: 'open' | 'closed' | 'all') {
   return useQuery({
@@ -162,7 +170,7 @@ export function useThreadContainers(threadId: string | undefined, enabled: boole
 
 export function useThreadQueue(threadId: string | undefined, enabled: boolean = true) {
   const qc = useQueryClient();
-  const queryKey = useMemo(() => ['agents', 'threads', threadId, 'queue'] as const, [threadId]);
+  const queryKey = useMemo(() => threadQueueQueryKey(threadId), [threadId]);
   const isValidThread = !!threadId && UUID_REGEX.test(threadId);
   const allow = enabled && isValidThread;
   const q = useQuery<{ items: AgentQueueItem[] }>({
@@ -174,24 +182,13 @@ export function useThreadQueue(threadId: string | undefined, enabled: boolean = 
 
   useEffect(() => {
     if (!allow || !threadId) return;
-    const invalidate = () => {
-      qc.invalidateQueries({ queryKey }).catch(() => {});
-    };
-    const offMessage = graphSocket.onMessageCreated((payload) => {
-      if (payload.threadId !== threadId) return;
-      invalidate();
+    const offReconnect = graphSocket.onReconnected(() => {
+      invalidateThreadQueue(qc, threadId).catch(() => {});
     });
-    const offRun = graphSocket.onRunStatusChanged((payload) => {
-      if (payload.threadId !== threadId) return;
-      invalidate();
-    });
-    const offReconnect = graphSocket.onReconnected(invalidate);
     return () => {
-      offMessage();
-      offRun();
       offReconnect();
     };
-  }, [allow, threadId, qc, queryKey]);
+  }, [allow, threadId, qc]);
 
   return q;
 }
