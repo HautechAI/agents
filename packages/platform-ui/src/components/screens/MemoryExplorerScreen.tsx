@@ -178,11 +178,32 @@ export default function MemoryExplorerScreen({
     queryClient.invalidateQueries({ queryKey: ['memory/list', nodeId, scope, effectiveThreadId ?? null] });
   }, [effectiveThreadId, nodeId, queryClient, scope]);
 
-  const invalidatePath = useCallback(
-    (path: string) => {
-      const normalized = normalizeMemoryPath(path);
-      queryClient.invalidateQueries({ queryKey: ['memory/stat', nodeId, scope, effectiveThreadId ?? null, normalized] });
-      queryClient.invalidateQueries({ queryKey: ['memory/read', nodeId, scope, effectiveThreadId ?? null, normalized] });
+  const invalidatePathQueries = useCallback(
+    (targetPath: string, options?: { includeRead?: boolean }) => {
+      const normalized = normalizeMemoryPath(targetPath);
+      queryClient.invalidateQueries({
+        queryKey: ['memory/stat', nodeId, scope, effectiveThreadId ?? null, normalized],
+      });
+      if (options?.includeRead ?? true) {
+        queryClient.invalidateQueries({
+          queryKey: ['memory/read', nodeId, scope, effectiveThreadId ?? null, normalized],
+        });
+      }
+    },
+    [effectiveThreadId, nodeId, queryClient, scope],
+  );
+
+  const invalidateParentQueries = useCallback(
+    (childPath: string) => {
+      const normalizedChild = normalizeMemoryPath(childPath);
+      const parentPath = memoryPathParent(normalizedChild);
+      queryClient.invalidateQueries({
+        queryKey: ['memory/stat', nodeId, scope, effectiveThreadId ?? null, parentPath],
+      });
+      const parentReadKey = ['memory/read', nodeId, scope, effectiveThreadId ?? null, parentPath] as const;
+      if (queryClient.getQueryState(parentReadKey)) {
+        queryClient.invalidateQueries({ queryKey: parentReadKey });
+      }
     },
     [effectiveThreadId, nodeId, queryClient, scope],
   );
@@ -194,6 +215,10 @@ export default function MemoryExplorerScreen({
     },
     onSuccess: (_data, { path, content, intent }) => {
       const normalized = normalizeMemoryPath(path);
+      invalidateTree();
+      invalidatePathQueries(normalized);
+      invalidateParentQueries(normalized);
+
       if (intent === 'append') {
         notifySuccess('Content appended');
         setAppendValue('');
@@ -203,9 +228,9 @@ export default function MemoryExplorerScreen({
         setEditorValue(content);
         setEditorDirty(false);
         lastSyncedRef.current = { path: normalized, content };
+        setNewDocumentName('');
+        setNewDocumentContent('');
       }
-      invalidateTree();
-      invalidatePath(normalized);
     },
     onError: (error: unknown, { intent }) => {
       notifyError((error as Error)?.message || (intent === 'append' ? 'Failed to append content' : 'Failed to create document'));
@@ -219,7 +244,8 @@ export default function MemoryExplorerScreen({
       notifySuccess('Document saved');
       setEditorDirty(false);
       const currentPath = selectedPathRef.current;
-      invalidatePath(currentPath);
+      invalidatePathQueries(currentPath);
+      invalidateParentQueries(currentPath);
       lastSyncedRef.current = { path: currentPath, content: editorValue };
     },
     onError: (error: unknown) => {
@@ -236,7 +262,8 @@ export default function MemoryExplorerScreen({
       const normalized = normalizeMemoryPath(path);
       notifySuccess('Location ensured');
       invalidateTree();
-      invalidatePath(normalized);
+      invalidatePathQueries(normalized);
+      invalidateParentQueries(normalized);
       setNewLocationName('');
       if (focusAfter) {
         focusPath(normalized, { notify: true });
@@ -252,9 +279,10 @@ export default function MemoryExplorerScreen({
     onSuccess: (_data, { path }) => {
       const normalized = normalizeMemoryPath(path);
       notifySuccess('Location deleted');
-      const parent = memoryPathParent(normalized);
       invalidateTree();
-      invalidatePath(normalized);
+      invalidatePathQueries(normalized);
+      invalidateParentQueries(normalized);
+      const parent = memoryPathParent(normalized);
       focusPath(parent, { notify: true });
     },
     onError: (error: unknown) => {
