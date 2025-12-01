@@ -64,12 +64,18 @@ export interface GraphLayoutProps {
 
 function resolveAgentDisplayTitle(node: GraphNodeConfig): string {
   const config = (node.config ?? {}) as Record<string, unknown>;
-  const rawTemplate = typeof node.template === 'string' ? node.template : '';
-  const fallbackTemplate = rawTemplate.trim().length > 0 ? rawTemplate.trim() : 'Agent';
   const configTitleRaw = typeof config.title === 'string' ? config.title : '';
   const configTitle = configTitleRaw.trim();
   if (configTitle.length > 0) {
     return configTitle;
+  }
+
+  const rawTemplate = typeof node.template === 'string' ? node.template : '';
+  const templateTitle = rawTemplate.trim().length > 0 ? rawTemplate.trim() : 'Agent';
+  const storedTitleRaw = typeof node.title === 'string' ? node.title : '';
+  const storedTitle = storedTitleRaw.trim();
+  if (storedTitle.length > 0 && storedTitle !== templateTitle) {
+    return storedTitle;
   }
 
   const rawName = typeof config.name === 'string' ? (config.name as string) : '';
@@ -80,17 +86,11 @@ function resolveAgentDisplayTitle(node: GraphNodeConfig): string {
     return computeAgentDefaultTitle(
       normalizedName.length > 0 ? normalizedName : undefined,
       normalizedRole.length > 0 ? normalizedRole : undefined,
-      fallbackTemplate,
+      templateTitle,
     );
   }
 
-  const storedTitleRaw = typeof node.title === 'string' ? node.title : '';
-  const storedTitle = storedTitleRaw.trim();
-  if (storedTitle.length > 0) {
-    return storedTitle;
-  }
-
-  return fallbackTemplate;
+  return templateTitle;
 }
 
 function resolveDisplayTitle(node: GraphNodeConfig): string {

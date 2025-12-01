@@ -359,7 +359,7 @@ describe('GraphLayout', () => {
       nodes: [
         {
           id: 'node-1',
-          template: 'agent-template',
+          template: 'Agent',
           kind: 'Agent',
           title: 'Agent',
           x: 0,
@@ -418,6 +418,46 @@ describe('GraphLayout', () => {
       };
       expect(latest?.nodes?.[0]?.data?.title).toBe('Atlas (Navigator)');
     });
+  });
+
+  it('keeps stored agent title when distinct from template', async () => {
+    const updateNode = vi.fn();
+    const applyNodeStatus = vi.fn();
+    const applyNodeState = vi.fn();
+    const setEdges = vi.fn();
+
+    mockGraphData({
+      nodes: [
+        {
+          id: 'node-1',
+          template: 'Agent',
+          kind: 'Agent',
+          title: 'Custom Dispatch',
+          x: 0,
+          y: 0,
+          status: 'not_ready',
+          config: { title: '', name: '', role: '' },
+          ports: { inputs: [], outputs: [] },
+        },
+      ],
+      updateNode,
+      applyNodeStatus,
+      applyNodeState,
+      setEdges,
+    });
+
+    hookMocks.useGraphSocket.mockReturnValue(undefined);
+    hookMocks.useNodeStatus.mockReturnValue({ data: null, refetch: vi.fn() });
+
+    render(<GraphLayout services={services} />);
+
+    await waitFor(() => expect(canvasSpy).toHaveBeenCalled());
+
+    const latest = canvasSpy.mock.calls.at(-1)?.[0] as {
+      nodes?: Array<{ data?: { title?: string } }>;
+    };
+
+    expect(latest?.nodes?.[0]?.data?.title).toBe('Custom Dispatch');
   });
 
   it('renders backend templates in the empty sidebar', async () => {
