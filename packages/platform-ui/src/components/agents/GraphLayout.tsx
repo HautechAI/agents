@@ -64,29 +64,30 @@ export interface GraphLayoutProps {
 
 function resolveAgentDisplayTitle(node: GraphNodeConfig): string {
   const config = (node.config ?? {}) as Record<string, unknown>;
+  const rawTemplate = typeof node.template === 'string' ? node.template : '';
+  const fallbackTemplate = rawTemplate.trim().length > 0 ? rawTemplate.trim() : 'Agent';
   const configTitleRaw = typeof config.title === 'string' ? config.title : '';
   const configTitle = configTitleRaw.trim();
   if (configTitle.length > 0) {
     return configTitle;
   }
 
+  const rawName = typeof config.name === 'string' ? (config.name as string) : '';
+  const normalizedName = rawName.trim();
+  const rawRole = typeof config.role === 'string' ? (config.role as string) : '';
+  const normalizedRole = rawRole.trim();
+  if (normalizedName.length > 0 || normalizedRole.length > 0) {
+    return computeAgentDefaultTitle(
+      normalizedName.length > 0 ? normalizedName : undefined,
+      normalizedRole.length > 0 ? normalizedRole : undefined,
+      fallbackTemplate,
+    );
+  }
+
   const storedTitleRaw = typeof node.title === 'string' ? node.title : '';
   const storedTitle = storedTitleRaw.trim();
   if (storedTitle.length > 0) {
     return storedTitle;
-  }
-
-  const rawTemplate = typeof node.template === 'string' ? node.template : '';
-  const fallbackTemplate = rawTemplate.trim().length > 0 ? rawTemplate.trim() : 'Agent';
-  const profileFallback = computeAgentDefaultTitle(
-    typeof config.name === 'string' ? (config.name as string) : undefined,
-    typeof config.role === 'string' ? (config.role as string) : undefined,
-    fallbackTemplate,
-  );
-  const trimmedProfileFallback = profileFallback.trim();
-
-  if (trimmedProfileFallback.length > 0) {
-    return trimmedProfileFallback;
   }
 
   return fallbackTemplate;
@@ -809,14 +810,17 @@ export function GraphLayout({ services }: GraphLayoutProps) {
     }
     const baseConfig = (selectedNode.config ?? {}) as Record<string, unknown>;
     const { title: _ignoredTitle, ...rest } = baseConfig;
-    const configTitle = typeof baseConfig.title === 'string' ? (baseConfig.title as string) : '';
+    const rawConfigTitle = typeof baseConfig.title === 'string' ? (baseConfig.title as string) : undefined;
 
-    const config: SidebarNodeConfig = {
+    const config = {
       ...rest,
       kind: selectedNode.kind,
-      title: configTitle,
       template: selectedNode.template,
-    };
+    } as SidebarNodeConfig;
+
+    if (rawConfigTitle && rawConfigTitle.trim().length > 0) {
+      config.title = rawConfigTitle;
+    }
 
     return {
       config,
