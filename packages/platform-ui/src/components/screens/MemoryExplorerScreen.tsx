@@ -224,9 +224,6 @@ export default function MemoryExplorerScreen({
   const saveMutation = useMutation({
     mutationFn: async () => {
       const path = normalizeMemoryPath(selectedPathRef.current);
-      if (path === '/') {
-        throw new Error('Root document cannot be edited');
-      }
       const nextContent = editorValueRef.current;
       const lastSynced = lastSyncedRef.current?.content ?? '';
       const exists = documentStateRef.current.exists;
@@ -311,7 +308,7 @@ export default function MemoryExplorerScreen({
     },
   });
 
-  const saveDisabled = threadMissing || isRootPath || saveMutation.isPending || readBusy || !editorDirty;
+  const saveDisabled = threadMissing || saveMutation.isPending || readBusy || !editorDirty;
   const addDisabled = threadMissing || createChildMutation.isPending;
   const addConfirmDisabled = threadMissing || createChildMutation.isPending || newChildName.trim().length === 0;
   const deleteDisabled = threadMissing || isRootPath || deleteMutation.isPending || !documentExists;
@@ -574,7 +571,7 @@ export default function MemoryExplorerScreen({
                       helperText={readQuery.error ? (readQuery.error as Error).message : undefined}
                     />
                     {isRootPath ? (
-                      <div className="text-xs text-[var(--agyn-text-subtle)]">The root document cannot be edited or removed.</div>
+                      <div className="text-xs text-[var(--agyn-text-subtle)]">The root document cannot be deleted.</div>
                     ) : null}
                   </section>
                 </div>

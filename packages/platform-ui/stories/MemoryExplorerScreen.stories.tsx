@@ -223,7 +223,7 @@ export const Default: Story = {
   args: {
     nodeId: 'demo-node',
     scope: 'global',
-    initialPath: '/projects/alpha/notes.md',
+    initialPath: '/',
     onPathChange: (nextPath: string) => console.info('Path changed to', nextPath),
   },
   render: (args) => <MemoryExplorerStoryWrapper {...args} />,
