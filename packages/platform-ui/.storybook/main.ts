@@ -19,24 +19,6 @@ const config: StorybookConfig = {
   async viteFinal(config) {
     return {
       ...config,
-      resolve: {
-        ...(config.resolve ?? {}),
-        alias: {
-          ...(config.resolve?.alias ?? {}),
-          '@storybook/react/dist/entry-preview.mjs': '@storybook/react/entry-preview',
-          '@storybook/react/dist/entry-preview.js': '@storybook/react/entry-preview',
-          '@storybook/react/dist/entry-preview': '@storybook/react/entry-preview',
-          '@storybook/react/dist/entry-preview-docs.mjs': '@storybook/react/entry-preview-docs',
-          '@storybook/react/dist/entry-preview-docs.js': '@storybook/react/entry-preview-docs',
-          '@storybook/react/dist/entry-preview-docs': '@storybook/react/entry-preview-docs',
-          '@storybook/addon-docs/dist/preview.js': '@storybook/addon-docs/preview',
-          '@storybook/addon-docs/dist/preview.mjs': '@storybook/addon-docs/preview',
-          '@storybook/addon-docs/dist/preview': '@storybook/addon-docs/preview',
-          '@storybook/addon-a11y/dist/preview.js': '@storybook/addon-a11y/preview',
-          '@storybook/addon-a11y/dist/preview.mjs': '@storybook/addon-a11y/preview',
-          '@storybook/addon-a11y/dist/preview': '@storybook/addon-a11y/preview',
-        },
-      },
       plugins: [
         ...(config.plugins ?? []), //
         tailwindcss(),
