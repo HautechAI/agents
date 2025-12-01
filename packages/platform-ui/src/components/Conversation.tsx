@@ -247,12 +247,12 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
       return;
     }
 
+    const requestId = scrollRequestIdRef.current + 1;
     const scroller = handle.getScrollerElement();
+    scrollRequestIdRef.current = requestId;
     if (!scroller) {
       debugConversation('conversation.scroll.missing-scroller', () => ({ threadId, requestId }));
     }
-    const requestId = scrollRequestIdRef.current + 1;
-    scrollRequestIdRef.current = requestId;
 
     if (scroller) {
       debugConversation('conversation.scroll.wait-for-stable', () => ({ threadId, requestId }));
