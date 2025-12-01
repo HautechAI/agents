@@ -1,9 +1,10 @@
-import { Inject, Injectable, Scope, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Scope } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import z from 'zod';
 import { BaseToolNode } from '../baseToolNode';
-import { ManageFunctionTool } from './manage.tool';
 import { AgentNode } from '../../agent/agent.node';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
+import { ManageFunctionTool } from './manage.tool';
 
 export const ManageToolStaticConfigSchema = z
   .object({
@@ -43,17 +44,20 @@ export const ManageToolStaticConfigSchema = z
 @Injectable({ scope: Scope.TRANSIENT })
 export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStaticConfigSchema>> {
   private tool?: ManageFunctionTool;
+  private toolPromise?: Promise<ManageFunctionTool>;
   private readonly workers: Set<AgentNode> = new Set();
 
   constructor(
-    @Inject(forwardRef(() => ManageFunctionTool)) private readonly manageTool: ManageFunctionTool,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
   ) {
     super();
+    void this.ensureTool();
   }
 
   async setConfig(cfg: z.input<typeof ManageToolStaticConfigSchema>): Promise<void> {
     const parsed = ManageToolStaticConfigSchema.parse(cfg ?? {});
+    await this.ensureTool();
     await super.setConfig(parsed);
   }
 
@@ -113,12 +117,20 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     throw new Error('ManageToolNode: worker agent requires non-empty title');
   }
 
-  protected createTool() {
-    return this.manageTool.init(this, { persistence: this.persistence });
+  private async ensureTool(): Promise<ManageFunctionTool> {
+    if (!this.toolPromise) {
+      this.toolPromise = this.moduleRef
+        .resolve(ManageFunctionTool, undefined, { strict: false })
+        .then((tool) => tool.init(this, { persistence: this.persistence }));
+    }
+    this.tool = await this.toolPromise;
+    return this.tool;
   }
 
   getTool() {
-    if (!this.tool) this.tool = this.createTool();
+    if (!this.tool) {
+      throw new Error('ManageToolNode: tool not initialized');
+    }
     return this.tool;
   }
 
