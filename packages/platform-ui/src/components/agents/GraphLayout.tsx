@@ -70,14 +70,14 @@ function resolveAgentDisplayTitle(node: GraphNodeConfig): string {
     return configTitle;
   }
 
-  const rawTemplate = typeof node.template === 'string' ? node.template : '';
-  const templateTitle = rawTemplate.trim().length > 0 ? rawTemplate.trim() : 'Agent';
   const storedTitleRaw = typeof node.title === 'string' ? node.title : '';
   const storedTitle = storedTitleRaw.trim();
-  if (storedTitle.length > 0 && storedTitle !== templateTitle) {
+  if (storedTitle.length > 0) {
     return storedTitle;
   }
 
+  const rawTemplate = typeof node.template === 'string' ? node.template : '';
+  const templateTitle = rawTemplate.trim().length > 0 ? rawTemplate.trim() : 'Agent';
   const rawName = typeof config.name === 'string' ? (config.name as string) : '';
   const normalizedName = rawName.trim();
   const rawRole = typeof config.role === 'string' ? (config.role as string) : '';
