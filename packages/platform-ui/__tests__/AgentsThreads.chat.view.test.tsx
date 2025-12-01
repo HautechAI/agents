@@ -32,6 +32,19 @@ describe('AgentsThreads conversation view', () => {
 
   const THREAD_ID = '00000000-0000-0000-0000-000000000001';
 
+  async function waitForListenerSet<T>(
+    key:
+      | 'messageCreatedListeners'
+      | 'agentQueueEnqueuedListeners'
+      | 'agentQueueDrainedListeners'
+      | 'runStatusListeners',
+  ): Promise<Set<T>> {
+    await waitFor(() =>
+      expect(((graphSocket as any)[key] as Set<T> | undefined)?.size ?? 0).toBeGreaterThan(0),
+    );
+    return (graphSocket as any)[key] as Set<T>;
+  }
+
   function setupThreadData() {
     const thread = {
       id: THREAD_ID,
@@ -64,6 +77,7 @@ describe('AgentsThreads conversation view', () => {
     const threadsHandler = () => HttpResponse.json({ items: [thread] });
     const threadHandler = () => HttpResponse.json(thread);
     const queueItems: Array<{ id: string; kind: 'user' | 'assistant' | 'system'; text: string; enqueuedAt: string }> = [];
+    const queueHandler = vi.fn(() => HttpResponse.json({ items: queueItems }));
 
     const messagesHandler = ({ request }: { request: Request }) => {
       const url = new URL(request.url);
@@ -95,11 +109,11 @@ describe('AgentsThreads conversation view', () => {
       http.get(abs('/api/containers'), () => HttpResponse.json({ items: containers })),
       http.get('/api/agents/runs/run1/messages', messagesHandler),
       http.get(abs('/api/agents/runs/run1/messages'), messagesHandler),
-      http.get(`/api/agents/threads/${THREAD_ID}/queue`, () => HttpResponse.json({ items: queueItems })),
-      http.get(abs(`/api/agents/threads/${THREAD_ID}/queue`), () => HttpResponse.json({ items: queueItems })),
+      http.get(`/api/agents/threads/${THREAD_ID}/queue`, queueHandler),
+      http.get(abs(`/api/agents/threads/${THREAD_ID}/queue`), queueHandler),
     );
 
-    return { queueItems };
+    return { queueItems, queueHandler };
   }
 
   it('renders conversation messages and run info, and navigates to run timeline', async () => {
@@ -134,7 +148,7 @@ describe('AgentsThreads conversation view', () => {
   });
 
   it('shows reminders and queued messages under pending, then moves queued items into runs when the run starts', async () => {
-    const { queueItems } = setupThreadData();
+    const { queueItems, queueHandler } = setupThreadData();
 
     const user = userEvent.setup();
 
@@ -171,8 +185,23 @@ describe('AgentsThreads conversation view', () => {
       },
     };
 
-    const messageListeners = (graphSocket as any).messageCreatedListeners as Set<(payload: typeof bufferedPayload) => void>;
+    const messageListeners = await waitForListenerSet<(payload: typeof bufferedPayload) => void>('messageCreatedListeners');
+    const queueEnqueuedListeners = await waitForListenerSet<(payload: { threadId: string; at: string }) => void>(
+      'agentQueueEnqueuedListeners',
+    );
     queueItems.push({ id: 'queued-run-late', kind: 'assistant', text: 'Pending reply', enqueuedAt: t(55) });
+
+    await waitFor(() => expect(queueHandler).toHaveBeenCalled());
+    const initialQueueCalls = queueHandler.mock.calls.length;
+
+    await act(async () => {
+      for (const listener of queueEnqueuedListeners) {
+        listener({ threadId: THREAD_ID, at: t(55) });
+      }
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
 
     await act(async () => {
       for (const listener of messageListeners) {
@@ -180,6 +209,7 @@ describe('AgentsThreads conversation view', () => {
       }
     });
 
+    await waitFor(() => expect(queueHandler).toHaveBeenCalledTimes(initialQueueCalls + 1));
     await waitFor(() => {
       expect(within(pendingRoot).getByText('Pending reply')).toBeInTheDocument();
     });
@@ -195,13 +225,26 @@ describe('AgentsThreads conversation view', () => {
       threadId: THREAD_ID,
       run: { id: 'run-late', status: 'running' as const, createdAt: t(56), updatedAt: t(57) },
     };
-    const runListeners = (graphSocket as any).runStatusListeners as Set<(payload: typeof runPayload) => void>;
+    const runListeners = await waitForListenerSet<(payload: typeof runPayload) => void>('runStatusListeners');
+    const queueDrainedListeners = await waitForListenerSet<(payload: { threadId: string; at: string }) => void>(
+      'agentQueueDrainedListeners',
+    );
+    const beforeDrainCalls = queueHandler.mock.calls.length;
     await act(async () => {
       for (const listener of runListeners) {
         listener(runPayload);
       }
     });
+    await act(async () => {
+      for (const listener of queueDrainedListeners) {
+        listener({ threadId: THREAD_ID, at: t(56) });
+      }
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
 
+    await waitFor(() => expect(queueHandler).toHaveBeenCalledTimes(beforeDrainCalls + 1));
     await waitFor(() => expect(within(pendingRoot).queryByText('Pending reply')).toBeNull());
 
     await waitFor(() => {
@@ -209,6 +252,7 @@ describe('AgentsThreads conversation view', () => {
       const found = nodes.some((node) => within(node).queryByText('Pending reply'));
       expect(found).toBe(true);
     });
+
   });
 
   it('loads subthreads when expanding a thread', async () => {

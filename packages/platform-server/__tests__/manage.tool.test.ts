@@ -19,6 +19,8 @@ import { ManageFunctionTool } from '../src/nodes/tools/manage/manage.tool';
 import { ManageToolNode } from '../src/nodes/tools/manage/manage.node';
 import { ReferenceResolverService } from '../src/utils/reference-resolver.service';
 import { createReferenceResolverStub } from './helpers/reference-resolver.stub';
+import { EventsBusService } from '../src/events/events-bus.service';
+import { createEventsBusStub } from './helpers/eventsBus.stub';
 
 class StubLLMProvisioner extends LLMProvisioner {
   async getLLM(): Promise<{ call: (messages: unknown) => Promise<{ text: string; output: unknown[] }> }> {
@@ -71,6 +73,7 @@ async function createHarness(options: { persistence?: AgentsPersistenceService }
       { provide: AgentsPersistenceService, useValue: persistence },
       RunSignalsRegistry,
       { provide: ReferenceResolverService, useValue: createReferenceResolverStub().stub },
+      { provide: EventsBusService, useValue: createEventsBusStub() },
     ],
   }).compile();
 
@@ -286,6 +289,7 @@ describe('ManageTool unit', () => {
           useValue: { getOrCreateSubthreadByAlias: async () => 'child-t' } as unknown as AgentsPersistenceService,
         },
         RunSignalsRegistry,
+        { provide: EventsBusService, useValue: createEventsBusStub() },
       ],
     }).compile();
 
@@ -333,6 +337,7 @@ describe('ManageTool graph wiring', () => {
           useValue: { getOrCreateSubthreadByAlias: async () => 'child-t' } as unknown as AgentsPersistenceService,
         },
         RunSignalsRegistry,
+        { provide: EventsBusService, useValue: createEventsBusStub() },
       ],
     }).compile();
 
@@ -376,6 +381,7 @@ describe('ManageTool graph wiring', () => {
           useValue: { getOrCreateSubthreadByAlias: async () => 'child-t' } as unknown as AgentsPersistenceService,
         },
         RunSignalsRegistry,
+        { provide: EventsBusService, useValue: createEventsBusStub() },
       ],
     }).compile();
     const runtime = await runtimeModule.resolve(LiveGraphRuntime);

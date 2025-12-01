@@ -11,7 +11,7 @@ import { notifyError } from '@/lib/notify';
 import { graphSocket } from '@/lib/graph/socket';
 import { threads } from '@/api/modules/threads';
 import { runs as runsApi } from '@/api/modules/runs';
-import { useThreadById, useThreadReminders, useThreadContainers, useThreadQueue } from '@/api/hooks/threads';
+import { useThreadById, useThreadReminders, useThreadContainers, useThreadQueue, invalidateThreadQueue } from '@/api/hooks/threads';
 import { useThreadRuns } from '@/api/hooks/runs';
 import type { ThreadNode, ThreadMetrics, ThreadReminder, RunMessageItem, RunMeta } from '@/api/types/agents';
 import type { ContainerItem } from '@/api/modules/containers';
@@ -960,6 +960,33 @@ export function AgentsThreads() {
     },
     [isDraftSelected, queueQuery.data],
   );
+
+  useEffect(() => {
+    const threadId = effectiveSelectedThreadId;
+    if (!threadId) return;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = () => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        invalidateThreadQueue(queryClient, threadId).catch(() => {});
+      }, 300);
+    };
+    const offEnqueued = graphSocket.onAgentQueueEnqueued((payload) => {
+      if (payload.threadId !== threadId) return;
+      scheduleInvalidate();
+    });
+    const offDrained = graphSocket.onAgentQueueDrained((payload) => {
+      if (payload.threadId !== threadId) return;
+      scheduleInvalidate();
+    });
+    const offReconnect = graphSocket.onReconnected(scheduleInvalidate);
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      offEnqueued();
+      offDrained();
+      offReconnect();
+    };
+  }, [effectiveSelectedThreadId, queryClient]);
   const selectedContainer = useMemo(() => {
     if (!selectedContainerId || isDraftSelected) return null;
     return containerItems.find((item) => item.containerId === selectedContainerId) ?? null;
@@ -982,7 +1009,7 @@ export function AgentsThreads() {
     onSuccess: (_data, variables) => {
       setInputValue('');
       if (variables?.threadId) {
-        queryClient.invalidateQueries({ queryKey: ['agents', 'threads', variables.threadId, 'queue'] }).catch(() => {});
+        invalidateThreadQueue(queryClient, variables.threadId).catch(() => {});
       }
     },
     onError: (error: unknown) => {
