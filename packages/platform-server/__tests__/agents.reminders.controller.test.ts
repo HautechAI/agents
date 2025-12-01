@@ -207,6 +207,110 @@ describe('AgentsPersistenceService.listReminders', () => {
 });
 
 describe('AgentsPersistenceService.listRemindersPaginated', () => {
+  it('coerces string pagination inputs and applies skip for latest/all path', async () => {
+    const tx = {
+      reminder: {
+        count: vi
+          .fn()
+          .mockResolvedValueOnce(50)
+          .mockResolvedValueOnce(30)
+          .mockResolvedValueOnce(15)
+          .mockResolvedValueOnce(5),
+        findMany: vi.fn(),
+      },
+      $queryRaw: vi.fn(),
+    } as any;
+
+    const svc = createPersistenceWithTx(tx);
+    const fetchSpy = vi.spyOn(svc as any, 'fetchRemindersLatestAll').mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) => ({
+        id: `rem-${index}`,
+        threadId: 'thread-1',
+        note: `Reminder ${index}`,
+        at: new Date(),
+        createdAt: new Date(),
+        completedAt: null,
+        cancelledAt: null,
+      })),
+    );
+
+    const result = await svc.listRemindersPaginated({
+      filter: 'all',
+      page: '2' as unknown as number,
+      pageSize: '10' as unknown as number,
+      sort: 'latest',
+      order: 'desc',
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, clauses, skipArg, takeArg, orderArg] = fetchSpy.mock.calls[0] ?? [];
+    expect(clauses).toEqual([]);
+    expect(skipArg).toBe(10);
+    expect(takeArg).toBe(10);
+    expect(orderArg).toBe('desc');
+    expect(result.page).toBe(2);
+    expect(result.pageSize).toBe(10);
+    expect(result.totalCount).toBe(50);
+    expect(result.countsByStatus).toEqual({ scheduled: 30, executed: 15, cancelled: 5 });
+    expect(tx.reminder.findMany).not.toHaveBeenCalled();
+  });
+
+  it('uses prisma pagination branch for non-latest filters with coerced values', async () => {
+    const items = Array.from({ length: 5 }, (_, index) => ({
+      id: `completed-${index}`,
+      threadId: 'thread-1',
+      note: `Completed ${index}`,
+      at: new Date(),
+      createdAt: new Date(),
+      completedAt: new Date(),
+      cancelledAt: null,
+    }));
+
+    const tx = {
+      reminder: {
+        count: vi
+          .fn()
+          .mockResolvedValueOnce(42)
+          .mockResolvedValueOnce(12)
+          .mockResolvedValueOnce(18)
+          .mockResolvedValueOnce(7),
+        findMany: vi.fn().mockResolvedValue(items),
+      },
+      $queryRaw: vi.fn(),
+    } as any;
+
+    const svc = createPersistenceWithTx(tx);
+    const result = await svc.listRemindersPaginated({
+      filter: 'completed',
+      page: '3' as unknown as number,
+      pageSize: '5' as unknown as number,
+      sort: 'createdAt',
+      order: 'asc',
+    });
+
+    expect(tx.reminder.findMany).toHaveBeenCalledWith({
+      where: { completedAt: { not: null } },
+      orderBy: { createdAt: 'asc' },
+      skip: 10,
+      take: 5,
+      select: {
+        id: true,
+        threadId: true,
+        note: true,
+        at: true,
+        createdAt: true,
+        completedAt: true,
+        cancelledAt: true,
+      },
+    });
+    expect(result.page).toBe(3);
+    expect(result.pageSize).toBe(5);
+    expect(result.items).toHaveLength(5);
+    expect(result.countsByStatus).toEqual({ scheduled: 12, executed: 18, cancelled: 7 });
+  });
+});
+
+describe('AgentsPersistenceService.listRemindersPaginated', () => {
   it('applies pagination and ordering with prisma findMany', async () => {
     const findMany = vi.fn(async () => [
       {

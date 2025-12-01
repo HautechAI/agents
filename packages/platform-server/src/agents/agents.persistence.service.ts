@@ -686,8 +686,12 @@ export class AgentsPersistenceService {
     countsByStatus: { scheduled: number; executed: number; cancelled: number };
     sortApplied: { key: 'latest' | 'createdAt' | 'at'; order: 'asc' | 'desc' };
   }> {
-    const normalizedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
-    const normalizedPageSize = Number.isFinite(pageSize) ? Math.max(1, Math.min(200, Math.trunc(pageSize))) : 20;
+    const parsedPage = Number(page);
+    const normalizedPage = Number.isFinite(parsedPage) ? Math.max(1, Math.trunc(parsedPage)) : 1;
+    const parsedPageSize = Number(pageSize);
+    const normalizedPageSize = Number.isFinite(parsedPageSize)
+      ? Math.max(1, Math.min(200, Math.trunc(parsedPageSize)))
+      : 20;
     const sortKey: 'latest' | 'createdAt' | 'at' = sort ?? 'latest';
     const sortOrder: 'asc' | 'desc' = order === 'asc' ? 'asc' : 'desc';
     const filterKey: 'all' | 'active' | 'completed' | 'cancelled' = filter ?? 'all';
