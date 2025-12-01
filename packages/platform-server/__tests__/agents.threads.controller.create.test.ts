@@ -8,7 +8,6 @@ import { RunSignalsRegistry } from '../src/agents/run-signals.service';
 import { LiveGraphRuntime } from '../src/graph-core/liveGraph.manager';
 import { TemplateRegistry } from '../src/graph-core/templateRegistry';
 import { ServiceUnavailableException } from '@nestjs/common';
-import type { Response } from 'express';
 
 const runEventsStub = {
   getRunSummary: async () => null,
@@ -31,6 +30,15 @@ type SetupOptions = {
   liveNode?: LiveNodeStub | null;
   templateKind?: 'agent' | 'tool';
   createError?: Error;
+  responseVariant?: 'setHeader' | 'header' | 'raw';
+};
+
+type TestResponse = {
+  setHeader?: ReturnType<typeof vi.fn>;
+  header?: ReturnType<typeof vi.fn>;
+  raw?: {
+    setHeader?: ReturnType<typeof vi.fn>;
+  };
 };
 
 async function setup(options: SetupOptions = {}) {
@@ -96,7 +104,16 @@ async function setup(options: SetupOptions = {}) {
   }).compile();
 
   const controller = await module.resolve(AgentsThreadsController);
-  const response = { setHeader: vi.fn() } as unknown as Response;
+  const response: TestResponse = (() => {
+    switch (options.responseVariant) {
+      case 'header':
+        return { header: vi.fn() };
+      case 'raw':
+        return { raw: { setHeader: vi.fn() } };
+      default:
+        return { setHeader: vi.fn() };
+    }
+  })();
 
   return {
     controller,
@@ -120,7 +137,29 @@ describe('AgentsThreadsController POST /api/agents/threads', () => {
     expect(args[1]).toMatch(/^manual:agent-1:[0-9a-fA-F-]{36}$/);
     expect(args[2]).toBe('New conversation');
     expect(ensureAssignedAgent).toHaveBeenCalledWith('thread-created', 'agent-1');
-    expect(response.setHeader).toHaveBeenCalledWith('Location', '/api/agents/threads/thread-created');
+    const setHeader = response.setHeader;
+    if (!setHeader) throw new Error('setHeader mock was not provided');
+    expect(setHeader).toHaveBeenCalledWith('Location', '/api/agents/threads/thread-created');
+  });
+
+  it('sets the Location header via response.header when available', async () => {
+    const { controller, response } = await setup({ responseVariant: 'header' });
+
+    await controller.createThread({ agentNodeId: 'agent-1' }, response);
+
+    const header = response.header;
+    if (!header) throw new Error('header mock was not provided');
+    expect(header).toHaveBeenCalledWith('Location', '/api/agents/threads/thread-created');
+  });
+
+  it('sets the Location header via response.raw.setHeader when available', async () => {
+    const { controller, response } = await setup({ responseVariant: 'raw' });
+
+    await controller.createThread({ agentNodeId: 'agent-1' }, response);
+
+    const rawSetHeader = response.raw?.setHeader;
+    if (!rawSetHeader) throw new Error('raw.setHeader mock was not provided');
+    expect(rawSetHeader).toHaveBeenCalledWith('Location', '/api/agents/threads/thread-created');
   });
 
   it('defaults summary to empty string when omitted', async () => {

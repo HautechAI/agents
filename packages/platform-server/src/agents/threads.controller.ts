@@ -45,6 +45,30 @@ import { randomUUID } from 'node:crypto';
 // Avoid runtime import of Prisma in tests; enumerate allowed values
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'injected', 'output'];
 
+type LocationHeaderTarget = {
+  header?: (name: string, value: string) => unknown;
+  setHeader?: (name: string, value: string) => unknown;
+  raw?: {
+    setHeader?: (name: string, value: string) => unknown;
+  };
+};
+
+function applyLocationHeader(target: LocationHeaderTarget | undefined, location: string): void {
+  if (!target) return;
+  if (typeof target.header === 'function') {
+    target.header('Location', location);
+    return;
+  }
+  if (typeof target.setHeader === 'function') {
+    target.setHeader('Location', location);
+    return;
+  }
+  const raw = target.raw;
+  if (raw && typeof raw.setHeader === 'function') {
+    raw.setHeader('Location', location);
+  }
+}
+
 export const RunEventTypeValues: ReadonlyArray<RunEventType> = [
   'invocation_message',
   'injection',
@@ -455,7 +479,10 @@ export class AgentsThreadsController {
   }
 
   @Post('threads')
-  async createThread(@Body() body: CreateThreadBodyDto, @Res({ passthrough: true }) res: unknown) {
+  async createThread(
+    @Body() body: CreateThreadBodyDto,
+    @Res({ passthrough: true }) res: LocationHeaderTarget | undefined,
+  ) {
     const agentNodeId = body.agentNodeId.trim();
     const summary = body.summary?.trim() ?? '';
 
@@ -482,12 +509,7 @@ export class AgentsThreadsController {
     try {
       const threadId = await this.persistence.getOrCreateThreadByAlias('manual', alias, summary);
       await this.persistence.ensureAssignedAgent(threadId, agentNodeId);
-      if (res && typeof res === 'object') {
-        const candidate = res as { setHeader?: (name: string, value: string) => void };
-        if (typeof candidate.setHeader === 'function') {
-          candidate.setHeader('Location', `/api/agents/threads/${threadId}`);
-        }
-      }
+      applyLocationHeader(res, `/api/agents/threads/${threadId}`);
       return { id: threadId } as const;
     } catch (error) {
       const stack = error instanceof Error ? error.stack : undefined;
