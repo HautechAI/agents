@@ -65,6 +65,7 @@ interface ConversationProps {
   className?: string;
   defaultCollapsed?: boolean;
   collapsed?: boolean;
+  atBottomAtOpen?: boolean;
   testId?: string | null;
 }
 
@@ -142,7 +143,7 @@ const sanitizeRestoreState = (state: ConversationScrollState | null): Conversati
 
 export interface ConversationHandle {
   captureScrollState: () => Promise<ConversationScrollState | null>;
-  restoreScrollState: (state: ConversationScrollState | null) => void;
+  restoreScrollState: (state: ConversationScrollState | null, options?: { showLoader?: boolean }) => void;
   isAtBottom: () => boolean;
 }
 
@@ -158,6 +159,7 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
   className = '',
   defaultCollapsed = false,
   collapsed,
+  atBottomAtOpen = true,
   testId,
 }: ConversationProps, ref) {
   const messagesRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -174,6 +176,12 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
   const [runHeights, setRunHeights] = useState<Map<string, number>>(new Map());
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isLoaderVisible, setIsLoaderVisible] = useState(() => isActive && !hydrationComplete);
+  const committedRunHeightsRef = useRef<Map<string, number>>(new Map());
+  const runHeightBufferRef = useRef<Map<string, number>>(new Map());
+  const runHeightFrameRef = useRef<number | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const allowAutoFollowRef = useRef(atBottomAtOpen !== false);
+  const loaderSuppressedRef = useRef(false);
 
   const isCollapsed = collapsed ?? defaultCollapsed;
   const hasQueueOrReminders = queuedMessages.length > 0 || reminders.length > 0;
@@ -198,22 +206,120 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     return count;
   }, [conversationItems]);
 
+  const handleMeasuredHeight = useCallback((runId: string, height: number) => {
+    const normalized = Math.max(0, Math.round(height));
+    runHeightBufferRef.current.set(runId, normalized);
+    if (runHeightFrameRef.current !== null) {
+      return;
+    }
+    runHeightFrameRef.current = requestAnimationFrame(() => {
+      runHeightFrameRef.current = null;
+      if (runHeightBufferRef.current.size === 0) {
+        return;
+      }
+      let changed = false;
+      const next = new Map(committedRunHeightsRef.current);
+      for (const [id, value] of runHeightBufferRef.current.entries()) {
+        if (next.get(id) !== value) {
+          next.set(id, value);
+          changed = true;
+        }
+      }
+      runHeightBufferRef.current.clear();
+      if (changed) {
+        committedRunHeightsRef.current = next;
+        setRunHeights(next);
+      }
+    });
+  }, [setRunHeights]);
+
   useEffect(() => {
+    const presentIds = new Set(runs.map((run) => run.id));
+    let changed = false;
     const next = new Map<string, number>();
-    const runIdSet = new Set(runs.map((run) => run.id));
+    for (const [runId, height] of committedRunHeightsRef.current.entries()) {
+      if (presentIds.has(runId)) {
+        next.set(runId, height);
+      } else {
+        changed = true;
+      }
+    }
+    if (changed) {
+      committedRunHeightsRef.current = next;
+      setRunHeights(next);
+    }
+
+    for (const key of Array.from(runHeightBufferRef.current.keys())) {
+      if (!presentIds.has(key)) {
+        runHeightBufferRef.current.delete(key);
+      }
+    }
+
+    for (const key of Array.from(messagesRefs.current.keys())) {
+      if (!presentIds.has(key)) {
+        const element = messagesRefs.current.get(key);
+        if (element && resizeObserverRef.current) {
+          resizeObserverRef.current.unobserve(element);
+        }
+        messagesRefs.current.delete(key);
+      }
+    }
+  }, [runs]);
+
+  useEffect(() => {
+    if (typeof ResizeObserver !== 'undefined') {
+      return;
+    }
+    const next = new Map<string, number>();
     for (const run of runs) {
       const element = messagesRefs.current.get(run.id);
       if (element) {
         next.set(run.id, element.offsetHeight);
       }
     }
-    for (const key of Array.from(messagesRefs.current.keys())) {
-      if (!runIdSet.has(key)) {
-        messagesRefs.current.delete(key);
-      }
-    }
+    committedRunHeightsRef.current = next;
     setRunHeights(next);
   }, [runs]);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const target = entry.target as HTMLElement;
+        const runId = target.dataset.runId;
+        if (!runId) {
+          continue;
+        }
+        const borderBox = entry.borderBoxSize;
+        let blockSize: number | undefined;
+        if (Array.isArray(borderBox)) {
+          const first = borderBox[0] as { blockSize?: number } | undefined;
+          if (typeof first?.blockSize === 'number' && Number.isFinite(first.blockSize)) {
+            blockSize = first.blockSize;
+          }
+        } else if (borderBox) {
+          const single = borderBox as { blockSize?: number };
+          if (typeof single.blockSize === 'number' && Number.isFinite(single.blockSize)) {
+            blockSize = single.blockSize;
+          }
+        }
+        const fallbackHeight = Number.isFinite(entry.contentRect.height) ? entry.contentRect.height : undefined;
+        const height = blockSize ?? fallbackHeight ?? 0;
+        handleMeasuredHeight(runId, height);
+      }
+    });
+    resizeObserverRef.current = observer;
+    for (const [runId, element] of messagesRefs.current.entries()) {
+      element.dataset.runId = runId;
+      observer.observe(element);
+    }
+    return () => {
+      observer.disconnect();
+      resizeObserverRef.current = null;
+    };
+  }, [handleMeasuredHeight]);
 
   useLayoutEffect(() => {
     const scroller = listHandleRef.current?.getScrollerElement();
@@ -234,6 +340,10 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     }
   }, [threadId, totalMessageCount]);
 
+  useEffect(() => {
+    allowAutoFollowRef.current = atBottomAtOpen !== false;
+  }, [atBottomAtOpen, threadId]);
+
   useEffect(
     () => () => {
       if (rafIdRef.current !== null) {
@@ -241,6 +351,10 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
       }
       if (restoreFrameRef.current !== null) {
         cancelAnimationFrame(restoreFrameRef.current);
+      }
+      if (runHeightFrameRef.current !== null) {
+        cancelAnimationFrame(runHeightFrameRef.current);
+        runHeightFrameRef.current = null;
       }
     },
     [],
@@ -294,19 +408,29 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
 
   useEffect(() => {
     if (!isActive) {
+      loaderSuppressedRef.current = false;
       setIsLoaderVisible(false);
       return;
     }
 
     if (!hydrationComplete) {
-      if (!initialScrollCompletedRef.current) {
+      if (!initialScrollCompletedRef.current && !loaderSuppressedRef.current) {
+        setIsLoaderVisible(true);
+      }
+      return;
+    }
+
+    if (pendingRestoreRef.current) {
+      if (!loaderSuppressedRef.current) {
         setIsLoaderVisible(true);
       }
       return;
     }
 
     if (initialScrollCompletedRef.current) {
-      setIsLoaderVisible(false);
+      if (!loaderSuppressedRef.current) {
+        setIsLoaderVisible(false);
+      }
       return;
     }
 
@@ -314,20 +438,33 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
       if (totalMessageCount === 0 && !hasQueueOrReminders) {
         initialScrollRequestedRef.current = true;
         initialScrollCompletedRef.current = true;
+        loaderSuppressedRef.current = false;
         setIsLoaderVisible(false);
         return;
       }
+
       initialScrollRequestedRef.current = true;
-      setIsLoaderVisible(true);
+
+      if (!allowAutoFollowRef.current) {
+        initialScrollCompletedRef.current = true;
+        loaderSuppressedRef.current = false;
+        setIsLoaderVisible(false);
+        return;
+      }
+
+      if (!loaderSuppressedRef.current) {
+        setIsLoaderVisible(true);
+      }
       void scrollToBottom();
       return;
     }
 
     if (isAtBottom) {
       initialScrollCompletedRef.current = true;
+      loaderSuppressedRef.current = false;
       setIsLoaderVisible(false);
     }
-  }, [conversationItems.length, hydrationComplete, isActive, isAtBottom, scrollToBottom, totalMessageCount, hasQueueOrReminders]);
+  }, [hasQueueOrReminders, hydrationComplete, isActive, isAtBottom, scrollToBottom, totalMessageCount]);
 
   useEffect(() => {
     if (!hydrationComplete || !isActive) {
@@ -338,7 +475,8 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     if (
       totalMessageCount > prevTotalMessageCountRef.current &&
       initialScrollCompletedRef.current &&
-      isAtBottomRef.current
+      isAtBottomRef.current &&
+      allowAutoFollowRef.current
     ) {
       void scrollToBottom();
     }
@@ -433,6 +571,7 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
       initialScrollRequestedRef.current = true;
       initialScrollCompletedRef.current = true;
       setIsLoaderVisible(false);
+      loaderSuppressedRef.current = false;
       debugConversation('conversation.restore.complete', () => ({ threadId, skipped: true }));
       return true;
     }
@@ -441,6 +580,7 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     initialScrollRequestedRef.current = true;
     initialScrollCompletedRef.current = true;
     setIsLoaderVisible(false);
+    loaderSuppressedRef.current = false;
     debugConversation('conversation.restore.complete', () => ({ threadId }));
     return true;
   }, [conversationItems, restorableItemCount, threadId]);
@@ -484,12 +624,24 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
     (runId: string) =>
       (element: HTMLDivElement | null) => {
         if (element) {
+          element.dataset.runId = runId;
           messagesRefs.current.set(runId, element);
+          const observer = resizeObserverRef.current;
+          if (observer) {
+            observer.observe(element);
+          } else if (typeof ResizeObserver === 'undefined') {
+            handleMeasuredHeight(runId, element.offsetHeight);
+          }
         } else {
+          const existing = messagesRefs.current.get(runId);
+          if (existing && resizeObserverRef.current) {
+            resizeObserverRef.current.unobserve(existing);
+          }
           messagesRefs.current.delete(runId);
+          runHeightBufferRef.current.delete(runId);
         }
       },
-    [],
+    [handleMeasuredHeight],
   );
 
   const renderItem = useCallback(
@@ -602,20 +754,30 @@ export const Conversation = forwardRef<ConversationHandle, ConversationProps>(fu
         debugConversation('conversation.capture.result', () => ({ threadId, normalized }));
         return normalized;
       },
-      restoreScrollState: (state) => {
+      restoreScrollState: (state, options) => {
         const normalized = sanitizeRestoreState(state);
         if (!normalized) {
           debugConversation('conversation.restore.skip', () => ({ threadId, provided: state }));
           pendingRestoreRef.current = null;
+          loaderSuppressedRef.current = false;
           return;
         }
 
-        debugConversation('conversation.restore.enqueue', () => ({ threadId, normalized }));
+        const showLoader = options?.showLoader ?? true;
+        debugConversation('conversation.restore.enqueue', () => ({ threadId, normalized, showLoader }));
         pendingRestoreRef.current = normalized;
         initialScrollRequestedRef.current = true;
         initialScrollCompletedRef.current = false;
-        if (isActive) {
-          setIsLoaderVisible(true);
+        if (showLoader) {
+          loaderSuppressedRef.current = false;
+          if (isActive) {
+            setIsLoaderVisible(true);
+          }
+        } else {
+          loaderSuppressedRef.current = true;
+          if (isActive) {
+            setIsLoaderVisible(false);
+          }
         }
         schedulePendingRestore();
       },

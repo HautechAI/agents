@@ -82,6 +82,16 @@ describe('Conversation auto-follow behavior', () => {
       return 1;
     });
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    class ResizeObserverMock {
+      callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock as unknown as typeof ResizeObserver);
   });
 
   afterEach(() => {
@@ -198,6 +208,92 @@ describe('Conversation auto-follow behavior', () => {
     expect(instance.scrollToIndex).not.toHaveBeenCalled();
   });
 
+  it('does not auto-follow when reopened away from the bottom', async () => {
+    const runs = createRuns();
+
+    const { rerender } = render(
+      <Conversation threadId="thread-1" runs={runs} hydrationComplete={false} isActive atBottomAtOpen={false} />,
+    );
+
+    const instance = getLatestInstance();
+    await completeInitialHydration({ rerender, instance, runs });
+
+    act(() => {
+      instance.setAtBottom(true);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('conversation-loader')).toBeNull();
+    });
+
+    instance.scrollToIndex.mockClear();
+    waitForStableScrollHeightMock.mockClear();
+
+    const updatedRuns: Run[] = [
+      {
+        ...runs[0],
+        messages: [
+          ...runs[0].messages,
+          { id: 'm3', role: 'assistant', content: 'Another reply' },
+        ],
+      },
+    ];
+
+    await act(async () => {
+      rerender(
+        <Conversation
+          threadId="thread-1"
+          runs={updatedRuns}
+          hydrationComplete
+          isActive
+          atBottomAtOpen={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(waitForStableScrollHeightMock).not.toHaveBeenCalled();
+    expect(instance.scrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('does not perform scroll writes when queued messages update', async () => {
+    const runs = createRuns();
+
+    const { rerender } = render(
+      <Conversation threadId="thread-typing" runs={runs} hydrationComplete={false} isActive />,
+    );
+
+    const instance = getLatestInstance();
+    await completeInitialHydration({ rerender, instance, runs });
+
+    act(() => {
+      instance.setAtBottom(true);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('conversation-loader')).toBeNull();
+    });
+
+    instance.scrollTo.mockClear();
+    instance.scrollToIndex.mockClear();
+
+    const queued = [{ id: 'q1', content: 'Typing...' }];
+
+    await act(async () => {
+      rerender(
+        <Conversation
+          threadId="thread-typing"
+          runs={runs}
+          hydrationComplete
+          isActive
+          queuedMessages={queued}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(instance.scrollToIndex).not.toHaveBeenCalled();
+    expect(instance.scrollTo).not.toHaveBeenCalled();
+  });
+
   it('keeps the loader hidden after restoring scroll state on reactivation', async () => {
     const runs = createRuns();
     const ref = React.createRef<ConversationHandle>();
@@ -224,12 +320,18 @@ describe('Conversation auto-follow behavior', () => {
     rerender(<Conversation threadId="thread-1" runs={runs} hydrationComplete isActive ref={ref} />);
 
     act(() => {
-    ref.current?.restoreScrollState({ index: 0, offset: 0, scrollTop: 10 });
+      instance.scrollToIndex.mockClear();
+      instance.scrollTo.mockClear();
+      ref.current?.restoreScrollState({ index: 0, offset: 0, scrollTop: 10 }, { showLoader: false });
     });
 
     await waitFor(() => {
       expect(screen.queryByTestId('conversation-loader')).toBeNull();
     });
+
+    expect(waitForStableScrollHeightMock).toHaveBeenCalled();
+    expect(instance.scrollToIndex).toHaveBeenCalledTimes(1);
+    expect(instance.scrollTo).not.toHaveBeenCalled();
   });
 });
 
@@ -264,6 +366,16 @@ describe('Conversation scroll restoration', () => {
         rafQueue[index] = () => {};
       }
     });
+    class ResizeObserverMock {
+      callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock as unknown as typeof ResizeObserver);
   });
 
   afterEach(() => {

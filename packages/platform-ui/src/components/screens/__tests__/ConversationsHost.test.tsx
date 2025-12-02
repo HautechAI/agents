@@ -9,6 +9,7 @@ vi.mock('../../Conversation', () => {
   let instanceCounter = 0;
   const conversationMock = vi.fn();
   const handleSpies = new Map<string, { capture: Mock; restore: Mock }>();
+  const atBottomOverrides = new Map<string, boolean>();
   const handleExposureOverrides = new Map<string, boolean>();
 
   const ConversationComponent = forwardRef<any, any>((props, ref) => {
@@ -30,13 +31,13 @@ vi.mock('../../Conversation', () => {
         shouldExposeHandle
           ? {
               captureScrollState: () => captureSpy(),
-              restoreScrollState: (state: unknown) => {
-                restoreSpy(state);
+              restoreScrollState: (state: unknown, options?: unknown) => {
+                restoreSpy(state, options);
               },
-              isAtBottom: () => true,
+              isAtBottom: () => atBottomOverrides.get(props.threadId) ?? true,
             }
           : null,
-      [shouldExposeHandle, captureSpy, restoreSpy],
+      [shouldExposeHandle, captureSpy, restoreSpy, props.threadId],
     );
 
     conversationMock(props);
@@ -73,6 +74,12 @@ vi.mock('../../Conversation', () => {
     __conversationResetHandleExposure: () => {
       handleExposureOverrides.clear();
     },
+    __conversationSetAtBottom: (threadId: string, atBottom: boolean) => {
+      atBottomOverrides.set(threadId, atBottom);
+    },
+    __conversationResetAtBottom: () => {
+      atBottomOverrides.clear();
+    },
   };
 });
 
@@ -81,6 +88,8 @@ type ConversationMockModule = {
   __conversationHandleSpies: Map<string, { capture: Mock; restore: Mock }>;
   __conversationSetHandleExposure: (threadId: string, exposed: boolean) => void;
   __conversationResetHandleExposure: () => void;
+  __conversationSetAtBottom: (threadId: string, atBottom: boolean) => void;
+  __conversationResetAtBottom: () => void;
 };
 
 let conversationMockModule: ConversationMockModule;
@@ -93,6 +102,7 @@ beforeEach(() => {
   conversationMockModule.__conversationMock.mockClear();
   conversationMockModule.__conversationHandleSpies.clear();
   conversationMockModule.__conversationResetHandleExposure();
+  conversationMockModule.__conversationResetAtBottom();
   vi.unstubAllGlobals();
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     callback(0);
@@ -370,14 +380,68 @@ describe('ConversationsHost', () => {
           isRunsInfoCollapsed={false}
         />,
       );
-    await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const refreshedSpiesForA = conversationMockModule.__conversationHandleSpies.get('thread-a');
+    expect(refreshedSpiesForA?.restore).toHaveBeenCalledTimes(1);
+    expect(refreshedSpiesForA?.restore).toHaveBeenCalledWith(
+      expect.objectContaining({ index: expect.any(Number), offset: 4, scrollTop: 42 }),
+      { showLoader: false },
+    );
   });
 
-  const refreshedSpiesForA = conversationMockModule.__conversationHandleSpies.get('thread-a');
-  expect(refreshedSpiesForA?.restore).toHaveBeenCalledTimes(1);
-  expect(refreshedSpiesForA?.restore).toHaveBeenCalledWith(
-    expect.objectContaining({ index: expect.any(Number), offset: 4, scrollTop: 42 }),
-  );
+  it('reuses cached at-bottom state and hydration flags on reactivation', async () => {
+    const { rerender } = render(
+      <ConversationsHost
+        activeThreadId="thread-a"
+        runs={[createRun('a')]}
+        queuedMessages={EMPTY_QUEUE}
+        reminders={EMPTY_REMINDERS}
+        hydrationComplete
+        isRunsInfoCollapsed={false}
+      />,
+    );
+
+    conversationMockModule.__conversationSetAtBottom('thread-a', false);
+
+    await act(async () => {
+      rerender(
+        <ConversationsHost
+          activeThreadId="thread-b"
+          runs={[createRun('b')]}
+          queuedMessages={EMPTY_QUEUE}
+          reminders={EMPTY_REMINDERS}
+          hydrationComplete
+          isRunsInfoCollapsed={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    conversationMockModule.__conversationMock.mockClear();
+
+    await act(async () => {
+      rerender(
+        <ConversationsHost
+          activeThreadId="thread-a"
+          runs={[createRun('a')]}
+          queuedMessages={EMPTY_QUEUE}
+          reminders={EMPTY_REMINDERS}
+          hydrationComplete={false}
+          isRunsInfoCollapsed={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const callsForA = conversationMockModule.__conversationMock.mock.calls.filter(
+      ([props]) => props.threadId === 'thread-a',
+    );
+    expect(callsForA.length).toBeGreaterThan(0);
+    const latestProps = callsForA[callsForA.length - 1]?.[0];
+    expect(latestProps?.atBottomAtOpen).toBe(false);
+    expect(latestProps?.hydrationComplete).toBe(true);
   });
 
   it('skips restore when no cached scroll state is available', async () => {
@@ -538,6 +602,7 @@ describe('ConversationsHost', () => {
     expect(restoredHandle?.restore).toHaveBeenCalledTimes(1);
     expect(restoredHandle?.restore).toHaveBeenCalledWith(
       expect.objectContaining({ index: expect.any(Number), offset: 4, scrollTop: 42 }),
+      { showLoader: false },
     );
   });
 });

@@ -65,7 +65,13 @@ type ConversationCacheEntry = {
   queuedMessages: QueuedMessageData[];
   reminders: ReminderData[];
   hydrationComplete: boolean;
+  atBottomAtOpen: boolean;
   scrollState?: ConversationScrollState | null;
+};
+
+type PendingRestoreEntry = {
+  state: ConversationScrollState;
+  showLoader: boolean;
 };
 
 type ConversationCacheState = {
@@ -140,13 +146,14 @@ export function ConversationsHost({
         queuedMessages,
         reminders,
         hydrationComplete,
+        atBottomAtOpen: true,
         scrollState: null,
       },
     },
   }));
   const cacheRef = useRef(cache);
   const conversationRefs = useRef<Map<string, ConversationHandle>>(new Map());
-  const pendingRestoresRef = useRef<Map<string, ConversationScrollState>>(new Map());
+  const pendingRestoresRef = useRef<Map<string, PendingRestoreEntry>>(new Map());
   const restoreFrameRefs = useRef<Map<string, number>>(new Map());
   const previousActiveRef = useRef<string>(activeThreadId);
 
@@ -173,12 +180,15 @@ export function ConversationsHost({
       const entries: Record<string, ConversationCacheEntry> = { ...prev.entries };
       const previousEntry = entries[activeThreadId];
       const preservedState = sanitizeScrollState(previousEntry?.scrollState);
+      const atBottomAtOpen = previousEntry?.atBottomAtOpen ?? true;
+      const hydrationState = hydrationComplete || Boolean(previousEntry?.hydrationComplete);
 
       entries[activeThreadId] = {
         runs,
         queuedMessages,
         reminders,
-        hydrationComplete,
+        hydrationComplete: hydrationState,
+        atBottomAtOpen,
         scrollState: preservedState,
       };
 
@@ -220,11 +230,29 @@ export function ConversationsHost({
     setCache((prev) => {
       const entry = prev.entries[threadId];
       if (!entry) return prev;
+      if (entry.scrollState === sanitized) return prev;
       const entries = {
         ...prev.entries,
         [threadId]: {
           ...entry,
           scrollState: sanitized,
+        },
+      };
+      return { order: prev.order, entries };
+    });
+  }, []);
+
+  const storeAtBottomAtOpen = useCallback((threadId: string, atBottomAtOpen: boolean) => {
+    debugConversation('conversations-host.cache.at-bottom', () => ({ threadId, atBottomAtOpen }));
+    setCache((prev) => {
+      const entry = prev.entries[threadId];
+      if (!entry) return prev;
+      if (entry.atBottomAtOpen === atBottomAtOpen) return prev;
+      const entries = {
+        ...prev.entries,
+        [threadId]: {
+          ...entry,
+          atBottomAtOpen,
         },
       };
       return { order: prev.order, entries };
@@ -241,21 +269,15 @@ export function ConversationsHost({
       const snapshot = await handle.captureScrollState();
       debugConversation('conversations-host.capture.success', () => ({ threadId, hasState: Boolean(snapshot) }));
       storeScrollState(threadId, snapshot);
+      storeAtBottomAtOpen(threadId, handle.isAtBottom());
     },
-    [storeScrollState],
+    [storeAtBottomAtOpen, storeScrollState],
   );
 
-  const scheduleRestoreFrame = useCallback((threadId: string, state: ConversationScrollState | null | undefined) => {
-    const sanitized = sanitizeScrollState(state);
-    if (!sanitized) {
-      pendingRestoresRef.current.delete(threadId);
-      debugConversation('conversations-host.restore.drop', () => ({ threadId }));
-      return;
-    }
-
+  const scheduleRestoreFrame = useCallback((threadId: string, entry: PendingRestoreEntry) => {
     const frames = restoreFrameRefs.current;
     const pending = pendingRestoresRef.current;
-    pending.set(threadId, sanitized);
+    pending.set(threadId, entry);
 
     const previousFrame = frames.get(threadId);
     if (typeof previousFrame === 'number') {
@@ -264,8 +286,8 @@ export function ConversationsHost({
 
     const frameId = requestAnimationFrame(() => {
       frames.delete(threadId);
-      const pendingState = pending.get(threadId);
-      if (!pendingState) {
+      const pendingEntry = pending.get(threadId);
+      if (!pendingEntry) {
         debugConversation('conversations-host.restore.frame-missing', () => ({ threadId }));
         return;
       }
@@ -275,30 +297,32 @@ export function ConversationsHost({
         return;
       }
       pending.delete(threadId);
-      debugConversation('conversations-host.restore.apply', () => ({ threadId }));
-      handle.restoreScrollState(pendingState);
+      debugConversation('conversations-host.restore.apply', () => ({ threadId, showLoader: pendingEntry.showLoader }));
+      handle.restoreScrollState(pendingEntry.state, { showLoader: pendingEntry.showLoader });
     });
 
     frames.set(threadId, frameId);
-    debugConversation('conversations-host.restore.schedule', () => ({ threadId, frameId }));
+    debugConversation('conversations-host.restore.schedule', () => ({ threadId, frameId, showLoader: entry.showLoader }));
   }, []);
 
   const requestRestore = useCallback(
-    (threadId: string, state: ConversationScrollState | null | undefined) => {
+    (threadId: string, state: ConversationScrollState | null | undefined, options?: { showLoader?: boolean }) => {
       const sanitized = sanitizeScrollState(state);
       if (!sanitized) {
         pendingRestoresRef.current.delete(threadId);
         debugConversation('conversations-host.restore.skip', () => ({ threadId }));
         return;
       }
+      const showLoader = options?.showLoader ?? true;
       const handle = conversationRefs.current.get(threadId);
+      const entry: PendingRestoreEntry = { state: sanitized, showLoader };
       if (handle) {
-        debugConversation('conversations-host.restore.immediate', () => ({ threadId }));
-        scheduleRestoreFrame(threadId, sanitized);
+        debugConversation('conversations-host.restore.immediate', () => ({ threadId, showLoader }));
+        scheduleRestoreFrame(threadId, entry);
         return;
       }
-      debugConversation('conversations-host.restore.queue', () => ({ threadId }));
-      pendingRestoresRef.current.set(threadId, sanitized);
+      debugConversation('conversations-host.restore.queue', () => ({ threadId, showLoader }));
+      pendingRestoresRef.current.set(threadId, entry);
     },
     [scheduleRestoreFrame],
   );
@@ -314,7 +338,7 @@ export function ConversationsHost({
     const cachedState = sanitizeScrollState(entry?.scrollState);
     if (cachedState) {
       debugConversation('conversations-host.switch.restore', () => ({ threadId: activeThreadId }));
-      requestRestore(activeThreadId, cachedState);
+      requestRestore(activeThreadId, cachedState, { showLoader: false });
     } else {
       debugConversation('conversations-host.switch.no-state', () => ({ threadId: activeThreadId }));
     }
@@ -334,7 +358,10 @@ export function ConversationsHost({
         const runsForThread = isActive ? runs : cached?.runs ?? [];
         const queuedForThread = isActive ? queuedMessages : cached?.queuedMessages ?? [];
         const remindersForThread = isActive ? reminders : cached?.reminders ?? [];
-        const hydrationForThread = isActive ? hydrationComplete : cached?.hydrationComplete ?? false;
+        const hydrationForThread = isActive
+          ? cached?.hydrationComplete ?? hydrationComplete
+          : cached?.hydrationComplete ?? false;
+        const atBottomAtOpen = cached?.atBottomAtOpen ?? true;
         const visibilityClass = isActive
           ? 'absolute inset-0 flex flex-col visible opacity-100 pointer-events-auto'
           : 'absolute inset-0 flex flex-col invisible opacity-0 pointer-events-none';
@@ -378,6 +405,7 @@ export function ConversationsHost({
               footer={footer}
               defaultCollapsed={defaultCollapsed ?? isRunsInfoCollapsed}
               collapsed={collapsed ?? isRunsInfoCollapsed}
+              atBottomAtOpen={atBottomAtOpen}
               testId={isActive ? undefined : null}
             />
           </div>

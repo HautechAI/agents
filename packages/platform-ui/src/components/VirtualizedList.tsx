@@ -19,7 +19,7 @@ import { debugConversation } from '@/lib/debug';
 
 type ScrollToIndexArgs = Parameters<VirtuosoHandle['scrollToIndex']>;
 type ScrollToIndexLocation = ScrollToIndexArgs[0];
-type ScrollToIndexRest = ScrollToIndexArgs extends [any, ...infer R] ? R : never;
+type ScrollToIndexRest = ScrollToIndexArgs extends [unknown, ...infer R] ? R : never;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
