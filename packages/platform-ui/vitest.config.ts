@@ -7,7 +7,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
     pool: 'threads',
-    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**/*.spec.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**/*.spec.ts', 'storybook-e2e/**/*.spec.ts'],
     poolOptions: {
       threads: {
         useAtomics: false,

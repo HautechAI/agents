@@ -7,13 +7,19 @@ import {
   forwardRef,
   useImperativeHandle,
   useCallback,
+  Component,
   type ReactNode,
   type ForwardedRef,
   type HTMLAttributes,
   type MutableRefObject,
   type Key,
+  type ErrorInfo,
 } from 'react';
 import { debugConversation } from '@/lib/debug';
+
+type ScrollToIndexArgs = Parameters<VirtuosoHandle['scrollToIndex']>;
+type ScrollToIndexLocation = ScrollToIndexArgs[0];
+type ScrollToIndexRest = ScrollToIndexArgs extends [any, ...infer R] ? R : never;
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
@@ -82,6 +88,40 @@ export interface VirtualizedListProps<T> {
   onAtBottomChange?: (isAtBottom: boolean) => void;
 }
 
+interface VirtualizedListErrorBoundaryProps {
+  onError: (error: unknown, info: ErrorInfo) => void;
+  children: ReactNode;
+}
+
+interface VirtualizedListErrorBoundaryState {
+  hasError: boolean;
+}
+
+class VirtualizedListErrorBoundary extends Component<
+  VirtualizedListErrorBoundaryProps,
+  VirtualizedListErrorBoundaryState
+> {
+  constructor(props: VirtualizedListErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): VirtualizedListErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    this.props.onError(error, info);
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      return null;
+    }
+    return this.props.children;
+  }
+}
+
 function VirtualizedListInner<T>(
   {
   items,
@@ -100,16 +140,72 @@ function VirtualizedListInner<T>(
   ref: ForwardedRef<VirtualizedListHandle>,
 ) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const virtuosoPatchedRef = useRef(false);
+  const virtuosoOriginalScrollRef = useRef<VirtuosoHandle['scrollToIndex'] | null>(null);
   const atBottomRef = useRef(true);
   const prevItemsLengthRef = useRef(items.length);
   const prevFirstItemKeyRef = useRef<string | number | null>(null);
   const isInitialMount = useRef(true);
   const [firstItemIndex, setFirstItemIndex] = useState(() => Math.max(0, 100000 - items.length));
-  const [hasProvidedInitialTopMost, setHasProvidedInitialTopMost] = useState(false);
-  const initialTopMostItemIndexRef = useRef<number | null>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const itemRefs = useRef<Array<HTMLElement | null>>([]);
-  const forceStatic = Boolean((globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__);
+  const virtualizationDisabled = Boolean(
+    (globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__,
+  );
+  const [virtualizationFailed, setVirtualizationFailed] = useState(false);
+  const shouldForceStatic = virtualizationDisabled || virtualizationFailed;
+
+  const attachVirtuosoRef = useCallback(
+    (instance: VirtuosoHandle | null) => {
+      virtuosoRef.current = instance;
+
+      if (!instance) {
+        if (virtuosoOriginalScrollRef.current) {
+          virtuosoOriginalScrollRef.current = null;
+        }
+        virtuosoPatchedRef.current = false;
+        return;
+      }
+
+      if (virtuosoPatchedRef.current) {
+        return;
+      }
+
+      const originalScrollToIndex = instance.scrollToIndex.bind(instance) as (...args: ScrollToIndexArgs) => void;
+      virtuosoOriginalScrollRef.current = originalScrollToIndex;
+
+      const patchedScrollToIndex: VirtuosoHandle['scrollToIndex'] = ((
+        location: ScrollToIndexLocation | null | undefined,
+        ...rest: ScrollToIndexRest
+      ) => {
+        if (location === undefined || location === null) {
+          debugConversation('virtualized-list.scrollToIndex.patch.skip-null', () => ({ items: items.length }));
+          return;
+        }
+        const args = [location, ...rest] as ScrollToIndexArgs;
+        originalScrollToIndex(...args);
+      }) as VirtuosoHandle['scrollToIndex'];
+
+      instance.scrollToIndex = patchedScrollToIndex;
+      virtuosoPatchedRef.current = true;
+    },
+    [items.length],
+  );
+
+  const handleVirtualizationError = useCallback(
+    (error: unknown, info: ErrorInfo) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      debugConversation('virtualized-list.error-boundary', () => ({
+        items: items.length,
+        message,
+        stack,
+        componentStack: info?.componentStack,
+      }));
+      setVirtualizationFailed(true);
+    },
+    [items.length],
+  );
 
   const scrollElement = useCallback((element: HTMLElement, options: ScrollToOptions | number) => {
     const scrollFn = (element as HTMLElement & { scrollTo?: (options: ScrollToOptions | number) => void }).scrollTo;
@@ -126,37 +222,17 @@ function VirtualizedListInner<T>(
     }
   }, []);
 
-  const resolveInitialTopMostIndex = useCallback(() => {
-    if (initialTopMostItemIndexRef.current !== null) {
-      return initialTopMostItemIndexRef.current;
-    }
-    if (items.length === 0) return null;
-    const baseIndex = Math.max(0, 100000 - items.length);
-    const topMost = baseIndex + items.length - 1;
-    initialTopMostItemIndexRef.current = topMost;
-    return topMost;
-  }, [items.length]);
-
   // Handle initial scroll to bottom
   useEffect(() => {
     if (isInitialMount.current && items.length > 0) {
       isInitialMount.current = false;
       const baseIndex = Math.max(0, 100000 - items.length);
       setFirstItemIndex(baseIndex);
-      if (initialTopMostItemIndexRef.current === null) {
-        initialTopMostItemIndexRef.current = baseIndex + items.length - 1;
-      }
       if (getItemKey) {
         prevFirstItemKeyRef.current = getItemKey(items[0]);
       }
     }
   }, [items.length, items, getItemKey]);
-
-  useEffect(() => {
-    if (!hasProvidedInitialTopMost && initialTopMostItemIndexRef.current !== null) {
-      setHasProvidedInitialTopMost(true);
-    }
-  }, [hasProvidedInitialTopMost]);
 
   // Detect when new items are added
   useEffect(() => {
@@ -183,7 +259,7 @@ function VirtualizedListInner<T>(
 
   const fallbackScrollToIndex = useCallback(
     (location: Parameters<VirtualizedListHandle['scrollToIndex']>[0]) => {
-      if (!forceStatic) return;
+      if (!shouldForceStatic) return;
       const scroller = scrollerRef.current;
       if (!scroller) return;
       const options = typeof location === 'number' ? { index: location } : location ?? { index: 0 };
@@ -220,17 +296,17 @@ function VirtualizedListInner<T>(
       }
       scrollElement(scroller, { top, behavior });
     },
-    [forceStatic, items.length, scrollElement],
+    [shouldForceStatic, items.length, scrollElement],
   );
 
   const fallbackScrollTo = useCallback(
     (location: Parameters<VirtualizedListHandle['scrollTo']>[0]) => {
-      if (!forceStatic) return;
+      if (!shouldForceStatic) return;
       const scroller = scrollerRef.current;
       if (!scroller) return;
       scrollElement(scroller, location ?? { top: 0 });
     },
-    [forceStatic, scrollElement],
+    [shouldForceStatic, scrollElement],
   );
 
   const renderVirtualItem = useCallback(
@@ -342,7 +418,7 @@ function VirtualizedListInner<T>(
   );
 
   const captureScrollPosition = useCallback(async () => {
-    if (forceStatic) {
+    if (shouldForceStatic) {
       return captureStaticPosition();
     }
     const instance = virtuosoRef.current;
@@ -386,7 +462,7 @@ function VirtualizedListInner<T>(
         resolve(sanitized);
       });
     });
-  }, [captureStaticPosition, firstItemIndex, forceStatic, items.length]);
+  }, [captureStaticPosition, firstItemIndex, items.length, shouldForceStatic]);
 
   const restoreScrollPosition = useCallback(
     (position: VirtualizedListScrollPosition) => {
@@ -397,7 +473,7 @@ function VirtualizedListInner<T>(
         return;
       }
 
-      if (forceStatic) {
+      if (shouldForceStatic) {
         debugConversation('virtualized-list.restore.static', () => ({ items: items.length, sanitized }));
         restoreStaticPosition(sanitized);
         return;
@@ -452,13 +528,13 @@ function VirtualizedListInner<T>(
 
       debugConversation('virtualized-list.restore.unhandled', () => ({ items: items.length }));
     },
-    [firstItemIndex, forceStatic, items.length, restoreStaticPosition],
+    [firstItemIndex, items.length, restoreStaticPosition, shouldForceStatic],
   );
 
   useImperativeHandle(
     ref,
     () => {
-      if (forceStatic) {
+      if (shouldForceStatic) {
         return {
           scrollToIndex: (location) => fallbackScrollToIndex(location),
           scrollTo: (location) => fallbackScrollTo(location),
@@ -471,8 +547,72 @@ function VirtualizedListInner<T>(
         } as VirtualizedListHandle;
       }
       return {
-        scrollToIndex: (...args) => {
-          virtuosoRef.current?.scrollToIndex(...args);
+        scrollToIndex: (...args: Parameters<VirtuosoHandle['scrollToIndex']>) => {
+          const [location] = args;
+          if (location === undefined || location === null) {
+            debugConversation('virtualized-list.scrollToIndex.skip-null', () => ({ items: items.length }));
+            return;
+          }
+          const instance = virtuosoRef.current;
+          if (!instance) {
+            debugConversation('virtualized-list.scrollToIndex.no-instance', () => ({ items: items.length }));
+            return;
+          }
+
+          debugConversation('virtualized-list.scrollToIndex.request', () => ({ items: items.length, location }));
+
+          const clampRelativeIndex = (value: unknown): number | null => {
+            if (items.length === 0) {
+              return null;
+            }
+            if (value === 'LAST') {
+              return items.length - 1;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              const raw = Math.floor(value);
+              return Math.max(0, Math.min(items.length - 1, raw));
+            }
+            return null;
+          };
+
+          const resolveAbsoluteLocation = (
+            target: ScrollToIndexLocation | 'LAST',
+          ): ScrollToIndexLocation | null => {
+            if (target === null || target === undefined) {
+              return null;
+            }
+
+            if (target === 'LAST') {
+              const relative = clampRelativeIndex('LAST');
+              if (relative === null) return null;
+              return firstItemIndex + relative;
+            }
+
+            if (typeof target === 'number') {
+              const relative = clampRelativeIndex(target);
+              if (relative === null) return null;
+              return firstItemIndex + relative;
+            }
+
+            if (typeof target === 'object') {
+              const locationTarget = target as { index?: unknown };
+              const relative = clampRelativeIndex(locationTarget.index);
+              if (relative === null) return null;
+              return { ...target, index: firstItemIndex + relative };
+            }
+
+            return null;
+          };
+
+          const resolved = resolveAbsoluteLocation(location);
+          if (resolved === null) {
+            debugConversation('virtualized-list.scrollToIndex.invalid-location', () => ({ items: items.length, location }));
+            return;
+          }
+
+          const [, ...rest] = args as ScrollToIndexArgs;
+          const finalArgs = [resolved, ...rest] as ScrollToIndexArgs;
+          instance.scrollToIndex(...finalArgs);
         },
         scrollTo: (...args) => {
           virtuosoRef.current?.scrollTo(...args);
@@ -485,16 +625,26 @@ function VirtualizedListInner<T>(
         },
       } as VirtualizedListHandle;
     },
-    [captureScrollPosition, captureStaticPosition, fallbackScrollTo, fallbackScrollToIndex, forceStatic, restoreScrollPosition, restoreStaticPosition],
+    [
+      captureScrollPosition,
+      captureStaticPosition,
+      fallbackScrollTo,
+      fallbackScrollToIndex,
+      restoreScrollPosition,
+      restoreStaticPosition,
+      shouldForceStatic,
+      firstItemIndex,
+      items.length,
+    ],
   );
 
   useEffect(() => {
-    if (!forceStatic) return;
+    if (!shouldForceStatic) return;
     itemRefs.current = itemRefs.current.slice(0, items.length);
-  }, [forceStatic, items.length]);
+  }, [items.length, shouldForceStatic]);
 
   useEffect(() => {
-    if (!forceStatic) return;
+    if (!shouldForceStatic) return;
     const scroller = scrollerRef.current;
     if (!scroller) return;
     const isAtBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 1;
@@ -505,10 +655,10 @@ function VirtualizedListInner<T>(
       atBottomRef.current = isAtBottom;
       onAtBottomChange?.(isAtBottom);
     }
-  }, [forceStatic, items.length, onAtBottomChange, scrollElement]);
+  }, [items.length, onAtBottomChange, scrollElement, shouldForceStatic]);
 
   useEffect(() => {
-    if (!forceStatic) return;
+    if (!shouldForceStatic) return;
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
@@ -526,7 +676,7 @@ function VirtualizedListInner<T>(
     return () => {
       scroller.removeEventListener('scroll', handleScroll);
     };
-  }, [forceStatic, onAtBottomChange, items.length]);
+  }, [items.length, onAtBottomChange, shouldForceStatic]);
 
   const Scroller = useMemo(
     () =>
@@ -549,7 +699,7 @@ function VirtualizedListInner<T>(
     [],
   );
 
-  if (forceStatic) {
+  if (shouldForceStatic) {
     return (
       <div className={className} style={style}>
         <div
@@ -581,33 +731,35 @@ function VirtualizedListInner<T>(
 
   return (
     <div className={className} style={style}>
-      <Virtuoso
-        ref={virtuosoRef}
-        data={items}
-        firstItemIndex={firstItemIndex}
-        itemContent={renderVirtualItem}
-        computeItemKey={resolveVirtualItemKey}
-        components={{
-          Header: header ? () => <>{header}</> : undefined,
-          Footer: footer ? () => <>{footer}</> : undefined,
-          EmptyPlaceholder: emptyPlaceholder ? () => <>{emptyPlaceholder}</> : undefined,
-          Scroller,
-        }}
-        initialTopMostItemIndex={!hasProvidedInitialTopMost ? resolveInitialTopMostIndex() ?? undefined : undefined}
-        followOutput={(isAtBottom) => {
-          atBottomRef.current = isAtBottom;
-          return isAtBottom ? 'auto' : false;
-        }}
-        atBottomStateChange={(isAtBottom) => {
-          atBottomRef.current = isAtBottom;
-          onAtBottomChange?.(isAtBottom);
-        }}
-        startReached={() => {
-          if (hasMore && !isLoadingMore) {
-            onLoadMore();
-          }
-        }}
-      />
+      <VirtualizedListErrorBoundary onError={handleVirtualizationError}>
+        <Virtuoso
+          ref={attachVirtuosoRef}
+          data={items}
+          totalCount={firstItemIndex + items.length}
+          firstItemIndex={firstItemIndex}
+          itemContent={renderVirtualItem}
+          computeItemKey={resolveVirtualItemKey}
+          components={{
+            Header: header ? () => <>{header}</> : undefined,
+            Footer: footer ? () => <>{footer}</> : undefined,
+            EmptyPlaceholder: emptyPlaceholder ? () => <>{emptyPlaceholder}</> : undefined,
+            Scroller,
+          }}
+          followOutput={(isAtBottom) => {
+            atBottomRef.current = isAtBottom;
+            return isAtBottom ? 'auto' : false;
+          }}
+          atBottomStateChange={(isAtBottom) => {
+            atBottomRef.current = isAtBottom;
+            onAtBottomChange?.(isAtBottom);
+          }}
+          startReached={() => {
+            if (hasMore && !isLoadingMore) {
+              onLoadMore();
+            }
+          }}
+        />
+      </VirtualizedListErrorBoundary>
     </div>
   );
 }
