@@ -20,7 +20,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { memoryApi } from '@/api/modules/memory';
+import { memoryQueryKeys, useMemoryData } from '@/components/memory/MemoryDataProvider';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { joinMemoryPath, memoryPathParent, normalizeMemoryPath } from '@/components/memory/path';
 
@@ -44,6 +44,7 @@ export default function MemoryExplorerScreen({
   onThreadChange,
 }: MemoryExplorerScreenProps) {
   const queryClient = useQueryClient();
+  const memoryData = useMemoryData();
 
   const requiresThread = scope === 'perThread';
   const trimmedThreadId = threadId?.trim() ?? '';
@@ -126,15 +127,15 @@ export default function MemoryExplorerScreen({
   }, [threadId]);
 
   const statQuery = useQuery({
-    queryKey: ['memory/stat', nodeId, scope, effectiveThreadId ?? null, selectedPath],
-    queryFn: () => memoryApi.stat(nodeId, scope, effectiveThreadId, selectedPath),
+    queryKey: memoryQueryKeys.stat(nodeId, scope, effectiveThreadId, selectedPath),
+    queryFn: () => memoryData.stat(nodeId, scope, effectiveThreadId, selectedPath),
     enabled: !threadMissing,
     staleTime: 15_000,
   });
 
   const readQuery = useQuery({
-    queryKey: ['memory/read', nodeId, scope, effectiveThreadId ?? null, selectedPath],
-    queryFn: () => memoryApi.read(nodeId, scope, effectiveThreadId, selectedPath),
+    queryKey: memoryQueryKeys.read(nodeId, scope, effectiveThreadId, selectedPath),
+    queryFn: () => memoryData.read(nodeId, scope, effectiveThreadId, selectedPath),
     enabled: !threadMissing,
     retry: false,
   });
@@ -168,18 +169,16 @@ export default function MemoryExplorerScreen({
   }, [editorDirty, readQuery.data, readQuery.isError, threadMissing, resetEditor]);
 
   const invalidateTree = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['memory/list', nodeId, scope, effectiveThreadId ?? null] });
+    queryClient.invalidateQueries({ queryKey: memoryQueryKeys.listScope(nodeId, scope, effectiveThreadId) });
   }, [effectiveThreadId, nodeId, queryClient, scope]);
 
   const invalidatePathQueries = useCallback(
     (targetPath: string, options?: { includeRead?: boolean }) => {
       const normalized = normalizeMemoryPath(targetPath);
-      queryClient.invalidateQueries({
-        queryKey: ['memory/stat', nodeId, scope, effectiveThreadId ?? null, normalized],
-      });
+      queryClient.invalidateQueries({ queryKey: memoryQueryKeys.stat(nodeId, scope, effectiveThreadId, normalized) });
       if (options?.includeRead ?? true) {
         queryClient.invalidateQueries({
-          queryKey: ['memory/read', nodeId, scope, effectiveThreadId ?? null, normalized],
+          queryKey: memoryQueryKeys.read(nodeId, scope, effectiveThreadId, normalized),
         });
       }
     },
@@ -191,9 +190,9 @@ export default function MemoryExplorerScreen({
       const normalizedChild = normalizeMemoryPath(childPath);
       const parentPath = memoryPathParent(normalizedChild);
       queryClient.invalidateQueries({
-        queryKey: ['memory/stat', nodeId, scope, effectiveThreadId ?? null, parentPath],
+        queryKey: memoryQueryKeys.stat(nodeId, scope, effectiveThreadId, parentPath),
       });
-      const parentReadKey = ['memory/read', nodeId, scope, effectiveThreadId ?? null, parentPath] as const;
+      const parentReadKey = memoryQueryKeys.read(nodeId, scope, effectiveThreadId, parentPath);
       if (queryClient.getQueryState(parentReadKey)) {
         queryClient.invalidateQueries({ queryKey: parentReadKey });
       }
@@ -229,9 +228,9 @@ export default function MemoryExplorerScreen({
       const exists = documentStateRef.current.exists;
 
       if (!exists) {
-        await memoryApi.ensureDir(nodeId, scope, effectiveThreadId, path);
+        await memoryData.ensureDir(nodeId, scope, effectiveThreadId, path);
         if (nextContent.length > 0) {
-          await memoryApi.append(nodeId, scope, effectiveThreadId, path, nextContent);
+          await memoryData.append(nodeId, scope, effectiveThreadId, path, nextContent);
         }
         return { status: 'created' as const };
       }
@@ -241,12 +240,12 @@ export default function MemoryExplorerScreen({
       }
 
       if (lastSynced.length === 0) {
-        await memoryApi.ensureDir(nodeId, scope, effectiveThreadId, path);
-        await memoryApi.append(nodeId, scope, effectiveThreadId, path, nextContent);
+        await memoryData.ensureDir(nodeId, scope, effectiveThreadId, path);
+        await memoryData.append(nodeId, scope, effectiveThreadId, path, nextContent);
         return { status: 'saved' as const };
       }
 
-      const result = await memoryApi.update(nodeId, scope, effectiveThreadId, path, lastSynced, nextContent);
+      const result = await memoryData.update(nodeId, scope, effectiveThreadId, path, lastSynced, nextContent);
       if (result.replaced === 0 && nextContent !== lastSynced) {
         throw new Error('Document changed remotely. Refresh and try again.');
       }
@@ -274,7 +273,7 @@ export default function MemoryExplorerScreen({
   const createChildMutation = useMutation({
     mutationFn: async (targetPath: string) => {
       const normalized = normalizeMemoryPath(targetPath);
-      await memoryApi.ensureDir(nodeId, scope, effectiveThreadId, normalized);
+      await memoryData.ensureDir(nodeId, scope, effectiveThreadId, normalized);
       return normalized;
     },
     onSuccess: (normalized) => {
@@ -292,7 +291,7 @@ export default function MemoryExplorerScreen({
   const deleteMutation = useMutation({
     mutationFn: async (targetPath: string) => {
       const normalized = normalizeMemoryPath(targetPath);
-      return memoryApi.delete(nodeId, scope, effectiveThreadId, normalized);
+      return memoryData.delete(nodeId, scope, effectiveThreadId, normalized);
     },
     onSuccess: (_result, removedPath) => {
       const normalized = normalizeMemoryPath(removedPath);
