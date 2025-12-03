@@ -97,16 +97,20 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
           : this.sanitizeAlias(targetTitle);
       const childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', alias, parentThreadId, '');
       await persistence.setThreadChannelNode(childThreadId, this.node.nodeId);
-      this.node.registerInvocation({
-        childThreadId,
-        parentThreadId,
-        workerTitle: targetTitle,
-        callerAgent,
-      });
       const mode = this.node.getMode();
-      const waitPromise = mode === 'sync' ? this.node.awaitChildResponse(childThreadId, this.node.getTimeoutMs()) : null;
+      const timeoutMs = this.node.getTimeoutMs();
+      let waitPromise: Promise<string> | null = null;
       let invocationPromise: Promise<ResponseMessage | ToolCallOutputMessage> | undefined;
       try {
+        await this.node.registerInvocation({
+          childThreadId,
+          parentThreadId,
+          workerTitle: targetTitle,
+          callerAgent,
+        });
+        if (mode === 'sync') {
+          waitPromise = this.node.awaitChildResponse(childThreadId, timeoutMs);
+        }
         invocationPromise = targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
         if (mode === 'sync') {
           const [responseText] = await Promise.all([

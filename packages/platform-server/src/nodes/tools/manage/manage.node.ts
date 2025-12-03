@@ -129,9 +129,17 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     return Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : 30000;
   }
 
-  registerInvocation(context: { childThreadId: string; parentThreadId: string; workerTitle: string; callerAgent: CallerAgent }): void {
+  async registerInvocation(context: { childThreadId: string; parentThreadId: string; workerTitle: string; callerAgent: CallerAgent }): Promise<void> {
     const trimmedChildId = context.childThreadId.trim();
     if (!trimmedChildId) return;
+
+    const existingContext = this.invocationContexts.get(trimmedChildId);
+    if (existingContext) {
+      await this.flushQueuedMessages(trimmedChildId, existingContext);
+    } else {
+      await this.flushQueuedMessages(trimmedChildId, undefined);
+    }
+
     this.invocationContexts.set(trimmedChildId, {
       parentThreadId: context.parentThreadId,
       workerTitle: context.workerTitle,
@@ -191,22 +199,32 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     const waiter = this.pendingWaiters.get(normalizedThreadId);
     if (waiter) {
       waiter.resolve(text);
-    } else if (mode === 'sync') {
+      return { ok: true, threadId: normalizedThreadId };
+    }
+
+    if (mode === 'sync') {
       this.enqueueMessage(normalizedThreadId, text);
+      return { ok: true, threadId: normalizedThreadId };
     }
 
-    if (mode === 'async') {
-      const context = this.invocationContexts.get(normalizedThreadId);
-      if (!context) {
-        this.logger.warn?.(
-          `ManageToolNode: async response received without invocation context${this.format({ threadId: normalizedThreadId })}`,
-        );
-      } else {
-        await this.forwardToParent(context, text, normalizedThreadId);
-      }
+    const context = this.invocationContexts.get(normalizedThreadId);
+    if (!context) {
+      this.logger.warn?.(
+        `ManageToolNode: async response received without invocation context${this.format({ threadId: normalizedThreadId })}`,
+      );
+      return { ok: false, error: 'missing_invocation_context', threadId: normalizedThreadId };
     }
 
-    return { ok: true, threadId: normalizedThreadId };
+    try {
+      await this.forwardToParent(context, text, normalizedThreadId);
+      return { ok: true, threadId: normalizedThreadId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error?.(
+        `ManageToolNode: failed to forward async response${this.format({ childThreadId: normalizedThreadId, parentThreadId: context.parentThreadId, error: message })}`,
+      );
+      return { ok: false, error: 'forward_failed', threadId: normalizedThreadId };
+    }
   }
 
   renderWorkerResponse(workerTitle: string, text: string): string {
@@ -221,16 +239,37 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
   private async forwardToParent(
     context: { parentThreadId: string; workerTitle: string; callerAgent: CallerAgent },
     text: string,
-    childThreadId: string,
+    _childThreadId: string,
   ): Promise<void> {
     const formatted = this.renderWorkerResponse(context.workerTitle, text);
-    try {
-      await context.callerAgent.invoke(context.parentThreadId, [HumanMessage.fromText(formatted)]);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        `ManageToolNode: failed to forward async response${this.format({ childThreadId, parentThreadId: context.parentThreadId, error: message })}`,
+    await context.callerAgent.invoke(context.parentThreadId, [HumanMessage.fromText(formatted)]);
+  }
+
+  private async flushQueuedMessages(
+    childThreadId: string,
+    context?: { parentThreadId: string; workerTitle: string; callerAgent: CallerAgent },
+  ): Promise<void> {
+    const queue = this.queuedMessages.get(childThreadId);
+    if (!queue || queue.length === 0) return;
+    this.queuedMessages.delete(childThreadId);
+
+    if (!context) {
+      this.logger.warn?.(
+        `ManageToolNode: discarding queued messages due to missing context${this.format({ childThreadId, count: queue.length })}`,
       );
+      return;
+    }
+
+    for (const message of queue) {
+      try {
+        await this.forwardToParent(context, message, childThreadId);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        this.logger.error?.(
+          `ManageToolNode: failed to flush queued response${this.format({ childThreadId, parentThreadId: context.parentThreadId, error: errorMessage })}`,
+        );
+        throw err instanceof Error ? err : new Error(errorMessage);
+      }
     }
   }
 

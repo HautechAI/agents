@@ -31,7 +31,7 @@ describe('ManageToolNode sendToChannel', () => {
     await node.setConfig({ mode: 'async', timeoutMs: 1000 } as unknown as ManageToolNode['config']);
     const parentInvoke = vi.fn().mockResolvedValue(undefined);
 
-    node.registerInvocation({
+    await node.registerInvocation({
       childThreadId: 'child-thread-async',
       parentThreadId: 'parent-thread',
       workerTitle: 'Async Worker',
@@ -48,5 +48,56 @@ describe('ManageToolNode sendToChannel', () => {
     expect(messages[0]).toBeInstanceOf(HumanMessage);
     expect((messages[0] as HumanMessage).text).toContain('async payload');
     expect((messages[0] as HumanMessage).text).toContain('Response from: Async Worker');
+  });
+
+  it('flushes queued sync messages before registering a new invocation', async () => {
+    const priorCaller = { invoke: vi.fn().mockResolvedValue(undefined) };
+    await node.registerInvocation({
+      childThreadId: 'child-thread-1',
+      parentThreadId: 'parent-1',
+      workerTitle: 'Worker One',
+      callerAgent: priorCaller,
+    });
+
+    await node.sendToChannel('child-thread-1', 'stale response');
+
+    const nextCaller = { invoke: vi.fn().mockResolvedValue(undefined) };
+    await node.registerInvocation({
+      childThreadId: 'child-thread-1',
+      parentThreadId: 'parent-2',
+      workerTitle: 'Worker Two',
+      callerAgent: nextCaller,
+    });
+
+    expect(priorCaller.invoke).toHaveBeenCalledTimes(1);
+    const [threadId, messages] = priorCaller.invoke.mock.calls[0];
+    expect(threadId).toBe('parent-1');
+    expect(messages[0]).toBeInstanceOf(HumanMessage);
+    expect((messages[0] as HumanMessage).text).toContain('stale response');
+    expect((messages[0] as HumanMessage).text).toContain('Worker One');
+  });
+
+  it('returns error when async channel response lacks invocation context', async () => {
+    await node.setConfig({ mode: 'async', timeoutMs: 1000 } as unknown as ManageToolNode['config']);
+    const result = await node.sendToChannel('missing-child', 'payload');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('missing_invocation_context');
+  });
+
+  it('surfaces errors when forwarding to parent fails', async () => {
+    await node.setConfig({ mode: 'async', timeoutMs: 1000 } as unknown as ManageToolNode['config']);
+    const parentInvoke = vi.fn().mockRejectedValue(new Error('parent unreachable'));
+
+    await node.registerInvocation({
+      childThreadId: 'child-thread-fail',
+      parentThreadId: 'parent-thread',
+      workerTitle: 'Async Worker',
+      callerAgent: { invoke: parentInvoke },
+    });
+
+    const result = await node.sendToChannel('child-thread-fail', 'payload');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('forward_failed');
+    expect(parentInvoke).toHaveBeenCalledTimes(1);
   });
 });
