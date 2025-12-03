@@ -9,6 +9,8 @@ interface ComputeForwardingInfoParams {
   source: ThreadOutboxSource;
   runId?: string | null;
   prefix?: string;
+  parentThreadId?: string | null;
+  childThreadAlias?: string | null;
 }
 
 interface ComputeForwardingInfoSuccess {
