@@ -20,6 +20,7 @@ import { ContainerService } from '../../src/infra/container/container.service';
 import { NcpsKeyService } from '../../src/infra/ncps/ncpsKey.service';
 import { LLMProvisioner } from '../../src/llm/provisioners/llm.provisioner';
 import { SlackAdapter } from '../../src/messaging/slack/slack.adapter';
+import { ThreadTransportService } from '../../src/messaging/threadTransport.service';
 import { ManageFunctionTool } from '../../src/nodes/tools/manage/manage.tool';
 import { VaultService } from '../../src/vault/vault.service';
 import { ReferenceResolverService } from '../../src/utils/reference-resolver.service';
@@ -86,6 +87,7 @@ const DEFAULT_TOKEN_FACTORIES = new Map<InjectionToken, () => unknown>([
         getOrCreateThreadByAlias: vi.fn(async () => 'thread-1'),
         updateThreadChannelDescriptor: vi.fn(async () => undefined),
         getOrCreateSubthreadByAlias: vi.fn(async () => 'child-thread'),
+        setThreadChannelNode: vi.fn(async () => undefined),
       }),
   ],
   [RunSignalsRegistry, () => createDefaultStub('RunSignalsRegistry')],
@@ -93,6 +95,13 @@ const DEFAULT_TOKEN_FACTORIES = new Map<InjectionToken, () => unknown>([
   [CallAgentLinkingService, () => createDefaultStub('CallAgentLinkingService')],
   [LiveGraphRuntime, () => createDefaultStub('LiveGraphRuntime')],
   [TemplateRegistry, () => createDefaultStub('TemplateRegistry', { getMeta: vi.fn(() => undefined) })],
+  [
+    ThreadTransportService,
+    () =>
+      createDefaultStub('ThreadTransportService', {
+        sendTextToThread: vi.fn(async () => ({ ok: true, threadId: 'thread-1' })),
+      }),
+  ],
   [
     ReferenceResolverService,
     () => {

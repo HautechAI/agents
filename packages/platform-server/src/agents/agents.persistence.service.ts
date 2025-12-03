@@ -86,6 +86,45 @@ export class AgentsPersistenceService {
     });
   }
 
+  async setThreadChannelNode(threadId: string, channelNodeId: string | null): Promise<void> {
+    const normalized = typeof channelNodeId === 'string' ? channelNodeId.trim() : null;
+
+    const updated = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const current = await tx.thread.findUnique({ where: { id: threadId }, select: { channelNodeId: true } });
+      if (!current) throw new Error('thread_not_found');
+      const currentValue = current.channelNodeId ?? null;
+      if (currentValue === normalized) return null;
+
+      return await tx.thread.update({
+        where: { id: threadId },
+        data: { channelNodeId: normalized },
+        select: {
+          id: true,
+          alias: true,
+          summary: true,
+          status: true,
+          createdAt: true,
+          parentId: true,
+          channelNodeId: true,
+          assignedAgentNodeId: true,
+        },
+      });
+    });
+
+    if (!updated) return;
+
+    this.eventsBus.emitThreadUpdated({
+      id: updated.id,
+      alias: updated.alias,
+      summary: updated.summary ?? null,
+      status: updated.status,
+      createdAt: updated.createdAt,
+      parentId: updated.parentId ?? null,
+      channelNodeId: updated.channelNodeId ?? null,
+      assignedAgentNodeId: updated.assignedAgentNodeId ?? null,
+    });
+  }
+
   /**
    * Resolve a UUID threadId for a globally-unique alias. Alias is only used at ingress.
    */
@@ -227,22 +266,30 @@ export class AgentsPersistenceService {
       const patchedEventIds: string[] = [];
       await Promise.all(
         inputMessages.map(async (msg) => {
-          const normalized = this.normalizeForPersistence(msg);
-          const { kind, text } = this.deriveKindTextTyped(normalized);
+          const normalized = this.normalizeToUserMessage(msg);
+          const text = normalized.text ?? null;
           const source = toPrismaJsonValue(normalized.toPlain());
-          const created = await tx.message.create({ data: { kind, text, source } });
+          const created = await tx.message.create({
+            data: { kind: 'user' as MessageKind, text, source },
+          });
           await tx.runMessage.create({ data: { runId: run.id, messageId: created.id, type: 'input' as RunMessageType } });
           const event = await this.runEvents.recordInvocationMessage({
             tx,
             runId: run.id,
             threadId,
             messageId: created.id,
-            role: kind,
+            role: 'user',
             ts: created.createdAt,
             metadata: { messageType: 'input' },
           });
           eventIds.push(event.id);
-          createdMessages.push({ id: created.id, kind, text, source: created.source as Prisma.JsonValue, createdAt: created.createdAt });
+          createdMessages.push({
+            id: created.id,
+            kind: 'user' as MessageKind,
+            text,
+            source: created.source as Prisma.JsonValue,
+            createdAt: created.createdAt,
+          });
         }),
       );
       const linkedEventId = await this.callAgentLinking.onChildRunStarted({
@@ -293,22 +340,30 @@ export class AgentsPersistenceService {
       threadId = resolvedThreadId;
 
       for (const msg of injectedMessages) {
-        const normalized = this.normalizeForPersistence(msg);
-        const { kind, text } = this.deriveKindTextTyped(normalized);
+        const normalized = this.normalizeToUserMessage(msg);
+        const text = normalized.text ?? null;
         const source = toPrismaJsonValue(normalized.toPlain());
-        const created = await tx.message.create({ data: { kind, text, source } });
+        const created = await tx.message.create({
+          data: { kind: 'user' as MessageKind, text, source },
+        });
         await tx.runMessage.create({ data: { runId, messageId: created.id, type: 'injected' as RunMessageType } });
         const event = await this.runEvents.recordInvocationMessage({
           tx,
           runId,
           threadId: resolvedThreadId,
           messageId: created.id,
-          role: kind,
+          role: 'user',
           ts: created.createdAt,
           metadata: { messageType: 'injected' },
         });
         eventIds.push(event.id);
-        createdMessages.push({ id: created.id, kind, text, source: created.source as Prisma.JsonValue, createdAt: created.createdAt });
+        createdMessages.push({
+          id: created.id,
+          kind: 'user' as MessageKind,
+          text,
+          source: created.source as Prisma.JsonValue,
+          createdAt: created.createdAt,
+        });
       }
 
       if (createdMessages.length > 0) {
@@ -968,6 +1023,18 @@ export class AgentsPersistenceService {
       return new SystemMessage(coerced);
     }
     return msg;
+  }
+
+  private normalizeToUserMessage(
+    msg: HumanMessage | DeveloperMessage | SystemMessage | AIMessage,
+  ): HumanMessage {
+    const normalized = this.normalizeForPersistence(msg);
+    if (normalized instanceof HumanMessage) return normalized;
+    if (normalized instanceof SystemMessage || normalized instanceof AIMessage) {
+      const coerced = coerceRole(normalized.toPlain(), 'user') as ResponseInputItem.Message & { role: 'user' };
+      return new HumanMessage(coerced);
+    }
+    return HumanMessage.fromText(normalized.text ?? '');
   }
 
   /**

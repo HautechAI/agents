@@ -29,6 +29,7 @@ import { SummarizationLLMReducer } from '../../llm/reducers/summarization.llm.re
 import { Signal } from '../../signal';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { RunSignalsRegistry } from '../../agents/run-signals.service';
+import { ThreadTransportService } from '../../messaging/threadTransport.service';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
@@ -78,6 +79,10 @@ export const AgentStaticConfigSchema = z
       .default('allTogether')
       .describe('Drain mode: process all queued messages together vs one message per run.')
       .meta({ 'ui:widget': 'select' }),
+    sendFinalResponseToThread: z
+      .boolean()
+      .default(true)
+      .describe('Automatically send final assistant response to the thread channel when no tools are pending.'),
     summarizationKeepTokens: z
       .number()
       .int()
@@ -124,6 +129,7 @@ type EffectiveAgentConfig = {
     debounceMs: number;
     whenBusy: WhenBusyMode;
     processBuffer: 'allTogether' | 'oneByOne';
+    autoSendFinalResponseToThread: boolean;
     restrictOutput: boolean;
     restrictionMessage: string;
     restrictionMaxInjections: number;
@@ -167,6 +173,7 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
   private runningThreads: Set<string> = new Set();
   private persistenceRef: AgentsPersistenceService | null | undefined;
   private runSignalsRef: RunSignalsRegistry | null | undefined;
+  private threadTransportRef: ThreadTransportService | null | undefined;
   private moduleInitialized = false;
 
   constructor(
@@ -209,6 +216,49 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
       throw new Error(`RunSignalsRegistry unavailable (${initializedState})`);
     }
     return this.runSignalsRef;
+  }
+
+  private getThreadTransport(): ThreadTransportService | null {
+    if (this.threadTransportRef === undefined) {
+      try {
+        this.threadTransportRef = this.moduleRef.get(ThreadTransportService, { strict: false }) ?? null;
+      } catch {
+        this.threadTransportRef = null;
+      }
+    }
+    return this.threadTransportRef;
+  }
+
+  private async autoSendFinalResponse(
+    threadId: string,
+    response: ResponseMessage,
+    outputs: Array<AIMessage | ToolCallMessage>,
+  ): Promise<void> {
+    const hasPendingToolCall = outputs.some((o) => o instanceof ToolCallMessage);
+    const finalText = response.text ?? '';
+    if (hasPendingToolCall || finalText.trim().length === 0) {
+      return;
+    }
+
+    const transport = this.getThreadTransport();
+    if (!transport) {
+      this.logger.debug?.(
+        `Agent auto-send skipped for thread ${threadId}: ThreadTransportService unavailable`,
+      );
+      return;
+    }
+
+    try {
+      const sendResult = await transport.sendTextToThread(threadId, finalText);
+      if (!sendResult.ok) {
+        this.logger.warn?.(
+          `Agent auto-send failed for thread ${threadId}: ${sendResult.error ?? 'unknown_error'}`,
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Agent auto-send threw for thread ${threadId}: ${message}`);
+    }
   }
 
   get config() {
@@ -358,6 +408,7 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
         debounceMs: this.config.debounceMs ?? 0,
         whenBusy: this.config.whenBusy ?? 'wait',
         processBuffer: this.config.processBuffer ?? 'allTogether',
+        autoSendFinalResponseToThread: this.config.sendFinalResponseToThread ?? true,
         restrictOutput: this.config.restrictOutput ?? false,
         restrictionMessage: this.config.restrictionMessage ?? DEFAULT_RESTRICTION_MESSAGE,
         restrictionMaxInjections: this.config.restrictionMaxInjections ?? 0,
@@ -555,13 +606,20 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
         }
 
         this.logger.log(`Agent response in thread ${thread}: ${last?.text}`);
+        let responseMessage: ResponseMessage | null = null;
+        let outputMessages: Array<AIMessage | ToolCallMessage> | null = null;
         if (last instanceof ResponseMessage) {
-          const outputs: Array<AIMessage | ToolCallMessage> = last.output.filter(
+          responseMessage = last;
+          outputMessages = last.output.filter(
             (o) => o instanceof AIMessage || o instanceof ToolCallMessage,
           ) as Array<AIMessage | ToolCallMessage>;
-          await persistence.completeRun(ensuredRunId, 'finished', outputs);
+          await persistence.completeRun(ensuredRunId, 'finished', outputMessages);
         } else {
           await persistence.completeRun(ensuredRunId, 'finished', [last]);
+        }
+
+        if (responseMessage && effective.behavior.autoSendFinalResponseToThread) {
+          await this.autoSendFinalResponse(thread, responseMessage, outputMessages ?? []);
         }
 
         result = last;

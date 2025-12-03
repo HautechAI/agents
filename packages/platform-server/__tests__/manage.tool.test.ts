@@ -51,10 +51,14 @@ function buildCtx(overrides: Partial<LLMContext> = {}): LLMContext {
 
 async function createHarness(options: { persistence?: AgentsPersistenceService } = {}) {
   const defaultSpy = vi.fn().mockResolvedValue('child-default');
+  const defaultSetThreadChannel = vi.fn();
   const hasCustomPersistence = Object.prototype.hasOwnProperty.call(options, 'persistence');
   const persistence = hasCustomPersistence
     ? (options.persistence as AgentsPersistenceService)
-    : ({ getOrCreateSubthreadByAlias: defaultSpy } as unknown as AgentsPersistenceService);
+    : ({
+        getOrCreateSubthreadByAlias: defaultSpy,
+        setThreadChannelNode: defaultSetThreadChannel,
+      } as unknown as AgentsPersistenceService);
 
   const module = await Test.createTestingModule({
     providers: [
@@ -75,10 +79,32 @@ async function createHarness(options: { persistence?: AgentsPersistenceService }
   }).compile();
 
   const node = await module.resolve(ManageToolNode);
+  node.init({ nodeId: 'manage' });
   await node.setConfig({ description: 'desc' });
   const tool = node.getTool();
 
-  return { module, node, tool, spy: hasCustomPersistence ? null : defaultSpy };
+  const awaitedResponses = new Map<string, string>();
+  const awaitSpy = vi
+    .spyOn(node, 'awaitChildResponse')
+    .mockImplementation(async (childThreadId: string) => {
+      const trimmed = childThreadId.trim();
+      if (awaitedResponses.has(trimmed)) return awaitedResponses.get(trimmed)!;
+      return `ok-${trimmed}`;
+    });
+
+  const setAwaitedResponse = (childThreadId: string, responseText: string) => {
+    awaitedResponses.set(childThreadId, responseText);
+  };
+
+  return {
+    module,
+    node,
+    tool,
+    spy: hasCustomPersistence ? null : defaultSpy,
+    defaultSetThreadChannel,
+    setAwaitedResponse,
+    awaitSpy,
+  };
 }
 
 async function addWorker(module: Awaited<ReturnType<typeof createHarness>>['module'], node: ManageToolNode, title: string) {
@@ -91,7 +117,11 @@ async function addWorker(module: Awaited<ReturnType<typeof createHarness>>['modu
 describe('ManageTool unit', () => {
   it('send_message: uses explicit threadAlias verbatim after trim', async () => {
     const getOrCreateSubthreadByAlias = vi.fn().mockResolvedValue('child-explicit');
-    const persistence = { getOrCreateSubthreadByAlias } as unknown as AgentsPersistenceService;
+    const setThreadChannelNode = vi.fn();
+    const persistence = {
+      getOrCreateSubthreadByAlias,
+      setThreadChannelNode,
+    } as unknown as AgentsPersistenceService;
     const harness = await createHarness({ persistence });
     await addWorker(harness.module, harness.node, '  child-1  ');
 
@@ -108,11 +138,16 @@ describe('ManageTool unit', () => {
 
     expect(res).toBe('Response from: child-1\nok-child-explicit');
     expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith('manage', 'Mixed.Alias-Case_123', 'parent', '');
+    expect(setThreadChannelNode).toHaveBeenCalledWith('child-explicit', 'manage');
   });
 
   it('send_message: derives sanitized alias when omitted', async () => {
     const getOrCreateSubthreadByAlias = vi.fn().mockResolvedValue('child-derived');
-    const persistence = { getOrCreateSubthreadByAlias } as unknown as AgentsPersistenceService;
+    const setThreadChannelNode = vi.fn();
+    const persistence = {
+      getOrCreateSubthreadByAlias,
+      setThreadChannelNode,
+    } as unknown as AgentsPersistenceService;
     const harness = await createHarness({ persistence });
     await addWorker(harness.module, harness.node, 'Alpha Worker');
 
@@ -124,6 +159,7 @@ describe('ManageTool unit', () => {
 
     expect(res).toBe('Response from: Alpha Worker\nok-child-derived');
     expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith('manage', 'alpha-worker', 'parent', '');
+    expect(setThreadChannelNode).toHaveBeenCalledWith('child-derived', 'manage');
   });
 
   it('send_message: prefixes multi-line worker response preserving content', async () => {
@@ -132,6 +168,7 @@ describe('ManageTool unit', () => {
     vi.spyOn(worker, 'invoke').mockResolvedValue(
       new ResponseMessage({ output: [AIMessage.fromText('line 1\nline 2').toPlain()] }),
     );
+    harness.setAwaitedResponse('child-default', 'line 1\nline 2');
 
     const ctx = buildCtx();
     const res = await harness.tool.execute(
@@ -148,6 +185,7 @@ describe('ManageTool unit', () => {
     vi.spyOn(worker, 'invoke').mockResolvedValue(
       new ResponseMessage({ output: [AIMessage.fromText('').toPlain()] }),
     );
+    harness.setAwaitedResponse('child-default', '');
 
     const ctx = buildCtx();
     const res = await harness.tool.execute(
@@ -283,13 +321,17 @@ describe('ManageTool unit', () => {
         FakeAgent,
         {
           provide: AgentsPersistenceService,
-          useValue: { getOrCreateSubthreadByAlias: async () => 'child-t' } as unknown as AgentsPersistenceService,
+          useValue: {
+            getOrCreateSubthreadByAlias: async () => 'child-t',
+            setThreadChannelNode: async () => undefined,
+          } as unknown as AgentsPersistenceService,
         },
         RunSignalsRegistry,
       ],
     }).compile();
 
     const node = await module.resolve(ManageToolNode);
+    node.init({ nodeId: 'manage' });
     await node.setConfig({ description: 'desc' });
 
     class ThrowingAgent extends FakeAgent {
