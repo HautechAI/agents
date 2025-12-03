@@ -36,13 +36,7 @@ const forceAxiosFetchAdapter = () => {
 };
 
 const applyBrowserMocks = () => {
-  const g = globalThis as typeof globalThis &
-    Partial<Window> &
-    { document?: Document; __AGYN_DISABLE_VIRTUALIZATION__?: boolean };
-
-  if (typeof g.__AGYN_DISABLE_VIRTUALIZATION__ === 'undefined') {
-    g.__AGYN_DISABLE_VIRTUALIZATION__ = false;
-  }
+  const g = globalThis as typeof globalThis & Partial<Window> & { document?: Document };
 
   if (!g.fetch) {
     g.fetch = undiciFetch as unknown as typeof fetch;
@@ -70,8 +64,6 @@ const applyBrowserMocks = () => {
     if (!window.Response) {
       window.Response = UndiciResponse as unknown as typeof Response;
     }
-    (window as typeof window & { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__ =
-      g.__AGYN_DISABLE_VIRTUALIZATION__;
   }
 
   if (!g.requestAnimationFrame) {

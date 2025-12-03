@@ -9,6 +9,10 @@ import { TestProviders, server, abs } from './integration/testUtils';
 
 const navigateMock = vi.fn();
 
+vi.mock('../src/components/VirtualizedList', async () =>
+  await import('../src/components/__tests__/__mocks__/virtualizedListMock'),
+);
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
@@ -26,11 +30,9 @@ describe('AgentsThreads conversation view', () => {
 
   beforeAll(() => server.listen());
   beforeEach(() => {
-    (globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__ = true;
     user = userEvent.setup();
   });
   afterEach(() => {
-    (globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__ = false;
     server.resetHandlers();
     navigateMock.mockReset();
   });

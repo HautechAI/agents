@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -7,17 +7,17 @@ import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { TestProviders, server, abs } from './integration/testUtils';
 import { graphSocket } from '../src/lib/graph/socket';
 
+vi.mock('../src/components/VirtualizedList', async () =>
+  await import('../src/components/__tests__/__mocks__/virtualizedListMock'),
+);
+
 function t(offsetMs: number) {
   return new Date(1700000000000 + offsetMs).toISOString();
 }
 
 describe('AgentsThreads realtime updates', () => {
   beforeAll(() => server.listen());
-  beforeEach(() => {
-    (globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__ = true;
-  });
   afterEach(() => {
-    (globalThis as { __AGYN_DISABLE_VIRTUALIZATION__?: boolean }).__AGYN_DISABLE_VIRTUALIZATION__ = false;
     server.resetHandlers();
   });
   afterAll(() => server.close());
