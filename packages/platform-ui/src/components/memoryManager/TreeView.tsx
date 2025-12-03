@@ -7,6 +7,8 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+
 import { cn } from '@/lib/utils';
 import {
   type MemoryTree,
@@ -207,33 +209,41 @@ export function TreeView({
               </span>
             </button>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
-                aria-label={`Add child to ${node.path}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onAddChild(node.path);
-                }}
-                tabIndex={-1}
-              >
-                <Plus className="size-3.5" />
-                <span className="hidden xl:inline">Add subdocument</span>
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-40"
-                aria-label={`Delete ${node.path}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDelete(node.path);
-                }}
-                disabled={node.path === '/'}
-                tabIndex={-1}
-              >
-                <Trash2 className="size-3.5" />
-                <span className="hidden xl:inline">Delete</span>
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
+                    aria-label="Add subdocument"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onAddChild(node.path);
+                    }}
+                    tabIndex={-1}
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Add subdocument</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-40"
+                    aria-label={`Delete ${node.path}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDelete(node.path);
+                    }}
+                    disabled={node.path === '/'}
+                    tabIndex={-1}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Delete document</TooltipContent>
+              </Tooltip>
             </div>
           </div>
           {isExpandable && isExpanded && node.children.length > 0 && (

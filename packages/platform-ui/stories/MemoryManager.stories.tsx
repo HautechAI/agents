@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { MemoryManager } from '../src/components/memoryManager/MemoryManager';
@@ -82,7 +82,6 @@ type Story = StoryObj<typeof meta>;
 const InteractiveTemplate = (args: MemoryManagerStoryArgs) => {
   const [tree, setTree] = useState<MemoryTree>(() => cloneTree(args.initialTree));
   const [selectedPath, setSelectedPath] = useState<string>(() => args.initialSelectedPath ?? args.initialTree.path);
-  const [editorValue, setEditorValue] = useState<string>('');
 
   useEffect(() => {
     setTree(cloneTree(args.initialTree));
@@ -97,42 +96,15 @@ const InteractiveTemplate = (args: MemoryManagerStoryArgs) => {
     }
   }, [args.initialSelectedPath]);
 
-  const nodeCount = useMemo(() => countNodes(tree), [tree]);
-
   return (
     <div className="h-[640px] w-full bg-muted/10 p-4">
-      <div className="flex h-full flex-col gap-4 xl:flex-row">
-        <div className="flex-1">
-          <MemoryManager
-            initialTree={tree}
-            initialSelectedPath={selectedPath}
-            showContentIndicators={args.showContentIndicators ?? true}
-            onTreeChange={(nextTree) => setTree(cloneTree(nextTree))}
-            onSelectPath={(path) => setSelectedPath(path)}
-            onEditorChange={(value) => setEditorValue(value)}
-          />
-        </div>
-        <aside className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground xl:w-72 xl:shrink-0">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">Story state</h3>
-          <dl className="space-y-3">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground/80">Selected path</dt>
-              <dd className="break-words text-foreground">{selectedPath}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground/80">Content length</dt>
-              <dd className="text-foreground">{editorValue.length} characters</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground/80">Tree nodes</dt>
-              <dd className="text-foreground">{nodeCount}</dd>
-            </div>
-          </dl>
-          <p className="mt-4 text-xs leading-relaxed">
-            Use the toolbar to add top-level documents, the row actions to manage subdocuments, and the editor to update markdown. Save persists your changes into this interactive story state.
-          </p>
-        </aside>
-      </div>
+      <MemoryManager
+        initialTree={tree}
+        initialSelectedPath={selectedPath}
+        showContentIndicators={args.showContentIndicators ?? true}
+        onTreeChange={(nextTree) => setTree(cloneTree(nextTree))}
+        onSelectPath={(path) => setSelectedPath(path)}
+      />
     </div>
   );
 };
@@ -140,7 +112,3 @@ const InteractiveTemplate = (args: MemoryManagerStoryArgs) => {
 export const InteractivePlayground: Story = {
   render: (args) => <InteractiveTemplate {...args} />,
 };
-
-function countNodes(tree: MemoryTree): number {
-  return tree.children.reduce((total, child) => total + countNodes(child), 1);
-}

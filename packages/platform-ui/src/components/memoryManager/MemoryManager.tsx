@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { Button } from '../Button';
 import { ScrollArea } from '../ui/scroll-area';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
-import { MarkdownEditor } from './MarkdownEditor';
 import { TreeView } from './TreeView';
 import { cn } from '@/lib/utils';
 import {
@@ -167,11 +165,6 @@ export function MemoryManager({
     createDocument(parentPath);
   }, [createDocument]);
 
-  const handleAddDocument = useCallback(() => {
-    const targetParent = selectedPath || '/';
-    createDocument(targetParent);
-  }, [createDocument, selectedPath]);
-
   const handleRequestDelete = useCallback((path: string) => {
     if (path === '/') return;
     setPendingDeletePath(path);
@@ -219,32 +212,23 @@ export function MemoryManager({
     setUnsaved(false);
   }, [editorValue, onTreeChange, selectedNode, selectedPath]);
 
+  const editorLabelId = useId();
+  const editorDescriptionId = useId();
+
   return (
     <div className={cn('h-full w-full', className)}>
       <ResizablePanelGroup
         direction="horizontal"
         className="h-full min-h-[480px] overflow-hidden rounded-lg border border-border bg-background"
       >
-        <ResizablePanel defaultSize={32} minSize={20} className="min-w-[260px] border-r border-border bg-muted/30">
-          <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-3">
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-foreground">Documents</h2>
-                <p className="text-xs text-muted-foreground">Organize and edit nested content</p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleAddDocument}
-                aria-label="Add document"
-              >
-                <Plus className="mr-2 size-4" aria-hidden="true" />
-                Add document
-              </Button>
+        <ResizablePanel defaultSize={32} minSize={20} className="min-w-[260px] border-r border-border bg-muted/20">
+          <div className="flex h-full flex-col gap-3 p-4">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Documents</h2>
+              <p className="text-xs text-muted-foreground">Select a document to edit</p>
             </div>
             <div className="flex-1 overflow-hidden">
-              <ScrollArea className="h-full px-2 py-3">
+              <ScrollArea className="h-full pr-2">
                 <TreeView
                   tree={tree}
                   selectedPath={selectedPath}
@@ -258,7 +242,7 @@ export function MemoryManager({
               </ScrollArea>
             </div>
             {treeMessage && (
-              <div className="border-t border-border bg-destructive/10 px-4 py-2 text-xs text-destructive" role="alert">
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
                 {treeMessage}
               </div>
             )}
@@ -266,25 +250,42 @@ export function MemoryManager({
         </ResizablePanel>
         <ResizableHandle withHandle className="bg-muted" />
         <ResizablePanel defaultSize={68} minSize={40} className="bg-background">
-          <div className="flex h-full flex-col">
-            <div className="border-b border-border px-4 py-3">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-sm font-semibold text-foreground">Markdown editor</h2>
-                <p className="text-xs text-muted-foreground">{selectedPath}</p>
+          <div className="flex h-full flex-col gap-4 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 id={editorLabelId} className="text-sm font-semibold text-foreground">Document content</h2>
+                <p id={editorDescriptionId} className="truncate text-xs text-muted-foreground">{selectedPath}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {selectedNode && (
+                  <span
+                    className={cn(
+                      'text-xs font-medium',
+                      unsaved ? 'text-amber-600' : 'text-muted-foreground',
+                    )}
+                  >
+                    {unsaved ? 'Unsaved changes' : 'Saved'}
+                  </span>
+                )}
+                <Button type="button" size="sm" onClick={handleSave} disabled={!unsaved || !selectedNode}>
+                  Save changes
+                </Button>
               </div>
             </div>
-            <div className="flex-1 p-4">
+            <div className="flex-1">
               {selectedNode ? (
-                <MarkdownEditor
+                <textarea
                   value={editorValue}
-                  onChange={handleEditorChange}
-                  onSave={handleSave}
-                  unsaved={unsaved}
-                  className="h-full"
+                  onChange={(event) => handleEditorChange(event.target.value)}
+                  aria-labelledby={editorLabelId}
+                  aria-describedby={editorDescriptionId}
+                  className="h-full w-full resize-none rounded-md border border-border bg-muted/20 px-4 py-3 text-sm leading-relaxed text-foreground shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  placeholder="Write markdown…"
+                  spellCheck="false"
                 />
               ) : (
                 <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border/70 bg-muted/20 text-sm text-muted-foreground">
-                  Select a document to edit its markdown content.
+                  Select a document to edit its content.
                 </div>
               )}
             </div>
