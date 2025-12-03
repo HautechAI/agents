@@ -31,6 +31,12 @@ type DeveloperMessagePlain = {
 };
 type AgentDescriptor = { title: string; role?: string; name?: string };
 
+export class ThreadParentNotFoundError extends Error {
+  constructor() {
+    super('parent_not_found');
+  }
+}
+
 @Injectable()
 export class AgentsPersistenceService {
   private readonly logger = new Logger(AgentsPersistenceService.name);
@@ -167,6 +173,77 @@ export class AgentsPersistenceService {
     });
     this.eventsBus.emitThreadMetricsAncestors({ threadId: created.id });
     return created.id;
+  }
+
+  async createThreadWithInitialMessage(params: {
+    alias: string;
+    text: string;
+    agentNodeId: string;
+    parentId?: string | null;
+  }): Promise<{
+    id: string;
+    alias: string;
+    summary: string | null;
+    status: ThreadStatus;
+    createdAt: Date;
+    parentId: string | null;
+    channelNodeId: string | null;
+    assignedAgentNodeId: string | null;
+  }> {
+    const alias = params.alias.trim();
+    if (alias.length === 0) {
+      throw new Error('thread_alias_required');
+    }
+    const agentNodeId = params.agentNodeId.trim();
+    if (agentNodeId.length === 0) {
+      throw new Error('agent_node_id_required');
+    }
+    const parentId = params.parentId ?? null;
+    const sanitizedSummary = this.sanitizeSummary(params.text);
+
+    const created = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (parentId) {
+        const parent = await tx.thread.findUnique({ where: { id: parentId }, select: { id: true } });
+        if (!parent) {
+          throw new ThreadParentNotFoundError();
+        }
+      }
+
+      return tx.thread.create({
+        data: {
+          alias,
+          summary: sanitizedSummary,
+          parentId,
+          assignedAgentNodeId: agentNodeId,
+        },
+      });
+    });
+
+    this.eventsBus.emitThreadCreated({
+      id: created.id,
+      alias: created.alias,
+      summary: created.summary ?? null,
+      status: created.status,
+      createdAt: created.createdAt,
+      parentId: created.parentId ?? null,
+      channelNodeId: created.channelNodeId ?? null,
+      assignedAgentNodeId: created.assignedAgentNodeId ?? null,
+    });
+
+    if (created.parentId) {
+      this.eventsBus.emitThreadMetricsAncestors({ threadId: created.id });
+    }
+
+    return {
+      id: created.id,
+      alias: created.alias,
+      summary: created.summary ?? null,
+      status: created.status,
+      createdAt: created.createdAt,
+      parentId: created.parentId ?? null,
+      channelNodeId: created.channelNodeId ?? null,
+      assignedAgentNodeId: created.assignedAgentNodeId ?? null,
+    };
   }
 
   async ensureAssignedAgent(threadId: string, agentNodeId: string): Promise<void> {
