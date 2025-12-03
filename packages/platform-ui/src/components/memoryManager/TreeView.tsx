@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import Badge from '../Badge';
 import {
   ChevronRight,
   ChevronDown,
   FileText,
-  Folder,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -162,25 +160,23 @@ export function TreeView({
       const isExpandable = node.children.length > 0;
       const isExpanded = expandedPaths.has(node.path);
       const indent = depth * 16;
-      const indicatorIcon = node.hasDocument ? (
-        <FileText className="size-4 text-primary" aria-hidden="true" />
-      ) : (
-        <Folder className="size-4 text-muted-foreground" aria-hidden="true" />
-      );
+      const indicatorIcon = showContentIndicators ? (
+        <FileText className="size-4 text-muted-foreground" aria-hidden="true" />
+      ) : null;
 
       return (
         <li key={node.path} role="none">
           <div
             className={cn(
-              'flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-within:bg-accent focus-within:text-accent-foreground',
-              isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60 hover:text-accent-foreground',
+              'group flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-within:bg-muted focus-within:text-foreground',
+              isSelected ? 'bg-muted text-foreground' : 'hover:bg-muted/70 hover:text-foreground',
             )}
             style={{ paddingLeft: indent }}
           >
             {isExpandable ? (
               <button
                 type="button"
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
                 aria-label={isExpanded ? 'Collapse node' : 'Expand node'}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -205,20 +201,15 @@ export function TreeView({
               onKeyDown={(event) => handleKeyDown(event, node.path)}
               tabIndex={isSelected ? 0 : -1}
             >
-              {showContentIndicators && indicatorIcon}
+              {indicatorIcon}
               <span className="truncate" title={node.path}>
                 {node.name}
               </span>
             </button>
             <div className="flex items-center gap-1">
-              {node.hasDocument && showContentIndicators && (
-                <Badge variant="accent" className="text-[10px] uppercase tracking-wide">
-                  doc
-                </Badge>
-              )}
               <button
                 type="button"
-                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
                 aria-label={`Add child to ${node.path}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -226,11 +217,12 @@ export function TreeView({
                 }}
                 tabIndex={-1}
               >
-                <Plus className="size-4" />
+                <Plus className="size-3.5" />
+                <span className="hidden xl:inline">Add subdocument</span>
               </button>
               <button
                 type="button"
-                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-40"
                 aria-label={`Delete ${node.path}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -239,7 +231,8 @@ export function TreeView({
                 disabled={node.path === '/'}
                 tabIndex={-1}
               >
-                <Trash2 className="size-4" />
+                <Trash2 className="size-3.5" />
+                <span className="hidden xl:inline">Delete</span>
               </button>
             </div>
           </div>

@@ -9,21 +9,18 @@ const populatedTree: MemoryTree = {
   id: 'root',
   path: '/',
   name: '/',
-  hasDocument: false,
-  content: '',
+  content: '# Workspace overview\n\nUse the Memory Manager to create nested documents.',
   children: [
     {
       id: 'notes',
       path: '/notes',
       name: 'notes',
-      hasDocument: false,
-      content: '',
+      content: 'Notes index',
       children: [
         {
           id: 'notes-todo',
           path: '/notes/todo',
           name: 'todo',
-          hasDocument: true,
           content: '# Todo list\n\n- Draft onboarding email\n- Schedule memory sync',
           children: [],
         },
@@ -33,14 +30,12 @@ const populatedTree: MemoryTree = {
       id: 'guides',
       path: '/guides',
       name: 'guides',
-      hasDocument: true,
       content: 'Guides index',
       children: [
         {
           id: 'guides-getting-started',
           path: '/guides/getting-started',
           name: 'getting-started',
-          hasDocument: true,
           content: `# Getting Started\n\n1. Install dependencies\n2. Launch Storybook\n3. Explore the Memory Manager UI`,
           children: [],
         },
@@ -134,7 +129,7 @@ const InteractiveTemplate = (args: MemoryManagerStoryArgs) => {
             </div>
           </dl>
           <p className="mt-4 text-xs leading-relaxed">
-            Use the Memory Manager to add or remove nodes, edit markdown, and press Save to persist your changes in this story.
+            Use the toolbar to add top-level documents, the row actions to manage subdocuments, and the editor to update markdown. Save persists your changes into this interactive story state.
           </p>
         </aside>
       </div>

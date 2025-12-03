@@ -2,8 +2,7 @@ export type MemoryNode = {
   id: string;
   path: string;
   name: string;
-  hasDocument: boolean;
-  content: string | null;
+  content: string;
   children: MemoryNode[];
 };
 
@@ -12,6 +11,7 @@ export type MemoryTree = MemoryNode;
 export function cloneTree(node: MemoryNode): MemoryTree {
   return {
     ...node,
+    content: node.content ?? '',
     children: node.children.map(cloneTree),
   };
 }
@@ -126,16 +126,13 @@ export function deleteNode(tree: MemoryTree, targetPath: string): MemoryTree {
   return remove(tree);
 }
 
-export function updateNodeContent(tree: MemoryTree, targetPath: string, content: string | null): MemoryTree {
+export function updateNodeContent(tree: MemoryTree, targetPath: string, content: string): MemoryTree {
   const normalizedTarget = normalizePath(targetPath);
   function update(node: MemoryNode): MemoryNode {
     if (node.path === normalizedTarget) {
-      const normalizedContent = content ?? '';
-      const trimmed = normalizedContent.trim();
       return {
         ...node,
         content,
-        hasDocument: trimmed.length > 0,
       };
     }
 

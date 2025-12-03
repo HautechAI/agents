@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollArea } from '../ui/scroll-area';
+import { Plus } from 'lucide-react';
 
-import { Panel, PanelBody, PanelHeader } from '../Panel';
+import { Button } from '../Button';
+import { ScrollArea } from '../ui/scroll-area';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -116,9 +117,9 @@ export function MemoryManager({
     });
   }, []);
 
-  const handleAddChild = useCallback(
+  const createDocument = useCallback(
     (parentPath: string) => {
-      const proposed = window.prompt('Enter a name for the new memory node');
+      const proposed = window.prompt('Enter a name for the new document');
       if (proposed == null) return;
       const name = proposed.trim();
       if (name.length === 0) {
@@ -140,7 +141,6 @@ export function MemoryManager({
         id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`,
         path: childPath,
         name,
-        hasDocument: false,
         content: '',
         children: [],
       };
@@ -150,6 +150,7 @@ export function MemoryManager({
         onTreeChange?.(next);
         return next;
       });
+      setTreeMessage(null);
       setExpandedPaths((previous) => {
         const next = new Set(previous);
         for (const ancestor of getAncestorPaths(childPath)) {
@@ -161,6 +162,15 @@ export function MemoryManager({
     },
     [handleSelectPath, onTreeChange, tree],
   );
+
+  const handleAddChild = useCallback((parentPath: string) => {
+    createDocument(parentPath);
+  }, [createDocument]);
+
+  const handleAddDocument = useCallback(() => {
+    const targetParent = selectedPath || '/';
+    createDocument(targetParent);
+  }, [createDocument, selectedPath]);
 
   const handleRequestDelete = useCallback((path: string) => {
     if (path === '/') return;
@@ -211,17 +221,30 @@ export function MemoryManager({
 
   return (
     <div className={cn('h-full w-full', className)}>
-      <ResizablePanelGroup direction="horizontal" className="h-full min-h-[480px] rounded-lg border border-border bg-muted/40">
-        <ResizablePanel defaultSize={30} minSize={20} className="min-w-[240px]">
-          <Panel className="flex h-full flex-col">
-            <PanelHeader className="border-b border-border bg-background">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-base font-semibold">Memory Tree</h2>
-                <p className="text-xs text-muted-foreground">Manage paths and documents</p>
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="h-full min-h-[480px] overflow-hidden rounded-lg border border-border bg-background"
+      >
+        <ResizablePanel defaultSize={32} minSize={20} className="min-w-[260px] border-r border-border bg-muted/30">
+          <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-3">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-foreground">Documents</h2>
+                <p className="text-xs text-muted-foreground">Organize and edit nested content</p>
               </div>
-            </PanelHeader>
-            <PanelBody className="flex-1 space-y-3 p-0">
-              <ScrollArea className="h-full p-3">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleAddDocument}
+                aria-label="Add document"
+              >
+                <Plus className="mr-2 size-4" aria-hidden="true" />
+                Add document
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full px-2 py-3">
                 <TreeView
                   tree={tree}
                   selectedPath={selectedPath}
@@ -233,24 +256,24 @@ export function MemoryManager({
                   showContentIndicators={showContentIndicators}
                 />
               </ScrollArea>
-              {treeMessage && (
-                <div className="px-3 pb-4 text-xs text-destructive" role="alert">
-                  {treeMessage}
-                </div>
-              )}
-            </PanelBody>
-          </Panel>
+            </div>
+            {treeMessage && (
+              <div className="border-t border-border bg-destructive/10 px-4 py-2 text-xs text-destructive" role="alert">
+                {treeMessage}
+              </div>
+            )}
+          </div>
         </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70} minSize={40}>
-          <Panel className="flex h-full flex-col">
-            <PanelHeader className="border-b border-border bg-background">
+        <ResizableHandle withHandle className="bg-muted" />
+        <ResizablePanel defaultSize={68} minSize={40} className="bg-background">
+          <div className="flex h-full flex-col">
+            <div className="border-b border-border px-4 py-3">
               <div className="flex flex-col gap-1">
-                <h2 className="text-base font-semibold">Markdown</h2>
+                <h2 className="text-sm font-semibold text-foreground">Markdown editor</h2>
                 <p className="text-xs text-muted-foreground">{selectedPath}</p>
               </div>
-            </PanelHeader>
-            <PanelBody className="flex-1 p-4">
+            </div>
+            <div className="flex-1 p-4">
               {selectedNode ? (
                 <MarkdownEditor
                   value={editorValue}
@@ -261,11 +284,11 @@ export function MemoryManager({
                 />
               ) : (
                 <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border/70 bg-muted/20 text-sm text-muted-foreground">
-                  Select a node to edit its markdown content.
+                  Select a document to edit its markdown content.
                 </div>
               )}
-            </PanelBody>
-          </Panel>
+            </div>
+          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
       <ConfirmDeleteDialog
