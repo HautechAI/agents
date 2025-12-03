@@ -98,13 +98,18 @@ const InteractiveTemplate = (args: MemoryManagerStoryArgs) => {
 
   return (
     <div className="h-[640px] w-full bg-muted/10 p-4">
-      <MemoryManager
-        initialTree={tree}
-        initialSelectedPath={selectedPath}
-        showContentIndicators={args.showContentIndicators ?? true}
-        onTreeChange={(nextTree) => setTree(cloneTree(nextTree))}
-        onSelectPath={(path) => setSelectedPath(path)}
-      />
+      <div className="flex h-full flex-col gap-3">
+        <MemoryManager
+          initialTree={tree}
+          initialSelectedPath={selectedPath}
+          showContentIndicators={args.showContentIndicators ?? true}
+          onTreeChange={(nextTree) => setTree(cloneTree(nextTree))}
+          onSelectPath={(path) => setSelectedPath(path)}
+        />
+        <p className="text-xs text-muted-foreground">
+          Tip: Use arrow keys to move between documents and notice the selected row highlight updating in the tree.
+        </p>
+      </div>
     </div>
   );
 };

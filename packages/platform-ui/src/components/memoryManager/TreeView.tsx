@@ -170,15 +170,18 @@ export function TreeView({
         <li key={node.path} role="none">
           <div
             className={cn(
-              'group flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-within:bg-muted focus-within:text-foreground',
-              isSelected ? 'bg-muted text-foreground' : 'hover:bg-muted/70 hover:text-foreground',
+              'group flex items-center gap-2 rounded-md border border-transparent px-2 py-1 text-sm transition-colors focus-within:border-primary/40 focus-within:bg-primary/5 focus-within:text-foreground',
+              isSelected
+                ? 'border-primary/40 bg-primary/10 text-primary shadow-sm'
+                : 'hover:bg-muted/70 hover:text-foreground',
             )}
             style={{ paddingLeft: indent }}
+            data-selected={isSelected || undefined}
           >
             {isExpandable ? (
               <button
                 type="button"
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40 group-data-[selected=true]:text-primary group-data-[selected=true]:hover:text-primary"
                 aria-label={isExpanded ? 'Collapse node' : 'Expand node'}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -196,7 +199,7 @@ export function TreeView({
               type="button"
               role="treeitem"
               aria-level={depth + 1}
-              aria-selected={isSelected}
+              aria-selected={isSelected ? 'true' : 'false'}
               aria-expanded={isExpandable ? isExpanded : undefined}
               className="flex flex-1 items-center gap-2 text-left focus-visible:outline-none"
               onClick={() => onSelect(node.path)}
@@ -213,7 +216,7 @@ export function TreeView({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40"
+                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-muted-foreground/40 group-data-[selected=true]:text-primary group-data-[selected=true]:hover:text-primary"
                     aria-label="Add subdocument"
                     onClick={(event) => {
                       event.stopPropagation();
@@ -230,7 +233,7 @@ export function TreeView({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-40"
+                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 disabled:opacity-40 group-data-[selected=true]:text-primary"
                     aria-label={`Delete ${node.path}`}
                     onClick={(event) => {
                       event.stopPropagation();
