@@ -1,3 +1,5 @@
+import type { ThreadOutboxSource } from '../threads/thread-channel.schema';
+
 export {
   SlackIdentifiersSchema,
   SlackChannelDescriptorSchema,
@@ -7,8 +9,9 @@ export {
   type ChannelDescriptor,
   type SlackChannelDescriptor,
   type ManageChannelDescriptor,
-  type ThreadOutboxSource,
 } from '../threads/thread-channel.schema';
+
+export type { ThreadOutboxSource } from '../threads/thread-channel.schema';
 
 export type ThreadOutboxSendRequest = {
   threadId: string;
