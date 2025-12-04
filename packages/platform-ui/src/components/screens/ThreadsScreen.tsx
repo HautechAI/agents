@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref, type UIEvent } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Play, Container, Bell, Send, PanelRightClose, PanelRight, Loader2, MessageSquarePlus, Terminal } from 'lucide-react';
 import { AutocompleteInput, type AutocompleteInputHandle, type AutocompleteOption } from '@/components/AutocompleteInput';
@@ -30,6 +30,8 @@ interface ThreadsScreenProps {
   isEmpty?: boolean;
   listError?: ReactNode;
   detailError?: ReactNode;
+  conversationScrollRef?: Ref<HTMLDivElement>;
+  onConversationScroll?: (event: UIEvent<HTMLDivElement>) => void;
   onFilterModeChange?: (mode: 'all' | 'open' | 'closed') => void;
   onSelectThread?: (threadId: string) => void;
   onToggleRunsInfoCollapsed?: (isCollapsed: boolean) => void;
@@ -86,6 +88,8 @@ export default function ThreadsScreen({
   onDraftRecipientChange,
   onDraftCancel,
   className = '',
+  conversationScrollRef,
+  onConversationScroll,
 }: ThreadsScreenProps) {
   const filteredThreads = threads.filter((thread) => {
     if (filterMode === 'all') return true;
@@ -208,15 +212,6 @@ export default function ThreadsScreen({
       );
     }
 
-    if (isLoading) {
-      return (
-        <div className="flex h-full items-center justify-center text-[var(--agyn-gray)]">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Loading thread…
-        </div>
-      );
-    }
-
     if (draftMode) {
       const trimmedInputValue = inputValue.trim();
       const hasRecipient = Boolean(draftRecipientId);
@@ -289,7 +284,7 @@ export default function ThreadsScreen({
     const agentDisplayRole = resolvedSelectedThread.agentRole?.trim();
 
     return (
-      <>
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="bg-white border-b border-[var(--agyn-border-subtle)] p-4">
           <div className="mb-3 flex items-start justify-between">
             <div className="flex-1">
@@ -428,11 +423,23 @@ export default function ThreadsScreen({
         </div>
 
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <Conversation runs={runs} className="h-full rounded-none border-none" collapsed={isRunsInfoCollapsed} />
+          <Conversation
+            runs={runs}
+            className="h-full rounded-none border-none"
+            collapsed={isRunsInfoCollapsed}
+            scrollRef={conversationScrollRef}
+            onScroll={onConversationScroll}
+          />
         </div>
 
         {renderComposer(!onSendMessage || !selectedThreadId || isSendMessagePending)}
-      </>
+        {isLoading ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin text-[var(--agyn-gray)]" />
+            <span className="text-sm text-[var(--agyn-gray)]">Loading thread…</span>
+          </div>
+        ) : null}
+      </div>
     );
   };
 

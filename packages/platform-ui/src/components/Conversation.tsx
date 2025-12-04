@@ -1,4 +1,4 @@
-import { type ReactNode, useRef, useEffect, useState } from 'react';
+import { type ReactNode, useRef, useEffect, useState, type Ref, type UIEvent } from 'react';
 import { Message, type MessageRole } from './Message';
 import { RunInfo } from './RunInfo';
 import { QueuedMessage } from './QueuedMessage';
@@ -44,6 +44,8 @@ interface ConversationProps {
   className?: string;
   defaultCollapsed?: boolean;
   collapsed?: boolean;
+  scrollRef?: Ref<HTMLDivElement>;
+  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
 }
 
 export function Conversation({
@@ -55,13 +57,15 @@ export function Conversation({
   className = '',
   defaultCollapsed = false,
   collapsed,
+  scrollRef,
+  onScroll,
 }: ConversationProps) {
   const messagesRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [runHeights, setRunHeights] = useState<Map<string, number>>(new Map());
 
   // Use controlled or uncontrolled state
   const isCollapsed = collapsed ?? defaultCollapsed;
-  
+
   // Measure run heights for the sticky run info column
   useEffect(() => {
     const newHeights = new Map<string, number>();
@@ -89,7 +93,12 @@ export function Conversation({
       )}
 
       {/* Main Content Area - Single Scroll Container */}
-      <div className="flex-1 min-w-0 overflow-y-auto flex flex-col">
+      <div
+        className="flex-1 min-w-0 overflow-y-auto flex flex-col"
+        ref={scrollRef ?? undefined}
+        onScroll={onScroll}
+        data-testid="conversation-scroll"
+      >
         {/* Runs Container */}
         <div className="flex flex-col flex-1 min-w-0">
           {/* Runs */}
