@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryKey } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import type { ConversationMessage, Run as ConversationRun } from '@/components/C
 import type { AutocompleteOption } from '@/components/AutocompleteInput';
 import { formatDuration } from '@/components/agents/runTimelineFormatting';
 import { notifyError } from '@/lib/notify';
+import { LruCache } from '@/lib/lru/LruCache.ts';
 import { graphSocket } from '@/lib/graph/socket';
 import { threads } from '@/api/modules/threads';
 import { runs as runsApi } from '@/api/modules/runs';
@@ -28,6 +29,10 @@ const MAX_THREAD_LIMIT = 500;
 
 const defaultMetrics: ThreadMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 };
 const THREAD_PRELOAD_CONCURRENCY = 4;
+const THREAD_CACHE_CAPACITY = 10;
+const SCROLL_BOTTOM_THRESHOLD = 4;
+const SCROLL_RESTORE_ATTEMPTS = 5;
+const SCROLL_PERSIST_DEBOUNCE_MS = 75;
 
 type FilterMode = 'open' | 'closed' | 'all';
 
@@ -59,6 +64,22 @@ type SocketMessage = {
 type SocketRun = { id: string; status: 'running' | 'finished' | 'terminated'; createdAt: string; updatedAt: string };
 
 type ConversationMessageWithMeta = ConversationMessage & { createdAtRaw: string };
+
+type ScrollState = {
+  atBottom: boolean;
+  dFromBottom: number;
+  lastScrollTop: number;
+  lastMeasured: number;
+};
+
+type ThreadViewCacheEntry = {
+  threadId: string;
+  runs: RunMeta[];
+  runMessagesByRunId: Record<string, ConversationMessageWithMeta[]>;
+  scroll: ScrollState | null;
+  messagesLoaded: boolean;
+  updatedAt: number;
+};
 
 type ThreadDraft = {
   id: string;
@@ -336,6 +357,47 @@ function mapSocketMessage(message: SocketMessage): ConversationMessageWithMeta {
   };
 }
 
+function createEmptyCacheEntry(threadId: string): ThreadViewCacheEntry {
+  return {
+    threadId,
+    runs: [],
+    runMessagesByRunId: {},
+    scroll: null,
+    messagesLoaded: false,
+    updatedAt: Date.now(),
+  };
+}
+
+function cloneRunMessagesMap(map: Record<string, ConversationMessageWithMeta[]>): Record<string, ConversationMessageWithMeta[]> {
+  const result: Record<string, ConversationMessageWithMeta[]> = {};
+  for (const [runId, messages] of Object.entries(map)) {
+    result[runId] = [...messages];
+  }
+  return result;
+}
+
+function computeScrollStateFromNode(node: HTMLDivElement): ScrollState {
+  const { scrollTop, scrollHeight, clientHeight } = node;
+  const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+  const distanceFromBottom = Math.max(0, scrollHeight - clientHeight - scrollTop);
+  const atBottom = maxScrollTop - scrollTop <= SCROLL_BOTTOM_THRESHOLD;
+  return {
+    atBottom,
+    dFromBottom: atBottom ? 0 : distanceFromBottom,
+    lastScrollTop: scrollTop,
+    lastMeasured: Date.now(),
+  };
+}
+
+function restoreScrollPosition(node: HTMLDivElement, state: ScrollState | null): void {
+  if (!state || state.atBottom) {
+    node.scrollTop = node.scrollHeight;
+    return;
+  }
+  const target = Math.max(0, node.scrollHeight - node.clientHeight - state.dFromBottom);
+  node.scrollTop = target;
+}
+
 function mapReminders(items: ThreadReminder[]): { id: string; title: string; time: string }[] {
   return items.map((reminder) => ({
     id: reminder.id,
@@ -365,9 +427,12 @@ export function AgentsThreads() {
   const [drafts, setDrafts] = useState<ThreadDraft[]>([]);
   const [selectedThreadIdState, setSelectedThreadIdState] = useState<string | null>(params.threadId ?? null);
   const [runMessages, setRunMessages] = useState<Record<string, ConversationMessageWithMeta[]>>({});
+  const [prefetchedRuns, setPrefetchedRuns] = useState<RunMeta[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isRunsInfoCollapsed, setRunsInfoCollapsed] = useState(false);
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
+  const [detailPreloaderVisible, setDetailPreloaderVisible] = useState(false);
+  const [initialMessagesLoaded, setInitialMessagesLoaded] = useState(false);
 
   const pendingMessagesRef = useRef<Map<string, ConversationMessageWithMeta[]>>(new Map());
   const seenMessageIdsRef = useRef<Map<string, Set<string>>>(new Map());
@@ -375,6 +440,31 @@ export function AgentsThreads() {
   const draftsRef = useRef<ThreadDraft[]>([]);
   const lastSelectedIdRef = useRef<string | null>(null);
   const lastNonDraftIdRef = useRef<string | null>(null);
+  const threadCacheRef = useRef(new LruCache<string, ThreadViewCacheEntry>(THREAD_CACHE_CAPACITY));
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const latestScrollStateRef = useRef<ScrollState | null>(null);
+  const pendingScrollRestoreRef = useRef<ScrollState | null>(null);
+  const scrollPersistTimerRef = useRef<number | null>(null);
+
+  const updateCacheEntry = useCallback(
+    (threadId: string, updates: Partial<Omit<ThreadViewCacheEntry, 'threadId'>>) => {
+      if (!threadId) return;
+      const cache = threadCacheRef.current;
+      const base = cache.has(threadId) ? cache.get(threadId)! : createEmptyCacheEntry(threadId);
+      const next: ThreadViewCacheEntry = {
+        ...base,
+        runs: updates.runs ? [...updates.runs] : [...base.runs],
+        runMessagesByRunId: updates.runMessagesByRunId
+          ? cloneRunMessagesMap(updates.runMessagesByRunId)
+          : { ...base.runMessagesByRunId },
+        scroll: updates.scroll ?? base.scroll,
+        messagesLoaded: updates.messagesLoaded ?? base.messagesLoaded,
+        updatedAt: Date.now(),
+      };
+      cache.set(threadId, next);
+    },
+    [],
+  );
 
   const selectedThreadId = params.threadId ?? selectedThreadIdState;
   const isDraftSelected = isDraftThreadId(selectedThreadId);
@@ -566,14 +656,58 @@ export function AgentsThreads() {
   }, [runsQuery.data]);
 
   useEffect(() => {
-    setRunMessages({});
-    setMessagesError(null);
-    pendingMessagesRef.current.clear();
-    seenMessageIdsRef.current.clear();
+    if (scrollPersistTimerRef.current !== null) {
+      window.clearTimeout(scrollPersistTimerRef.current);
+      scrollPersistTimerRef.current = null;
+    }
+
+    pendingMessagesRef.current = new Map();
     runIdsRef.current = new Set();
-  }, [selectedThreadId]);
+    setMessagesError(null);
+
+    if (!selectedThreadId || isDraftSelected) {
+      setRunMessages({});
+      setPrefetchedRuns([]);
+      seenMessageIdsRef.current = new Map();
+      latestScrollStateRef.current = null;
+      pendingScrollRestoreRef.current = null;
+      setInitialMessagesLoaded(true);
+      setDetailPreloaderVisible(false);
+      return;
+    }
+
+    setDetailPreloaderVisible(true);
+
+    const cache = threadCacheRef.current;
+    const cachedEntry = cache.has(selectedThreadId) ? cache.get(selectedThreadId)! : undefined;
+
+    if (cachedEntry) {
+      setPrefetchedRuns([...cachedEntry.runs]);
+      setRunMessages(cloneRunMessagesMap(cachedEntry.runMessagesByRunId));
+      const seen = new Map<string, Set<string>>();
+      for (const run of cachedEntry.runs) {
+        const messages = cachedEntry.runMessagesByRunId[run.id] ?? [];
+        seen.set(run.id, new Set(messages.map((message) => message.id)));
+        runIdsRef.current.add(run.id);
+      }
+      seenMessageIdsRef.current = seen;
+      latestScrollStateRef.current = cachedEntry.scroll;
+      pendingScrollRestoreRef.current = cachedEntry.scroll;
+      setInitialMessagesLoaded(cachedEntry.messagesLoaded);
+    } else {
+      setPrefetchedRuns([]);
+      setRunMessages({});
+      seenMessageIdsRef.current = new Map();
+      latestScrollStateRef.current = null;
+      pendingScrollRestoreRef.current = null;
+      setInitialMessagesLoaded(false);
+    }
+  }, [selectedThreadId, isDraftSelected]);
 
   useEffect(() => {
+    if (runsQuery.isLoading && prefetchedRuns.length > 0) {
+      return;
+    }
     const currentIds = new Set(runList.map((run) => run.id));
     runIdsRef.current = currentIds;
     setRunMessages((prev) => {
@@ -592,7 +726,7 @@ export function AgentsThreads() {
     for (const id of Array.from(pendingMessagesRef.current.keys())) {
       if (!currentIds.has(id)) pendingMessagesRef.current.delete(id);
     }
-  }, [runList]);
+  }, [runList, runsQuery.isLoading, prefetchedRuns]);
 
   const flushPendingForRun = useCallback((runId: string) => {
     const pending = pendingMessagesRef.current.get(runId);
@@ -608,11 +742,26 @@ export function AgentsThreads() {
   }, []);
 
   useEffect(() => {
-    if (!selectedThreadId || runList.length === 0) return;
+    if (!selectedThreadId || isDraftSelected) return;
+    if (runList.length === 0) {
+      if (!runsQuery.isLoading) {
+        setInitialMessagesLoaded(true);
+        updateCacheEntry(selectedThreadId, { messagesLoaded: true });
+      }
+      return;
+    }
+
     let cancelled = false;
     const concurrency = 3;
     let index = 0;
     let inflight = 0;
+    let remaining = runList.length;
+
+    const markComplete = () => {
+      if (cancelled) return;
+      setInitialMessagesLoaded(true);
+      updateCacheEntry(selectedThreadId, { messagesLoaded: true });
+    };
 
     const queue = runList.map((run) => async () => {
       try {
@@ -630,8 +779,18 @@ export function AgentsThreads() {
         if (!cancelled) {
           setMessagesError(error instanceof Error ? error.message : 'Failed to load messages.');
         }
+      } finally {
+        remaining -= 1;
+        if (remaining === 0) {
+          markComplete();
+        }
       }
     });
+
+    if (remaining === 0) {
+      markComplete();
+      return;
+    }
 
     const pump = () => {
       while (inflight < concurrency && index < queue.length) {
@@ -648,13 +807,24 @@ export function AgentsThreads() {
     return () => {
       cancelled = true;
     };
-  }, [selectedThreadId, runList]);
+  }, [selectedThreadId, isDraftSelected, runList, runsQuery.isLoading, updateCacheEntry]);
 
   useEffect(() => {
     for (const run of runList) {
       flushPendingForRun(run.id);
     }
   }, [runList, flushPendingForRun]);
+
+  useEffect(() => {
+    if (!selectedThreadId || isDraftSelected) return;
+    if (runsQuery.isLoading) return;
+    updateCacheEntry(selectedThreadId, { runs: runList });
+  }, [selectedThreadId, isDraftSelected, runList, runsQuery.isLoading, updateCacheEntry]);
+
+  useEffect(() => {
+    if (!selectedThreadId || isDraftSelected) return;
+    updateCacheEntry(selectedThreadId, { runMessagesByRunId: runMessages });
+  }, [selectedThreadId, isDraftSelected, runMessages, updateCacheEntry]);
 
   useEffect(() => {
     if (!selectedThreadId) return;
@@ -728,6 +898,37 @@ export function AgentsThreads() {
       graphSocket.unsubscribe([room]);
     };
   }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!detailPreloaderVisible) return;
+    if (!selectedThreadId || isDraftSelected) {
+      setDetailPreloaderVisible(false);
+      return;
+    }
+    if (!initialMessagesLoaded) return;
+    const desiredState = pendingScrollRestoreRef.current ?? {
+      atBottom: true,
+      dFromBottom: 0,
+      lastScrollTop: 0,
+      lastMeasured: Date.now(),
+    } satisfies ScrollState;
+
+    const apply = (remaining: number) => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      restoreScrollPosition(container, desiredState);
+      latestScrollStateRef.current = computeScrollStateFromNode(container);
+      if (remaining > 0) {
+        window.requestAnimationFrame(() => apply(remaining - 1));
+        return;
+      }
+      pendingScrollRestoreRef.current = null;
+      updateCacheEntry(selectedThreadId, { scroll: latestScrollStateRef.current });
+      setDetailPreloaderVisible(false);
+    };
+
+    window.requestAnimationFrame(() => apply(SCROLL_RESTORE_ATTEMPTS - 1));
+  }, [detailPreloaderVisible, initialMessagesLoaded, selectedThreadId, isDraftSelected, updateCacheEntry]);
 
   const updateThreadSummaryFromEvent = useCallback(
     ({ thread }: { thread: { id: string; alias: string; summary: string | null; status: 'open' | 'closed'; createdAt: string; parentId?: string | null } }) => {
@@ -896,6 +1097,22 @@ export function AgentsThreads() {
     notifyError(messagesError);
   }, [messagesError]);
 
+  useEffect(() => {
+    if (!selectedThreadId || isDraftSelected) return;
+    if (detailPreloaderVisible) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const currentState = latestScrollStateRef.current;
+    if (!currentState?.atBottom) return;
+    window.requestAnimationFrame(() => {
+      const node = scrollContainerRef.current;
+      if (!node) return;
+      node.scrollTop = node.scrollHeight;
+      latestScrollStateRef.current = computeScrollStateFromNode(node);
+      updateCacheEntry(selectedThreadId, { scroll: latestScrollStateRef.current });
+    });
+  }, [runMessages, selectedThreadId, isDraftSelected, detailPreloaderVisible, updateCacheEntry]);
+
   const remindersQuery = useThreadReminders(effectiveSelectedThreadId, Boolean(effectiveSelectedThreadId));
   const containersQuery = useThreadContainers(effectiveSelectedThreadId, Boolean(effectiveSelectedThreadId));
 
@@ -913,12 +1130,20 @@ export function AgentsThreads() {
     return containerItems.find((item) => item.containerId === selectedContainerId) ?? null;
   }, [selectedContainerId, containerItems, isDraftSelected]);
 
+  const runsForDisplay = useMemo<RunMeta[]>(() => {
+    if (isDraftSelected) return [];
+    if (runsQuery.isLoading && prefetchedRuns.length > 0) {
+      return prefetchedRuns;
+    }
+    return runList;
+  }, [isDraftSelected, runsQuery.isLoading, prefetchedRuns, runList]);
+
   useEffect(() => {
     if (!selectedContainerId) return;
     if (!selectedContainer) setSelectedContainerId(null);
   }, [selectedContainerId, selectedContainer]);
 
-  const selectedThreadHasRunningRun = runList.some((run) => run.status === 'running');
+  const selectedThreadHasRunningRun = runsForDisplay.some((run) => run.status === 'running');
   const selectedThreadRemindersCount = remindersQuery.data?.items?.length ?? 0;
   const selectedThreadHasPendingReminder = selectedThreadRemindersCount > 0;
 
@@ -1062,9 +1287,26 @@ export function AgentsThreads() {
     [navigate, selectedThreadId],
   );
 
+  const handleConversationScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      const container = event.currentTarget;
+      const nextState = computeScrollStateFromNode(container);
+      latestScrollStateRef.current = nextState;
+      if (!selectedThreadId || isDraftThreadId(selectedThreadId)) return;
+      if (scrollPersistTimerRef.current !== null) {
+        window.clearTimeout(scrollPersistTimerRef.current);
+      }
+      scrollPersistTimerRef.current = window.setTimeout(() => {
+        updateCacheEntry(selectedThreadId, { scroll: nextState });
+        scrollPersistTimerRef.current = null;
+      }, SCROLL_PERSIST_DEBOUNCE_MS);
+    },
+    [selectedThreadId, updateCacheEntry],
+  );
+
   const conversationRuns = useMemo<ConversationRun[]>(() => {
     if (isDraftSelected) return [];
-    return runList.map((run) => {
+    return runsForDisplay.map((run) => {
       const timelineHref = selectedThreadId
         ? `/agents/threads/${encodeURIComponent(selectedThreadId)}/runs/${encodeURIComponent(run.id)}/timeline`
         : undefined;
@@ -1077,7 +1319,7 @@ export function AgentsThreads() {
         onViewRun: selectedThreadId ? handleViewRun : undefined,
       };
     });
-  }, [isDraftSelected, runList, runMessages, selectedThreadId, handleViewRun]);
+  }, [isDraftSelected, runsForDisplay, runMessages, selectedThreadId, handleViewRun]);
 
   const selectedThreadNode = useMemo(() => {
     if (!selectedThreadId || isDraftThreadId(selectedThreadId)) return undefined;
@@ -1115,7 +1357,6 @@ export function AgentsThreads() {
   const threadsHasMore = (threadsQuery.data?.items?.length ?? 0) >= threadLimit && threadLimit < MAX_THREAD_LIMIT;
   const threadsIsLoading = threadsQuery.isFetching;
   const isThreadsEmpty = !threadsQuery.isLoading && threadsForList.length === 0;
-  const detailIsLoading = runsQuery.isLoading || threadDetailQuery.isLoading;
 
   const handleOpenContainerTerminal = useCallback(
     (containerId: string) => {
@@ -1303,6 +1544,13 @@ export function AgentsThreads() {
       : detailError.message ?? 'Unable to load thread.'
     : null;
 
+  useEffect(() => {
+    if (!detailPreloaderVisible) return;
+    if (detailError || runsQuery.isError) {
+      setDetailPreloaderVisible(false);
+    }
+  }, [detailPreloaderVisible, detailError, runsQuery.isError]);
+
   const listErrorNode = listErrorMessage ? <span>{listErrorMessage}</span> : undefined;
   const detailErrorNode = detailErrorMessage ? <div className="text-sm text-[var(--agyn-red)]">{detailErrorMessage}</div> : undefined;
 
@@ -1320,10 +1568,12 @@ export function AgentsThreads() {
           isRunsInfoCollapsed={isRunsInfoCollapsed}
           threadsHasMore={threadsHasMore}
           threadsIsLoading={threadsIsLoading}
-          isLoading={detailIsLoading}
+          isLoading={detailPreloaderVisible}
           isEmpty={isThreadsEmpty}
           listError={listErrorNode}
           detailError={detailErrorNode}
+          conversationScrollRef={scrollContainerRef}
+          onConversationScroll={handleConversationScroll}
           onFilterModeChange={handleFilterChange}
           onSelectThread={handleSelectThread}
           onToggleRunsInfoCollapsed={handleToggleRunsInfoCollapsed}
