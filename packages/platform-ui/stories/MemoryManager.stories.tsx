@@ -10,35 +10,64 @@ import { withMainLayout } from './decorators/withMainLayout';
 const populatedTree: MemoryTree = {
   id: 'root',
   path: '/',
-  name: '/',
-  content: '# Workspace overview\n\nUse the Memory Manager to create nested documents.',
+  name: 'All memory cells',
+  content: '# Memory overview\n\nUse the Memory Manager to explore shared knowledge.',
   children: [
     {
-      id: 'notes',
-      path: '/notes',
-      name: 'notes',
-      content: 'Notes index',
+      id: 'global-memory',
+      path: '/global-memory',
+      name: 'Global memory',
+      content: '# Global memory\n\nCompany-wide announcements and shared norms.',
       children: [
         {
-          id: 'notes-todo',
-          path: '/notes/todo',
-          name: 'todo',
-          content: '# Todo list\n\n- Draft onboarding email\n- Schedule memory sync',
+          id: 'global-announcements',
+          path: '/global-memory/announcements',
+          name: 'Announcements',
+          content: 'Upcoming launch timelines and safety updates.',
+          children: [],
+        },
+        {
+          id: 'global-guidelines',
+          path: '/global-memory/guidelines',
+          name: 'Guidelines',
+          content: 'Security, compliance, and operating procedures.',
           children: [],
         },
       ],
     },
     {
-      id: 'guides',
-      path: '/guides',
-      name: 'guides',
-      content: 'Guides index',
+      id: 'project-memory',
+      path: '/project-memory',
+      name: 'Project memory',
+      content: '# Project memory\n\nCapture customer insights and delivery milestones.',
       children: [
         {
-          id: 'guides-getting-started',
-          path: '/guides/getting-started',
-          name: 'getting-started',
-          content: `# Getting Started\n\n1. Install dependencies\n2. Launch Storybook\n3. Explore the Memory Manager UI`,
+          id: 'project-overview',
+          path: '/project-memory/overview',
+          name: 'Overview',
+          content: 'Goals, scope, and timelines for the active initiative.',
+          children: [],
+        },
+        {
+          id: 'project-resources',
+          path: '/project-memory/resources',
+          name: 'Resources',
+          content: 'Links to research folders, briefs, and design assets.',
+          children: [],
+        },
+      ],
+    },
+    {
+      id: 'best-practices-memory',
+      path: '/best-practices-memory',
+      name: 'Best practices memory',
+      content: '# Best practices\n\nReusable checklists and recommended flows.',
+      children: [
+        {
+          id: 'best-checklists',
+          path: '/best-practices-memory/checklists',
+          name: 'Checklists',
+          content: 'Delivery QA, security sign-off, and release rollbacks.',
           children: [],
         },
       ],
@@ -73,7 +102,7 @@ const meta: Meta<typeof MemoryManager> = {
   },
   args: {
     initialTree: cloneTree(populatedTree),
-    initialSelectedPath: '/guides/getting-started',
+    initialSelectedPath: '/project-memory/resources',
     showContentIndicators: true,
   } satisfies MemoryManagerStoryArgs,
   tags: ['!autodocs'],
@@ -120,18 +149,18 @@ export const InteractivePlayground: Story = {
     docs: {
       description: {
         story:
-          'Use the Memory node selector above the tree to scope the view, then use the add icon on any tree node to open the subdocument dialog and the document header delete action to preview the destructive confirmation.',
+          'Use the Memory cell selector under the Documents header to scope the tree, then use the add icon on any tree node to open the subdocument dialog and the document header delete action to preview the destructive confirmation.',
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const nodeSelector = await canvas.findByLabelText(/memory node/i);
+    const nodeSelector = await canvas.findByRole('combobox', { name: /memory cell/i });
     await userEvent.click(nodeSelector);
     const portal = within(canvasElement.ownerDocument.body);
-    const notesOption = await portal.findByRole('option', { name: /^notes \(\/notes\)$/i });
-    await userEvent.click(notesOption);
-    await canvas.findByText('Viewing /notes');
+    const projectOption = await portal.findByRole('option', { name: /^Project memory$/i });
+    await userEvent.click(projectOption);
+    await canvas.findByText('Viewing Project memory');
     const addButton = await canvas.findByRole('button', { name: /Add subdocument/i });
     await userEvent.click(addButton);
     const nameField = await canvas.findByLabelText(/name/i);

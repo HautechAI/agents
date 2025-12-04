@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Trash2 } from 'lucide-react';
 
 import { Button } from '../Button';
 import { IconButton } from '../IconButton';
-import { Label } from '../ui/label';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
 import { ScrollArea } from '../ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -38,13 +38,35 @@ type MemoryManagerProps = {
   showContentIndicators?: boolean;
 };
 
-type MemoryNodeOption = {
+type MemoryCellOption = {
   path: string;
-  name: string;
+  label: string;
 };
 
-const formatMemoryNodeLabel = (option: MemoryNodeOption): string =>
-  option.path === '/' ? 'Root (/)' : `${option.name} (${option.path})`;
+const formatSegment = (value: string): string =>
+  value
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+
+const getMemoryCellLabel = (node: MemoryNode, isRoot: boolean): string => {
+  const normalizedPath = normalizePath(node.path);
+  if (isRoot) {
+    if (node.name && node.name.trim().length > 0 && node.name !== '/') {
+      return node.name;
+    }
+    return 'All memory cells';
+  }
+
+  if (node.name && node.name.trim().length > 0) {
+    return node.name;
+  }
+
+  const segments = normalizedPath.split('/').filter(Boolean);
+  const lastSegment = segments[segments.length - 1] ?? normalizedPath;
+  return formatSegment(lastSegment);
+};
 
 export function MemoryManager({
   initialTree,
@@ -66,8 +88,7 @@ export function MemoryManager({
   const selectedPathRef = useRef<string>(defaultSelectedPath);
   const [rootPath, setRootPath] = useState<string>(() => normalizePath(initialTree.path));
   const rootPathRef = useRef<string>(normalizePath(initialTree.path));
-  const rootSelectorLabelId = useId();
-  const rootSelectorTriggerId = useId();
+  const memoryCellLabelId = useId();
 
   const handleSelectPath = useCallback(
     (path: string) => {
@@ -108,27 +129,35 @@ export function MemoryManager({
   }, [handleSelectPath, initialSelectedPath]);
 
   const selectedNode = useMemo<MemoryNode | null>(() => findNodeByPath(tree, selectedPath), [tree, selectedPath]);
-
-  const memoryNodeOptions = useMemo<MemoryNodeOption[]>(() => {
-    const nodes: MemoryNodeOption[] = [];
-    const traverse = (node: MemoryNode) => {
-      const normalized = normalizePath(node.path);
-      nodes.push({ path: normalized, name: normalized === '/' ? 'Root' : node.name });
-      for (const child of node.children) {
-        traverse(child);
-      }
+  const memoryCellOptions = useMemo<MemoryCellOption[]>(() => {
+    const rootOption: MemoryCellOption = {
+      path: normalizePath(tree.path),
+      label: getMemoryCellLabel(tree, true),
     };
-    traverse(tree);
-    return nodes;
+
+    const childOptions = tree.children.map<MemoryCellOption>((child) => ({
+      path: normalizePath(child.path),
+      label: getMemoryCellLabel(child, false),
+    }));
+
+    return [rootOption, ...childOptions];
   }, [tree]);
 
   const normalizedRootPath = normalizePath(rootPath);
 
-  const currentRootOption =
-    memoryNodeOptions.find((option) => option.path === normalizedRootPath) ??
-    memoryNodeOptions[0] ?? {
+  useEffect(() => {
+    if (memoryCellOptions.length === 0) {
+      return;
+    }
+    if (!memoryCellOptions.some((option) => option.path === normalizedRootPath)) {
+      setRootPath(memoryCellOptions[0].path);
+    }
+  }, [memoryCellOptions, normalizedRootPath]);
+
+  const currentMemoryCell =
+    memoryCellOptions.find((option) => option.path === normalizedRootPath) ?? memoryCellOptions[0] ?? {
       path: normalizePath(tree.path),
-      name: 'Root',
+      label: getMemoryCellLabel(tree, true),
     };
 
   const displayedTree = useMemo<MemoryTree>(() => findNodeByPath(tree, normalizedRootPath) ?? tree, [normalizedRootPath, tree]);
@@ -336,43 +365,31 @@ export function MemoryManager({
       <ResizablePanelGroup direction="horizontal" className="h-full min-h-[480px] overflow-hidden">
         <ResizablePanel defaultSize={32} minSize={20} className="min-w-[260px] bg-white">
           <div className="flex h-full flex-col bg-white">
+            <div className="flex h-[66px] flex-col justify-center gap-1 border-b border-[var(--agyn-border-subtle)] px-6">
+              <h2 className="text-sm font-semibold text-[var(--agyn-dark)]">Documents</h2>
+              <p className="text-xs text-[var(--agyn-text-subtle)]">
+                Viewing {currentMemoryCell.label}
+              </p>
+            </div>
             <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-4">
-              <Label
-                id={rootSelectorLabelId}
-                htmlFor={rootSelectorTriggerId}
-                className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--agyn-text-subtle)]"
-              >
-                Memory node
-              </Label>
+              <VisuallyHidden id={memoryCellLabelId}>Memory cell</VisuallyHidden>
               <Select value={normalizedRootPath} onValueChange={(value) => setRootPath(normalizePath(value))}>
                 <SelectTrigger
-                  id={rootSelectorTriggerId}
-                  aria-labelledby={rootSelectorLabelId}
+                  aria-labelledby={memoryCellLabelId}
+                  aria-label="Memory cell"
                   size="default"
-                  className="mt-2 border-[var(--agyn-border-subtle)] bg-white text-left"
+                  className="border-[var(--agyn-border-subtle)] bg-white text-left font-medium text-[var(--agyn-dark)]"
                 >
-                  <SelectValue placeholder="Select memory node">
-                    {currentRootOption ? (
-                      <span className="text-sm font-medium text-[var(--agyn-dark)]">
-                        {formatMemoryNodeLabel(currentRootOption)}
-                      </span>
-                    ) : null}
-                  </SelectValue>
+                  <SelectValue placeholder="Select memory cell" />
                 </SelectTrigger>
                 <SelectContent className="min-w-[240px]">
-                  {memoryNodeOptions.map((option) => (
+                  {memoryCellOptions.map((option) => (
                     <SelectItem key={option.path} value={option.path}>
-                      {formatMemoryNodeLabel(option)}
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="flex h-[66px] flex-col justify-center gap-1 border-b border-[var(--agyn-border-subtle)] px-6">
-              <h2 className="text-sm font-semibold text-[var(--agyn-dark)]">Documents</h2>
-              <p className="text-xs text-[var(--agyn-text-subtle)]">
-                {normalizedRootPath === '/' ? 'Viewing all documents' : `Viewing ${normalizedRootPath}`}
-              </p>
             </div>
             <ScrollArea className="flex-1">
               <div className="px-2 py-3">
