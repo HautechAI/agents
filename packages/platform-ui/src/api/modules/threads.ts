@@ -30,6 +30,12 @@ export const threads = {
     ),
   patchStatus: (id: string, status: 'open' | 'closed') =>
     asData<void>(http.patch(`/api/agents/threads/${encodeURIComponent(id)}`, { status })),
+  create: ({ agentNodeId, text, parentId, alias }: { agentNodeId: string; text: string; parentId?: string; alias?: string }) => {
+    const payload: Record<string, string> = { agentNodeId, text };
+    if (parentId !== undefined) payload.parentId = parentId;
+    if (alias !== undefined) payload.alias = alias;
+    return asData<{ id: string }>(http.post(`/api/agents/threads`, payload));
+  },
   sendMessage: (id: string, text: string) =>
     asData<{ ok: true }>(http.post(`/api/agents/threads/${encodeURIComponent(id)}/messages`, { text })),
   metrics: (id: string) =>

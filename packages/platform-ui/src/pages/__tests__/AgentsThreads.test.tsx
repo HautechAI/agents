@@ -9,6 +9,16 @@ import { TestProviders, server, abs } from '../../../__tests__/integration/testU
 import type { PersistedGraph } from '@agyn/shared';
 import type { TemplateSchema } from '@/api/types/graph';
 
+const notifyMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock('@/lib/notify', () => ({
+  notifySuccess: (...args: unknown[]) => notifyMocks.success(...args),
+  notifyError: (...args: unknown[]) => notifyMocks.error(...args),
+}));
+
 function t(offsetMs: number) {
   return new Date(1700000000000 + offsetMs).toISOString();
 }
@@ -173,6 +183,8 @@ describe('AgentsThreads page', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     server.resetHandlers();
+    notifyMocks.success.mockReset();
+    notifyMocks.error.mockReset();
   });
   afterAll(() => server.close());
 
@@ -766,6 +778,156 @@ describe('AgentsThreads page', () => {
 
       expect(draftThreadRequests).toHaveLength(0);
       expect(draftRunsRequests).toHaveLength(0);
+    });
+
+    it('submits a draft thread and navigates to the created thread', async () => {
+      const user = userEvent.setup();
+      const existingThread = makeThread();
+      registerThreadScenario({ thread: existingThread, runs: [] });
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+
+      const newThreadId = 'thread-new-1';
+      const newThread = makeThread({ id: newThreadId, summary: 'Fresh thread', alias: 'alias-new', createdAt: t(500) });
+
+      let requestPayload: unknown = null;
+      const postHandler = async ({ request }: { request: Request }) => {
+        requestPayload = await request.json();
+        return HttpResponse.json({ id: newThreadId }, { status: 201 });
+      };
+
+      server.use(
+        http.post('*/api/agents/threads', postHandler),
+        http.post(abs('/api/agents/threads'), postHandler),
+        http.get('*/api/agents/threads', () => HttpResponse.json({ items: [newThread, existingThread] })),
+        http.get(abs('/api/agents/threads'), () => HttpResponse.json({ items: [newThread, existingThread] })),
+        http.get('*/api/agents/threads/:threadId', ({ params }) => {
+          if (params.threadId === newThreadId) return HttpResponse.json(newThread);
+          if (params.threadId === existingThread.id) return HttpResponse.json(existingThread);
+          return new HttpResponse(null, { status: 404 });
+        }),
+        http.get(abs('/api/agents/threads/:threadId'), ({ params }) => {
+          if (params.threadId === newThreadId) return HttpResponse.json(newThread);
+          if (params.threadId === existingThread.id) return HttpResponse.json(existingThread);
+          return new HttpResponse(null, { status: 404 });
+        }),
+        http.get('*/api/agents/threads/:threadId/runs', () => HttpResponse.json({ items: [] })),
+        http.get(abs('/api/agents/threads/:threadId/runs'), () => HttpResponse.json({ items: [] })),
+        http.get('*/api/agents/reminders', () => HttpResponse.json({ items: [] })),
+        http.get(abs('/api/agents/reminders'), () => HttpResponse.json({ items: [] })),
+        http.get('*/api/containers', () => HttpResponse.json({ items: [] })),
+        http.get(abs('/api/containers'), () => HttpResponse.json({ items: [] })),
+      );
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+      const searchInput = await screen.findByPlaceholderText('Search agents...');
+      await user.click(await screen.findByRole('button', { name: 'Agent Nimbus' }));
+      await waitFor(() => expect(searchInput).toHaveValue('Agent Nimbus'));
+
+      const textarea = await screen.findByPlaceholderText('Type a message...');
+      await user.type(textarea, 'Hello new thread');
+      await user.click(screen.getByTitle('Send message'));
+
+      await waitFor(() => expect(requestPayload).not.toBeNull());
+      expect(requestPayload).toEqual({ agentNodeId: 'agent-1', text: 'Hello new thread' });
+
+      await screen.findByRole('heading', { name: 'Fresh thread' });
+
+      expect(notifyMocks.error).not.toHaveBeenCalled();
+      expect(within(screen.getByTestId('threads-list')).queryByText('(new conversation)')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      { status: 400, code: 'bad_message_payload', message: 'Please enter a message up to 8000 characters.' },
+      { status: 404, code: 'parent_not_found', message: 'Parent thread not found. It may have been removed.' },
+      { status: 503, code: 'agent_unavailable', message: 'Agent is not currently available for new threads.' },
+      { status: 503, code: 'agent_unready', message: 'Agent is starting up. Try again shortly.' },
+      { status: 500, code: 'create_failed', message: 'Failed to create the thread. Please retry.' },
+    ])('surfaces creation errors for %s responses', async ({ status, code, message }) => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+
+      const postHandler = async () => HttpResponse.json({ error: code }, { status });
+
+      server.use(
+        http.post('*/api/agents/threads', postHandler),
+        http.post(abs('/api/agents/threads'), postHandler),
+      );
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+      await user.click(await screen.findByRole('button', { name: 'Agent Nimbus' }));
+      const textarea = await screen.findByPlaceholderText('Type a message...');
+      await user.type(textarea, 'Hello new thread');
+      const sendButton = screen.getByTitle('Send message');
+      await user.click(sendButton);
+
+      await waitFor(() => expect(notifyMocks.error).toHaveBeenCalled());
+      expect(notifyMocks.error).toHaveBeenCalledWith(message);
+
+      expect(within(screen.getByTestId('threads-list')).getByText('(new conversation)')).toBeInTheDocument();
+      await waitFor(() => expect(sendButton).toBeEnabled());
+    });
+
+    it('disables the send button while thread creation is pending', async () => {
+      const user = userEvent.setup();
+      const thread = makeThread();
+      registerThreadScenario({ thread, runs: [] });
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+
+      const newThreadId = 'thread-new-2';
+      const newThread = makeThread({ id: newThreadId, summary: 'Pending thread', alias: 'alias-pending', createdAt: t(600) });
+
+      let resolvePost: (() => void) | null = null;
+      const postHandler = () =>
+        new Promise<HttpResponse>((resolve) => {
+          resolvePost = () => resolve(HttpResponse.json({ id: newThreadId }, { status: 201 }));
+        });
+
+      server.use(
+        http.post('*/api/agents/threads', postHandler),
+        http.post(abs('/api/agents/threads'), postHandler),
+        http.get('*/api/agents/threads', () => HttpResponse.json({ items: [newThread, thread] })),
+        http.get(abs('/api/agents/threads'), () => HttpResponse.json({ items: [newThread, thread] })),
+        http.get('*/api/agents/threads/:threadId', ({ params }) => {
+          if (params.threadId === newThreadId) return HttpResponse.json(newThread);
+          if (params.threadId === thread.id) return HttpResponse.json(thread);
+          return new HttpResponse(null, { status: 404 });
+        }),
+        http.get(abs('/api/agents/threads/:threadId'), ({ params }) => {
+          if (params.threadId === newThreadId) return HttpResponse.json(newThread);
+          if (params.threadId === thread.id) return HttpResponse.json(thread);
+          return new HttpResponse(null, { status: 404 });
+        }),
+        http.get('*/api/agents/threads/:threadId/runs', () => HttpResponse.json({ items: [] })),
+        http.get(abs('/api/agents/threads/:threadId/runs'), () => HttpResponse.json({ items: [] })),
+        http.get('*/api/agents/reminders', () => HttpResponse.json({ items: [] })),
+        http.get(abs('/api/agents/reminders'), () => HttpResponse.json({ items: [] })),
+        http.get('*/api/containers', () => HttpResponse.json({ items: [] })),
+        http.get(abs('/api/containers'), () => HttpResponse.json({ items: [] })),
+      );
+
+      renderAt('/agents/threads');
+
+      await user.click(await screen.findByRole('button', { name: 'New thread' }));
+      await user.click(await screen.findByRole('button', { name: 'Agent Nimbus' }));
+      const textarea = await screen.findByPlaceholderText('Type a message...');
+      await user.type(textarea, 'Waiting thread');
+      const sendButton = screen.getByTitle('Send message');
+      await user.click(sendButton);
+
+      await waitFor(() => expect(sendButton).toBeDisabled());
+
+      expect(resolvePost).toBeTruthy();
+      await act(async () => {
+        resolvePost?.();
+      });
+
+      await screen.findByRole('heading', { name: 'Pending thread' });
     });
   });
 });

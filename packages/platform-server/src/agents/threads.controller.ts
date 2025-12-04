@@ -28,6 +28,8 @@ import { LiveGraphRuntime } from '../graph-core/liveGraph.manager';
 import { HumanMessage } from '@agyn/llm';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
 import { isAgentLiveNode, isAgentRuntimeInstance } from './agent-node.utils';
+import { randomUUID } from 'node:crypto';
+import { ThreadParentNotFoundError } from './agents.persistence.service';
 
 // Avoid runtime import of Prisma in tests; enumerate allowed values
 export const RunMessageTypeValues: ReadonlyArray<RunMessageType> = ['input', 'injected', 'output'];
@@ -44,6 +46,8 @@ export const RunEventStatusValues: ReadonlyArray<RunEventStatus> = ['pending', '
 
 const isRunEventType = (value: string): value is RunEventType => (RunEventTypeValues as ReadonlyArray<string>).includes(value);
 const isRunEventStatus = (value: string): value is RunEventStatus => (RunEventStatusValues as ReadonlyArray<string>).includes(value);
+
+const THREAD_MESSAGE_MAX_LENGTH = 8000;
 
 export class ListRunMessagesQueryDto {
   @IsIn(RunMessageTypeValues)
@@ -161,9 +165,16 @@ export class PatchThreadBodyDto {
   status?: ThreadStatus;
 }
 
+type CreateThreadBody = {
+  text?: unknown;
+  agentNodeId?: unknown;
+  parentId?: unknown;
+  alias?: unknown;
+};
+
 @Controller('api/agents')
 export class AgentsThreadsController {
-  private static readonly MAX_MESSAGE_LENGTH = 8000;
+  private static readonly MAX_MESSAGE_LENGTH = THREAD_MESSAGE_MAX_LENGTH;
   private readonly logger = new Logger(AgentsThreadsController.name);
   constructor(
     @Inject(AgentsPersistenceService) private readonly persistence: AgentsPersistenceService,
@@ -173,6 +184,81 @@ export class AgentsThreadsController {
     @Inject(LiveGraphRuntime) private readonly runtime: LiveGraphRuntime,
     @Inject(TemplateRegistry) private readonly templateRegistry: TemplateRegistry,
   ) {}
+
+  @Post('threads')
+  @HttpCode(201)
+  async createThread(@Body() body: CreateThreadBody | null | undefined): Promise<{ id: string }> {
+    const textValue = typeof body?.text === 'string' ? body.text : '';
+    const text = textValue.trim();
+    if (text.length === 0 || text.length > AgentsThreadsController.MAX_MESSAGE_LENGTH) {
+      throw new BadRequestException({ error: 'bad_message_payload' });
+    }
+
+    const agentNodeValue = typeof body?.agentNodeId === 'string' ? body.agentNodeId : '';
+    const agentNodeId = agentNodeValue.trim();
+    if (agentNodeId.length === 0) {
+      throw new BadRequestException({ error: 'bad_message_payload' });
+    }
+
+    const aliasCandidate = typeof body?.alias === 'string' ? body.alias.trim() : '';
+    const alias = aliasCandidate.length > 0 ? aliasCandidate : `ui:${randomUUID()}`;
+    const parentIdCandidate = typeof body?.parentId === 'string' ? body.parentId.trim() : '';
+    const parentId = parentIdCandidate.length > 0 ? parentIdCandidate : null;
+
+    const liveNodes = this.runtime.getNodes();
+    const agentNodes = liveNodes.filter((node) => isAgentLiveNode(node, this.templateRegistry));
+    if (agentNodes.length === 0) {
+      throw new ServiceUnavailableException({ error: 'agent_unavailable' });
+    }
+    const liveAgentNode = agentNodes.find((node) => node.id === agentNodeId);
+    if (!liveAgentNode) {
+      throw new ServiceUnavailableException({ error: 'agent_unavailable' });
+    }
+
+    const instance = liveAgentNode.instance;
+    if (!isAgentRuntimeInstance(instance)) {
+      throw new ServiceUnavailableException({ error: 'agent_unavailable' });
+    }
+
+    if (instance.status !== 'ready') {
+      throw new ServiceUnavailableException({ error: 'agent_unready' });
+    }
+
+    let threadId: string;
+    try {
+      const created = await this.persistence.createThreadWithInitialMessage({
+        alias,
+        text,
+        agentNodeId,
+        parentId,
+      });
+      threadId = created.id;
+    } catch (error) {
+      if (error instanceof ThreadParentNotFoundError || (error instanceof Error && error.message === 'parent_not_found')) {
+        throw new NotFoundException({ error: 'parent_not_found' });
+      }
+      if (error instanceof Error && (error.message === 'thread_alias_required' || error.message === 'agent_node_id_required')) {
+        throw new BadRequestException({ error: 'bad_message_payload' });
+      }
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`createThread persistence failed alias=${alias}`, stack, AgentsThreadsController.name);
+      throw new InternalServerErrorException({ error: 'create_failed' });
+    }
+
+    try {
+      const invocation = instance.invoke(threadId, [HumanMessage.fromText(text)]);
+      void invocation.catch((error) => {
+        const stack = error instanceof Error ? error.stack : undefined;
+        this.logger.error(`createThread invoke failed thread=${threadId} agent=${agentNodeId}`, stack, AgentsThreadsController.name);
+      });
+    } catch (error) {
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`createThread immediate failure thread=${threadId} agent=${agentNodeId}`, stack, AgentsThreadsController.name);
+      throw new InternalServerErrorException({ error: 'create_failed' });
+    }
+
+    return { id: threadId } as const;
+  }
 
   @Get('threads')
   async listThreads(@Query() query: ListThreadsQueryDto) {
