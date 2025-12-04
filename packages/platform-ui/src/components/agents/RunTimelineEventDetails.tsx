@@ -210,9 +210,8 @@ function parseContextWindow(metadata: unknown): ContextWindowMeta | null {
   if (!contextWindow || typeof contextWindow !== 'object' || Array.isArray(contextWindow)) {
     return null;
   }
-  const rawNewIds = Array.isArray((contextWindow as Record<string, unknown>).newIds)
-    ? (contextWindow as Record<string, unknown>).newIds
-    : [];
+  const contextWindowRecord = contextWindow as Record<string, unknown>;
+  const rawNewIds = Array.isArray(contextWindowRecord.newIds) ? (contextWindowRecord.newIds as unknown[]) : [];
   const newIds = rawNewIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
   const totalCountRaw = (contextWindow as Record<string, unknown>).totalCount;
   const prevCursorRaw = (contextWindow as Record<string, unknown>).prevCursorId;

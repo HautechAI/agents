@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   AttachmentKind,
   ContextItemRole,
@@ -1011,7 +1011,9 @@ export class RunEventsService {
       throw new NotFoundException('event_not_found');
     }
 
-    const contextItemIds = Array.isArray(event.llmCall.contextItemIds) ? [...event.llmCall.contextItemIds] : [];
+    const contextItemIds = Array.isArray(event.llmCall.contextItemIds)
+      ? event.llmCall.contextItemIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
 
     const plainMetadata = this.toPlainJson(event.metadata ?? null);
     let metadataNewIds: string[] = [];
@@ -1050,9 +1052,10 @@ export class RunEventsService {
     let endExclusive = contextItemIds.length;
     if (beforeId) {
       const index = contextItemIds.indexOf(beforeId);
-      if (index >= 0) {
-        endExclusive = index + 1;
+      if (index < 0) {
+        throw new BadRequestException('invalid_cursor');
       }
+      endExclusive = index + 1;
     }
 
     const startIndex = Math.max(0, endExclusive - limit);

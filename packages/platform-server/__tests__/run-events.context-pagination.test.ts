@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { RunEventsService } from '../src/events/run-events.service';
 
 const baseItem = (id: string) => ({
@@ -102,5 +102,15 @@ describe('RunEventsService.listEventContextPage', () => {
     await expect(
       service.listEventContextPage({ runId: 'run-missing', eventId: 'evt-missing' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('throws BadRequestException when beforeId does not match known context items', async () => {
+    const contextItemIds = ['ctx-0', 'ctx-1'];
+    const items = contextItemIds.map((id) => baseItem(id));
+    const { service } = createService({ contextItemIds, items });
+
+    await expect(
+      service.listEventContextPage({ runId: 'run-1', eventId: 'evt-1', beforeId: 'ctx-missing' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
