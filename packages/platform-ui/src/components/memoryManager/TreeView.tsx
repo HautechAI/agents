@@ -4,7 +4,6 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-import { SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '../ui/sidebar';
 import {
   type MemoryTree,
   type MemoryNode,
@@ -161,13 +160,8 @@ export function TreeView({
       const paddingStart = depth * INDENT_STEP + 12;
 
       return (
-        <SidebarMenuItem key={node.path} role="none">
-          <SidebarMenuButton
-            asChild
-            isActive={isSelected}
-            size="lg"
-            className="group/menu-button relative w-full pr-10"
-          >
+        <li key={node.path} role="none" className="space-y-1">
+          <div className="relative">
             <div
               ref={registerRef(node.path)}
               role="treeitem"
@@ -176,8 +170,10 @@ export function TreeView({
               aria-expanded={isExpandable ? isExpanded : undefined}
               tabIndex={isSelected ? 0 : -1}
               className={cn(
-                'flex min-h-10 w-full items-center gap-2 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                isSelected ? 'font-semibold text-sidebar-accent-foreground' : 'font-medium text-sidebar-foreground/80',
+                'group/tree-item flex min-h-10 w-full items-center gap-2 rounded-md pr-10 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                isSelected
+                  ? 'bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)]'
+                  : 'text-[var(--sidebar-foreground)]/80 hover:bg-[var(--sidebar-accent)]/70 hover:text-[var(--sidebar-accent-foreground)]',
               )}
               style={{ paddingInlineStart: `${paddingStart}px` }}
               data-selected={isSelected ? 'true' : undefined}
@@ -196,8 +192,8 @@ export function TreeView({
                     onToggle(node.path);
                   }}
                   className={cn(
-                    'shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground',
-                    isSelected && 'text-sidebar-accent-foreground',
+                    'size-8 shrink-0 text-[var(--sidebar-foreground)]/60 hover:text-[var(--sidebar-foreground)]',
+                    isSelected && 'text-[var(--sidebar-accent-foreground)]',
                   )}
                 >
                   <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} />
@@ -209,40 +205,44 @@ export function TreeView({
                 {node.name}
               </span>
             </div>
-          </SidebarMenuButton>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <SidebarMenuAction
-                type="button"
-                aria-label="Add subdocument"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onAddChild(node.path);
-                }}
-                className={cn(
-                  'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                  isSelected && 'text-sidebar-accent-foreground',
-                )}
-              >
-                <Plus className="size-4" />
-              </SidebarMenuAction>
-            </TooltipTrigger>
-            <TooltipContent side="top">Add subdocument</TooltipContent>
-          </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  tabIndex={-1}
+                  aria-label="Add subdocument"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onAddChild(node.path);
+                  }}
+                  className={cn(
+                    'absolute right-1 top-1/2 flex -translate-y-1/2 rounded-md text-[var(--sidebar-foreground)]/60 transition-opacity hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]',
+                    'opacity-0 pointer-events-none group-hover/tree-item:opacity-100 group-hover/tree-item:pointer-events-auto group-focus-visible/tree-item:opacity-100 group-focus-visible/tree-item:pointer-events-auto',
+                    isSelected && 'opacity-100 pointer-events-auto text-[var(--sidebar-accent-foreground)]',
+                  )}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Add subdocument</TooltipContent>
+            </Tooltip>
+          </div>
           {isExpandable && isExpanded && node.children.length > 0 ? (
-            <SidebarMenu role="group" className="gap-1 pl-0">
+            <ul role="group" className="ml-0 flex flex-col gap-1 pl-0">
               {node.children.map((child) => renderNode(child, depth + 1))}
-            </SidebarMenu>
+            </ul>
           ) : null}
-        </SidebarMenuItem>
+        </li>
       );
     },
     [expandedPaths, handleKeyDown, onAddChild, onSelect, onToggle, registerRef, selectedPath],
   );
 
   return (
-    <SidebarMenu role="tree" className={cn('gap-1', className)}>
+    <ul role="tree" className={cn('flex flex-col gap-1', className)}>
       {renderNode(tree, 0)}
-    </SidebarMenu>
+    </ul>
   );
 }
