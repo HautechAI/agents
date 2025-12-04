@@ -5,6 +5,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
 import { Separator } from '../ui/separator';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { CreateDocumentDialog } from './CreateDocumentDialog';
 import { TreeView } from './TreeView';
 import { cn } from '@/lib/utils';
 import {
@@ -47,7 +48,7 @@ export function MemoryManager({
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set(getAncestorPaths(defaultSelectedPath)));
   const [editorValue, setEditorValue] = useState<string>(() => findNodeByPath(initialTree, defaultSelectedPath)?.content ?? '');
   const [unsaved, setUnsaved] = useState(false);
-  const [treeMessage, setTreeMessage] = useState<string | null>(null);
+  const [pendingCreateParent, setPendingCreateParent] = useState<string | null>(null);
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(null);
   const selectedPathRef = useRef<string>(defaultSelectedPath);
 
@@ -56,7 +57,6 @@ export function MemoryManager({
       const normalized = normalizePath(path);
       setSelectedPath(normalized);
       onSelectPath?.(normalized);
-      setTreeMessage(null);
     },
     [onSelectPath],
   );
@@ -116,30 +116,47 @@ export function MemoryManager({
     });
   }, []);
 
-  const createDocument = useCallback(
-    (parentPath: string) => {
-      const proposed = window.prompt('Enter a name for the new document');
-      if (proposed == null) return;
-      const name = proposed.trim();
-      if (name.length === 0) {
-        setTreeMessage('Name cannot be empty.');
-        return;
+  const validateCreateName = useCallback(
+    (rawName: string) => {
+      if (!pendingCreateParent) {
+        return 'Select a parent to create a document.';
       }
-      if (name.includes('/')) {
-        setTreeMessage('Name cannot include “/”.');
-        return;
+      const trimmed = rawName.trim();
+      if (trimmed.length === 0) {
+        return 'Name is required.';
       }
+      if (trimmed.includes('/')) {
+        return 'Name cannot include “/”.';
+      }
+      const candidatePath = joinPath(pendingCreateParent, trimmed);
+      if (pathExists(tree, candidatePath)) {
+        return 'A document with this name already exists.';
+      }
+      return null;
+    },
+    [pendingCreateParent, tree],
+  );
 
-      const childPath = joinPath(parentPath, name);
-      if (pathExists(tree, childPath)) {
-        setTreeMessage(`Path ${childPath} already exists.`);
-        return;
-      }
+  const handleAddChild = useCallback((parentPath: string) => {
+    setPendingCreateParent(normalizePath(parentPath));
+  }, []);
 
+  const handleCancelCreate = useCallback(() => {
+    setPendingCreateParent(null);
+  }, []);
+
+  const handleConfirmCreate = useCallback(
+    (name: string) => {
+      if (!pendingCreateParent) return;
+      const trimmedName = name.trim();
+      if (validateCreateName(trimmedName)) return;
+
+      const parentPath = normalizePath(pendingCreateParent);
+      const childPath = joinPath(parentPath, trimmedName);
       const childNode: MemoryNode = {
         id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`,
         path: childPath,
-        name,
+        name: trimmedName,
         content: '',
         children: [],
       };
@@ -149,7 +166,6 @@ export function MemoryManager({
         onTreeChange?.(next);
         return next;
       });
-      setTreeMessage(null);
       setExpandedPaths((previous) => {
         const next = new Set(previous);
         for (const ancestor of getAncestorPaths(childPath)) {
@@ -157,14 +173,11 @@ export function MemoryManager({
         }
         return next;
       });
+      setPendingCreateParent(null);
       handleSelectPath(childPath);
     },
-    [handleSelectPath, onTreeChange, tree],
+    [handleSelectPath, onTreeChange, pendingCreateParent, validateCreateName],
   );
-
-  const handleAddChild = useCallback((parentPath: string) => {
-    createDocument(parentPath);
-  }, [createDocument]);
 
   const handleRequestDelete = useCallback((path: string) => {
     if (path === '/') return;
@@ -261,14 +274,6 @@ export function MemoryManager({
                 />
               </ScrollArea>
             </div>
-            {treeMessage && (
-              <div
-                className="rounded-[8px] border border-[var(--agyn-status-failed)]/40 bg-[var(--agyn-status-failed)]/10 px-3 py-2 text-xs text-[var(--agyn-status-failed)]"
-                role="alert"
-              >
-                {treeMessage}
-              </div>
-            )}
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle className="bg-[var(--agyn-border-subtle)]" />
@@ -333,6 +338,13 @@ export function MemoryManager({
         path={pendingDeletePath}
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDeletePath(null)}
+      />
+      <CreateDocumentDialog
+        open={pendingCreateParent != null}
+        parentPath={pendingCreateParent}
+        onCancel={handleCancelCreate}
+        onCreate={handleConfirmCreate}
+        validateName={validateCreateName}
       />
     </div>
   );

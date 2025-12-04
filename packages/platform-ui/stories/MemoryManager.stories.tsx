@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { userEvent, within } from '@storybook/testing-library';
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { MemoryManager } from '../src/components/memoryManager/MemoryManager';
@@ -115,4 +116,17 @@ const InteractiveTemplate = (args: MemoryManagerStoryArgs) => {
 
 export const InteractivePlayground: Story = {
   render: (args) => <InteractiveTemplate {...args} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Use the add icon on any tree node to open the subdocument dialog and the trash icon to preview the destructive delete confirmation.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const addButton = await canvas.findByRole('button', { name: /Add subdocument/i });
+    await userEvent.click(addButton);
+  },
 };
