@@ -984,6 +984,126 @@ describe('RunTimelineEventDetails', () => {
     }
   });
 
+  it('shows only new legacy context items initially and paginates older history on demand', async () => {
+    const user = userEvent.setup();
+    const itemsById: Record<string, ContextItem> = {
+      'ctx-1': {
+        id: 'ctx-1',
+        role: 'system',
+        contentText: 'System primer',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 120,
+        createdAt: '2024-01-01T00:00:00.000Z',
+      },
+      'ctx-2': {
+        id: 'ctx-2',
+        role: 'summary',
+        contentText: 'Earlier thread summary',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 88,
+        createdAt: '2024-01-01T00:02:00.000Z',
+      },
+      'ctx-3': {
+        id: 'ctx-3',
+        role: 'user',
+        contentText: 'New user prompt',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 96,
+        createdAt: '2024-01-01T00:03:00.000Z',
+      },
+      'ctx-4': {
+        id: 'ctx-4',
+        role: 'assistant',
+        contentText: 'Assistant follow-up',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 104,
+        createdAt: '2024-01-01T00:04:00.000Z',
+      },
+    };
+
+    const getManySpy = vi.spyOn(contextItemsApi.contextItems, 'getMany').mockImplementation(async (requestedIds: readonly string[]) => {
+      const results: ContextItem[] = [];
+      for (const id of requestedIds) {
+        const item = itemsById[id];
+        if (item) results.push(item);
+      }
+      return results;
+    });
+
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+
+    try {
+      const event = buildEvent({
+        type: 'llm_call',
+        toolExecution: undefined,
+        llmCall: {
+          provider: 'openai',
+          model: 'gpt-legacy',
+          temperature: null,
+          topP: null,
+          stopReason: null,
+          contextItemIds: ['ctx-1', 'ctx-2', 'ctx-3', 'ctx-4'],
+          newContextItemCount: 2,
+          responseText: null,
+          rawResponse: null,
+          toolCalls: [],
+        },
+      });
+
+      renderDetails(event);
+
+      await waitFor(() => {
+        expect(getManySpy).toHaveBeenCalled();
+        const firstCall = getManySpy.mock.calls[0];
+        expect(firstCall?.[0]).toEqual(['ctx-3', 'ctx-4']);
+      });
+
+      const contextRegion = await screen.findByTestId('llm-context-scroll');
+      expect(within(contextRegion).getByText('New user prompt')).toBeInTheDocument();
+      expect(within(contextRegion).getByText('Assistant follow-up')).toBeInTheDocument();
+      expect(within(contextRegion).queryByText('System primer')).toBeNull();
+      expect(within(contextRegion).queryByText('Earlier thread summary')).toBeNull();
+
+      expect(within(contextRegion).getAllByText('New')).toHaveLength(2);
+
+      const loadButton = within(contextRegion).getByRole('button', { name: /Load older context/ });
+      expect(loadButton).toHaveTextContent('Load older context (2 of 4)');
+
+      await user.click(loadButton);
+
+      await act(async () => {
+        waitForStableScrollResolvers.splice(0).forEach((resolve) => resolve());
+      });
+
+      await waitFor(() => {
+        const call = getManySpy.mock.calls.find(([ids]) => Array.isArray(ids) && ids.includes('ctx-1'));
+        expect(call).toBeTruthy();
+        const ids = (call![0] as string[]).slice().sort();
+        expect(ids).toEqual(['ctx-1', 'ctx-2']);
+      });
+
+      await waitFor(() => {
+        expect(within(contextRegion).getByText('System primer')).toBeInTheDocument();
+        expect(within(contextRegion).getByText('Earlier thread summary')).toBeInTheDocument();
+      });
+
+      expect(within(contextRegion).getAllByText('New')).toHaveLength(2);
+      await waitFor(() => {
+        expect(within(contextRegion).queryByRole('button', { name: /Load older context/ })).toBeNull();
+      });
+    } finally {
+      getManySpy.mockRestore();
+      raf.mockRestore();
+    }
+  });
+
   it('highlights only the last N conversational context items', () => {
     const contextItems: ContextItem[] = [
       {

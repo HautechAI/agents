@@ -775,6 +775,13 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
   const contextTotalCount = contextWindow ? Math.max(contextWindow.totalCount, fallbackTotalCount) : fallbackTotalCount;
   const prevCursorId = contextWindow?.prevCursorId ?? null;
   const contextPageSize = contextWindow?.pageSize ?? 10;
+  const legacyInitialCount = useMemo(() => {
+    if (!llmCall) return undefined;
+    const raw = llmCall.newContextItemCount;
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+    const bounded = Math.max(0, Math.min(Math.floor(raw), llmCall.contextItemIds.length));
+    return bounded;
+  }, [llmCall]);
   const fetchOlderContext = useCallback(
     (beforeId: string | null, limit: number) =>
       runs.eventContext(event.runId, event.id, {
@@ -964,6 +971,7 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
                     <LLMContextViewer
                       ids={llmCall.contextItemIds}
                       highlightLastCount={llmCall.newContextItemCount}
+                      initialVisibleCount={legacyInitialCount}
                       onItemsRendered={handleContextItemsRendered}
                       onBeforeLoadMore={handleBeforeLoadMore}
                     />

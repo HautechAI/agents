@@ -13,6 +13,7 @@ type LegacyViewerProps = ViewerBaseProps & {
   mode?: 'legacy';
   ids: readonly string[];
   highlightLastCount?: number;
+  initialVisibleCount?: number;
 };
 
 type WindowedViewerProps = ViewerBaseProps & {
@@ -60,6 +61,7 @@ const ROLE_COLORS: Record<ContextItem['role'], string> = {
 };
 
 const HIGHLIGHT_ROLES: ReadonlySet<ContextItem['role']> = new Set(['user', 'assistant', 'tool']);
+const LEGACY_PAGE_SIZE = 10;
 
 export function LLMContextViewer(props: LLMContextViewerProps) {
   if (props.mode === 'windowed') {
@@ -68,10 +70,22 @@ export function LLMContextViewer(props: LLMContextViewerProps) {
   return <LegacyContextViewer {...props} />;
 }
 
-function LegacyContextViewer({ ids, highlightLastCount, onItemsRendered, onBeforeLoadMore }: LegacyViewerProps) {
-  const { items, hasMore, isInitialLoading, isFetching, error, loadMore, total, targetCount } = useContextItems(ids, {
-    initialCount: 10,
-  });
+function LegacyContextViewer({ ids, highlightLastCount, initialVisibleCount, onItemsRendered, onBeforeLoadMore }: LegacyViewerProps) {
+  const normalizedInitialCount = useMemo(() => {
+    if (initialVisibleCount === undefined) return undefined;
+    if (typeof initialVisibleCount !== 'number' || !Number.isFinite(initialVisibleCount)) return undefined;
+    return Math.max(0, Math.floor(initialVisibleCount));
+  }, [initialVisibleCount]);
+
+  const legacyOptions = useMemo(() => {
+    if (normalizedInitialCount === undefined) {
+      return undefined;
+    }
+    const pageSize = normalizedInitialCount > 0 ? Math.max(LEGACY_PAGE_SIZE, normalizedInitialCount) : LEGACY_PAGE_SIZE;
+    return { initialCount: normalizedInitialCount, pageSize } as const;
+  }, [normalizedInitialCount]);
+
+  const { items, hasMore, isInitialLoading, isFetching, error, loadMore, total, targetCount } = useContextItems(ids, legacyOptions);
 
   const emptyState = ids.length === 0;
   const displayedCount = useMemo(() => Math.min(targetCount, total), [targetCount, total]);

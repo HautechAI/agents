@@ -4,9 +4,12 @@ import { contextItems } from '@/api/modules/contextItems';
 import type { ContextItem } from '@/api/types/agents';
 
 const BASE_KEY = ['agents', 'context-items'] as const;
+const DEFAULT_INITIAL_COUNT = 10;
+const DEFAULT_PAGE_SIZE = 10;
 
 export type UseContextItemsOptions = {
   initialCount?: number;
+  pageSize?: number;
 };
 
 export type UseContextItemsResult = {
@@ -24,15 +27,33 @@ export type UseContextItemsResult = {
 export function useContextItems(ids: readonly string[] | undefined, options?: UseContextItemsOptions): UseContextItemsResult {
   const queryClient = useQueryClient();
   const allIds = useMemo(() => (Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string' && id.length > 0) : []), [ids]);
-  const initialCount = options?.initialCount ?? 10;
-  const [visibleCount, setVisibleCount] = useState(() => Math.min(initialCount, allIds.length));
+
+  const sanitizedInitialCount = useMemo(() => {
+    if (options?.initialCount === undefined) return DEFAULT_INITIAL_COUNT;
+    if (typeof options.initialCount !== 'number' || !Number.isFinite(options.initialCount)) return DEFAULT_INITIAL_COUNT;
+    return Math.max(0, Math.floor(options.initialCount));
+  }, [options?.initialCount]);
+
+  const sanitizedPageSize = useMemo(() => {
+    if (options?.pageSize === undefined) {
+      const baseline = sanitizedInitialCount > 0 ? sanitizedInitialCount : DEFAULT_PAGE_SIZE;
+      return Math.max(1, baseline);
+    }
+    if (typeof options.pageSize !== 'number' || !Number.isFinite(options.pageSize)) {
+      const baseline = sanitizedInitialCount > 0 ? sanitizedInitialCount : DEFAULT_PAGE_SIZE;
+      return Math.max(1, baseline);
+    }
+    return Math.max(1, Math.floor(options.pageSize));
+  }, [options?.pageSize, sanitizedInitialCount]);
+
+  const [visibleCount, setVisibleCount] = useState(() => Math.min(sanitizedInitialCount, allIds.length));
   const [cacheVersion, setCacheVersion] = useState(0);
 
   const idsKey = useMemo(() => allIds.join('|'), [allIds]);
 
   useEffect(() => {
-    setVisibleCount(Math.min(initialCount, allIds.length));
-  }, [idsKey, initialCount, allIds.length]);
+    setVisibleCount(Math.min(sanitizedInitialCount, allIds.length));
+  }, [idsKey, sanitizedInitialCount, allIds.length]);
 
   const windowIds = useMemo(() => {
     if (allIds.length === 0) return [] as string[];
@@ -91,11 +112,10 @@ export function useContextItems(ids: readonly string[] | undefined, options?: Us
     if (allIds.length === 0) return;
     setVisibleCount((prev) => {
       if (prev >= allIds.length) return prev;
-      const increment = Math.max(1, initialCount);
-      const next = Math.min(allIds.length, prev + increment);
+      const next = Math.min(allIds.length, prev + sanitizedPageSize);
       return next;
     });
-  }, [allIds.length, initialCount]);
+  }, [allIds.length, sanitizedPageSize]);
 
   return {
     items,
