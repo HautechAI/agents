@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { ChevronRight, FileText, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { IconButton } from '../IconButton';
@@ -38,7 +38,7 @@ export function TreeView({
   onToggle,
   onAddChild,
   onDelete,
-  showContentIndicators = true,
+  showContentIndicators: _showContentIndicators = true,
   className,
 }: TreeViewProps) {
   const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -157,19 +157,14 @@ export function TreeView({
       const isSelected = selectedPath === node.path;
       const isExpandable = node.children.length > 0;
       const isExpanded = expandedPaths.has(node.path);
-      const indicatorIcon = showContentIndicators ? (
-        <FileText className="h-4 w-4" aria-hidden="true" />
-      ) : null;
       const indent = depth * INDENT_STEP;
 
       return (
         <li key={node.path} role="none" className="space-y-1">
           <div
             className={cn(
-              'group flex min-h-10 items-center gap-2 rounded-[10px] border border-transparent bg-white/0 py-2 transition-colors',
-              isSelected
-                ? 'border-[var(--agyn-blue)] bg-[var(--agyn-blue)]/5 shadow-[0_0_0_1px_rgba(28,72,154,0.08)]'
-                : 'hover:border-[var(--agyn-border-subtle)] hover:bg-[var(--agyn-bg-light)]',
+              'group flex min-h-10 items-center gap-2 rounded-[10px] px-2 py-2 transition-colors',
+              isSelected ? 'bg-[var(--agyn-blue)]/10' : 'hover:bg-[var(--agyn-bg-light)]',
             )}
             style={{ marginLeft: indent }}
             data-selected={isSelected ? 'true' : undefined}
@@ -184,10 +179,7 @@ export function TreeView({
                   event.stopPropagation();
                   onToggle(node.path);
                 }}
-                className={cn(
-                  'shrink-0 text-[var(--agyn-gray)] hover:text-[var(--agyn-blue)]',
-                  isSelected && 'text-[var(--agyn-blue)]',
-                )}
+                className={cn('shrink-0', isSelected ? 'text-[var(--agyn-blue)]' : 'text-[var(--agyn-gray)]')}
                 icon={<ChevronRight className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-90')} />}
               />
             ) : (
@@ -203,25 +195,12 @@ export function TreeView({
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-2 rounded-[8px] px-2 py-1 text-left text-sm font-medium text-[var(--agyn-dark)] transition-colors',
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--agyn-blue)] focus-visible:outline-offset-1',
-                isSelected
-                  ? 'text-[var(--agyn-blue)]'
-                  : 'group-hover:text-[var(--agyn-blue)]',
+                isSelected ? 'text-[var(--agyn-dark)]' : 'group-hover:text-[var(--agyn-blue)]',
               )}
               onClick={() => onSelect(node.path)}
               onKeyDown={(event) => handleKeyDown(event, node.path)}
               tabIndex={isSelected ? 0 : -1}
             >
-              {indicatorIcon ? (
-                <span
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-[8px] border border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] text-[var(--agyn-gray)] transition-colors',
-                    isSelected && 'border-[var(--agyn-blue)] bg-[var(--agyn-blue)]/10 text-[var(--agyn-blue)]',
-                  )}
-                  aria-hidden="true"
-                >
-                  {indicatorIcon}
-                </span>
-              ) : null}
               <span className="truncate" title={node.path}>
                 {node.name}
               </span>
@@ -279,7 +258,7 @@ export function TreeView({
         </li>
       );
     },
-    [expandedPaths, handleKeyDown, onAddChild, onDelete, onSelect, onToggle, registerRef, selectedPath, showContentIndicators],
+    [expandedPaths, handleKeyDown, onAddChild, onDelete, onSelect, onToggle, registerRef, selectedPath],
   );
 
   return (

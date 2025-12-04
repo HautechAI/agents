@@ -100,20 +100,15 @@ const InteractiveTemplate = (args: MemoryManagerStoryArgs) => {
   }, [args.initialSelectedPath]);
 
   return (
-    <div className="flex h-full min-h-[640px] w-full flex-col gap-4 bg-[var(--agyn-bg-light)] p-6">
-      <div className="flex-1 rounded-[16px] border border-[var(--agyn-border-subtle)] bg-white p-4">
-        <MemoryManager
-          className="h-full"
-          initialTree={tree}
-          initialSelectedPath={selectedPath}
-          showContentIndicators={args.showContentIndicators ?? true}
-          onTreeChange={(nextTree) => setTree(cloneTree(nextTree))}
-          onSelectPath={(path) => setSelectedPath(path)}
-        />
-      </div>
-      <div className="rounded-[10px] border border-[var(--agyn-border-subtle)] bg-white px-4 py-3 text-xs text-[var(--agyn-gray)]">
-        Tip: Navigate with ↑/↓ to move between documents and press ⌘/Ctrl + S to save changes instantly.
-      </div>
+    <div className="h-[720px]">
+      <MemoryManager
+        className="h-full"
+        initialTree={tree}
+        initialSelectedPath={selectedPath}
+        showContentIndicators={args.showContentIndicators ?? true}
+        onTreeChange={(nextTree) => setTree(cloneTree(nextTree))}
+        onSelectPath={(path) => setSelectedPath(path)}
+      />
     </div>
   );
 };
