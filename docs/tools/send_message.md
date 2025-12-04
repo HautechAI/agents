@@ -1,7 +1,7 @@
-SendMessage tool
+# SendMessage tool
 
-- Name: send_message
-- Purpose: Send a text message to the thread’s Slack channel using the stored descriptor.
+- Name: `send_message`
+- Purpose: Send a plain-text message back to the thread's origin channel through the configured channel node.
 
 Schema
 
@@ -13,18 +13,12 @@ Schema
 
 Behavior
 
-- Requires ctx.threadId; loads `Thread.channel` and validates the Slack-only descriptor.
-- Uses SlackAdapter directly; no registry or multi-channel support in v1.
-- Returns plain text responses: `message sent successfully` on success, otherwise an error code/message string.
-- Logs adapter type and identifiers; does not log full text.
+- Requires `ctx.threadId`. Uses `ThreadTransportService.sendTextToThread` to look up the persisted `channelNodeId` for the current thread and delegate delivery to the resolved node.
+- The channel node must implement `sendToChannel(threadId, text)`; Manage, SlackTrigger, and any future channel adapters satisfy this interface.
+- Returns `message sent successfully` when the transport succeeds; otherwise returns the error string produced by the transport service (e.g. `missing_channel_node`, `channel_node_unavailable`, `unsupported_channel_node`, or adapter-specific failures).
+- Validation: rejects missing thread context or empty `message` payload at the schema layer (min length 1).
 
-Slack-only descriptor and token resolution
+Notes
 
-- `SlackTrigger` writes the descriptor on ingress only when `identifiers.channel` is present: `{ type: 'slack', version: number, identifiers: { channel, thread_ts? } }`.
-- No tokens are persisted. `SlackTrigger` requires a `bot_token` in node config and resolves it during setup/provision only.
-- `SendMessage` uses the `SlackTrigger`'s resolved `bot_token` to call `SlackAdapter`.
-
-Migration
-
-- Add `Thread.channel` (Json?).
-- `SlackTrigger` populates the descriptor on ingress for new threads when channel is present; skips otherwise.
+- Manage registers itself as the channel node for child threads when mediating worker communication. SlackTrigger (and other ingress adapters) set the channel node for user-originated threads.
+- Errors are surfaced to the caller without additional formatting to simplify tool reasoning and retry behavior.

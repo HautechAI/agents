@@ -1,6 +1,6 @@
 import z from 'zod';
 
-import { FunctionTool, HumanMessage } from '@agyn/llm';
+import { FunctionTool, HumanMessage, ResponseMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { ManageToolNode } from './manage.node';
 import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
 import { LLMContext } from '../../../llm/types';
@@ -83,6 +83,10 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       if (!targetAgent) throw new Error(`Unknown worker: ${targetTitle}`);
       const persistence = this.getPersistence();
       if (!persistence) throw new Error('Manage: persistence unavailable');
+      const callerAgent = ctx.callerAgent;
+      if (!callerAgent || typeof callerAgent.invoke !== 'function') {
+        throw new Error('Manage: caller agent unavailable');
+      }
       const alias =
         typeof threadAlias === 'string'
           ? (() => {
@@ -92,16 +96,46 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
             })()
           : this.sanitizeAlias(targetTitle);
       const childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', alias, parentThreadId, '');
+      await persistence.setThreadChannelNode(childThreadId, this.node.nodeId);
+      const mode = this.node.getMode();
+      const timeoutMs = this.node.getTimeoutMs();
+      let waitPromise: Promise<string> | null = null;
+      let invocationPromise: Promise<ResponseMessage | ToolCallOutputMessage> | undefined;
       try {
-        const res = await targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
-        const responseText = res?.text ?? '';
-        return responseText ? `Response from: ${targetTitle}\n${responseText}` : `Response from: ${targetTitle}`;
+        await this.node.registerInvocation({
+          childThreadId,
+          parentThreadId,
+          workerTitle: targetTitle,
+          callerAgent,
+        });
+        if (mode === 'sync') {
+          waitPromise = this.node.awaitChildResponse(childThreadId, timeoutMs);
+        }
+        invocationPromise = targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
+        if (mode === 'sync') {
+          const [responseText] = await Promise.all([
+            waitPromise!,
+            invocationPromise!,
+          ]);
+          return this.node.renderWorkerResponse(targetTitle, responseText);
+        }
+        invocationPromise!.catch((err) => {
+          this.logger.error('Manage: async send_message failed', {
+            worker: targetTitle,
+            childThreadId,
+            error: (err as { message?: string })?.message || String(err),
+          });
+        });
+        return this.node.renderAsyncAcknowledgement(targetTitle);
       } catch (err: unknown) {
         this.logger.error('Manage: send_message failed', {
           worker: targetTitle,
           childThreadId,
           error: (err as { message?: string })?.message || String(err),
         });
+        if (mode !== 'sync' && invocationPromise) {
+          invocationPromise.catch(() => {});
+        }
         throw err;
       }
     }
