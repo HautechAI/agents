@@ -120,7 +120,7 @@ export const InteractivePlayground: Story = {
     docs: {
       description: {
         story:
-          'Use the add icon on any tree node to open the subdocument dialog and the trash icon to preview the destructive delete confirmation.',
+          'Use the add icon on any tree node to open the subdocument dialog and the document header delete action to preview the destructive confirmation.',
       },
     },
   },

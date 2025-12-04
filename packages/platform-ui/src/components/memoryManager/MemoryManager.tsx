@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 
-import { Button } from '../Button';
+import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
-import { Separator } from '../ui/separator';
+import { Textarea } from '../ui/textarea';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { CreateDocumentDialog } from './CreateDocumentDialog';
 import { TreeView } from './TreeView';
@@ -244,24 +245,21 @@ export function MemoryManager({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave, selectedNode, unsaved]);
 
+  const canDeleteSelected = selectedNode != null && selectedPath !== '/';
+
   return (
     <div className={cn('h-full w-full', className)}>
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="h-full min-h-[480px] overflow-hidden rounded-[12px] border border-[var(--agyn-border-subtle)] bg-white"
-      >
-        <ResizablePanel
-          defaultSize={32}
-          minSize={20}
-          className="min-w-[260px] border-r border-[var(--agyn-border-subtle)] bg-white text-[var(--agyn-dark)]"
-        >
-          <div className="flex h-full flex-col gap-4 px-4 py-5">
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--agyn-dark)]">Documents</h2>
-              <p className="mt-1 text-xs text-[var(--agyn-gray)]">Select a document to edit</p>
+      <ResizablePanelGroup direction="horizontal" className="h-full min-h-[480px] overflow-hidden">
+        <ResizablePanel defaultSize={32} minSize={20} className="min-w-[260px] bg-background">
+          <div className="flex h-full flex-col">
+            <div className="border-border border-b">
+              <div className="flex min-h-[56px] flex-col justify-center gap-1 px-4">
+                <h2 className="text-sm font-semibold text-foreground">Documents</h2>
+                <p className="text-xs text-muted-foreground">Select a document to edit</p>
+              </div>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <ScrollArea className="h-full">
+            <ScrollArea className="flex-1">
+              <div className="px-2 py-3">
                 <TreeView
                   tree={tree}
                   selectedPath={selectedPath}
@@ -272,35 +270,45 @@ export function MemoryManager({
                   onDelete={handleRequestDelete}
                   showContentIndicators={showContentIndicators}
                 />
-              </ScrollArea>
-            </div>
+              </div>
+            </ScrollArea>
           </div>
         </ResizablePanel>
-        <ResizableHandle withHandle className="bg-[var(--agyn-border-subtle)]" />
-        <ResizablePanel defaultSize={68} minSize={40} className="bg-white">
+        <ResizableHandle className="bg-border" />
+        <ResizablePanel defaultSize={68} minSize={40} className="bg-background">
           <div className="flex h-full flex-col">
-            <div className="px-6 py-5">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="border-border border-b">
+              <div className="flex min-h-[56px] flex-col gap-3 px-6 py-3 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="min-w-0">
-                  <h2 id={editorLabelId} className="text-sm font-semibold text-[var(--agyn-dark)]">
+                  <h2 id={editorLabelId} className="text-sm font-semibold text-foreground">
                     Document content
                   </h2>
-                  <p id={editorDescriptionId} className="truncate text-xs text-[var(--agyn-gray)]">
+                  <p id={editorDescriptionId} className="truncate text-xs text-muted-foreground">
                     {selectedPath}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   {selectedNode ? (
                     <span
                       className={cn(
                         'text-xs font-medium',
-                        unsaved
-                          ? 'text-[var(--agyn-status-pending)]'
-                          : 'text-[var(--agyn-gray)]',
+                        unsaved ? 'text-[var(--agyn-status-pending)]' : 'text-muted-foreground',
                       )}
                     >
                       {unsaved ? 'Unsaved changes' : 'Saved'}
                     </span>
+                  ) : null}
+                  {selectedNode ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleRequestDelete(selectedPath)}
+                      disabled={!canDeleteSelected}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete
+                    </Button>
                   ) : null}
                   <Button type="button" size="sm" onClick={handleSave} disabled={!unsaved || !selectedNode}>
                     Save changes
@@ -308,24 +316,21 @@ export function MemoryManager({
                 </div>
               </div>
             </div>
-            <div className="px-6">
-              <Separator className="bg-[var(--agyn-border-subtle)]" />
-            </div>
             <div className="flex-1">
               {selectedNode ? (
                 <div className="h-full overflow-auto px-6 py-5">
-                  <textarea
+                  <Textarea
                     value={editorValue}
                     onChange={(event) => handleEditorChange(event.target.value)}
                     aria-labelledby={editorLabelId}
                     aria-describedby={editorDescriptionId}
-                    className="h-full min-h-[320px] w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--agyn-dark)] focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                    className="h-full min-h-[320px] resize-none border-0 bg-transparent px-0 py-0 text-sm leading-relaxed text-foreground focus-visible:ring-0"
                     placeholder="Write markdown…"
                     spellCheck="false"
                   />
                 </div>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-[var(--agyn-gray)]">
+                <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
                   <p>Select a document to edit its content.</p>
                 </div>
               )}

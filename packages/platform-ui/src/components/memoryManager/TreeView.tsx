@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { IconButton } from '../IconButton';
+import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import {
   type MemoryTree,
@@ -41,7 +41,7 @@ export function TreeView({
   showContentIndicators: _showContentIndicators = true,
   className,
 }: TreeViewProps) {
-  const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const visibleNodes = useMemo<VisibleNode[]>(() => {
     const nodes: VisibleNode[] = [];
@@ -64,7 +64,7 @@ export function TreeView({
   }, [selectedPath]);
 
   const registerRef = useCallback(
-    (path: string) => (element: HTMLButtonElement | null) => {
+    (path: string) => (element: HTMLDivElement | null) => {
       if (element) {
         itemRefs.current.set(path, element);
       } else {
@@ -162,55 +162,52 @@ export function TreeView({
       return (
         <li key={node.path} role="none" className="space-y-1">
           <div
+            ref={registerRef(node.path)}
+            role="treeitem"
+            aria-level={depth + 1}
+            aria-selected={isSelected ? 'true' : 'false'}
+            aria-expanded={isExpandable ? isExpanded : undefined}
+            tabIndex={isSelected ? 0 : -1}
             className={cn(
-              'group flex min-h-10 items-center gap-2 rounded-[10px] px-2 py-2 transition-colors',
-              isSelected ? 'bg-[var(--agyn-blue)]/10' : 'hover:bg-[var(--agyn-bg-light)]',
+              'group relative flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              isSelected ? 'bg-primary/10 text-foreground' : 'hover:bg-muted',
             )}
-            style={{ marginLeft: indent }}
+            style={{ paddingLeft: indent }}
             data-selected={isSelected ? 'true' : undefined}
+            onClick={() => onSelect(node.path)}
+            onKeyDown={(event) => handleKeyDown(event, node.path)}
           >
             {isExpandable ? (
-              <IconButton
+              <Button
+                type="button"
                 variant="ghost"
-                size="sm"
+                size="icon"
                 tabIndex={-1}
                 aria-label={isExpanded ? 'Collapse node' : 'Expand node'}
                 onClick={(event) => {
                   event.stopPropagation();
                   onToggle(node.path);
                 }}
-                className={cn('shrink-0', isSelected ? 'text-[var(--agyn-blue)]' : 'text-[var(--agyn-gray)]')}
-                icon={<ChevronRight className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-90')} />}
-              />
+                className={cn(
+                  'shrink-0 text-muted-foreground hover:text-foreground',
+                  isSelected && 'text-primary',
+                )}
+              >
+                <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} />
+              </Button>
             ) : (
-              <span className="h-8 w-8 shrink-0" aria-hidden="true" />
+              <span className="size-8 shrink-0" aria-hidden="true" />
             )}
-            <button
-              ref={registerRef(node.path)}
-              type="button"
-              role="treeitem"
-              aria-level={depth + 1}
-              aria-selected={isSelected ? 'true' : 'false'}
-              aria-expanded={isExpandable ? isExpanded : undefined}
-              className={cn(
-                'flex min-w-0 flex-1 items-center gap-2 rounded-[8px] px-2 py-1 text-left text-sm font-medium text-[var(--agyn-dark)] transition-colors',
-                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--agyn-blue)] focus-visible:outline-offset-1',
-                isSelected ? 'text-[var(--agyn-dark)]' : 'group-hover:text-[var(--agyn-blue)]',
-              )}
-              onClick={() => onSelect(node.path)}
-              onKeyDown={(event) => handleKeyDown(event, node.path)}
-              tabIndex={isSelected ? 0 : -1}
-            >
-              <span className="truncate" title={node.path}>
-                {node.name}
-              </span>
-            </button>
-            <div className="flex items-center gap-1">
+            <span className="truncate" title={node.path}>
+              {node.name}
+            </span>
+            <div className="ml-auto flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <IconButton
+                  <Button
+                    type="button"
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     tabIndex={-1}
                     aria-label="Add subdocument"
                     onClick={(event) => {
@@ -218,35 +215,14 @@ export function TreeView({
                       onAddChild(node.path);
                     }}
                     className={cn(
-                      'text-[var(--agyn-gray)] hover:text-[var(--agyn-blue)]',
-                      isSelected && 'text-[var(--agyn-blue)]',
+                      'text-muted-foreground hover:text-foreground',
+                      isSelected && 'text-primary',
                     )}
-                    icon={<Plus className="h-4 w-4" />}
-                  />
+                  >
+                    <Plus className="size-4" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">Add subdocument</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <IconButton
-                    variant={node.path === '/' ? 'ghost' : 'danger'}
-                    size="sm"
-                    tabIndex={-1}
-                    aria-label={`Delete ${node.path}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onDelete(node.path);
-                    }}
-                    disabled={node.path === '/'}
-                    className={cn(
-                      node.path === '/'
-                        ? 'text-[var(--agyn-gray)]'
-                        : 'text-[var(--agyn-status-failed)] hover:text-[var(--agyn-status-failed)]',
-                    )}
-                    icon={<Trash2 className="h-4 w-4" />}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="top">Delete document</TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -258,7 +234,7 @@ export function TreeView({
         </li>
       );
     },
-    [expandedPaths, handleKeyDown, onAddChild, onDelete, onSelect, onToggle, registerRef, selectedPath],
+    [expandedPaths, handleKeyDown, onAddChild, onSelect, onToggle, registerRef, selectedPath],
   );
 
   return (
