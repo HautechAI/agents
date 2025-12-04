@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Button } from '../Button';
 import { ScrollArea } from '../ui/scroll-area';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
+import { Separator } from '../ui/separator';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { TreeView } from './TreeView';
 import { cn } from '@/lib/utils';
@@ -273,7 +274,7 @@ export function MemoryManager({
         <ResizableHandle withHandle className="bg-[var(--agyn-border-subtle)]" />
         <ResizablePanel defaultSize={68} minSize={40} className="bg-white">
           <div className="flex h-full flex-col">
-            <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-5">
+            <div className="px-6 py-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
                   <h2 id={editorLabelId} className="text-sm font-semibold text-[var(--agyn-dark)]">
@@ -302,6 +303,9 @@ export function MemoryManager({
                 </div>
               </div>
             </div>
+            <div className="px-6">
+              <Separator className="bg-[var(--agyn-border-subtle)]" />
+            </div>
             <div className="flex-1">
               {selectedNode ? (
                 <div className="h-full overflow-auto px-6 py-5">
@@ -310,7 +314,7 @@ export function MemoryManager({
                     onChange={(event) => handleEditorChange(event.target.value)}
                     aria-labelledby={editorLabelId}
                     aria-describedby={editorDescriptionId}
-                    className="h-full min-h-[320px] w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--agyn-dark)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--agyn-blue)]"
+                    className="h-full min-h-[320px] w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--agyn-dark)] focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                     placeholder="Write markdown…"
                     spellCheck="false"
                   />
