@@ -67,11 +67,14 @@ export interface JsonRpcTransport {
 }
 
 export class McpError extends Error {
-  constructor(
-    message: string,
-    public code?: string,
-  ) {
-    super(message);
+  public code?: string;
+
+  constructor(message: string, codeOrOptions?: string | { code?: string; cause?: unknown }) {
+    const hasOptionsObject = typeof codeOrOptions === 'object' && codeOrOptions !== null;
+    const cause = hasOptionsObject ? (codeOrOptions as { cause?: unknown }).cause : undefined;
+    super(message, cause !== undefined ? { cause } : undefined);
+    this.code = hasOptionsObject ? (codeOrOptions as { code?: string }).code : codeOrOptions;
+    this.name = 'McpError';
   }
 }
 
