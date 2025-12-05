@@ -149,23 +149,28 @@ export function AgentsMemoryManager() {
     [selectedNode],
   );
 
+  const storedPathsRef = useRef<Map<string, string>>(new Map());
+  const [selectedPath, setSelectedPath] = useState<string>(ROOT_PATH);
+
   const dumpQuery = useQuery<DumpResponse>({
     queryKey: dumpKey ?? ['memory/dump', 'none'],
-    queryFn: async () => memoryApi.dump(selectedNode!.nodeId, selectedNode!.scope, selectedNode!.threadId) as Promise<DumpResponse>,
-    enabled: Boolean(selectedNode),
+    queryFn: async () => {
+      if (!selectedNode) {
+        throw new Error('Cannot load memory dump without a selected node.');
+      }
+      return memoryApi.dump(selectedNode.nodeId, selectedNode.scope, selectedNode.threadId) as Promise<DumpResponse>;
+    },
+    enabled: Boolean(selectedNode) && Boolean(selectedPath),
     staleTime: 5_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 
   const tree = useMemo<MemoryTree | null>(() => {
     if (!selectedNode) return null;
     return buildTreeFromDump(selectedNode.label, dumpQuery.data);
   }, [dumpQuery.data, selectedNode]);
-
-  const storedPathsRef = useRef<Map<string, string>>(new Map());
-  const [selectedPath, setSelectedPath] = useState<string>(ROOT_PATH);
 
   useEffect(() => {
     if (!selectedNode) {
