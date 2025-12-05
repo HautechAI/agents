@@ -7,7 +7,6 @@ import {
   afterAll,
 } from 'vitest';
 import { render, fireEvent, screen, waitFor, within, act } from '@testing-library/react';
-import { $getSelection, $isRangeSelection } from 'lexical';
 import React, { useState } from 'react';
 import { MarkdownComposer, type MarkdownComposerProps } from '../MarkdownComposer';
 import { MarkdownContent } from '../MarkdownContent';
@@ -615,6 +614,20 @@ describe('MarkdownComposer code fences', () => {
     await waitFor(() =>
       expect(getValue()).toBe(['```', 'line one', 'line two', '```', '', 'After block'].join('\n')),
     );
+  });
+});
+
+describe('MarkdownComposer source styling', () => {
+  it('removes border and outline in source mode', async () => {
+    render(<ComposerHarness />);
+
+    switchToSourceView();
+
+    const sourceEditor = await screen.findByTestId('markdown-composer-source-editor');
+
+    expect(sourceEditor.className).toContain('!border-none');
+    expect(sourceEditor.className).toContain('focus:!ring-0');
+    expect(sourceEditor.className).toContain('focus:!outline-none');
   });
 });
 

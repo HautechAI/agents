@@ -1408,8 +1408,8 @@ export function MarkdownComposerRTE({
   const sendButtonDisabled = disabled || Boolean(sendDisabled) || Boolean(isSending);
   const ariaLabel = textareaAriaLabel ?? ariaLabelProp ?? placeholder;
   const sourceTextareaClassName = [
-    'border-none bg-transparent px-3 py-2 pr-12 text-sm leading-relaxed text-[var(--agyn-dark)]',
-    'placeholder:text-[var(--agyn-gray)] focus:border-transparent focus:outline-none focus:ring-0',
+    '!border-none !outline-none !ring-0 bg-transparent px-3 py-2 pr-12 text-sm leading-relaxed text-[var(--agyn-dark)]',
+    'placeholder:text-[var(--agyn-gray)] focus:!ring-0 focus:!outline-none focus:!border-transparent focus-visible:!ring-0 focus-visible:!outline-none',
     textareaClassName,
   ]
     .filter(Boolean)
