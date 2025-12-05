@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { userEvent, waitForElementToBeRemoved, within } from '@storybook/testing-library';
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { MemoryManager } from '../src/components/memoryManager/MemoryManager';
-import type { MemoryTree } from '../src/components/memoryManager/utils';
-import { cloneTree } from '../src/components/memoryManager/utils';
+import { MemoryManager } from '../src/components/screens/memoryManager/MemoryManager';
+import type { MemoryTree } from '../src/components/screens/memoryManager/utils';
+import { cloneTree } from '../src/components/screens/memoryManager/utils';
 import { withMainLayout } from './decorators/withMainLayout';
 
 const populatedTree: MemoryTree = {
