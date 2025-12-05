@@ -2,6 +2,8 @@ import { FunctionTool } from '@agyn/llm';
 import z from 'zod';
 import { LocalMCPServerNode } from './localMcpServer.node';
 import { LLMContext } from '../../llm/types';
+import { buildMcpToolError } from './errorUtils';
+import { McpError } from './types';
 
 // Runtime execution delegate provided by LocalMCPServer node
 export interface McpExecDelegate {
@@ -42,8 +44,14 @@ export class LocalMCPServerTool extends FunctionTool<z.ZodObject> {
   async execute(args: z.infer<z.ZodObject<z.ZodRawShape>>, ctx: LLMContext): Promise<string> {
     const res = await this.node.callTool(this._name, args, { threadId: ctx.threadId });
     if (res.isError) {
-      return JSON.stringify({ ok: false, error: res.content || 'error' });
+      const { message, cause } = buildMcpToolError(res);
+      throw new McpError(message, { cause });
     }
-    return JSON.stringify({ ok: true, content: res.content, structured: res.structuredContent });
+
+    if (res.structuredContent !== undefined && res.structuredContent !== null) {
+      return JSON.stringify(res.structuredContent);
+    }
+
+    return res.content ?? '';
   }
 }
