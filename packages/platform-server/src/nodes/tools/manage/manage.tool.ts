@@ -5,6 +5,8 @@ import { ManageToolNode } from './manage.node';
 import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
 import { LLMContext } from '../../../llm/types';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
+import type { ErrorResponse } from '../../../utils/error-response';
+import { normalizeError } from '../../../utils/error-response';
 
 export const ManageInvocationSchema = z
   .object({
@@ -18,6 +20,11 @@ export const ManageInvocationSchema = z
       .describe('Optional child thread alias; defaults per worker title.'),
   })
   .strict();
+
+type ManageInvocationArgs = z.infer<typeof ManageInvocationSchema>;
+type ManageInvocationSuccess = string;
+type InvocationOutcome = ResponseMessage | ToolCallOutputMessage;
+type InvocationResult = PromiseLike<InvocationOutcome> | InvocationOutcome;
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSchema> {
@@ -60,15 +67,6 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     return context ? ` ${JSON.stringify(context)}` : '';
   }
 
-  private extractMessage(err: unknown): string {
-    if (err instanceof Error) return err.message;
-    if (err && typeof err === 'object' && 'message' in err) {
-      const value = (err as Record<string, unknown>).message;
-      if (typeof value === 'string') return value;
-    }
-    return String(err);
-  }
-
   private sanitizeAlias(raw: string | undefined): string {
     const normalized = (raw ?? '').toLowerCase();
     const withHyphen = normalized.replace(/\s+/g, '-');
@@ -81,17 +79,29 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     return truncated;
   }
 
-  private isPromiseWithCatch(
-    value: unknown,
-  ): value is Promise<ResponseMessage | ToolCallOutputMessage> {
+  private normalize(err: unknown, options?: { defaultCode?: string; retriable?: boolean }): ErrorResponse {
+    return normalizeError(err, options);
+  }
+
+  private isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
     if (!value || (typeof value !== 'object' && typeof value !== 'function')) {
       return false;
     }
-    const candidate = value as { catch?: unknown };
-    return typeof candidate.catch === 'function';
+    return typeof (value as PromiseLike<T>).then === 'function';
   }
 
-  async execute(args: z.infer<typeof ManageInvocationSchema>, ctx: LLMContext): Promise<string> {
+  private toInvocationPromise(result: InvocationResult): { promise: Promise<InvocationOutcome>; isPromise: boolean } {
+    const isPromise = this.isPromiseLike<InvocationOutcome>(result);
+    const promise = Promise.resolve(result as InvocationOutcome);
+    return { promise, isPromise };
+  }
+
+  private logError(prefix: string, context: Record<string, unknown>, err: unknown) {
+    const normalized = this.normalize(err);
+    this.logger.error(`${prefix}${this.format({ ...context, error: normalized })}`);
+  }
+
+  async execute(args: ManageInvocationArgs, ctx: LLMContext): Promise<ManageInvocationSuccess> {
     const { command, worker, message, threadAlias } = args;
     const parentThreadId = ctx.threadId;
     if (!parentThreadId) throw new Error('Manage: missing threadId in LLM context');
@@ -110,13 +120,11 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       if (!callerAgent || typeof callerAgent.invoke !== 'function') {
         throw new Error('Manage: caller agent unavailable');
       }
-      const providedAlias =
-        typeof threadAlias === 'string' ? threadAlias.trim() : undefined;
+      const providedAlias = typeof threadAlias === 'string' ? threadAlias.trim() : undefined;
       if (typeof threadAlias === 'string' && !providedAlias) {
         throw new Error('Manage: invalid or empty threadAlias');
       }
-      let aliasUsed =
-        providedAlias ?? this.sanitizeAlias(targetTitle);
+      let aliasUsed = providedAlias ?? this.sanitizeAlias(targetTitle);
       const fallbackAlias =
         providedAlias !== undefined
           ? (() => {
@@ -129,21 +137,11 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
           : null;
       let childThreadId: string;
       try {
-        childThreadId = await persistence.getOrCreateSubthreadByAlias(
-          'manage',
-          aliasUsed,
-          parentThreadId,
-          '',
-        );
+        childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', aliasUsed, parentThreadId, '');
       } catch (primaryError) {
         if (fallbackAlias && fallbackAlias !== aliasUsed) {
           aliasUsed = fallbackAlias;
-          childThreadId = await persistence.getOrCreateSubthreadByAlias(
-            'manage',
-            aliasUsed,
-            parentThreadId,
-            '',
-          );
+          childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', aliasUsed, parentThreadId, '');
           this.logger.warn(
             `Manage: provided threadAlias invalid, using sanitized fallback${this.format({
               worker: targetTitle,
@@ -160,7 +158,6 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       const mode = this.node.getMode();
       const timeoutMs = this.node.getTimeoutMs();
       let waitPromise: Promise<string> | null = null;
-      let invocationPromise: Promise<ResponseMessage | ToolCallOutputMessage> | undefined;
       try {
         await this.node.registerInvocation({
           childThreadId,
@@ -171,42 +168,33 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
         if (mode === 'sync') {
           waitPromise = this.node.awaitChildResponse(childThreadId, timeoutMs);
         }
-        const invocationResult = targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
+        const invocationResult: InvocationResult = targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
+        const { promise: invocationPromise, isPromise } = this.toInvocationPromise(invocationResult);
+
         if (mode === 'sync') {
-          invocationPromise = Promise.resolve(invocationResult as ResponseMessage | ToolCallOutputMessage);
-          const [responseText] = await Promise.all([
-            waitPromise!,
-            invocationPromise!,
-          ]);
+          const [responseText] = await Promise.all([waitPromise!, invocationPromise]);
           return this.node.renderWorkerResponse(targetTitle, responseText);
         }
-        if (this.isPromiseWithCatch(invocationResult)) {
-          invocationPromise = invocationResult;
-          invocationPromise.catch((err) => {
-            const msg = this.extractMessage(err);
-            this.logger.error(
-              `Manage: async send_message failed${this.format({ worker: targetTitle, childThreadId, error: msg })}`,
-            );
-          });
-        } else {
+
+        if (!isPromise) {
           const resultType = invocationResult === null ? 'null' : typeof invocationResult;
           this.logger.error(
             `Manage: async send_message invoke returned non-promise${this.format({
               worker: targetTitle,
               childThreadId,
               resultType,
+              promiseLike: isPromise,
             })}`,
           );
         }
+
+        invocationPromise.catch((err) => {
+          this.logError('Manage: async send_message failed', { worker: targetTitle, childThreadId }, err);
+        });
+
         return this.node.renderAsyncAcknowledgement(targetTitle);
       } catch (err: unknown) {
-        const msg = this.extractMessage(err);
-        this.logger.error(
-          `Manage: send_message failed${this.format({ worker: targetTitle, childThreadId, error: msg })}`,
-        );
-        if (mode !== 'sync' && this.isPromiseWithCatch(invocationPromise)) {
-          invocationPromise.catch(() => {});
-        }
+        this.logError('Manage: send_message failed', { worker: targetTitle, childThreadId }, err);
         throw err;
       }
     }

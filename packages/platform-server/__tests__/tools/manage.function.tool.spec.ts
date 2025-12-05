@@ -241,7 +241,7 @@ ${text}`),
 
     expect(result).toBe('async acknowledgement');
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: async send_message invoke returned non-promise {"worker":"Async Worker","childThreadId":"child-thread-non-promise","resultType":"object"}',
+      'Manage: async send_message invoke returned non-promise {"worker":"Async Worker","childThreadId":"child-thread-non-promise","resultType":"object","promiseLike":false}',
     );
   });
 
@@ -321,7 +321,7 @@ ${text}`),
     expect(result).toBe('async acknowledgement');
     await vi.waitFor(() => {
       expect(loggerErrorSpy).toHaveBeenCalledWith(
-        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-async","error":"boom"}',
+        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-async","error":{"code":"unknown_error","message":"boom","retriable":false}}',
       );
     });
   });
@@ -359,7 +359,7 @@ ${text}`),
     expect(result).toBe('async acknowledgement');
     await vi.waitFor(() => {
       expect(loggerErrorSpy).toHaveBeenCalledWith(
-        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-undefined","error":"undefined"}',
+        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-undefined","error":{"code":"unknown_error","message":"undefined","retriable":false}}',
       );
     });
   });
@@ -398,7 +398,7 @@ ${text}`),
     expect(result).toBe('async acknowledgement');
     await vi.waitFor(() => {
       expect(loggerErrorSpy).toHaveBeenCalledWith(
-        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-object","error":"custom diagnostic"}',
+        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-object","error":{"code":"X","message":"custom diagnostic","retriable":false}}',
       );
     });
   });
@@ -433,7 +433,7 @@ ${text}`),
     ).rejects.toBe('boom');
 
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: send_message failed {"worker":"Fail Worker","childThreadId":"child-thread-sync","error":"boom"}',
+      'Manage: send_message failed {"worker":"Fail Worker","childThreadId":"child-thread-sync","error":{"code":"unknown_error","message":"boom","retriable":false}}',
     );
   });
 
@@ -468,7 +468,7 @@ ${text}`),
     ).rejects.toEqual(diagnostic);
 
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: send_message failed {"worker":"Fail Worker","childThreadId":"child-thread-sync-object","error":"sync diagnostic"}',
+      'Manage: send_message failed {"worker":"Fail Worker","childThreadId":"child-thread-sync-object","error":{"code":"Y","message":"sync diagnostic","retriable":false}}',
     );
   });
 });
