@@ -119,8 +119,6 @@ export function MemoryManager({
     });
   }, [treeSnapshot]);
 
-  const currentNodeLabel = useMemo(() => nodes.find((node) => node.key === selectedNodeKey)?.label ?? 'No node selected', [nodes, selectedNodeKey]);
-
   const treeIsEmpty = !treeSnapshot || treeSnapshot.children.length === 0;
   const interactionsDisabled = disableInteractions || !selectedNodeKey || !treeSnapshot;
 
@@ -308,11 +306,7 @@ export function MemoryManager({
       <ResizablePanelGroup direction="horizontal" className="h-full min-h-[480px] overflow-hidden">
         <ResizablePanel defaultSize={32} minSize={20} className="min-w-[260px] bg-white">
           <div className="flex h-full flex-col bg-white">
-            <div className="flex h-[66px] px-6 border-b border-[var(--agyn-border-subtle)] flex-col justify-center gap-1">
-              <h2 className="text-sm font-semibold text-[var(--agyn-dark)]">Documents</h2>
-              <p className="text-xs text-[var(--agyn-text-subtle)]">{currentNodeLabel}</p>
-            </div>
-            <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-4">
+            <div className="flex h-[66px] items-center border-b border-[var(--agyn-border-subtle)] px-6">
               <Dropdown
                 placeholder="Select memory node"
                 value={selectedNodeKey ?? ''}
@@ -320,6 +314,7 @@ export function MemoryManager({
                 options={nodes.map((option) => ({ value: option.key, label: option.label }))}
                 size="default"
                 disabled={nodeSelectDisabled || !nodes.length}
+                className="w-full"
               />
             </div>
             {renderTreeSection()}
