@@ -7,6 +7,7 @@ import { LLMContext } from '../../../llm/types';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
 import type { ErrorResponse } from '../../../utils/error-response';
 import { normalizeError } from '../../../utils/error-response';
+import { CallAgentLinkingService } from '../../../agents/call-agent-linking.service';
 
 export const ManageInvocationSchema = z
   .object({
@@ -34,6 +35,7 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
 
   constructor(
     @Inject(AgentsPersistenceService) private readonly injectedPersistence: AgentsPersistenceService,
+    @Inject(CallAgentLinkingService) private readonly linking: CallAgentLinkingService,
   ) {
     super();
   }
@@ -50,13 +52,15 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
   }
 
   get name() {
-    return this.node.config.name ?? 'manage';
+    const configured = this.node.config?.name;
+    return typeof configured === 'string' && configured.length > 0 ? configured : 'manage';
   }
   get schema() {
     return ManageInvocationSchema;
   }
   get description() {
-    return this.node.config.description ?? 'Manage tool';
+    const description = this.node.config?.description;
+    return typeof description === 'string' && description.length > 0 ? description : 'Manage tool';
   }
 
   private getPersistence(): AgentsPersistenceService | undefined {
@@ -155,6 +159,27 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
         }
       }
       await persistence.setThreadChannelNode(childThreadId, this.node.nodeId);
+      const runId = typeof ctx.runId === 'string' ? ctx.runId : '';
+      if (runId) {
+        try {
+          await this.linking.registerParentToolExecution({
+            runId,
+            parentThreadId,
+            childThreadId,
+            toolName: this.name,
+          });
+        } catch (err) {
+          const errorInfo = err instanceof Error ? { name: err.name, message: err.message } : { message: String(err) };
+          this.logger.warn(
+            `Manage: failed to register parent tool execution${this.format({
+              parentThreadId,
+              childThreadId,
+              runId,
+              error: errorInfo,
+            })}`,
+          );
+        }
+      }
       const mode = this.node.getMode();
       const timeoutMs = this.node.getTimeoutMs();
       let waitPromise: Promise<string> | null = null;

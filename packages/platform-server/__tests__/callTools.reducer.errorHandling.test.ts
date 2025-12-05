@@ -175,8 +175,8 @@ describe('CallToolsLLMReducer call_agent metadata', () => {
     } as unknown as AgentsPersistenceService;
 
     const linkingMock = {
-      buildInitialMetadata: vi.fn((params: { toolName: string; parentThreadId: string; childThreadId: string }) => ({
-        tool: params.toolName === 'call_engineer' ? 'call_engineer' : 'call_agent',
+      buildInitialMetadata: vi.fn((params: { tool: 'call_agent' | 'call_engineer'; parentThreadId: string; childThreadId: string }) => ({
+        tool: params.tool,
         parentThreadId: params.parentThreadId,
         childThreadId: params.childThreadId,
         childRun: { id: null, status: 'queued', linkEnabled: false, latestMessageId: null },
