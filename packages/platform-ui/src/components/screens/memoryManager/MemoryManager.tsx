@@ -5,13 +5,13 @@ import { Button } from '../../Button';
 import { IconButton } from '../../IconButton';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../../ui/resizable';
 import { ScrollArea } from '../../ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Textarea } from '../../ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { CreateDocumentDialog } from './CreateDocumentDialog';
 import { TreeView } from './TreeView';
 import { cn } from '@/lib/utils';
+import { Dropdown } from '@/components/Dropdown';
 import {
   type MemoryTree,
   cloneTree,
@@ -313,22 +313,14 @@ export function MemoryManager({
               <p className="text-xs text-[var(--agyn-text-subtle)]">{currentNodeLabel}</p>
             </div>
             <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-4">
-              <Select
+              <Dropdown
+                placeholder="Select memory node"
                 value={selectedNodeKey ?? ''}
                 onValueChange={handleSelectNode}
+                options={nodes.map((option) => ({ value: option.key, label: option.label }))}
+                size="default"
                 disabled={nodeSelectDisabled || !nodes.length}
-              >
-                <SelectTrigger size="default" className="border-[var(--agyn-border-subtle)] bg-white text-left font-medium text-[var(--agyn-dark)]">
-                  <SelectValue placeholder="Select memory node" />
-                </SelectTrigger>
-                <SelectContent className="min-w-[240px]">
-                  {nodes.map((option) => (
-                    <SelectItem key={option.key} value={option.key}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
             {renderTreeSection()}
           </div>

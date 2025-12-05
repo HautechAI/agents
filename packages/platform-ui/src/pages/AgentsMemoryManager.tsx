@@ -240,15 +240,15 @@ export function AgentsMemoryManager() {
           lastLoadedRef.current = { nodeKey: key, path: normalizedPath };
           return;
         }
-        const content = await memoryApi.read(selectedNode.nodeId, selectedNode.scope, selectedNode.threadId, normalizedPath);
+        const readResponse = await memoryApi.read(selectedNode.nodeId, selectedNode.scope, selectedNode.threadId, normalizedPath);
         if (cancelled) return;
         if (dirtyRef.current && !pathChanged) {
           setDocState({ loading: false, exists: true, error: null });
           lastLoadedRef.current = { nodeKey: key, path: normalizedPath };
           return;
         }
-        setEditorValue(content);
-        setBaselineValue(content);
+        setEditorValue(readResponse.content);
+        setBaselineValue(readResponse.content);
         setDocState({ loading: false, exists: true, error: null });
         lastLoadedRef.current = { nodeKey: key, path: normalizedPath };
       } catch (error) {
@@ -371,12 +371,6 @@ export function AgentsMemoryManager() {
 
   return (
     <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden bg-white">
-      <div className="shrink-0 border-b border-border/60 px-6 py-4">
-        <div className="space-y-1">
-          <h1 className="text-lg font-semibold text-foreground">Agents / Memory</h1>
-          <p className="text-sm text-muted-foreground">Inspect and edit agent memory documents.</p>
-        </div>
-      </div>
       <div className="flex-1 min-h-0">
         {docsLoading ? (
           <div className="p-6 text-sm text-muted-foreground">Loading memory nodes…</div>
