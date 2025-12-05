@@ -1,7 +1,20 @@
 import React from 'react';
 import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import SlackTriggerConfigView from '@/components/configViews/SlackTriggerConfigView';
+
+vi.mock('@/features/secrets/utils/flatVault', () => ({
+  listAllSecretPaths: () => Promise.resolve(['kv/prod/app', 'kv/prod/bot']),
+}));
+
+vi.mock('@/features/variables/api', () => ({
+  listVariables: () =>
+    Promise.resolve([
+      { key: 'SLACK_APP_TOKEN' },
+      { key: 'SLACK_BOT_TOKEN' },
+    ]),
+}));
 
 const pointerProto = Element.prototype as unknown as {
   hasPointerCapture?: (pointerId: number) => boolean;
@@ -143,5 +156,42 @@ describe('SlackTriggerConfigView', () => {
     });
 
     // No masking behavior asserted (out of scope)
+  });
+
+  it('surfaces secret and variable suggestions after focus', async () => {
+    const user = userEvent.setup();
+    render(
+      <SlackTriggerConfigView
+        templateName="slackTrigger"
+        value={{}}
+        onChange={() => {}}
+        readOnly={false}
+        disabled={false}
+      />,
+    );
+
+    const appField = screen.getByText('App token').parentElement as HTMLElement;
+    const appInput = within(appField).getAllByRole('textbox')[0];
+    const appTrigger = within(appField).getAllByRole('combobox')[0];
+
+    await user.click(appTrigger);
+    const appListbox = await screen.findByRole('listbox');
+    const secretOption = within(appListbox).getByRole('option', { name: /secret/i });
+    await user.click(secretOption);
+
+    await user.click(appInput);
+    await screen.findByText('kv/prod/app');
+
+    const botField = screen.getByText('Bot token').parentElement as HTMLElement;
+    const botInput = within(botField).getAllByRole('textbox')[0];
+    const botTrigger = within(botField).getAllByRole('combobox')[0];
+
+    await user.click(botTrigger);
+    const botListbox = await screen.findByRole('listbox');
+    const variableOption = within(botListbox).getByRole('option', { name: /variable/i });
+    await user.click(variableOption);
+
+    await user.click(botInput);
+    await screen.findByText('SLACK_BOT_TOKEN');
   });
 });
