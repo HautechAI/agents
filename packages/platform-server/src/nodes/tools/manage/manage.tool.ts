@@ -110,10 +110,52 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       if (!callerAgent || typeof callerAgent.invoke !== 'function') {
         throw new Error('Manage: caller agent unavailable');
       }
-      const alias = this.sanitizeAlias(
-        (typeof threadAlias === 'string' ? threadAlias : targetTitle).trim(),
-      );
-      const childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', alias, parentThreadId, '');
+      const providedAlias =
+        typeof threadAlias === 'string' ? threadAlias.trim() : undefined;
+      if (typeof threadAlias === 'string' && !providedAlias) {
+        throw new Error('Manage: invalid or empty threadAlias');
+      }
+      let aliasUsed =
+        providedAlias ?? this.sanitizeAlias(targetTitle);
+      const fallbackAlias =
+        providedAlias !== undefined
+          ? (() => {
+              try {
+                return this.sanitizeAlias(providedAlias);
+              } catch {
+                return null;
+              }
+            })()
+          : null;
+      let childThreadId: string;
+      try {
+        childThreadId = await persistence.getOrCreateSubthreadByAlias(
+          'manage',
+          aliasUsed,
+          parentThreadId,
+          '',
+        );
+      } catch (primaryError) {
+        if (fallbackAlias && fallbackAlias !== aliasUsed) {
+          aliasUsed = fallbackAlias;
+          childThreadId = await persistence.getOrCreateSubthreadByAlias(
+            'manage',
+            aliasUsed,
+            parentThreadId,
+            '',
+          );
+          this.logger.warn(
+            `Manage: provided threadAlias invalid, using sanitized fallback${this.format({
+              worker: targetTitle,
+              parentThreadId,
+              providedAlias,
+              fallbackAlias: aliasUsed,
+            })}`,
+          );
+        } else {
+          throw primaryError;
+        }
+      }
       await persistence.setThreadChannelNode(childThreadId, this.node.nodeId);
       const mode = this.node.getMode();
       const timeoutMs = this.node.getTimeoutMs();

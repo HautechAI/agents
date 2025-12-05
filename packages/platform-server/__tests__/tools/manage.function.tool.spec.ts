@@ -65,7 +65,7 @@ ${text}`),
     expect(result).toBe('Response from: Worker Alpha\nchild response text');
   });
 
-  it('sanitizes provided threadAlias before persistence', async () => {
+  it('reuses provided threadAlias without altering case when accepted', async () => {
     const persistence = {
       getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-alias'),
       setThreadChannelNode: vi.fn().mockResolvedValue(undefined),
@@ -88,29 +88,66 @@ ${text}`),
     tool.init(manageNode, { persistence });
 
     const ctx = createCtx();
-    const rawAlias = 'Casey Brooks (Engineer)-hautechai-agents-send-message';
-    const expectedAlias = rawAlias
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9._-]/g, '')
-      .replace(/-+/g, '-')
-      .slice(0, 64);
+    const rawAlias = '  Mixed.Alias-Case_123  ';
 
     await tool.execute({ command: 'send_message', worker: 'Worker Alpha', message: 'hi', threadAlias: rawAlias }, ctx);
 
     expect(persistence.getOrCreateSubthreadByAlias).toHaveBeenCalledWith(
       'manage',
-      expectedAlias,
+      'Mixed.Alias-Case_123',
       'parent-thread',
       '',
     );
-    expect(expectedAlias.length).toBeLessThanOrEqual(64);
     expect(manageNode.renderAsyncAcknowledgement).toHaveBeenCalledWith('Worker Alpha');
   });
 
-  it('enforces 64 character limit on sanitized aliases', async () => {
+  it('falls back to sanitized alias when provided alias is rejected', async () => {
     const persistence = {
-      getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-long'),
+      getOrCreateSubthreadByAlias: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('invalid alias'))
+        .mockResolvedValue('child-thread-fallback'),
+      setThreadChannelNode: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AgentsPersistenceService;
+
+    const workerInvoke = vi.fn().mockResolvedValue({ text: 'invoke result' });
+    const manageNode = {
+      nodeId: 'manage-node-fallback',
+      listWorkers: vi.fn().mockReturnValue(['Worker Alpha']),
+      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
+      registerInvocation: vi.fn().mockResolvedValue(undefined),
+      awaitChildResponse: vi.fn(),
+      getMode: vi.fn().mockReturnValue('async'),
+      getTimeoutMs: vi.fn(),
+      renderWorkerResponse: vi.fn(),
+      renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
+    } as unknown as ManageToolNode;
+
+    const tool = new ManageFunctionTool(persistence);
+    tool.init(manageNode, { persistence });
+
+    const loggerWarnSpy = vi.spyOn((tool as any).logger, 'warn');
+
+    const ctx = createCtx();
+    const rawAlias = 'Invalid Alias!';
+
+    await tool.execute({ command: 'send_message', worker: 'Worker Alpha', message: 'hi', threadAlias: rawAlias }, ctx);
+
+    const aliasMock = vi.mocked(persistence.getOrCreateSubthreadByAlias);
+    expect(aliasMock).toHaveBeenNthCalledWith(1, 'manage', 'Invalid Alias!', 'parent-thread', '');
+    expect(aliasMock).toHaveBeenNthCalledWith(2, 'manage', 'invalid-alias', 'parent-thread', '');
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      'Manage: provided threadAlias invalid, using sanitized fallback {"worker":"Worker Alpha","parentThreadId":"parent-thread","providedAlias":"Invalid Alias!","fallbackAlias":"invalid-alias"}',
+    );
+    expect(manageNode.renderAsyncAcknowledgement).toHaveBeenCalledWith('Worker Alpha');
+  });
+
+  it('fallback alias enforces 64 character limit', async () => {
+    const persistence = {
+      getOrCreateSubthreadByAlias: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('too long'))
+        .mockResolvedValue('child-thread-long'),
       setThreadChannelNode: vi.fn().mockResolvedValue(undefined),
     } as unknown as AgentsPersistenceService;
 
@@ -136,9 +173,10 @@ ${text}`),
     await tool.execute({ command: 'send_message', worker: 'Worker Alpha', message: 'hi', threadAlias: rawAlias }, ctx);
 
     const aliasMock = vi.mocked(persistence.getOrCreateSubthreadByAlias);
-    const aliasArg = aliasMock.mock.calls[0][1] as string;
-    expect(aliasArg.length).toBeLessThanOrEqual(64);
-    expect(aliasArg).toBe('a'.repeat(64));
+    const fallbackAlias = aliasMock.mock.calls[1][1] as string;
+    expect(fallbackAlias.length).toBeLessThanOrEqual(64);
+    expect(fallbackAlias).toBe('a'.repeat(64));
+    expect(manageNode.renderAsyncAcknowledgement).toHaveBeenCalledWith('Worker Alpha');
   });
 
   it('returns acknowledgement in async mode without awaiting child response', async () => {

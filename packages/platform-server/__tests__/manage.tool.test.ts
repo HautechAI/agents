@@ -139,7 +139,7 @@ describe('ManageTool unit', () => {
     expect(res).toBe('Response from: child-1\nok-child-explicit');
     expect(getOrCreateSubthreadByAlias).toHaveBeenCalledWith(
       'manage',
-      'mixed.alias-case_123',
+      'Mixed.Alias-Case_123',
       'parent',
       '',
     );
