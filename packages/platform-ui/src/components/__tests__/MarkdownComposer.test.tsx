@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { render, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import React, { useState } from 'react';
 import { MarkdownComposer, type MarkdownComposerProps } from '../MarkdownComposer';
+import { MarkdownContent } from '../MarkdownContent';
 
 interface ComposerHarnessProps {
   initialValue?: string;
@@ -9,6 +10,7 @@ interface ComposerHarnessProps {
   isSending?: boolean;
   onSend?: (value: string) => void;
   disabled?: boolean;
+  renderPreview?: boolean;
 }
 
 function ComposerHarness({
@@ -17,6 +19,7 @@ function ComposerHarness({
   isSending,
   onSend,
   disabled,
+  renderPreview = false,
 }: ComposerHarnessProps) {
   const [value, setValue] = useState(initialValue);
 
@@ -35,78 +38,124 @@ function ComposerHarness({
     };
   }
 
-  return <MarkdownComposer {...composerProps} />;
+  return (
+    <>
+      <MarkdownComposer {...composerProps} />
+      <div data-testid="value-output">{value}</div>
+      {renderPreview ? (
+        <div data-testid="markdown-preview">
+          <MarkdownContent content={value} />
+        </div>
+      ) : null}
+    </>
+  );
 }
 
-const getComposerTextarea = () =>
-  screen.getByPlaceholderText('Type a message...') as HTMLTextAreaElement;
+const getComposerEditor = () =>
+  screen.getByTestId('markdown-composer-editor') as HTMLElement;
 
-const selectAll = (textarea: HTMLTextAreaElement) => {
-  textarea.focus();
-  textarea.setSelectionRange(0, textarea.value.length);
+const getValue = () => screen.getByTestId('value-output').textContent ?? '';
+
+const focusAndSelectAll = (editor: HTMLElement) => {
+  editor.focus();
+  fireEvent.focus(editor);
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  document.dispatchEvent(new Event('selectionchange'));
 };
+
+beforeAll(() => {
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      toJSON: () => ({}),
+    }),
+  });
+});
 
 describe('MarkdownComposer formatting', () => {
   it('wraps selected text in bold via toolbar', async () => {
     render(<ComposerHarness initialValue="hello" />);
 
-    const textarea = getComposerTextarea();
-    selectAll(textarea);
+    const editor = getComposerEditor();
+    await waitFor(() => expect(editor.textContent).toContain('hello'));
 
+    focusAndSelectAll(editor);
     fireEvent.click(screen.getByTestId('markdown-composer-toolbar-bold'));
 
-    await waitFor(() => expect(textarea.value).toBe('**hello**'));
-    expect(textarea.selectionStart).toBe(2);
-    expect(textarea.selectionEnd).toBe(7);
+    await waitFor(() => expect(getValue()).toBe('**hello**'));
   });
 
   it('toggles bulleted list for selected lines', async () => {
-    render(<ComposerHarness initialValue={['Line one', 'Line two'].join('\n')} />);
+    render(<ComposerHarness initialValue={'Line one\n\nLine two'} />);
 
-    const textarea = getComposerTextarea();
-    selectAll(textarea);
+    const editor = getComposerEditor();
+    await waitFor(() => expect(getValue()).toBe('Line one\n\nLine two'));
 
+    focusAndSelectAll(editor);
     fireEvent.click(screen.getByTestId('markdown-composer-toolbar-bullet'));
+    await waitFor(() => expect(getValue()).toBe('- Line one\n- Line two'));
 
-    await waitFor(() => expect(textarea.value).toBe('- Line one\n- Line two'));
-
-    selectAll(textarea);
+    focusAndSelectAll(editor);
     fireEvent.click(screen.getByTestId('markdown-composer-toolbar-bullet'));
-
-    await waitFor(() => expect(textarea.value).toBe('Line one\nLine two'));
+    await waitFor(() => expect(getValue()).toBe('Line one\n\nLine two'));
   });
 
   it('wraps code block with shortcut Cmd/Ctrl+Shift+E', async () => {
     render(<ComposerHarness initialValue="snippet" />);
 
-    const textarea = getComposerTextarea();
-    selectAll(textarea);
+    const editor = getComposerEditor();
+    await waitFor(() => expect(editor.textContent).toContain('snippet'));
 
-    fireEvent.keyDown(textarea, {
+    focusAndSelectAll(editor);
+    fireEvent.keyDown(editor, {
       key: 'E',
       ctrlKey: true,
       shiftKey: true,
     });
 
-    await waitFor(() => expect(textarea.value).toBe('```\nsnippet\n```'));
-    expect(textarea.selectionStart).toBe(4);
-    expect(textarea.selectionEnd).toBe(11);
+    await waitFor(() => expect(getValue()).toBe('```\nsnippet\n```'));
   });
 
   it('wraps inline code with shortcut Cmd/Ctrl+E', async () => {
     render(<ComposerHarness initialValue="inline" />);
 
-    const textarea = getComposerTextarea();
-    selectAll(textarea);
+    const editor = getComposerEditor();
+    await waitFor(() => expect(editor.textContent).toContain('inline'));
 
-    fireEvent.keyDown(textarea, {
+    focusAndSelectAll(editor);
+    fireEvent.keyDown(editor, {
       key: 'e',
       ctrlKey: true,
     });
 
-    await waitFor(() => expect(textarea.value).toBe('`inline`'));
-    expect(textarea.selectionStart).toBe(1);
-    expect(textarea.selectionEnd).toBe(7);
+    await waitFor(() => expect(getValue()).toBe('`inline`'));
+  });
+
+  it('wraps selected text in underline via toolbar', async () => {
+    render(<ComposerHarness initialValue="focus" />);
+
+    const editor = getComposerEditor();
+    await waitFor(() => expect(editor.textContent).toContain('focus'));
+
+    focusAndSelectAll(editor);
+    fireEvent.click(screen.getByTestId('markdown-composer-toolbar-underline'));
+
+    await waitFor(() => expect(getValue()).toBe('<u>focus</u>'));
   });
 });
 
@@ -115,10 +164,10 @@ describe('MarkdownComposer sending', () => {
     const handleSend = vi.fn();
     render(<ComposerHarness initialValue="message" onSend={handleSend} />);
 
-    const textarea = getComposerTextarea();
-    textarea.focus();
+    const editor = getComposerEditor();
+    editor.focus();
 
-    fireEvent.keyDown(textarea, {
+    fireEvent.keyDown(editor, {
       key: 'Enter',
       ctrlKey: true,
     });
@@ -130,14 +179,41 @@ describe('MarkdownComposer sending', () => {
     const handleSend = vi.fn();
     render(<ComposerHarness initialValue="message" onSend={handleSend} sendDisabled />);
 
-    const textarea = getComposerTextarea();
-    textarea.focus();
+    const editor = getComposerEditor();
+    editor.focus();
 
-    fireEvent.keyDown(textarea, {
+    fireEvent.keyDown(editor, {
       key: 'Enter',
       ctrlKey: true,
     });
 
     expect(handleSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('MarkdownComposer markdown parity', () => {
+  it('preserves underline markup when importing markdown', async () => {
+    render(<ComposerHarness initialValue={'A <u>highlight</u>'} />);
+
+    await waitFor(() => expect(getValue()).toBe('A <u>highlight</u>'));
+  });
+
+  it('renders MarkdownContent output matching serialized markdown', async () => {
+    render(
+      <ComposerHarness
+        initialValue={'**bold** and <u>link</u> [Link](https://example.com)'}
+        renderPreview
+      />,
+    );
+
+    await waitFor(() => expect(getValue()).toBe('**bold** and <u>link</u> [Link](https://example.com)'));
+
+    const preview = screen.getByTestId('markdown-preview');
+    const link = within(preview).getByRole('link', { name: 'Link' });
+    expect(link).toHaveAttribute('href', 'https://example.com');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(preview.querySelector('strong')).not.toBeNull();
+    expect(preview.querySelector('u')).not.toBeNull();
   });
 });
