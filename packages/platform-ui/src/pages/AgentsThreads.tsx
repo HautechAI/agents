@@ -128,14 +128,16 @@ function formatReminderScheduledTime(value: string | null | undefined): string {
   if (!value) return '00:00';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '00:00';
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 function formatReminderDate(value: string | null | undefined): string | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
-  return date.toLocaleDateString();
+  return date.toISOString();
 }
 
 function sanitizeSummary(summary: string | null | undefined): string {
