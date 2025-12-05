@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FileText, Save } from 'lucide-react';
 
-import { Button } from '../Button';
-import Badge from '../Badge';
-import { Textarea } from '../Textarea';
+import { Button } from '../../Button';
+import Badge from '../../Badge';
+import { Textarea } from '../../Textarea';
 import { cn } from '@/lib/utils';
 
 type MarkdownEditorProps = {
@@ -67,7 +67,14 @@ export function MarkdownEditor({
               Saved
             </Badge>
           )}
-          <Button type="button" onClick={handleSave} disabled={!unsaved} className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="primary"
+            size="md"
+            onClick={handleSave}
+            disabled={!unsaved}
+            className="flex items-center gap-2"
+          >
             <Save className="size-4" />
             Save
           </Button>
