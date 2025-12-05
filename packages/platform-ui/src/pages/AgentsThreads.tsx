@@ -291,25 +291,29 @@ function areThreadNodesEqual(a: ThreadNode, b: ThreadNode): boolean {
 
 function mergeChildrenEntry(prev: ThreadChildrenEntry | undefined, nodes: ThreadNode[], hasChildren: boolean): ThreadChildrenEntry {
   const dedup = new Map<string, ThreadNode>();
-  if (prev && prev.status === 'success') {
-    for (const node of prev.nodes) dedup.set(node.id, node);
-  }
   for (const node of nodes) dedup.set(node.id, node);
   const merged = Array.from(dedup.values());
   merged.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  if (prev && prev.status === 'success' && prev.hasChildren === hasChildren && prev.nodes.length === merged.length) {
-    const prevMap = new Map(prev.nodes.map((node) => [node.id, node] as const));
-    let identical = true;
-    for (const node of merged) {
-      const existing = prevMap.get(node.id);
-      if (!existing || !areThreadNodesEqual(existing, node)) {
-        identical = false;
-        break;
-      }
-    }
-    if (identical) return prev;
+
+  if (!prev || prev.status !== 'success') {
+    return { nodes: merged, status: 'success', error: null, hasChildren };
   }
-  return { nodes: merged, status: 'success', error: null, hasChildren };
+
+  const prevMap = new Map(prev.nodes.map((node) => [node.id, node] as const));
+  let changed = prev.hasChildren !== hasChildren || prev.nodes.length !== merged.length;
+
+  const normalized = merged.map((node) => {
+    const existing = prevMap.get(node.id);
+    if (existing && areThreadNodesEqual(existing, node)) {
+      return existing;
+    }
+    changed = true;
+    return node;
+  });
+
+  if (!changed) return prev;
+
+  return { nodes: normalized, status: 'success', error: null, hasChildren };
 }
 
 function buildThreadTree(node: ThreadNode, children: ThreadChildrenState, overrides: StatusOverrides): Thread {

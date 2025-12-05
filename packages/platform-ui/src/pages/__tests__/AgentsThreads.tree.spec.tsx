@@ -337,6 +337,119 @@ describe('AgentsThreads tree preload', () => {
     expect(childrenRequests).toBeGreaterThanOrEqual(1);
   });
 
+  it('removes stale children when later tree responses shrink the list', async () => {
+    const root = makeThread({ id: 'root-1', summary: 'Root Thread' });
+    const childKeep = makeThread({ id: 'child-keep', parentId: root.id, summary: 'Keep Child', createdAt: t(10) });
+    const childDrop = makeThread({ id: 'child-drop', parentId: root.id, summary: 'Drop Child', createdAt: t(20) });
+
+    const extraRoots: ThreadMock[] = Array.from({ length: 49 }).map((_, index) => ({
+      ...makeThread({ id: `extra-root-${index}`, summary: `Extra Root ${index}`, createdAt: t(100 + index) }),
+      hasChildren: false,
+      children: [],
+    }));
+
+    const initialItems: ThreadMock[] = [
+      {
+        ...root,
+        hasChildren: true,
+        children: [
+          {
+            ...childKeep,
+            hasChildren: false,
+            children: [],
+          },
+          {
+            ...childDrop,
+            hasChildren: false,
+            children: [],
+          },
+        ],
+      },
+      ...extraRoots,
+    ];
+
+    const updatedItems: ThreadMock[] = [
+      {
+        ...root,
+        hasChildren: true,
+        children: [
+          {
+            ...childKeep,
+            hasChildren: false,
+            children: [],
+          },
+        ],
+      },
+      ...extraRoots,
+    ];
+
+    let childrenRequests = 0;
+
+    server.use(
+      http.get('*/api/agents/threads/tree', ({ request }) => {
+        const url = new URL(request.url);
+        const limit = Number.parseInt(url.searchParams.get('limit') ?? '0', 10);
+        if (!Number.isFinite(limit) || limit <= 50) {
+          return HttpResponse.json(buildTreeResponse(initialItems));
+        }
+        return HttpResponse.json(buildTreeResponse(updatedItems));
+      }),
+      http.get(abs('/api/agents/threads/tree'), ({ request }) => {
+        const url = new URL(request.url);
+        const limit = Number.parseInt(url.searchParams.get('limit') ?? '0', 10);
+        if (!Number.isFinite(limit) || limit <= 50) {
+          return HttpResponse.json(buildTreeResponse(initialItems));
+        }
+        return HttpResponse.json(buildTreeResponse(updatedItems));
+      }),
+      http.get('*/api/agents/threads', () => HttpResponse.json({ items: updatedItems })),
+      http.get(abs('/api/agents/threads'), () => HttpResponse.json({ items: updatedItems })),
+      http.get('*/api/agents/threads/:threadId', ({ params }) => {
+        const match = updatedItems.find((item) => item.id === params.threadId);
+        if (match) return HttpResponse.json(match);
+        return new HttpResponse(null, { status: 404 });
+      }),
+      http.get(abs('/api/agents/threads/:threadId'), ({ params }) => {
+        const match = updatedItems.find((item) => item.id === params.threadId);
+        if (match) return HttpResponse.json(match);
+        return new HttpResponse(null, { status: 404 });
+      }),
+      http.get('*/api/agents/threads/:threadId/children', () => {
+        childrenRequests += 1;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get(abs('/api/agents/threads/:threadId/children'), () => {
+        childrenRequests += 1;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get('*/api/agents/threads/:threadId/runs', () => HttpResponse.json({ items: [] })),
+      http.get(abs('/api/agents/threads/:threadId/runs'), () => HttpResponse.json({ items: [] })),
+      http.get('*/api/agents/reminders', () => HttpResponse.json({ items: [] })),
+      http.get(abs('/api/agents/reminders'), () => HttpResponse.json({ items: [] })),
+      http.options('*/api/agents/reminders', () => new HttpResponse(null, { status: 200 })),
+      http.options(abs('/api/agents/reminders'), () => new HttpResponse(null, { status: 200 })),
+      http.get('*/api/containers', () => HttpResponse.json({ items: [] })),
+      http.get(abs('/api/containers'), () => HttpResponse.json({ items: [] })),
+    );
+
+    const user = userEvent.setup();
+    renderAt('/agents/threads');
+
+    const rootToggle = await screen.findByRole('button', { name: /Show 2 subthreads/i });
+    await user.click(rootToggle);
+
+    expect(await screen.findByText('Keep Child')).toBeInTheDocument();
+    expect(await screen.findByText('Drop Child')).toBeInTheDocument();
+
+    act(() => {
+      MockIntersectionObserver.instances.forEach((instance) => instance.trigger());
+    });
+
+    await waitFor(() => expect(screen.queryByText('Drop Child')).not.toBeInTheDocument());
+    expect(screen.getByText('Keep Child')).toBeInTheDocument();
+    expect(childrenRequests).toBe(0);
+  });
+
   it('merges children state when pagination extends the tree', async () => {
     const primaryRoot = makeThread({ id: 'root-primary', summary: 'Primary Root', createdAt: t(0) });
     const primaryChild = makeThread({ id: 'child-primary', parentId: primaryRoot.id, summary: 'Primary Child', createdAt: t(10) });
