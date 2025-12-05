@@ -2,7 +2,7 @@ import z from 'zod';
 
 import { FunctionTool, HumanMessage, ResponseMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { ManageToolNode } from './manage.node';
-import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { LLMContext } from '../../../llm/types';
 import { AgentsPersistenceService } from '../../../agents/agents.persistence.service';
 import type { ErrorResponse } from '../../../utils/error-response';
@@ -27,21 +27,19 @@ type ManageInvocationSuccess = string;
 type InvocationOutcome = ResponseMessage | ToolCallOutputMessage;
 type InvocationResult = PromiseLike<InvocationOutcome> | InvocationOutcome;
 
-@Injectable({ scope: Scope.TRANSIENT })
 export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSchema> {
   private _node?: ManageToolNode;
-  private persistence?: AgentsPersistenceService;
+  private readonly logger = new Logger(ManageFunctionTool.name);
 
   constructor(
-    @Inject(AgentsPersistenceService) private readonly injectedPersistence: AgentsPersistenceService,
-    @Inject(CallAgentLinkingService) private readonly linking: CallAgentLinkingService,
+    private readonly persistence: AgentsPersistenceService,
+    private readonly linking: CallAgentLinkingService,
   ) {
     super();
   }
 
-  init(node: ManageToolNode, options?: { persistence?: AgentsPersistenceService }) {
+  init(node: ManageToolNode) {
     this._node = node;
-    this.persistence = options?.persistence ?? this.injectedPersistence;
     return this;
   }
 
@@ -62,8 +60,8 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     return typeof description === 'string' && description.length > 0 ? description : 'Manage tool';
   }
 
-  private getPersistence(): AgentsPersistenceService | undefined {
-    return this.persistence ?? this.injectedPersistence;
+  private getPersistence(): AgentsPersistenceService {
+    return this.persistence;
   }
 
   private format(context?: Record<string, unknown>): string {
@@ -101,7 +99,7 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
 
   private logError(prefix: string, context: Record<string, unknown>, err: unknown) {
     const normalized = this.normalize(err);
-    Logger.error(`${prefix}${this.format({ ...context, error: normalized })}`, ManageFunctionTool.name);
+    this.logger.error(`${prefix}${this.format({ ...context, error: normalized })}`);
   }
 
   async execute(args: ManageInvocationArgs, ctx: LLMContext): Promise<ManageInvocationSuccess> {
@@ -118,7 +116,6 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       const targetAgent = this.node.getWorkerByTitle(targetTitle);
       if (!targetAgent) throw new Error(`Unknown worker: ${targetTitle}`);
       const persistence = this.getPersistence();
-      if (!persistence) throw new Error('Manage: persistence unavailable');
       const callerAgent = ctx.callerAgent;
       if (!callerAgent || typeof callerAgent.invoke !== 'function') {
         throw new Error('Manage: caller agent unavailable');
@@ -145,14 +142,13 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
         if (fallbackAlias && fallbackAlias !== aliasUsed) {
           aliasUsed = fallbackAlias;
           childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', aliasUsed, parentThreadId, '');
-          Logger.warn(
+          this.logger.warn(
             `Manage: provided threadAlias invalid, using sanitized fallback${this.format({
               worker: targetTitle,
               parentThreadId,
               providedAlias,
               fallbackAlias: aliasUsed,
             })}`,
-            ManageFunctionTool.name,
           );
         } else {
           throw primaryError;
@@ -170,14 +166,13 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
           });
         } catch (err) {
           const errorInfo = err instanceof Error ? { name: err.name, message: err.message } : { message: String(err) };
-          Logger.warn(
+          this.logger.warn(
             `Manage: failed to register parent tool execution${this.format({
               parentThreadId,
               childThreadId,
               runId,
               error: errorInfo,
             })}`,
-            ManageFunctionTool.name,
           );
         }
       }
@@ -204,14 +199,13 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
 
         if (!isPromise) {
           const resultType = invocationResult === null ? 'null' : typeof invocationResult;
-          Logger.error(
+          this.logger.error(
             `Manage: async send_message invoke returned non-promise${this.format({
               worker: targetTitle,
               childThreadId,
               resultType,
               promiseLike: isPromise,
             })}`,
-            ManageFunctionTool.name,
           );
         }
 

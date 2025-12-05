@@ -10,7 +10,6 @@ import { CallAgentLinkingService } from '../src/agents/call-agent-linking.servic
 import { ShellCommandTool } from '../src/nodes/tools/shell_command/shell_command.tool';
 import { ManageFunctionTool } from '../src/nodes/tools/manage/manage.tool';
 import type { ManageToolNode } from '../src/nodes/tools/manage/manage.node';
-import { Logger } from '@nestjs/common';
 
 const buildState = (name: string, callId: string, args: string) => {
   const response = new ResponseMessage({
@@ -198,15 +197,15 @@ describe('CallToolsLLMReducer error isolation', () => {
       persistence as AgentsPersistenceService,
       linking as unknown as CallAgentLinkingService,
     );
-    manageTool.init(manageNode, { persistence: persistence as AgentsPersistenceService });
-
-    (manageTool as any).logger = undefined;
+    manageTool.init(manageNode as ManageToolNode);
 
     const runEvents = createRunEventsStub();
     const eventsBus = createEventsBusStub();
     const reducer = new CallToolsLLMReducer(runEvents as any, eventsBus as any).init({ tools: [manageTool as any] });
 
-    const warnSpy = vi.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn((manageTool as unknown as { logger: { warn: (...args: unknown[]) => void } }).logger, 'warn')
+      .mockImplementation(() => undefined);
 
     const ctx = {
       threadId: 'thread-manage',
@@ -238,10 +237,7 @@ describe('CallToolsLLMReducer error isolation', () => {
     );
     expect(workerInvoke).toHaveBeenCalledWith('child-thread', expect.any(Array));
     expect(linking.registerParentToolExecution).toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('failed to register parent tool execution'),
-      ManageFunctionTool.name,
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('failed to register parent tool execution'));
 
     warnSpy.mockRestore();
   });

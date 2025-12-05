@@ -257,16 +257,6 @@ describe('ManageTool unit', () => {
     ).rejects.toThrow('Unknown worker: unknown');
   });
 
-  it('send_message: persistence unavailable guard', async () => {
-    const harness = await createHarness({ persistence: undefined as unknown as AgentsPersistenceService });
-    await addWorker(harness.module, harness.node, 'Worker Y');
-    const ctx = buildCtx();
-
-    await expect(
-      harness.tool.execute({ command: 'send_message', worker: 'Worker Y', message: 'msg' }, ctx),
-    ).rejects.toThrow('Manage: persistence unavailable');
-  });
-
   it('execute: missing threadId guard', async () => {
     const harness = await createHarness();
     await addWorker(harness.module, harness.node, 'Worker Z');
