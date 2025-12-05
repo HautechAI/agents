@@ -71,6 +71,22 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     return context ? ` ${JSON.stringify(context)}` : '';
   }
 
+  private safeWarn(msg: string) {
+    if ((this as any)?.logger?.warn) {
+      (this as any).logger.warn(msg);
+    } else {
+      console.warn(msg);
+    }
+  }
+
+  private safeError(msg: string) {
+    if ((this as any)?.logger?.error) {
+      (this as any).logger.error(msg);
+    } else {
+      console.error(msg);
+    }
+  }
+
   private sanitizeAlias(raw: string | undefined): string {
     const normalized = (raw ?? '').toLowerCase();
     const withHyphen = normalized.replace(/\s+/g, '-');
@@ -102,7 +118,7 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
 
   private logError(prefix: string, context: Record<string, unknown>, err: unknown) {
     const normalized = this.normalize(err);
-    this.logger.error(`${prefix}${this.format({ ...context, error: normalized })}`);
+    this.safeError(`${prefix}${this.format({ ...context, error: normalized })}`);
   }
 
   async execute(args: ManageInvocationArgs, ctx: LLMContext): Promise<ManageInvocationSuccess> {
@@ -146,7 +162,7 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
         if (fallbackAlias && fallbackAlias !== aliasUsed) {
           aliasUsed = fallbackAlias;
           childThreadId = await persistence.getOrCreateSubthreadByAlias('manage', aliasUsed, parentThreadId, '');
-          this.logger.warn(
+          this.safeWarn(
             `Manage: provided threadAlias invalid, using sanitized fallback${this.format({
               worker: targetTitle,
               parentThreadId,
@@ -170,7 +186,7 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
           });
         } catch (err) {
           const errorInfo = err instanceof Error ? { name: err.name, message: err.message } : { message: String(err) };
-          this.logger.warn(
+          this.safeWarn(
             `Manage: failed to register parent tool execution${this.format({
               parentThreadId,
               childThreadId,
@@ -203,7 +219,7 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
 
         if (!isPromise) {
           const resultType = invocationResult === null ? 'null' : typeof invocationResult;
-          this.logger.error(
+          this.safeError(
             `Manage: async send_message invoke returned non-promise${this.format({
               worker: targetTitle,
               childThreadId,
