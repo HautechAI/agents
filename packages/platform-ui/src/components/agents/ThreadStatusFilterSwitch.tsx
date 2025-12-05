@@ -1,6 +1,12 @@
 
 export type ThreadStatusFilter = 'open' | 'closed' | 'all';
 
+const labelForValue = (value: ThreadStatusFilter): string => {
+  if (value === 'closed') return 'Resolved';
+  if (value === 'open') return 'Open';
+  return 'All';
+};
+
 export function ThreadStatusFilterSwitch({ value, onChange }: { value: ThreadStatusFilter; onChange: (v: ThreadStatusFilter) => void }) {
   const opts: ThreadStatusFilter[] = ['open', 'closed', 'all'];
   return (
@@ -13,7 +19,7 @@ export function ThreadStatusFilterSwitch({ value, onChange }: { value: ThreadSta
           aria-pressed={value === v}
           onClick={() => onChange(v)}
         >
-          {v[0].toUpperCase() + v.slice(1)}
+          {labelForValue(v)}
         </button>
       ))}
     </div>
