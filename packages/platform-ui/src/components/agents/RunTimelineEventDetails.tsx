@@ -674,16 +674,6 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
   const hasLlmResponse = Boolean(llmCall?.responseText);
   const hasLlmToolCalls = (llmCall?.toolCalls.length ?? 0) > 0;
   const usageMetrics = llmCall?.usage;
-  const contextHighlightIds = useMemo(() => {
-    const metadata = event.metadata;
-    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
-    const contextWindow = (metadata as Record<string, unknown>).contextWindow;
-    if (!contextWindow || typeof contextWindow !== 'object' || Array.isArray(contextWindow)) return undefined;
-    const candidates = (contextWindow as Record<string, unknown>).newIds;
-    if (!Array.isArray(candidates)) return undefined;
-    const normalized = candidates.filter((id): id is string => typeof id === 'string' && id.length > 0);
-    return normalized.length > 0 ? normalized : undefined;
-  }, [event.metadata]);
   const toolExecution = event.toolExecution;
   const callAgentMeta = useMemo(() => {
     if (!toolExecution || !CALL_AGENT_TOOL_NAMES.has(toolExecution.toolName)) return null;
@@ -897,10 +887,7 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
                 <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Context</header>
                 <div ref={contextScrollRef} data-testid="llm-context-scroll" className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
                   <LLMContextViewer
-                    runId={event.runId}
-                    eventId={event.id}
                     ids={llmCall.contextItemIds}
-                    highlightIds={contextHighlightIds}
                     highlightLastCount={llmCall.newContextItemCount}
                     onItemsRendered={handleContextItemsRendered}
                     onBeforeLoadMore={handleBeforeLoadMore}

@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Badge } from '@/components/Badge';
+import { useContextItems } from '@/api/hooks/contextItems';
 import type { ContextItem } from '@/api/types/agents';
-import { useRunEventContext } from '@/hooks/useRunEventContext';
 
 type LLMContextViewerProps = {
-  runId: string;
-  eventId: string;
-  ids?: readonly string[];
-  highlightIds?: readonly string[];
+  ids: readonly string[];
   highlightLastCount?: number;
   onItemsRendered?: (items: ContextItem[]) => void;
   onBeforeLoadMore?: () => void;
@@ -47,32 +44,18 @@ const ROLE_COLORS: Record<ContextItem['role'], string> = {
 
 const HIGHLIGHT_ROLES: ReadonlySet<ContextItem['role']> = new Set(['user', 'assistant', 'tool']);
 
-export function LLMContextViewer({
-  runId,
-  eventId,
-  ids = [],
-  highlightIds,
-  highlightLastCount,
-  onItemsRendered,
-  onBeforeLoadMore,
-}: LLMContextViewerProps) {
-  const { items, totalCount, hasMore, isInitialLoading, isFetchingMore, error, loadOlder } = useRunEventContext(runId, eventId);
+export function LLMContextViewer({ ids, highlightLastCount, onItemsRendered, onBeforeLoadMore }: LLMContextViewerProps) {
+  const { items, hasMore, isInitialLoading, isFetching, error, loadMore, total, targetCount } = useContextItems(ids, {
+    initialCount: 10,
+  });
 
-  const fallbackTotal = useMemo(() => {
-    if (totalCount !== null && totalCount !== undefined && Number.isFinite(totalCount)) {
-      return totalCount;
-    }
-    return Array.isArray(ids) ? ids.length : 0;
-  }, [ids, totalCount]);
-
+  const emptyState = ids.length === 0;
+  const displayedCount = useMemo(() => Math.min(targetCount, total), [targetCount, total]);
   const highlightCount = useMemo(() => {
     if (!highlightLastCount || !Number.isFinite(highlightLastCount)) return 0;
     return Math.max(0, Math.floor(highlightLastCount));
   }, [highlightLastCount]);
   const highlightSet = useMemo(() => {
-    if (Array.isArray(highlightIds) && highlightIds.length > 0) {
-      return new Set(highlightIds);
-    }
     if (highlightCount <= 0 || items.length === 0) return new Set<string>();
     const collected = new Set<string>();
     let remaining = highlightCount;
@@ -86,7 +69,7 @@ export function LLMContextViewer({
       }
     }
     return collected;
-  }, [highlightCount, highlightIds, items]);
+  }, [items, highlightCount]);
   const renderedCallbackRef = useRef<((items: ContextItem[]) => void) | undefined>(undefined);
 
   renderedCallbackRef.current = onItemsRendered;
@@ -95,13 +78,9 @@ export function LLMContextViewer({
     renderedCallbackRef.current?.(items);
   }, [items]);
 
-  const emptyState = !isInitialLoading && items.length === 0 && fallbackTotal === 0;
-
   if (emptyState) {
     return <div className="text-[11px] text-gray-500">No context items</div>;
   }
-
-  const displayedCount = items.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -109,13 +88,13 @@ export function LLMContextViewer({
         <button
           type="button"
           className="self-start rounded border border-gray-300 bg-white px-3 py-1 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => {
-              onBeforeLoadMore?.();
-              loadOlder().catch(() => {});
-            }}
-          disabled={isFetchingMore}
+          onClick={() => {
+            onBeforeLoadMore?.();
+            loadMore();
+          }}
+          disabled={isFetching}
         >
-          Load older context ({displayedCount} of {fallbackTotal})
+          Load older context ({displayedCount} of {total})
         </button>
       )}
 
@@ -151,8 +130,8 @@ export function LLMContextViewer({
 
       {isInitialLoading && <div className="text-[11px] text-gray-500">Loading context…</div>}
       {!!error && !isInitialLoading && <div className="text-[11px] text-red-600">Failed to load context items</div>}
-      {isFetchingMore && !isInitialLoading && <div className="text-[11px] text-gray-500">Loading…</div>}
-      {!error && !isFetchingMore && !isInitialLoading && items.length === 0 && fallbackTotal > 0 && (
+      {isFetching && !isInitialLoading && <div className="text-[11px] text-gray-500">Loading…</div>}
+      {!error && !isFetching && !isInitialLoading && items.length === 0 && displayedCount > 0 && (
         <div className="text-[11px] text-gray-500">No context items available.</div>
       )}
     </div>
