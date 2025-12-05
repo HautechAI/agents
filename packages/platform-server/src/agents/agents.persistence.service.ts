@@ -1126,34 +1126,18 @@ export class AgentsPersistenceService {
     if (agentNodes.length === 0) return descriptors;
 
     const nodeById = new Map<string, PersistedGraphNode>(agentNodes.map((node) => [node.id, node]));
-    const agentIds = agentNodes.map((node) => node.id);
-    if (agentIds.length === 0) return descriptors;
 
-    const states = await this.prisma.conversationState.findMany({
-      where: { threadId: { in: threadIds }, nodeId: { in: agentIds } },
-      orderBy: { updatedAt: 'desc' },
+    const threads = await this.prisma.thread.findMany({
+      where: { id: { in: threadIds } },
+      select: { id: true, assignedAgentNodeId: true },
     });
 
-    const seen = new Set<string>();
-    for (const state of states) {
-      if (seen.has(state.threadId)) continue;
-      const node = nodeById.get(state.nodeId);
+    for (const thread of threads) {
+      const assignedId = typeof thread.assignedAgentNodeId === 'string' ? thread.assignedAgentNodeId.trim() : '';
+      if (!assignedId) continue;
+      const node = nodeById.get(assignedId);
       if (!node) continue;
-      descriptors[state.threadId] = computeDescriptor(node);
-      seen.add(state.threadId);
-    }
-
-    const unresolved = threadIds.filter((id) => !seen.has(id));
-    if (unresolved.length > 0) {
-      const linkedNodes = await this.callAgentLinking.resolveLinkedAgentNodes(unresolved);
-      for (const threadId of unresolved) {
-        const nodeId = linkedNodes[threadId];
-        if (!nodeId) continue;
-        const node = nodeById.get(nodeId);
-        if (!node) continue;
-        descriptors[threadId] = computeDescriptor(node);
-        seen.add(threadId);
-      }
+      descriptors[thread.id] = computeDescriptor(node);
     }
 
     return descriptors;
