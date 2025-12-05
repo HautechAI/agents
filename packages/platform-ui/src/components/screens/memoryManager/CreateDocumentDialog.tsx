@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useId, useMemo, useState } from 'react';
 
-import { Button } from '../Button';
+import { Button } from '../../Button';
 import {
   ScreenDialog,
   ScreenDialogContent,
@@ -8,9 +8,9 @@ import {
   ScreenDialogFooter,
   ScreenDialogHeader,
   ScreenDialogTitle,
-} from '../screens/Dialog';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
+} from '../../Dialog';
+import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
 
 type CreateDocumentDialogProps = {
   open: boolean;

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FileText, Save } from 'lucide-react';
 
-import { Button } from '../Button';
-import Badge from '../Badge';
-import { Textarea } from '../Textarea';
+import { Button } from '../../Button';
+import Badge from '../../Badge';
+import { Textarea } from '../../Textarea';
 import { cn } from '@/lib/utils';
 
 type MarkdownEditorProps = {

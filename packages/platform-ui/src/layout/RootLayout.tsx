@@ -5,6 +5,7 @@ import {
   GitBranch,
   MessageSquare,
   Bell,
+  Brain,
   Activity,
   Container,
   HardDrive,
@@ -19,6 +20,7 @@ const MENU_ITEM_ROUTES: Record<string, string> = {
   graph: '/agents/graph',
   threads: '/agents/threads',
   reminders: '/agents/reminders',
+  memory: '/agents/memory',
   containers: '/monitoring/containers',
   resources: '/monitoring/resources',
   secrets: '/settings/secrets',
@@ -34,6 +36,7 @@ const MENU_ITEMS: MenuItem[] = [
       { id: 'graph', label: 'Graph', icon: <GitBranch className="w-4 h-4" /> },
       { id: 'threads', label: 'Threads', icon: <MessageSquare className="w-4 h-4" /> },
       { id: 'reminders', label: 'Reminders', icon: <Bell className="w-4 h-4" /> },
+      { id: 'memory', label: 'Memory', icon: <Brain className="w-4 h-4" /> },
     ],
   },
   {

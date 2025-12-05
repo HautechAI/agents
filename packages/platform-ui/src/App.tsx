@@ -11,6 +11,7 @@ import { RootLayout } from './layout/RootLayout';
 import { AgentsChat } from './pages/AgentsChat';
 import { AgentsThreads } from './pages/AgentsThreads';
 import { AgentsReminders } from './pages/AgentsReminders';
+import { AgentsMemoryManager } from './pages/AgentsMemoryManager';
 import { AgentsRunTimeline } from './pages/AgentsRunTimeline';
 import { AgentsRunScreen } from './pages/AgentsRunScreen';
 import { TracingTraces } from './pages/TracingTraces';
@@ -48,6 +49,7 @@ function App() {
               element={enableRunScreenV2 ? <AgentsRunScreen /> : <AgentsRunTimeline />}
             />
             <Route path="/agents/reminders" element={<AgentsReminders />} />
+            <Route path="/agents/memory" element={<AgentsMemoryManager />} />
 
             {/* Tracing */}
             <Route path="/tracing/traces" element={<TracingTraces />} />

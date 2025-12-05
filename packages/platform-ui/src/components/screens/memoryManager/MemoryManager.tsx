@@ -2,13 +2,13 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Trash2 } from 'lucide-react';
 
-import { Button } from '../Button';
-import { IconButton } from '../IconButton';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
-import { ScrollArea } from '../ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Textarea } from '../ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { Button } from '../../Button';
+import { IconButton } from '../../IconButton';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../../ui/resizable';
+import { ScrollArea } from '../../ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { Textarea } from '../../ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { CreateDocumentDialog } from './CreateDocumentDialog';
 import { TreeView } from './TreeView';

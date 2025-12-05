@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode, type KeyboardE
 import { ChevronRight, Plus } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { Button } from '../ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { Button } from '../../ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import {
   type MemoryTree,
   type MemoryNode,
