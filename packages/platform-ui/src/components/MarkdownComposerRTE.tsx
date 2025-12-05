@@ -422,7 +422,45 @@ export interface MarkdownComposerRTEProps {
   textareaProps?: Omit<AutosizeTextareaProps, 'value' | 'onChange' | 'ref' | 'minLines' | 'maxLines' | 'disabled' | 'placeholder'>;
 }
 
-const isModKey = (event: KeyboardEvent) => event.metaKey || event.ctrlKey;
+const MATCHED_MAC_PLATFORM = /Mac|iPad|iPhone|iPod/;
+
+const isMacPlatform = () => {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+  const platform = navigator.platform ?? '';
+  if (MATCHED_MAC_PLATFORM.test(platform)) {
+    return true;
+  }
+  const userAgent = navigator.userAgent ?? '';
+  return MATCHED_MAC_PLATFORM.test(userAgent);
+};
+
+const isModKey = (event: { metaKey: boolean; ctrlKey: boolean }) => {
+  if (isMacPlatform()) {
+    return event.metaKey || event.ctrlKey;
+  }
+  return event.ctrlKey || event.metaKey;
+};
+
+const matchesShortcut = (
+  event: { code?: string; key: string },
+  { codes = [], keys = [] }: { codes?: string[]; keys?: string[] },
+) => {
+  if (codes.length > 0 && event.code && codes.includes(event.code)) {
+    return true;
+  }
+
+  if (!event.key) {
+    return false;
+  }
+
+  const normalizedKey = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  return keys.some((candidate) => {
+    const normalizedCandidate = candidate.length === 1 ? candidate.toLowerCase() : candidate;
+    return normalizedCandidate === normalizedKey;
+  });
+};
 
 const TOGGLE_BLOCKQUOTE_COMMAND = createCommand<void>('TOGGLE_BLOCKQUOTE_COMMAND');
 const TOGGLE_CODE_BLOCK_COMMAND = createCommand<void>('TOGGLE_CODE_BLOCK_COMMAND');
@@ -744,54 +782,58 @@ function MarkdownComposerKeymapPlugin({
           return false;
         }
 
-        const key = event.key.toLowerCase();
-
         if (!event.shiftKey) {
-          if (key === 'b') {
+          if (matchesShortcut(event, { codes: ['KeyB'], keys: ['b'] })) {
             event.preventDefault();
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
             return true;
           }
 
-          if (key === 'i') {
+          if (matchesShortcut(event, { codes: ['KeyI'], keys: ['i'] })) {
             event.preventDefault();
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic');
             return true;
           }
 
-          if (key === 'u') {
+          if (matchesShortcut(event, { codes: ['KeyU'], keys: ['u'] })) {
             event.preventDefault();
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
             return true;
           }
 
-          if (key === 'e') {
+          if (matchesShortcut(event, { codes: ['KeyE'], keys: ['e'] })) {
             event.preventDefault();
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code');
+            return true;
+          }
+
+          if (matchesShortcut(event, { codes: ['Backquote'], keys: ['`'] })) {
+            event.preventDefault();
+            editor.dispatchCommand(TOGGLE_CODE_BLOCK_COMMAND, undefined);
             return true;
           }
         }
 
         if (event.shiftKey) {
-          if (key === 'e') {
+          if (matchesShortcut(event, { codes: ['KeyE'], keys: ['e'] })) {
             event.preventDefault();
             editor.dispatchCommand(TOGGLE_CODE_BLOCK_COMMAND, undefined);
             return true;
           }
 
-          if (key === '8') {
+          if (matchesShortcut(event, { codes: ['Digit8'], keys: ['8', '*'] })) {
             event.preventDefault();
             editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
             return true;
           }
 
-          if (key === '7') {
+          if (matchesShortcut(event, { codes: ['Digit7'], keys: ['7', '&'] })) {
             event.preventDefault();
             editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
             return true;
           }
 
-          if (key === '9') {
+          if (matchesShortcut(event, { codes: ['Digit9'], keys: ['9', '('] })) {
             event.preventDefault();
             editor.dispatchCommand(TOGGLE_BLOCKQUOTE_COMMAND, undefined);
             return true;
@@ -1032,7 +1074,7 @@ function MarkdownComposerToolbar({
       {
         id: 'codeBlock',
         icon: <CodeSquare className="h-4 w-4" />,
-        label: 'Code block (Cmd/Ctrl+Shift+E)',
+        label: 'Code block (Cmd/Ctrl+Shift+E or Cmd+`)',
         formatter: toggleCodeBlock,
       },
     ], [
@@ -1282,7 +1324,7 @@ export function MarkdownComposerRTE({
       return;
     }
 
-    const modKey = event.metaKey || event.ctrlKey;
+    const modKey = isModKey(event);
 
     if (event.key === 'Enter' && modKey) {
       if (onSend && !sendButtonDisabled) {
@@ -1296,54 +1338,58 @@ export function MarkdownComposerRTE({
       return;
     }
 
-    const key = event.key.toLowerCase();
-
     if (!event.shiftKey) {
-      if (key === 'b') {
+      if (matchesShortcut(event, { codes: ['KeyB'], keys: ['b'] })) {
         event.preventDefault();
         handleSourceAction('bold');
         return;
       }
 
-      if (key === 'i') {
+      if (matchesShortcut(event, { codes: ['KeyI'], keys: ['i'] })) {
         event.preventDefault();
         handleSourceAction('italic');
         return;
       }
 
-      if (key === 'u') {
+      if (matchesShortcut(event, { codes: ['KeyU'], keys: ['u'] })) {
         event.preventDefault();
         handleSourceAction('underline');
         return;
       }
 
-      if (key === 'e') {
+      if (matchesShortcut(event, { codes: ['KeyE'], keys: ['e'] })) {
         event.preventDefault();
         handleSourceAction('inlineCode');
+        return;
+      }
+
+      if (matchesShortcut(event, { codes: ['Backquote'], keys: ['`'] })) {
+        event.preventDefault();
+        handleSourceAction('codeBlock');
         return;
       }
     }
 
     if (event.shiftKey) {
-      if (key === 'e') {
+      if (matchesShortcut(event, { codes: ['KeyE'], keys: ['e'] })) {
         event.preventDefault();
         handleSourceAction('codeBlock');
         return;
       }
 
-      if (key === '8') {
+      if (matchesShortcut(event, { codes: ['Digit8'], keys: ['8', '*'] })) {
         event.preventDefault();
         handleSourceAction('bullet');
         return;
       }
 
-      if (key === '7') {
+      if (matchesShortcut(event, { codes: ['Digit7'], keys: ['7', '&'] })) {
         event.preventDefault();
         handleSourceAction('numbered');
         return;
       }
 
-      if (key === '9') {
+      if (matchesShortcut(event, { codes: ['Digit9'], keys: ['9', '('] })) {
         event.preventDefault();
         handleSourceAction('blockquote');
       }
