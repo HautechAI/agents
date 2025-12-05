@@ -46,7 +46,7 @@ jobs:
               value="http://localhost:3010"
             fi
             {
-              echo "build_args<<'EOF'"
+              echo "build_args<<EOF"
               echo "VITE_API_BASE_URL=$value"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
