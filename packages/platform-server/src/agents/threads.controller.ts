@@ -530,18 +530,12 @@ export class AgentsThreadsController {
       throw new ServiceUnavailableException({ error: 'agent_unavailable' });
     }
 
-    let agentNodeId = thread.assignedAgentNodeId ?? null;
-    if (!agentNodeId) {
-      const candidateNodeIds = agentNodes.map((node) => node.id);
-      const fallbackAgentNodeId = await this.persistence.getLatestAgentNodeIdForThread(threadId, { candidateNodeIds });
-      if (!fallbackAgentNodeId) {
-        throw new ServiceUnavailableException({ error: 'agent_unavailable' });
-      }
-      agentNodeId = fallbackAgentNodeId;
-      await this.persistence.ensureAssignedAgent(threadId, agentNodeId);
+    const normalizedAgentNodeId = thread.assignedAgentNodeId?.trim();
+    if (!normalizedAgentNodeId) {
+      throw new ServiceUnavailableException({ error: 'agent_unavailable' });
     }
 
-    const liveAgentNode = agentNodes.find((node) => node.id === agentNodeId);
+    const liveAgentNode = agentNodes.find((node) => node.id === normalizedAgentNodeId);
     if (!liveAgentNode) {
       throw new ServiceUnavailableException({ error: 'agent_unavailable' });
     }
@@ -559,7 +553,7 @@ export class AgentsThreadsController {
       void invocation.catch((error) => {
         const stack = error instanceof Error ? error.stack : undefined;
         this.logger.error(
-          `sendThreadMessage invoke failed thread=${threadId} agent=${agentNodeId}`,
+          `sendThreadMessage invoke failed thread=${threadId} agent=${normalizedAgentNodeId}`,
           stack,
           AgentsThreadsController.name,
         );
@@ -567,7 +561,7 @@ export class AgentsThreadsController {
     } catch (error) {
       const stack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
-        `sendThreadMessage immediate failure thread=${threadId} agent=${agentNodeId}`,
+        `sendThreadMessage immediate failure thread=${threadId} agent=${normalizedAgentNodeId}`,
         stack,
         AgentsThreadsController.name,
       );
