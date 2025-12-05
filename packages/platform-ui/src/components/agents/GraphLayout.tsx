@@ -822,6 +822,8 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       config.title = rawConfigTitle;
     }
 
+    config.title = config.title ?? selectedNode.title;
+
     return {
       config,
       displayTitle: resolveDisplayTitle(selectedNode),
