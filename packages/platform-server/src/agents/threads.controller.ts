@@ -27,7 +27,7 @@ import { RunSignalsRegistry } from './run-signals.service';
 import { LiveGraphRuntime } from '../graph-core/liveGraph.manager';
 import { HumanMessage } from '@agyn/llm';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
-import { isAgentLiveNode, isAgentRuntimeInstance } from './agent-node.utils';
+import { hasQueuedPreviewCapability, isAgentLiveNode, isAgentRuntimeInstance } from './agent-node.utils';
 import { randomUUID } from 'node:crypto';
 import { ThreadParentNotFoundError } from './agents.persistence.service';
 
@@ -404,6 +404,47 @@ export class AgentsThreadsController {
   async listRuns(@Param('threadId') threadId: string) {
     const runs = await this.persistence.listRuns(threadId);
     return { items: runs };
+  }
+
+  @Get('threads/:threadId/queued-messages')
+  async listQueuedMessages(@Param('threadId') threadId: string) {
+    const thread = await this.persistence.getThreadById(threadId);
+    if (!thread) throw new NotFoundException({ error: 'thread_not_found' });
+
+    const assignedAgentNodeId = typeof thread.assignedAgentNodeId === 'string' ? thread.assignedAgentNodeId.trim() : '';
+    if (!assignedAgentNodeId) {
+      return { items: [] } as const;
+    }
+
+    const liveNodes = this.runtime.getNodes();
+    const agentNodes = liveNodes.filter((node) => isAgentLiveNode(node, this.templateRegistry));
+    if (agentNodes.length === 0) {
+      return { items: [] } as const;
+    }
+
+    const liveAgentNode = agentNodes.find((node) => node.id === assignedAgentNodeId);
+    if (!liveAgentNode) {
+      return { items: [] } as const;
+    }
+
+    const instance = liveAgentNode.instance;
+    if (!isAgentRuntimeInstance(instance)) {
+      return { items: [] } as const;
+    }
+
+    const snapshot = hasQueuedPreviewCapability(instance) ? instance.listQueuedPreview(threadId) ?? [] : [];
+    const items = snapshot.map((item) => {
+      const text = typeof item.text === 'string' ? item.text : '';
+      let enqueuedAt: string | undefined;
+      if (Number.isFinite(item.ts)) {
+        const ts = new Date(item.ts);
+        if (!Number.isNaN(ts.getTime())) {
+          enqueuedAt = ts.toISOString();
+        }
+      }
+      return { id: item.id, text, enqueuedAt };
+    });
+    return { items };
   }
 
   @Get('runs/:runId/messages')

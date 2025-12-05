@@ -157,11 +157,13 @@ function registerThreadScenario({
   runs,
   children = [],
   reminders = [],
+  queuedMessages = [],
 }: {
   thread: ThreadMock;
   runs: RunMock[];
   children?: ThreadMock[];
   reminders?: ReminderMock[];
+  queuedMessages?: Array<{ id: string; text: string; enqueuedAt?: string }>;
 }) {
   const threadPayload: ThreadMock = {
     ...thread,
@@ -183,6 +185,12 @@ function registerThreadScenario({
       }
       return HttpResponse.json({ items: [] });
     }),
+    http.get('*/api/agents/threads/:threadId/queued-messages', ({ params }) => {
+      if (params.threadId === threadPayload.id) {
+        return HttpResponse.json({ items: queuedMessages });
+      }
+      return HttpResponse.json({ items: [] });
+    }),
     http.get('*/api/agents/threads/:threadId/children', ({ params }) => {
       if (params.threadId === threadPayload.id) {
         return HttpResponse.json({ items: children });
@@ -197,6 +205,12 @@ function registerThreadScenario({
       return HttpResponse.json({ items: [] });
     }),
     http.options(abs('/api/agents/threads/:threadId/children'), () => new HttpResponse(null, { status: 200 })),
+    http.get(abs('/api/agents/threads/:threadId/queued-messages'), ({ params }) => {
+      if (params.threadId === threadPayload.id) {
+        return HttpResponse.json({ items: queuedMessages });
+      }
+      return HttpResponse.json({ items: [] });
+    }),
     http.get(abs('/api/agents/threads/tree'), () => HttpResponse.json(buildTreeResponse([threadPayload], childMap))),
     http.get('*/api/agents/runs/:runId/messages', () => HttpResponse.json({ items: [] })),
     http.get('*/api/agents/reminders', () => HttpResponse.json({ items: reminders })),
