@@ -107,9 +107,23 @@ async function createHarness(options: { persistence?: AgentsPersistenceService }
   };
 }
 
-async function addWorker(module: Awaited<ReturnType<typeof createHarness>>['module'], node: ManageToolNode, title: string) {
+type WorkerConfigInput = string | { name: string; role?: string; title?: string };
+
+async function addWorker(
+  module: Awaited<ReturnType<typeof createHarness>>['module'],
+  node: ManageToolNode,
+  input: WorkerConfigInput,
+) {
   const worker = await module.resolve(FakeAgent);
-  await worker.setConfig({ title });
+  const normalizedName = typeof input === 'string' ? input.trim() : input.name.trim();
+  const normalizedRole = typeof input === 'string' ? undefined : input.role?.trim();
+  const normalizedTitle =
+    typeof input === 'string'
+      ? input.trim()
+      : input.title !== undefined
+        ? input.title.trim()
+        : input.name.trim();
+  await worker.setConfig({ name: normalizedName, role: normalizedRole, title: normalizedTitle });
   node.addWorker(worker);
   return worker;
 }
@@ -271,7 +285,7 @@ describe('ManageTool unit', () => {
     expect(status.childThreadIds.length).toBe(0);
   });
 
-  it('ManageToolNode derives worker titles from profile fields and handles retitle/removal', async () => {
+  it('ManageToolNode derives worker labels and enforces name-based uniqueness', async () => {
     const harness = await createHarness();
 
     const explicit = await addWorker(harness.module, harness.node, 'Alpha');
@@ -286,7 +300,7 @@ describe('ManageTool unit', () => {
     const noProfile = await harness.module.resolve(FakeAgent);
     await noProfile.setConfig({});
     expect(() => harness.node.addWorker(noProfile)).toThrow(
-      'ManageToolNode: worker agent requires non-empty title',
+      'ManageToolNode: worker agent requires non-empty name',
     );
 
     const nameOnly = await harness.module.resolve(FakeAgent);
@@ -296,19 +310,53 @@ describe('ManageTool unit', () => {
 
     const roleOnly = await harness.module.resolve(FakeAgent);
     await roleOnly.setConfig({ role: 'Dispatcher' });
-    harness.node.addWorker(roleOnly);
-    expect(harness.node.listWorkers()).toEqual(['Alpha', 'Bravo (Strategist)', 'Gamma', 'Dispatcher']);
+    expect(() => harness.node.addWorker(roleOnly)).toThrow('ManageToolNode: worker agent requires non-empty name');
 
     const dup = await harness.module.resolve(FakeAgent);
     await dup.setConfig({ name: 'Bravo', role: 'Strategist' });
-    expect(() => harness.node.addWorker(dup)).toThrow('ManageToolNode: worker with title "Bravo (Strategist)" already exists');
-
-    await explicit.setConfig({ title: ' Beta ' });
-    expect(harness.node.listWorkers()).toEqual(['Beta', 'Bravo (Strategist)', 'Gamma', 'Dispatcher']);
-    expect(harness.node.getWorkerByTitle('Beta')).toBe(explicit);
+    expect(() => harness.node.addWorker(dup)).toThrow('ManageToolNode: worker with name "Bravo" already exists');
 
     harness.node.removeWorker(explicit);
-    expect(harness.node.listWorkers()).toEqual(['Bravo (Strategist)', 'Gamma', 'Dispatcher']);
+    expect(harness.node.listWorkers()).toEqual(['Bravo (Strategist)', 'Gamma']);
+  });
+
+  it('ManageToolNode permits duplicate names by role when configured', async () => {
+    const harness = await createHarness();
+    await harness.node.setConfig({ description: 'desc', enforceUniqueByRole: true });
+
+    const builder = await harness.module.resolve(FakeAgent);
+    await builder.setConfig({ name: 'Worker X', role: 'Builder' });
+    harness.node.addWorker(builder);
+
+    const reviewer = await harness.module.resolve(FakeAgent);
+    await reviewer.setConfig({ name: 'Worker X', role: 'Reviewer' });
+    expect(() => harness.node.addWorker(reviewer)).not.toThrow();
+    expect(harness.node.listWorkers().sort()).toEqual(['Worker X (Builder)', 'Worker X (Reviewer)']);
+
+    const duplicateRole = await harness.module.resolve(FakeAgent);
+    await duplicateRole.setConfig({ name: 'Worker X', role: 'Builder' });
+    expect(() => harness.node.addWorker(duplicateRole)).toThrow(
+      'ManageToolNode: worker with name "Worker X" and role "Builder" already exists',
+    );
+
+    const noRole = await harness.module.resolve(FakeAgent);
+    await noRole.setConfig({ name: 'Worker X' });
+    expect(() => harness.node.addWorker(noRole)).toThrow(
+      'ManageToolNode: worker with name "Worker X" and role "Builder" already exists',
+    );
+  });
+
+  it('ManageToolNode refreshes metadata when worker config changes', async () => {
+    const harness = await createHarness();
+
+    const worker = await addWorker(harness.module, harness.node, { name: 'Worker One', role: 'Reviewer', title: 'Initial Title' });
+    expect(harness.node.listWorkers()).toEqual(['Worker One (Reviewer)']);
+
+    await worker.setConfig({ name: 'Worker Prime', role: 'Reviewer', title: 'Prime Title' });
+
+    expect(harness.node.listWorkers()).toEqual(['Worker Prime (Reviewer)']);
+    expect(harness.node.getWorkersByName('Worker Prime')).toEqual([worker]);
+    expect(harness.node.findWorkerByLegacyLabel('prime title')).toBe(worker);
   });
 
   it('send_message: surfaces child agent failure', async () => {
@@ -350,7 +398,7 @@ describe('ManageTool unit', () => {
       module.get(LLMProvisioner),
       module.get(ModuleRef),
     );
-    await failingAgent.setConfig({ title: 'W' });
+    await failingAgent.setConfig({ name: 'W', title: 'W' });
     node.addWorker(failingAgent);
 
     const tool = node.getTool();
@@ -429,8 +477,8 @@ describe('ManageTool graph wiring', () => {
 
     const graph = {
       nodes: [
-        { id: 'A', data: { template: 'agent', config: { title: 'Alpha' } } },
-        { id: 'B', data: { template: 'agent', config: { title: 'Beta' } } },
+        { id: 'A', data: { template: 'agent', config: { name: 'Alpha', title: 'Alpha' } } },
+        { id: 'B', data: { template: 'agent', config: { name: 'Beta', title: 'Beta' } } },
         { id: 'M', data: { template: 'manageTool', config: { description: 'desc' } } },
       ],
       edges: [

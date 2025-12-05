@@ -93,8 +93,8 @@ describe('ThreadHeader', () => {
     render(<ThreadHeader thread={thread} runsCount={5} />);
 
     expect(screen.getByTestId('thread-header-summary')).toHaveTextContent('Investigate alerts');
-    expect(screen.getByText('Incident Agent')).toBeInTheDocument();
-    expect(screen.queryByText('Incident Commander')).toBeNull();
+    expect(screen.getByText('Ops L1 (Incident Commander)')).toBeInTheDocument();
+    expect(screen.queryByText('Incident Agent')).toBeNull();
     expect(screen.getByText(/Status: Open/i)).toBeInTheDocument();
     const stats = screen.getByTestId('thread-header-stats');
     expect(stats).toHaveTextContent('Runs 5');
@@ -142,7 +142,7 @@ describe('ThreadHeader', () => {
     expect(screen.getByText('(unknown agent)')).toBeInTheDocument();
   });
 
-  it('omits agent role text when provided', () => {
+  it('renders combined name and role when both are provided', () => {
     const thread: ThreadNode = {
       id: 't2',
       alias: 'root',
@@ -158,7 +158,7 @@ describe('ThreadHeader', () => {
 
     render(<ThreadHeader thread={thread} runsCount={0} />);
 
-    expect(screen.queryByText('Coordinator')).toBeNull();
+    expect(screen.getByText('Ops L2 (Coordinator)')).toBeInTheDocument();
   });
 
   it('shows reminders in popover when opened', async () => {

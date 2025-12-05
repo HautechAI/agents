@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import type { ThreadStatusFilter } from './ThreadStatusFilterSwitch';
 import { threads } from '@/api/modules/threads';
 import type { ThreadNode } from '@/api/types/agents';
+import { AGENT_TITLE_FALLBACK, computeAgentDefaultTitle, normalizeAgentName, normalizeAgentRole } from '@/utils/agentDisplay';
 
 export function ThreadTreeNode({
   node,
@@ -28,7 +29,12 @@ export function ThreadTreeNode({
   const [toggling, setToggling] = useState(false);
 
   const summary = node.summary && node.summary.trim().length > 0 ? node.summary.trim() : '(no summary yet)';
-  const agentTitle = node.agentTitle && node.agentTitle.trim().length > 0 ? node.agentTitle.trim() : '(unknown agent)';
+  const normalizedName = normalizeAgentName(node.agentName);
+  const normalizedRole = normalizeAgentRole(node.agentRole);
+  const fallbackTitle = normalizeAgentName(node.agentTitle);
+  const agentLabel = normalizedName || normalizedRole
+    ? computeAgentDefaultTitle(normalizedName, normalizedRole, AGENT_TITLE_FALLBACK)
+    : fallbackTitle ?? AGENT_TITLE_FALLBACK;
   const isSelected = selectedId === node.id;
   const activity = node.metrics?.activity ?? 'idle';
   const createdAtLabel = new Date(node.createdAt).toLocaleString();
@@ -102,7 +108,7 @@ export function ThreadTreeNode({
               {summary}
             </div>
             <div className={metaClasses}>
-              <span className="max-w-[200px] truncate" title={agentTitle}>{agentTitle}</span>
+              <span className="max-w-[200px] truncate" title={agentLabel}>{agentLabel}</span>
               <span aria-hidden="true">•</span>
               <span>{createdAtLabel}</span>
             </div>

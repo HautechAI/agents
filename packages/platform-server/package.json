@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "pnpm run prisma:generate && eslint .",
+    "backfill:agent-names": "tsx tools/backfill-agent-names.ts",
     "prepare": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

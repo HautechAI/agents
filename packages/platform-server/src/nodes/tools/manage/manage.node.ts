@@ -27,13 +27,35 @@ export const ManageToolStaticConfigSchema = z
       .min(0)
       .default(0)
       .describe('Timeout in milliseconds when waiting for child responses in sync mode. 0 disables timeout.'),
+    enforceUniqueByRole: z
+      .boolean()
+      .default(false)
+      .describe('When true, include role in Manage worker uniqueness checks.'),
   })
   .strict();
+
+const normalizeString = (value?: string | null): string => (typeof value === 'string' ? value.trim() : '');
+
+const normalizeKey = (value: string): string => value.trim().normalize('NFKC').toLowerCase();
+
+export type ManageWorkerMetadata = {
+  name: string;
+  normalizedName: string;
+  role?: string;
+  normalizedRole?: string;
+  title?: string;
+  displayLabel: string;
+  legacyKeys: string[];
+};
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStaticConfigSchema>> implements ThreadChannelNode {
   private tool?: ManageFunctionTool;
   private readonly workers: Set<AgentNode> = new Set();
+  private readonly workerMetadata: Map<AgentNode, ManageWorkerMetadata> = new Map();
+  private readonly workersByName: Map<string, Set<AgentNode>> = new Map();
+  private readonly workersByLegacyLabel: Map<string, AgentNode> = new Map();
+  private readonly uniquenessIndex: Map<string, AgentNode> = new Map();
   private readonly invocationContexts: Map<string, { parentThreadId: string; workerTitle: string; callerAgent: CallerAgent }>
     = new Map();
   private readonly pendingWaiters: Map<string, { resolve: (text: string) => void; reject: (err: Error) => void }>
@@ -51,37 +73,74 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
   addWorker(agent: AgentNode): void {
     if (!agent) throw new Error('ManageToolNode: agent instance is required');
     if (this.workers.has(agent)) return;
-    const title = this.resolveAgentTitle(agent);
-    const existing = this.getWorkerByTitle(title);
-    if (existing && existing !== agent) {
-      throw new Error(`ManageToolNode: worker with title "${title}" already exists`);
-    }
+    const metadata = this.resolveWorkerMetadata(agent);
+    this.assertUniqueConstraints(agent, metadata);
     this.workers.add(agent);
+    this.workerMetadata.set(agent, metadata);
+    this.indexWorker(agent, metadata);
   }
 
   removeWorker(agent: AgentNode): void {
     if (!agent) return;
     this.workers.delete(agent);
+    const metadata = this.workerMetadata.get(agent);
+    if (!metadata) return;
+    this.deindexWorker(agent, metadata);
+    this.workerMetadata.delete(agent);
   }
 
   listWorkers(): string[] {
-    return Array.from(this.workers).map((worker) => this.resolveAgentTitle(worker));
+    return Array.from(this.workers).map((worker) => this.ensureMetadata(worker).displayLabel);
   }
 
   getWorkers(): AgentNode[] {
     return Array.from(this.workers);
   }
 
-  getWorkerByTitle(title: string): AgentNode | undefined {
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) return undefined;
-    for (const agent of this.workers) {
-      if (this.resolveAgentTitle(agent) === trimmedTitle) return agent;
+  getWorkerMetadata(agent: AgentNode): ManageWorkerMetadata {
+    return this.ensureMetadata(agent);
+  }
+
+  getWorkersByName(name: string): AgentNode[] {
+    const normalizedName = normalizeKey(name);
+    if (!normalizedName) return [];
+    const bucket = this.workersByName.get(normalizedName);
+    if (!bucket) return [];
+    const agents = Array.from(bucket);
+    for (const agent of agents) this.ensureMetadata(agent);
+    const refreshed = this.workersByName.get(normalizedName);
+    return refreshed ? Array.from(refreshed) : [];
+  }
+
+  findWorkerByNameAndRole(name: string, role: string | undefined): AgentNode | undefined {
+    const normalizedName = normalizeKey(name);
+    if (!normalizedName) return undefined;
+    const bucket = this.workersByName.get(normalizedName);
+    if (!bucket || bucket.size === 0) return undefined;
+    const normalizedRole = role ? normalizeKey(role) : '';
+    for (const agent of Array.from(bucket)) {
+      const meta = this.ensureMetadata(agent);
+      const existingRole = meta.normalizedRole ?? '';
+      if (existingRole === normalizedRole) return agent;
     }
     return undefined;
   }
 
-  private resolveAgentTitle(agent: AgentNode): string {
+  findWorkerByLegacyLabel(label: string): AgentNode | undefined {
+    const normalizedLabel = normalizeKey(label);
+    if (!normalizedLabel) return undefined;
+    const agent = this.workersByLegacyLabel.get(normalizedLabel);
+    if (!agent) return undefined;
+    const metadata = this.ensureMetadata(agent);
+    if (!metadata.legacyKeys.includes(normalizedLabel)) {
+      const mapped = this.workersByLegacyLabel.get(normalizedLabel);
+      if (mapped === agent) this.workersByLegacyLabel.delete(normalizedLabel);
+      return undefined;
+    }
+    return agent;
+  }
+
+  private resolveWorkerMetadata(agent: AgentNode): ManageWorkerMetadata {
     let config: AgentNode['config'];
     try {
       config = agent.config;
@@ -89,19 +148,29 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
       throw new Error('ManageToolNode: worker agent missing configuration');
     }
 
-    const normalize = (value?: string | null): string => (typeof value === 'string' ? value.trim() : '');
+    const name = normalizeString(config.name);
+    if (!name) {
+      throw new Error('ManageToolNode: worker agent requires non-empty name');
+    }
 
-    const title = normalize(config.title);
-    if (title) return title;
+    const role = normalizeString(config.role) || undefined;
+    const title = normalizeString(config.title) || undefined;
+    const normalizedName = normalizeKey(name);
+    const normalizedRole = role ? normalizeKey(role) : undefined;
+    const displayLabel = role ? `${name} (${role})` : name;
+    const legacyKeys = new Set<string>();
+    legacyKeys.add(normalizeKey(displayLabel));
+    if (title) legacyKeys.add(normalizeKey(title));
 
-    const name = normalize(config.name);
-    const role = normalize(config.role);
-
-    if (name && role) return `${name} (${role})`;
-    if (name) return name;
-    if (role) return role;
-
-    throw new Error('ManageToolNode: worker agent requires non-empty title');
+    return {
+      name,
+      normalizedName,
+      role,
+      normalizedRole,
+      title,
+      displayLabel,
+      legacyKeys: Array.from(legacyKeys),
+    };
   }
 
   protected createTool() {
@@ -129,6 +198,125 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     if (!Number.isFinite(raw)) return 0;
     const normalized = Math.trunc(raw as number);
     return normalized >= 0 ? normalized : 0;
+  }
+
+  private getUniquenessKey(metadata: ManageWorkerMetadata): string {
+    if (this.shouldEnforceUniqueByRole(metadata)) {
+      return `${metadata.normalizedName}::${metadata.normalizedRole ?? ''}`;
+    }
+    return metadata.normalizedName;
+  }
+
+  private shouldEnforceUniqueByRole(metadata: ManageWorkerMetadata): boolean {
+    if (!this.config.enforceUniqueByRole) return false;
+    return !!metadata.role;
+  }
+
+  private assertUniqueConstraints(agent: AgentNode, metadata: ManageWorkerMetadata): void {
+    const uniquenessKey = this.getUniquenessKey(metadata);
+    const uniquenessHolder = this.uniquenessIndex.get(uniquenessKey);
+    if (uniquenessHolder && uniquenessHolder !== agent) {
+      const existingMeta = this.workerMetadata.get(uniquenessHolder);
+      const roleLabel = metadata.role ?? existingMeta?.role ?? undefined;
+      if (this.config.enforceUniqueByRole && roleLabel) {
+        throw new Error(
+          `ManageToolNode: worker with name "${metadata.name}" and role "${roleLabel}" already exists`,
+        );
+      }
+      throw new Error(`ManageToolNode: worker with name "${metadata.name}" already exists`);
+    }
+
+    const bucket = this.workersByName.get(metadata.normalizedName);
+    if (!bucket || bucket.size === 0) return;
+
+    if (!this.config.enforceUniqueByRole) {
+      throw new Error(`ManageToolNode: worker with name "${metadata.name}" already exists`);
+    }
+
+    for (const existingAgent of bucket) {
+      if (existingAgent === agent) continue;
+      const existingMeta = this.workerMetadata.get(existingAgent);
+      const existingRole = existingMeta?.normalizedRole ?? '';
+      const currentRole = metadata.normalizedRole ?? '';
+      if (!existingRole || !currentRole || existingRole === currentRole) {
+        const roleLabel = metadata.role ?? existingMeta?.role ?? undefined;
+        if ((existingRole || currentRole) && roleLabel) {
+          throw new Error(
+            `ManageToolNode: worker with name "${metadata.name}" and role "${roleLabel}" already exists`,
+          );
+        }
+        throw new Error(`ManageToolNode: worker with name "${metadata.name}" already exists`);
+      }
+    }
+  }
+
+  private indexWorker(agent: AgentNode, metadata: ManageWorkerMetadata): void {
+    const bucket = this.workersByName.get(metadata.normalizedName) ?? new Set<AgentNode>();
+    if (!this.workersByName.has(metadata.normalizedName)) {
+      this.workersByName.set(metadata.normalizedName, bucket);
+    }
+    bucket.add(agent);
+    this.uniquenessIndex.set(this.getUniquenessKey(metadata), agent);
+    for (const key of metadata.legacyKeys) {
+      this.workersByLegacyLabel.set(key, agent);
+    }
+  }
+
+  private deindexWorker(agent: AgentNode, metadata: ManageWorkerMetadata): void {
+    const bucket = this.workersByName.get(metadata.normalizedName);
+    if (bucket) {
+      bucket.delete(agent);
+      if (bucket.size === 0) {
+        this.workersByName.delete(metadata.normalizedName);
+      }
+    }
+    const uniquenessKey = this.getUniquenessKey(metadata);
+    const holder = this.uniquenessIndex.get(uniquenessKey);
+    if (holder === agent) {
+      this.uniquenessIndex.delete(uniquenessKey);
+    }
+    for (const key of metadata.legacyKeys) {
+      const mapped = this.workersByLegacyLabel.get(key);
+      if (mapped === agent) {
+        this.workersByLegacyLabel.delete(key);
+      }
+    }
+  }
+
+  private ensureMetadata(agent: AgentNode): ManageWorkerMetadata {
+    const current = this.workerMetadata.get(agent);
+    if (!current) throw new Error('ManageToolNode: worker metadata unavailable');
+    const refreshed = this.resolveWorkerMetadata(agent);
+    if (this.metadataEquals(current, refreshed)) return current;
+
+    this.deindexWorker(agent, current);
+    try {
+      this.assertUniqueConstraints(agent, refreshed);
+    } catch (err) {
+      this.indexWorker(agent, current);
+      throw err;
+    }
+
+    this.workerMetadata.set(agent, refreshed);
+    this.indexWorker(agent, refreshed);
+    return refreshed;
+  }
+
+  private metadataEquals(a: ManageWorkerMetadata, b: ManageWorkerMetadata): boolean {
+    if (a === b) return true;
+    if (a.name !== b.name) return false;
+    if (a.normalizedName !== b.normalizedName) return false;
+    if ((a.role ?? '') !== (b.role ?? '')) return false;
+    if ((a.normalizedRole ?? '') !== (b.normalizedRole ?? '')) return false;
+    if ((a.title ?? '') !== (b.title ?? '')) return false;
+    if (a.displayLabel !== b.displayLabel) return false;
+    if (a.legacyKeys.length !== b.legacyKeys.length) return false;
+    const aKeys = [...a.legacyKeys].sort();
+    const bKeys = [...b.legacyKeys].sort();
+    for (let i = 0; i < aKeys.length; i += 1) {
+      if (aKeys[i] !== bKeys[i]) return false;
+    }
+    return true;
   }
 
   async registerInvocation(context: { childThreadId: string; parentThreadId: string; workerTitle: string; callerAgent: CallerAgent }): Promise<void> {

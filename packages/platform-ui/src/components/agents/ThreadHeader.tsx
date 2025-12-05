@@ -7,7 +7,7 @@ import { formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
 import { useThreadMetrics, useThreadReminders, useThreadContainers, useThreadContainersCount } from '@/api/hooks/threads';
 import type { ThreadNode, ThreadReminder } from '@/api/types/agents';
 import type { ContainerItem } from '@/api/modules/containers';
-import { computeAgentDefaultTitle, normalizeAgentName } from '../../utils/agentDisplay';
+import { AGENT_TITLE_FALLBACK, computeAgentDefaultTitle, normalizeAgentName, normalizeAgentRole } from '../../utils/agentDisplay';
 
 const defaultMetrics = { remindersCount: 0, containersCount: 0, activity: 'idle' as const, runsCount: 0 };
 const badgeButtonClasses = 'rounded border px-3 py-1 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400';
@@ -121,9 +121,12 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
     return text.length > 0 ? text : '(no summary yet)';
   }, [thread]);
 
-  const explicitTitle = normalizeAgentName(thread?.agentTitle);
-  const computedDefaultTitle = computeAgentDefaultTitle(thread?.agentName, thread?.agentRole);
-  const agentTitle = explicitTitle ?? computedDefaultTitle;
+  const normalizedName = normalizeAgentName(thread?.agentName);
+  const normalizedRole = normalizeAgentRole(thread?.agentRole);
+  const fallbackTitle = normalizeAgentName(thread?.agentTitle);
+  const agentTitle = normalizedName || normalizedRole
+    ? computeAgentDefaultTitle(normalizedName, normalizedRole, AGENT_TITLE_FALLBACK)
+    : fallbackTitle ?? AGENT_TITLE_FALLBACK;
   const createdAt = thread?.createdAt ? new Date(thread.createdAt) : null;
   const createdAtLabel = createdAt && Number.isFinite(createdAt.getTime()) ? createdAt.toLocaleString() : null;
   const createdRelative = createdAt && Number.isFinite(createdAt.getTime()) ? formatDistanceToNow(createdAt, { addSuffix: true }) : null;

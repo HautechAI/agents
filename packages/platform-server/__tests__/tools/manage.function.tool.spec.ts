@@ -2,10 +2,65 @@ import 'reflect-metadata';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { ManageFunctionTool } from '../../src/nodes/tools/manage/manage.tool';
-import type { ManageToolNode } from '../../src/nodes/tools/manage/manage.node';
+import type { ManageToolNode, ManageWorkerMetadata } from '../../src/nodes/tools/manage/manage.node';
 import type { AgentsPersistenceService } from '../../src/agents/agents.persistence.service';
 import type { LLMContext } from '../../src/llm/types';
 import { HumanMessage } from '@agyn/llm';
+
+type WorkerAgent = ReturnType<ManageToolNode['getWorkersByName']>[number];
+
+const createMetadata = (overrides: Partial<ManageWorkerMetadata> = {}): ManageWorkerMetadata => {
+  const name = overrides.name ?? 'Worker Alpha';
+  const role = Object.prototype.hasOwnProperty.call(overrides, 'role') ? overrides.role : undefined;
+  const normalizedName = overrides.normalizedName ?? name.toLowerCase();
+  const normalizedRole = overrides.normalizedRole ?? (role ? role.toLowerCase() : undefined);
+  const displayLabel = overrides.displayLabel ?? (role ? `${name} (${role})` : name);
+  const title = overrides.title;
+  const legacyKeys = overrides.legacyKeys ?? [];
+  return {
+    name,
+    normalizedName,
+    role,
+    normalizedRole,
+    title,
+    displayLabel,
+    legacyKeys,
+  };
+};
+
+const createManageNodeStub = (
+  metadata: ManageWorkerMetadata,
+  agent: WorkerAgent,
+  overrides: Record<string, unknown> = {},
+): ManageToolNode => {
+  const base = {
+    nodeId: 'manage-node',
+    config: { enforceUniqueByRole: false },
+    listWorkers: vi.fn().mockReturnValue([metadata.displayLabel]),
+    getWorkersByName: vi.fn().mockImplementation((name: string) =>
+      name.trim().toLowerCase() === metadata.name.toLowerCase() ? [agent] : [],
+    ),
+    findWorkerByNameAndRole: vi.fn().mockImplementation((_name: string, role: string | undefined) => {
+      if (!metadata.role) return undefined;
+      if (!role) return undefined;
+      return role.trim().toLowerCase() === metadata.role.toLowerCase() ? agent : undefined;
+    }),
+    findWorkerByLegacyLabel: vi.fn().mockReturnValue(undefined),
+    getWorkerMetadata: vi.fn().mockImplementation((value: WorkerAgent) => {
+      if (value === agent) return metadata;
+      throw new Error('unexpected agent');
+    }),
+    registerInvocation: vi.fn().mockResolvedValue(undefined),
+    awaitChildResponse: vi.fn().mockResolvedValue('child response text'),
+    getMode: vi.fn().mockReturnValue('sync'),
+    getTimeoutMs: vi.fn().mockReturnValue(64000),
+    renderWorkerResponse: vi
+      .fn()
+      .mockImplementation((worker: string, text: string) => `Response from: ${worker}\n${text}`),
+    renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
+  } satisfies Record<string, unknown>;
+  return Object.assign(base, overrides) as unknown as ManageToolNode;
+};
 
 const createCtx = (overrides: Partial<LLMContext> = {}): LLMContext => ({
   threadId: 'parent-thread',
@@ -18,6 +73,7 @@ const createCtx = (overrides: Partial<LLMContext> = {}): LLMContext => ({
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  (ManageFunctionTool as unknown as { legacyLookupWarningEmitted: boolean }).legacyLookupWarningEmitted = false;
 });
 
 describe('ManageFunctionTool.execute', () => {
@@ -28,18 +84,13 @@ describe('ManageFunctionTool.execute', () => {
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockResolvedValue({ text: 'invoke result' });
-    const manageNode = {
+    const metadata = createMetadata();
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-1',
-      listWorkers: vi.fn().mockReturnValue(['Worker Alpha']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn().mockResolvedValue('child response text'),
       getMode: vi.fn().mockReturnValue('sync'),
-      getTimeoutMs: vi.fn().mockReturnValue(64000),
-      renderWorkerResponse: vi.fn().mockImplementation((worker: string, text: string) => `Response from: ${worker}
-${text}`),
-      renderAsyncAcknowledgement: vi.fn(),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -72,17 +123,16 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockResolvedValue({ text: 'invoke result' });
-    const manageNode = {
+    const metadata = createMetadata();
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-alias',
-      listWorkers: vi.fn().mockReturnValue(['Worker Alpha']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -111,17 +161,16 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockResolvedValue({ text: 'invoke result' });
-    const manageNode = {
+    const metadata = createMetadata();
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-fallback',
-      listWorkers: vi.fn().mockReturnValue(['Worker Alpha']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -137,7 +186,7 @@ ${text}`),
     expect(aliasMock).toHaveBeenNthCalledWith(1, 'manage', 'Invalid Alias!', 'parent-thread', '');
     expect(aliasMock).toHaveBeenNthCalledWith(2, 'manage', 'invalid-alias', 'parent-thread', '');
     expect(loggerWarnSpy).toHaveBeenCalledWith(
-      'Manage: provided threadAlias invalid, using sanitized fallback {"worker":"Worker Alpha","parentThreadId":"parent-thread","providedAlias":"Invalid Alias!","fallbackAlias":"invalid-alias"}',
+      'Manage: provided threadAlias invalid, using sanitized fallback {"workerName":"Worker Alpha","workerLabel":"Worker Alpha","parentThreadId":"parent-thread","providedAlias":"Invalid Alias!","fallbackAlias":"invalid-alias"}',
     );
     expect(manageNode.renderAsyncAcknowledgement).toHaveBeenCalledWith('Worker Alpha');
   });
@@ -152,17 +201,16 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockResolvedValue({ text: 'invoke result' });
-    const manageNode = {
+    const metadata = createMetadata();
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-long',
-      listWorkers: vi.fn().mockReturnValue(['Worker Alpha']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -179,6 +227,149 @@ ${text}`),
     expect(manageNode.renderAsyncAcknowledgement).toHaveBeenCalledWith('Worker Alpha');
   });
 
+  it('requires role disambiguation when workers share a name', async () => {
+    const persistence = {
+      getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-shared-name'),
+      setThreadChannelNode: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AgentsPersistenceService;
+
+    const reviewerInvoke = vi.fn().mockResolvedValue({ text: 'review response' });
+    const builderInvoke = vi.fn().mockResolvedValue({ text: 'build response' });
+    const reviewerAgent = { invoke: reviewerInvoke } as unknown as WorkerAgent;
+    const builderAgent = { invoke: builderInvoke } as unknown as WorkerAgent;
+    const reviewerMeta = createMetadata({
+      name: 'Worker Alpha',
+      role: 'Reviewer',
+      normalizedRole: 'reviewer',
+      displayLabel: 'Worker Alpha (Reviewer)',
+      legacyKeys: ['worker alpha (reviewer)'],
+    });
+    const builderMeta = createMetadata({
+      name: 'Worker Alpha',
+      role: 'Builder',
+      normalizedRole: 'builder',
+      displayLabel: 'Worker Alpha (Builder)',
+      legacyKeys: ['worker alpha (builder)'],
+    });
+    const manageNode = {
+      nodeId: 'manage-node-duplicates',
+      config: { enforceUniqueByRole: true },
+      listWorkers: vi.fn().mockReturnValue([reviewerMeta.displayLabel, builderMeta.displayLabel]),
+      getWorkersByName: vi.fn().mockImplementation((name: string) =>
+        name.trim().toLowerCase() === 'worker alpha' ? [reviewerAgent, builderAgent] : [],
+      ),
+      findWorkerByNameAndRole: vi.fn().mockImplementation((name: string, role: string | undefined) => {
+        if (name.trim().toLowerCase() !== 'worker alpha' || !role) return undefined;
+        const normalized = role.trim().toLowerCase();
+        if (normalized === 'reviewer') return reviewerAgent;
+        if (normalized === 'builder') return builderAgent;
+        return undefined;
+      }),
+      findWorkerByLegacyLabel: vi.fn().mockReturnValue(undefined),
+      getWorkerMetadata: vi.fn().mockImplementation((agent: WorkerAgent) => {
+        if (agent === reviewerAgent) return reviewerMeta;
+        if (agent === builderAgent) return builderMeta;
+        throw new Error('unexpected agent');
+      }),
+      registerInvocation: vi.fn().mockResolvedValue(undefined),
+      awaitChildResponse: vi.fn().mockResolvedValue('sync response'),
+      getMode: vi.fn().mockReturnValue('sync'),
+      getTimeoutMs: vi.fn().mockReturnValue(64000),
+      renderWorkerResponse: vi
+        .fn()
+        .mockImplementation((worker: string, text: string) => `Response from: ${worker}\n${text}`),
+      renderAsyncAcknowledgement: vi.fn(),
+    } as unknown as ManageToolNode;
+
+    const tool = new ManageFunctionTool(persistence);
+    tool.init(manageNode, { persistence });
+
+    const ctx = createCtx();
+
+    await expect(
+      tool.execute({ command: 'send_message', worker: 'Worker Alpha', message: 'hi' }, ctx),
+    ).rejects.toThrow(
+      'Multiple workers share the name "Worker Alpha". Include the role to disambiguate. Available roles: Reviewer, Builder',
+    );
+    expect(persistence.getOrCreateSubthreadByAlias).not.toHaveBeenCalled();
+
+    const result = await tool.execute(
+      { command: 'send_message', worker: 'Worker Alpha (Reviewer)', message: 'hello reviewer' },
+      ctx,
+    );
+
+    expect(persistence.getOrCreateSubthreadByAlias).toHaveBeenLastCalledWith(
+      'manage',
+      'worker-alpha',
+      'parent-thread',
+      '',
+    );
+    expect(manageNode.renderWorkerResponse).toHaveBeenLastCalledWith('Worker Alpha (Reviewer)', 'sync response');
+    expect(result).toBe('Response from: Worker Alpha (Reviewer)\nsync response');
+  });
+
+  it('falls back to legacy labels and warns once', async () => {
+    const persistence = {
+      getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-legacy'),
+      setThreadChannelNode: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AgentsPersistenceService;
+
+    const workerInvoke = vi.fn().mockResolvedValue({ text: 'legacy invoke' });
+    const metadata = createMetadata({
+      name: 'Canonical Worker',
+      displayLabel: 'Canonical Worker',
+      legacyKeys: ['legacy worker', 'canonical worker'],
+      title: 'Legacy Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = {
+      nodeId: 'manage-node-legacy',
+      config: { enforceUniqueByRole: false },
+      listWorkers: vi.fn().mockReturnValue([metadata.displayLabel]),
+      getWorkersByName: vi.fn().mockReturnValue([]),
+      findWorkerByNameAndRole: vi.fn().mockReturnValue(undefined),
+      findWorkerByLegacyLabel: vi.fn().mockImplementation((label: string) =>
+        label.trim().toLowerCase() === 'legacy worker' ? workerAgent : undefined,
+      ),
+      getWorkerMetadata: vi.fn().mockReturnValue(metadata),
+      registerInvocation: vi.fn().mockResolvedValue(undefined),
+      awaitChildResponse: vi.fn().mockResolvedValue('legacy response'),
+      getMode: vi.fn().mockReturnValue('sync'),
+      getTimeoutMs: vi.fn().mockReturnValue(0),
+      renderWorkerResponse: vi
+        .fn()
+        .mockImplementation((worker: string, text: string) => `Response from: ${worker}\n${text}`),
+      renderAsyncAcknowledgement: vi.fn(),
+    } as unknown as ManageToolNode;
+
+    const tool = new ManageFunctionTool(persistence);
+    tool.init(manageNode, { persistence });
+
+    const warnSpy = vi.spyOn((tool as any).logger, 'warn');
+    const ctx = createCtx();
+
+    const first = await tool.execute(
+      { command: 'send_message', worker: 'Legacy Worker', message: 'legacy hi' },
+      ctx,
+    );
+
+    expect(first).toBe('Response from: Canonical Worker\nlegacy response');
+    expect(persistence.getOrCreateSubthreadByAlias).toHaveBeenLastCalledWith(
+      'manage',
+      'canonical-worker',
+      'parent-thread',
+      '',
+    );
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Manage: worker lookup matched legacy label {"provided":"Legacy Worker","workerName":"Canonical Worker","workerLabel":"Canonical Worker"}',
+    );
+
+    warnSpy.mockClear();
+    await tool.execute({ command: 'send_message', worker: 'Legacy Worker', message: 'again' }, ctx);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it('returns acknowledgement in async mode without awaiting child response', async () => {
     const persistence = {
       getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-2'),
@@ -186,17 +377,20 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockResolvedValue({ text: 'ignored' });
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Async Worker',
+      normalizedName: 'async worker',
+      displayLabel: 'Async Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-2',
-      listWorkers: vi.fn().mockReturnValue(['Async Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -219,17 +413,20 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockReturnValue({ text: 'sync result' });
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Async Worker',
+      normalizedName: 'async worker',
+      displayLabel: 'Async Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-non-promise',
-      listWorkers: vi.fn().mockReturnValue(['Async Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -241,7 +438,7 @@ ${text}`),
 
     expect(result).toBe('async acknowledgement');
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: async send_message invoke returned non-promise {"worker":"Async Worker","childThreadId":"child-thread-non-promise","resultType":"object","promiseLike":false}',
+      'Manage: async send_message invoke returned non-promise {"workerName":"Async Worker","workerLabel":"Async Worker","childThreadId":"child-thread-non-promise","resultType":"object","promiseLike":false}',
     );
   });
 
@@ -258,17 +455,20 @@ ${text}`),
         setTimeout(() => resolve({ text: 'late reply' }), 2000);
       }),
     );
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Async Worker',
+      normalizedName: 'async worker',
+      displayLabel: 'Async Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-delayed',
-      listWorkers: vi.fn().mockReturnValue(['Async Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -295,17 +495,20 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockRejectedValue('boom');
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Async Worker',
+      normalizedName: 'async worker',
+      displayLabel: 'Async Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-async',
-      listWorkers: vi.fn().mockReturnValue(['Async Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -321,7 +524,7 @@ ${text}`),
     expect(result).toBe('async acknowledgement');
     await vi.waitFor(() => {
       expect(loggerErrorSpy).toHaveBeenCalledWith(
-        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-async","error":{"code":"unknown_error","message":"boom","retriable":false}}',
+        'Manage: async send_message failed {"workerName":"Async Worker","workerLabel":"Async Worker","childThreadId":"child-thread-async","matchType":"name","error":{"code":"unknown_error","message":"boom","retriable":false}}',
       );
     });
   });
@@ -333,17 +536,20 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockRejectedValue(undefined);
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Async Worker',
+      normalizedName: 'async worker',
+      displayLabel: 'Async Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-undefined',
-      listWorkers: vi.fn().mockReturnValue(['Async Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -359,7 +565,7 @@ ${text}`),
     expect(result).toBe('async acknowledgement');
     await vi.waitFor(() => {
       expect(loggerErrorSpy).toHaveBeenCalledWith(
-        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-undefined","error":{"code":"unknown_error","message":"undefined","retriable":false}}',
+        'Manage: async send_message failed {"workerName":"Async Worker","workerLabel":"Async Worker","childThreadId":"child-thread-undefined","matchType":"name","error":{"code":"unknown_error","message":"undefined","retriable":false}}',
       );
     });
   });
@@ -372,17 +578,20 @@ ${text}`),
 
     const diagnostic = { message: 'custom diagnostic', code: 'X' };
     const workerInvoke = vi.fn().mockRejectedValue(diagnostic);
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Async Worker',
+      normalizedName: 'async worker',
+      displayLabel: 'Async Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-object',
-      listWorkers: vi.fn().mockReturnValue(['Async Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn(),
       getMode: vi.fn().mockReturnValue('async'),
       getTimeoutMs: vi.fn(),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn().mockReturnValue('async acknowledgement'),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -398,7 +607,7 @@ ${text}`),
     expect(result).toBe('async acknowledgement');
     await vi.waitFor(() => {
       expect(loggerErrorSpy).toHaveBeenCalledWith(
-        'Manage: async send_message failed {"worker":"Async Worker","childThreadId":"child-thread-object","error":{"code":"X","message":"custom diagnostic","retriable":false}}',
+        'Manage: async send_message failed {"workerName":"Async Worker","workerLabel":"Async Worker","childThreadId":"child-thread-object","matchType":"name","error":{"code":"X","message":"custom diagnostic","retriable":false}}',
       );
     });
   });
@@ -410,17 +619,20 @@ ${text}`),
     } as unknown as AgentsPersistenceService;
 
     const workerInvoke = vi.fn().mockRejectedValue('boom');
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Fail Worker',
+      normalizedName: 'fail worker',
+      displayLabel: 'Fail Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-sync',
-      listWorkers: vi.fn().mockReturnValue(['Fail Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn().mockResolvedValue('ignored'),
       getMode: vi.fn().mockReturnValue('sync'),
       getTimeoutMs: vi.fn().mockReturnValue(64000),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn(),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -433,7 +645,7 @@ ${text}`),
     ).rejects.toBe('boom');
 
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: send_message failed {"worker":"Fail Worker","childThreadId":"child-thread-sync","error":{"code":"unknown_error","message":"boom","retriable":false}}',
+      'Manage: send_message failed {"workerName":"Fail Worker","workerLabel":"Fail Worker","childThreadId":"child-thread-sync","matchType":"name","error":{"code":"unknown_error","message":"boom","retriable":false}}',
     );
   });
 
@@ -445,17 +657,20 @@ ${text}`),
 
     const diagnostic = { message: 'sync diagnostic', code: 'Y' };
     const workerInvoke = vi.fn().mockRejectedValue(diagnostic);
-    const manageNode = {
+    const metadata = createMetadata({
+      name: 'Fail Worker',
+      normalizedName: 'fail worker',
+      displayLabel: 'Fail Worker',
+    });
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub(metadata, workerAgent, {
       nodeId: 'manage-node-sync-object',
-      listWorkers: vi.fn().mockReturnValue(['Fail Worker']),
-      getWorkerByTitle: vi.fn().mockReturnValue({ invoke: workerInvoke }),
-      registerInvocation: vi.fn().mockResolvedValue(undefined),
       awaitChildResponse: vi.fn().mockResolvedValue('ignored'),
       getMode: vi.fn().mockReturnValue('sync'),
       getTimeoutMs: vi.fn().mockReturnValue(64000),
       renderWorkerResponse: vi.fn(),
       renderAsyncAcknowledgement: vi.fn(),
-    } as unknown as ManageToolNode;
+    });
 
     const tool = new ManageFunctionTool(persistence);
     tool.init(manageNode, { persistence });
@@ -468,7 +683,7 @@ ${text}`),
     ).rejects.toEqual(diagnostic);
 
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: send_message failed {"worker":"Fail Worker","childThreadId":"child-thread-sync-object","error":{"code":"Y","message":"sync diagnostic","retriable":false}}',
+      'Manage: send_message failed {"workerName":"Fail Worker","workerLabel":"Fail Worker","childThreadId":"child-thread-sync-object","matchType":"name","error":{"code":"Y","message":"sync diagnostic","retriable":false}}',
     );
   });
 });

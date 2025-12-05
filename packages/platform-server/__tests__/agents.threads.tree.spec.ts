@@ -120,6 +120,8 @@ describe('AgentsPersistenceService.listThreadsTree', () => {
     expect(child2?.hasChildren).toBe(true);
     expect(child2?.metrics).toMatchObject(makeMetrics([childA2.id])[childA2.id]);
     expect(child2?.agentTitle).toBe(`Agent ${childA2.id}`);
+    expect(child2?.agentName).toBe(`Name ${childA2.id}`);
+    expect(child2?.agentRole).toBe(`Role ${childA2.id}`);
 
     expect(child1?.children?.map((grand) => grand.id)).toEqual([grandA2.id, grandA1.id]);
     expect(child1?.hasChildren).toBe(true);
@@ -131,6 +133,10 @@ describe('AgentsPersistenceService.listThreadsTree', () => {
     expect(grand1?.metrics).toMatchObject(makeMetrics([grandA1.id])[grandA1.id]);
     expect(grand1?.agentTitle).toBe(`Agent ${grandA1.id}`);
     expect(grand2?.agentTitle).toBe(`Agent ${grandA2.id}`);
+    expect(grand1?.agentName).toBe(`Name ${grandA1.id}`);
+    expect(grand1?.agentRole).toBe(`Role ${grandA1.id}`);
+    expect(grand2?.agentName).toBe(`Name ${grandA2.id}`);
+    expect(grand2?.agentRole).toBe(`Role ${grandA2.id}`);
   });
 
   it('respects depth and children status filters', async () => {

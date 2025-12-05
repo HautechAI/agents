@@ -131,6 +131,7 @@ describe('AgentsThreadsController list endpoints', () => {
     expect(res.items[0].metrics).toEqual({ remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 });
     expect(res.items[0].agentTitle).toBe('(unknown agent)');
     expect(res.items[0].agentRole).toBeUndefined();
+    expect(res.items[0].agentName).toBeUndefined();
   });
 
   it('listChildren forwards agent name and role descriptors', async () => {
@@ -242,6 +243,8 @@ describe('AgentsThreadsController list endpoints', () => {
       metrics: { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 },
       agentTitle: '(unknown agent)',
     });
+    expect(result.agentName).toBeUndefined();
+    expect(result.agentRole).toBeUndefined();
     expect(result.createdAt).toBeInstanceOf(Date);
   });
 

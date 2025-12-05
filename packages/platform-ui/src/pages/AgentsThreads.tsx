@@ -88,7 +88,7 @@ type ThreadDraft = {
   createdAt: string;
 };
 
-type AgentOption = { id: string; title: string };
+type AgentOption = { id: string; display: string; graphTitle?: string; name?: string; role?: string };
 
 const DRAFT_SUMMARY_LABEL = '(new conversation)';
 const DRAFT_RECIPIENT_PLACEHOLDER = '(no recipient)';
@@ -130,9 +130,13 @@ function sanitizeSummary(summary: string | null | undefined): string {
 }
 
 function resolveThreadAgentTitle(node: ThreadNode): string {
+  const name = normalizeAgentName(node.agentName);
+  const role = normalizeAgentRole(node.agentRole);
+  if (name || role) {
+    return computeAgentDefaultTitle(name, role, AGENT_TITLE_FALLBACK);
+  }
   const explicit = normalizeAgentName(node.agentTitle);
-  if (explicit) return explicit;
-  return computeAgentDefaultTitle(node.agentName, node.agentRole, AGENT_TITLE_FALLBACK);
+  return explicit ?? AGENT_TITLE_FALLBACK;
 }
 
 function resolveThreadAgentName(node: ThreadNode): string {
@@ -665,13 +669,23 @@ export function AgentsThreads() {
       const template = templateByName.get(node.template);
       if (template?.kind !== 'agent') continue;
       const config = node.config && typeof node.config === 'object' ? (node.config as Record<string, unknown>) : undefined;
+      const rawName = typeof config?.name === 'string' ? config.name.trim() : '';
+      const rawRole = typeof config?.role === 'string' ? config.role.trim() : '';
       const configTitleCandidate = typeof config?.title === 'string' ? config.title.trim() : '';
-      const optionTitle = configTitleCandidate || template.title || node.template;
+      const templateTitle = typeof template?.title === 'string' ? template.title.trim() : '';
+      const fallbackLabel = configTitleCandidate || templateTitle || node.template;
+      const display = rawName || rawRole ? computeAgentDefaultTitle(rawName, rawRole, fallbackLabel) : fallbackLabel;
       seen.add(node.id);
-      result.push({ id: node.id, title: optionTitle });
+      result.push({
+        id: node.id,
+        display,
+        graphTitle: configTitleCandidate || templateTitle || undefined,
+        name: rawName || undefined,
+        role: rawRole || undefined,
+      });
     }
 
-    result.sort((a, b) => a.title.localeCompare(b.title));
+    result.sort((a, b) => a.display.localeCompare(b.display));
     return result;
   }, [fullGraphQuery.data, graphTemplatesQuery.data]);
 
@@ -679,8 +693,8 @@ export function AgentsThreads() {
     async (query: string): Promise<AutocompleteOption[]> => {
       const normalized = query.trim().toLowerCase();
       return agentOptions
-        .filter((option) => normalized.length === 0 || option.title.toLowerCase().includes(normalized))
-        .map((option) => ({ value: option.id, label: option.title }));
+        .filter((option) => normalized.length === 0 || option.display.toLowerCase().includes(normalized))
+        .map((option) => ({ value: option.id, label: option.display }));
     },
     [agentOptions],
   );
@@ -1661,7 +1675,7 @@ export function AgentsThreads() {
             mutated = true;
             return { ...draft, agentNodeId: undefined, agentTitle: undefined };
           }
-          const nextTitle = agentTitle ?? agentOptions.find((item) => item.id === agentId)?.title ?? agentId;
+          const nextTitle = agentTitle ?? agentOptions.find((item) => item.id === agentId)?.display ?? agentId;
           if (draft.agentNodeId === agentId && draft.agentTitle === nextTitle) return draft;
           mutated = true;
           return { ...draft, agentNodeId: agentId, agentTitle: nextTitle };
