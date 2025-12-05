@@ -56,6 +56,17 @@ const getComposerEditor = () =>
 
 const getValue = () => screen.getByTestId('value-output').textContent ?? '';
 
+const getSourceEditor = () =>
+  screen.getByTestId('markdown-composer-source-editor') as HTMLTextAreaElement;
+
+const switchToSourceView = () => {
+  fireEvent.click(screen.getByTestId('markdown-composer-view-source'));
+};
+
+const switchToRenderedView = () => {
+  fireEvent.click(screen.getByTestId('markdown-composer-view-rendered'));
+};
+
 const focusAndSelectAll = (editor: HTMLElement) => {
   editor.focus();
   fireEvent.focus(editor);
@@ -156,6 +167,82 @@ describe('MarkdownComposer formatting', () => {
     fireEvent.click(screen.getByTestId('markdown-composer-toolbar-underline'));
 
     await waitFor(() => expect(getValue()).toBe('<u>focus</u>'));
+  });
+});
+
+describe('MarkdownComposer view modes', () => {
+  it('maintains content when toggling between rendered and source modes', async () => {
+    render(<ComposerHarness initialValue="hello world" />);
+
+    await waitFor(() => expect(getValue()).toBe('hello world'));
+
+    switchToSourceView();
+
+    const sourceEditor = getSourceEditor();
+    expect(sourceEditor.value).toBe('hello world');
+
+    fireEvent.change(sourceEditor, { target: { value: 'updated markdown' } });
+
+    await waitFor(() => expect(getValue()).toBe('updated markdown'));
+
+    switchToRenderedView();
+
+    await waitFor(() => {
+      const editor = getComposerEditor();
+      expect(editor.textContent).toContain('updated markdown');
+    });
+  });
+
+  it('applies bold formatting via toolbar in source view', async () => {
+    render(<ComposerHarness initialValue="format me" />);
+
+    await waitFor(() => expect(getValue()).toBe('format me'));
+
+    switchToSourceView();
+
+    const sourceEditor = getSourceEditor();
+    sourceEditor.focus();
+    sourceEditor.setSelectionRange(0, sourceEditor.value.length);
+
+    fireEvent.click(screen.getByTestId('markdown-composer-toolbar-bold'));
+
+    await waitFor(() => expect(getValue()).toBe('**format me**'));
+  });
+
+  it('applies inline code via shortcut Cmd/Ctrl+E in source view', async () => {
+    render(<ComposerHarness initialValue="inline" />);
+
+    await waitFor(() => expect(getValue()).toBe('inline'));
+
+    switchToSourceView();
+
+    const sourceEditor = getSourceEditor();
+    sourceEditor.focus();
+    sourceEditor.setSelectionRange(0, sourceEditor.value.length);
+
+    fireEvent.keyDown(sourceEditor, {
+      key: 'e',
+      ctrlKey: true,
+    });
+
+    await waitFor(() => expect(getValue()).toBe('`inline`'));
+  });
+
+  it('calls onSend for Cmd/Ctrl+Enter in source view when enabled', () => {
+    const handleSend = vi.fn();
+    render(<ComposerHarness initialValue="message" onSend={handleSend} />);
+
+    switchToSourceView();
+
+    const sourceEditor = getSourceEditor();
+    sourceEditor.focus();
+
+    fireEvent.keyDown(sourceEditor, {
+      key: 'Enter',
+      ctrlKey: true,
+    });
+
+    expect(handleSend).toHaveBeenCalledWith('message');
   });
 });
 

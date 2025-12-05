@@ -4,6 +4,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -77,9 +79,333 @@ import {
 } from '@/lib/markdown/transformers';
 import { MARKDOWN_COMPOSER_THEME } from '@/lib/markdown/composerTheme';
 
-import type { AutosizeTextareaProps } from './AutosizeTextarea';
+import { AutosizeTextarea, type AutosizeTextareaProps } from './AutosizeTextarea';
 
 type Formatter = () => void;
+
+type ComposerMode = 'rendered' | 'source';
+
+type SourceAction =
+  | 'bold'
+  | 'italic'
+  | 'underline'
+  | 'inlineCode'
+  | 'bullet'
+  | 'numbered'
+  | 'blockquote'
+  | 'codeBlock';
+
+interface SourceEditResult {
+  value: string;
+  selectionStart: number;
+  selectionEnd: number;
+}
+
+function toggleInlineMarker(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  marker: string,
+): SourceEditResult {
+  const before = text.slice(0, selectionStart);
+  const selection = text.slice(selectionStart, selectionEnd);
+  const after = text.slice(selectionEnd);
+  const markerLength = marker.length;
+  const hasSelection = selectionStart !== selectionEnd;
+
+  const hasSurroundingMarkers = before.endsWith(marker) && after.startsWith(marker);
+
+  if (hasSurroundingMarkers) {
+    return {
+      value: `${before.slice(0, -markerLength)}${selection}${after.slice(markerLength)}`,
+      selectionStart: selectionStart - markerLength,
+      selectionEnd: selectionEnd - markerLength,
+    };
+  }
+
+  if (hasSelection && selection.startsWith(marker) && selection.endsWith(marker)) {
+    const inner = selection.slice(markerLength, selection.length - markerLength);
+    return {
+      value: `${before}${inner}${after}`,
+      selectionStart,
+      selectionEnd: selectionStart + inner.length,
+    };
+  }
+
+  const wrapped = `${marker}${selection}${marker}`;
+  const nextValue = `${before}${wrapped}${after}`;
+  const caret = selectionStart + markerLength;
+
+  return {
+    value: nextValue,
+    selectionStart: caret,
+    selectionEnd: caret + selection.length,
+  };
+}
+
+function toggleTagWrapper(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  tagName: string,
+): SourceEditResult {
+  const openTag = `<${tagName}>`;
+  const closeTag = `</${tagName}>`;
+  const before = text.slice(0, selectionStart);
+  const selection = text.slice(selectionStart, selectionEnd);
+  const after = text.slice(selectionEnd);
+  const hasSelection = selectionStart !== selectionEnd;
+
+  const hasSurroundingTags = before.endsWith(openTag) && after.startsWith(closeTag);
+
+  if (hasSurroundingTags) {
+    return {
+      value: `${before.slice(0, -openTag.length)}${selection}${after.slice(closeTag.length)}`,
+      selectionStart: selectionStart - openTag.length,
+      selectionEnd: selectionEnd - openTag.length,
+    };
+  }
+
+  if (
+    hasSelection
+    && selection.startsWith(openTag)
+    && selection.endsWith(closeTag)
+  ) {
+    const inner = selection.slice(openTag.length, selection.length - closeTag.length);
+    return {
+      value: `${before}${inner}${after}`,
+      selectionStart,
+      selectionEnd: selectionStart + inner.length,
+    };
+  }
+
+  const wrapped = `${openTag}${selection}${closeTag}`;
+  const nextValue = `${before}${wrapped}${after}`;
+  const caret = selectionStart + openTag.length;
+
+  return {
+    value: nextValue,
+    selectionStart: caret,
+    selectionEnd: caret + selection.length,
+  };
+}
+
+function expandSelectionToLines(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+) {
+  let start = selectionStart;
+  while (start > 0 && text[start - 1] !== '\n') {
+    start -= 1;
+  }
+
+  let end = selectionEnd;
+  while (end < text.length && text[end] !== '\n') {
+    end += 1;
+  }
+  if (end < text.length) {
+    end += 1;
+  }
+
+  const block = text.slice(start, end);
+  const endsWithNewline = block.endsWith('\n');
+  const lines = block.split('\n');
+  if (endsWithNewline) {
+    lines.pop();
+  }
+
+  return {
+    start,
+    end,
+    lines,
+    trailingNewline: endsWithNewline,
+  } as const;
+}
+
+function toggleList(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  type: 'bullet' | 'numbered',
+): SourceEditResult | null {
+  const { start, end, lines, trailingNewline } = expandSelectionToLines(text, selectionStart, selectionEnd);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const bulletPattern = /^(\s*)[-*]\s+(.*)$/;
+  const numberedPattern = /^(\s*)\d+\.\s+(.*)$/;
+
+  const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
+  const shouldRemove =
+    type === 'bullet'
+      ? nonEmptyLines.length > 0 && nonEmptyLines.every((line) => bulletPattern.test(line))
+      : nonEmptyLines.length > 0 && nonEmptyLines.every((line) => numberedPattern.test(line));
+
+  let counter = 1;
+  const updatedLines = lines.map((line) => {
+    if (!line.trim()) {
+      return line;
+    }
+
+    if (shouldRemove) {
+      const pattern = type === 'bullet' ? bulletPattern : numberedPattern;
+      const match = line.match(pattern);
+      if (!match) {
+        return line;
+      }
+      const [, indent = '', content = ''] = match;
+      return `${indent}${content}`;
+    }
+
+    const indentMatch = line.match(/^(\s*)(.*)$/);
+    const indent = indentMatch?.[1] ?? '';
+    const content = indentMatch?.[2] ?? '';
+    const normalizedContent = content.replace(bulletPattern, '$1$2').replace(numberedPattern, '$1$2');
+
+    if (type === 'bullet') {
+      return `${indent}- ${normalizedContent.trimStart()}`;
+    }
+
+    const current = `${counter}. `;
+    counter += 1;
+    return `${indent}${current}${normalizedContent.trimStart()}`;
+  });
+
+  const updatedBlock = `${updatedLines.join('\n')}${trailingNewline ? '\n' : ''}`;
+  const nextValue = `${text.slice(0, start)}${updatedBlock}${text.slice(end)}`;
+
+  return {
+    value: nextValue,
+    selectionStart: start,
+    selectionEnd: start + updatedBlock.length,
+  };
+}
+
+function toggleBlockquote(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+): SourceEditResult | null {
+  const { start, end, lines, trailingNewline } = expandSelectionToLines(text, selectionStart, selectionEnd);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
+  const quotePattern = /^\s*>\s?/;
+  const shouldRemove = nonEmptyLines.length > 0 && nonEmptyLines.every((line) => quotePattern.test(line));
+
+  const updatedLines = lines.map((line) => {
+    if (!line.trim()) {
+      if (!shouldRemove) {
+        return line;
+      }
+      const blankMatch = line.match(/^\s*>\s?$/);
+      if (blankMatch) {
+        return '';
+      }
+      return line;
+    }
+
+    if (shouldRemove) {
+      const match = line.match(/^(\s*)>\s?(.*)$/);
+      if (!match) {
+        return line;
+      }
+      const [, indent = '', content = ''] = match;
+      return `${indent}${content}`;
+    }
+
+    const indentMatch = line.match(/^(\s*)(.*)$/);
+    const indent = indentMatch?.[1] ?? '';
+    const content = indentMatch?.[2] ?? '';
+    const normalizedContent = content.replace(/^>\s?/, '');
+    return `${indent}> ${normalizedContent}`;
+  });
+
+  const updatedBlock = `${updatedLines.join('\n')}${trailingNewline ? '\n' : ''}`;
+  const nextValue = `${text.slice(0, start)}${updatedBlock}${text.slice(end)}`;
+
+  return {
+    value: nextValue,
+    selectionStart: start,
+    selectionEnd: start + updatedBlock.length,
+  };
+}
+
+function toggleCodeBlock(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+): SourceEditResult | null {
+  const { start, end, lines, trailingNewline } = expandSelectionToLines(text, selectionStart, selectionEnd);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  const firstLine = lines[0] ?? '';
+  const lastLine = lines[lines.length - 1] ?? '';
+  const hasFence = firstLine.startsWith('```') && lastLine.trim() === '```';
+
+  if (hasFence && lines.length >= 2) {
+    const innerLines = lines.slice(1, -1);
+    const innerContent = innerLines.join('\n');
+    const updatedBlock = `${innerContent}${trailingNewline ? '\n' : ''}`;
+    const nextValue = `${text.slice(0, start)}${updatedBlock}${text.slice(end)}`;
+
+    return {
+      value: nextValue,
+      selectionStart: start,
+      selectionEnd: start + innerContent.length,
+    };
+  }
+
+  const rawSelection = text.slice(selectionStart, selectionEnd);
+  const content = rawSelection.length > 0 ? rawSelection : lines.join('\n');
+  const block = `\`\`\`\n${content}\n\`\`\``;
+  const updatedBlock = trailingNewline ? `${block}\n` : block;
+  const nextValue = `${text.slice(0, start)}${updatedBlock}${text.slice(end)}`;
+  const contentStart = start + 4; // ```\n
+
+  return {
+    value: nextValue,
+    selectionStart: contentStart,
+    selectionEnd: contentStart + content.length,
+  };
+}
+
+function applySourceAction(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  action: SourceAction,
+): SourceEditResult | null {
+  switch (action) {
+    case 'bold':
+      return toggleInlineMarker(text, selectionStart, selectionEnd, '**');
+    case 'italic':
+      return toggleInlineMarker(text, selectionStart, selectionEnd, '*');
+    case 'underline':
+      return toggleTagWrapper(text, selectionStart, selectionEnd, 'u');
+    case 'inlineCode':
+      return toggleInlineMarker(text, selectionStart, selectionEnd, '`');
+    case 'bullet':
+      return toggleList(text, selectionStart, selectionEnd, 'bullet');
+    case 'numbered':
+      return toggleList(text, selectionStart, selectionEnd, 'numbered');
+    case 'blockquote':
+      return toggleBlockquote(text, selectionStart, selectionEnd);
+    case 'codeBlock':
+      return toggleCodeBlock(text, selectionStart, selectionEnd);
+    default:
+      return null;
+  }
+}
 
 export interface MarkdownComposerRTEProps {
   value: string;
@@ -158,6 +484,7 @@ function MarkdownComposerEditable({
             aria-multiline="true"
             aria-disabled={disabled || undefined}
             aria-placeholder={placeholder}
+            placeholder={<></>}
             role="textbox"
             spellCheck
             className="min-h-full w-full resize-none whitespace-pre-wrap break-words rounded-[10px] border border-transparent bg-transparent px-3 py-2 pr-12 text-sm leading-relaxed text-[var(--agyn-dark)] focus:outline-none focus-visible:outline-none"
@@ -541,15 +868,26 @@ function getSelectedElementState(editor: LexicalEditor): ToolbarState {
 
 function MarkdownComposerToolbar({
   disabled,
+  mode,
+  onModeChange,
   onOpenFullscreen,
+  onSourceAction,
 }: {
   disabled: boolean;
+  mode: ComposerMode;
+  onModeChange: (mode: ComposerMode) => void;
   onOpenFullscreen: () => void;
+  onSourceAction: (action: SourceAction) => void;
 }) {
   const [editor] = useLexicalComposerContext();
   const [toolbarState, setToolbarState] = useState<ToolbarState>(() => getSelectedElementState(editor));
 
   useEffect(() => {
+    if (mode !== 'rendered') {
+      setToolbarState({ blockType: 'paragraph', listType: 'none', codeLanguage: '' });
+      return;
+    }
+
     const updateToolbar = () => {
       setToolbarState(getSelectedElementState(editor));
     };
@@ -573,47 +911,79 @@ function MarkdownComposerToolbar({
       unregisterSelection();
       unregisterUpdate();
     };
-  }, [editor]);
+  }, [editor, mode]);
 
   const applyBold = useCallback(() => {
-    editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
-  }, [editor]);
+    if (mode === 'rendered') {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold');
+      return;
+    }
+    onSourceAction('bold');
+  }, [editor, mode, onSourceAction]);
 
   const applyItalic = useCallback(() => {
-    editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic');
-  }, [editor]);
+    if (mode === 'rendered') {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic');
+      return;
+    }
+    onSourceAction('italic');
+  }, [editor, mode, onSourceAction]);
 
   const applyUnderline = useCallback(() => {
-    editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
-  }, [editor]);
+    if (mode === 'rendered') {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
+      return;
+    }
+    onSourceAction('underline');
+  }, [editor, mode, onSourceAction]);
 
   const applyInlineCode = useCallback(() => {
-    editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code');
-  }, [editor]);
+    if (mode === 'rendered') {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code');
+      return;
+    }
+    onSourceAction('inlineCode');
+  }, [editor, mode, onSourceAction]);
 
   const toggleBulletedList = useCallback(() => {
-    if (toolbarState.listType === 'bullet') {
-      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+    if (mode === 'rendered') {
+      if (toolbarState.listType === 'bullet') {
+        editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+        return;
+      }
+      editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
       return;
     }
-    editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
-  }, [editor, toolbarState.listType]);
+    onSourceAction('bullet');
+  }, [editor, mode, onSourceAction, toolbarState.listType]);
 
   const toggleNumberedList = useCallback(() => {
-    if (toolbarState.listType === 'number') {
-      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+    if (mode === 'rendered') {
+      if (toolbarState.listType === 'number') {
+        editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+        return;
+      }
+      editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
       return;
     }
-    editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
-  }, [editor, toolbarState.listType]);
+    onSourceAction('numbered');
+  }, [editor, mode, onSourceAction, toolbarState.listType]);
 
   const toggleCodeBlock = useCallback(() => {
-    editor.dispatchCommand(TOGGLE_CODE_BLOCK_COMMAND, undefined);
-  }, [editor]);
+    if (mode === 'rendered') {
+      editor.dispatchCommand(TOGGLE_CODE_BLOCK_COMMAND, undefined);
+      return;
+    }
+    onSourceAction('codeBlock');
+  }, [editor, mode, onSourceAction]);
 
   const toggleBlockquote = useCallback(() => {
-    editor.dispatchCommand(TOGGLE_BLOCKQUOTE_COMMAND, undefined);
-  }, [editor]);
+    if (mode === 'rendered') {
+      editor.dispatchCommand(TOGGLE_BLOCKQUOTE_COMMAND, undefined);
+      return;
+    }
+    onSourceAction('blockquote');
+  }, [editor, mode, onSourceAction]);
 
   const toolbarActions = useMemo<ToolbarAction[]>(
     () => [
@@ -682,8 +1052,15 @@ function MarkdownComposerToolbar({
     return options.map(([value, label]) => ({ value, label }));
   }, []);
 
+  const currentToolbarState = mode === 'rendered'
+    ? toolbarState
+    : { blockType: 'paragraph', listType: 'none', codeLanguage: '' };
+
   const handleLanguageChange = useCallback(
     (next: string) => {
+      if (mode !== 'rendered') {
+        return;
+      }
       editor.update(() => {
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) {
@@ -700,7 +1077,7 @@ function MarkdownComposerToolbar({
         codeLanguage: next === AUTO_CODE_LANGUAGE ? '' : next,
       }));
     },
-    [editor],
+    [editor, mode],
   );
 
   return (
@@ -722,7 +1099,7 @@ function MarkdownComposerToolbar({
           </button>
         ))}
 
-        {toolbarState.blockType === 'code' ? (
+        {mode === 'rendered' && currentToolbarState.blockType === 'code' ? (
           <div
             className="ml-2 flex items-center gap-1"
             data-testid="markdown-composer-toolbar-code-language"
@@ -731,7 +1108,7 @@ function MarkdownComposerToolbar({
               size="sm"
               variant="flat"
               placeholder="Language"
-              value={toolbarState.codeLanguage || AUTO_CODE_LANGUAGE}
+              value={currentToolbarState.codeLanguage || AUTO_CODE_LANGUAGE}
               onValueChange={handleLanguageChange}
               options={[{ value: AUTO_CODE_LANGUAGE, label: 'Auto' }, ...languageOptions]}
               disabled={disabled}
@@ -740,18 +1117,42 @@ function MarkdownComposerToolbar({
           </div>
         ) : null}
       </div>
-      <button
-        type="button"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--agyn-gray)] transition-colors hover:bg-[var(--agyn-bg-light)] hover:text-[var(--agyn-blue)] disabled:cursor-not-allowed disabled:opacity-50"
-        title="Open fullscreen markdown editor"
-        aria-label="Open fullscreen markdown editor"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={onOpenFullscreen}
-        disabled={disabled}
-        data-testid="markdown-composer-toolbar-fullscreen"
-      >
-        <Maximize2 className="h-4 w-4" />
-      </button>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center rounded-md border border-[var(--agyn-border-subtle)] bg-white">
+          <button
+            type="button"
+            className={`inline-flex h-8 items-center px-3 text-xs font-medium transition-colors rounded-l-md ${mode === 'rendered' ? 'bg-[var(--agyn-bg-light)] text-[var(--agyn-blue)]' : 'text-[var(--agyn-gray)] hover:text-[var(--agyn-blue)]'}`}
+            aria-pressed={mode === 'rendered'}
+            onClick={() => onModeChange('rendered')}
+            onMouseDown={(event) => event.preventDefault()}
+            data-testid="markdown-composer-view-rendered"
+          >
+            Rendered
+          </button>
+          <button
+            type="button"
+            className={`inline-flex h-8 items-center px-3 text-xs font-medium transition-colors rounded-r-md ${mode === 'source' ? 'bg-[var(--agyn-bg-light)] text-[var(--agyn-blue)]' : 'text-[var(--agyn-gray)] hover:text-[var(--agyn-blue)]'}`}
+            aria-pressed={mode === 'source'}
+            onClick={() => onModeChange('source')}
+            onMouseDown={(event) => event.preventDefault()}
+            data-testid="markdown-composer-view-source"
+          >
+            Source
+          </button>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--agyn-gray)] transition-colors hover:bg-[var(--agyn-bg-light)] hover:text-[var(--agyn-blue)] disabled:cursor-not-allowed disabled:opacity-50"
+          title="Open fullscreen markdown editor"
+          aria-label="Open fullscreen markdown editor"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onOpenFullscreen}
+          disabled={disabled}
+          data-testid="markdown-composer-toolbar-fullscreen"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -770,13 +1171,29 @@ export function MarkdownComposerRTE({
   textareaAriaLabel,
   textareaProps,
 }: MarkdownComposerRTEProps) {
+  const {
+    maxLength,
+    id: editorId,
+    className: textareaClassName,
+    size: textareaSize,
+    'aria-describedby': ariaDescribedBy,
+    'aria-labelledby': ariaLabelledBy,
+    'aria-label': ariaLabelProp,
+    ...restTextareaProps
+  } = textareaProps ?? {};
+
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
-  const maxLength = textareaProps?.maxLength;
-  const ariaDescribedBy = textareaProps?.['aria-describedby'];
-  const ariaLabelledBy = textareaProps?.['aria-labelledby'];
-  const editorId = textareaProps?.id;
+  const [mode, setMode] = useState<ComposerMode>('rendered');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendButtonDisabled = disabled || Boolean(sendDisabled) || Boolean(isSending);
-  const ariaLabel = textareaAriaLabel ?? placeholder;
+  const ariaLabel = textareaAriaLabel ?? ariaLabelProp ?? placeholder;
+  const sourceTextareaClassName = [
+    'border-none bg-transparent px-3 py-2 pr-12 text-sm leading-relaxed text-[var(--agyn-dark)]',
+    'placeholder:text-[var(--agyn-gray)] focus:border-transparent focus:outline-none focus:ring-0',
+    textareaClassName,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const initialConfig = useMemo(
     () => ({
@@ -802,6 +1219,13 @@ export function MarkdownComposerRTE({
   const minHeight = minLines * 20;
   const maxHeight = typeof maxLines === 'number' ? maxLines * 20 : undefined;
 
+  const handleModeChange = useCallback((nextMode: ComposerMode) => {
+    if (mode === nextMode) {
+      return;
+    }
+    setMode(nextMode);
+  }, [mode]);
+
   const handleSend = useCallback(() => {
     if (!onSend || sendButtonDisabled) {
       return;
@@ -809,24 +1233,166 @@ export function MarkdownComposerRTE({
     onSend();
   }, [onSend, sendButtonDisabled]);
 
+  const handleTextareaChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
+    const nextValue = event.target.value;
+    if (typeof maxLength === 'number' && nextValue.length > maxLength) {
+      return;
+    }
+    onChange(nextValue);
+  }, [maxLength, onChange]);
+
+  const handleSourceAction = useCallback((action: SourceAction) => {
+    if (mode !== 'source') {
+      return;
+    }
+
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const selectionStart = textarea.selectionStart ?? 0;
+    const selectionEnd = textarea.selectionEnd ?? 0;
+    const result = applySourceAction(value, selectionStart, selectionEnd, action);
+    if (!result) {
+      return;
+    }
+
+    if (typeof maxLength === 'number' && result.value.length > maxLength) {
+      return;
+    }
+
+    onChange(result.value);
+
+    const nextSelectionStart = Math.max(0, result.selectionStart);
+    const nextSelectionEnd = Math.max(0, result.selectionEnd);
+
+    requestAnimationFrame(() => {
+      const target = textareaRef.current;
+      if (!target) {
+        return;
+      }
+      target.focus();
+      target.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+    });
+  }, [maxLength, mode, onChange, value]);
+
+  const handleTextareaKeyDown = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (mode !== 'source' || disabled) {
+      return;
+    }
+
+    const modKey = event.metaKey || event.ctrlKey;
+
+    if (event.key === 'Enter' && modKey) {
+      if (onSend && !sendButtonDisabled) {
+        event.preventDefault();
+        handleSend();
+      }
+      return;
+    }
+
+    if (!modKey || event.altKey) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+
+    if (!event.shiftKey) {
+      if (key === 'b') {
+        event.preventDefault();
+        handleSourceAction('bold');
+        return;
+      }
+
+      if (key === 'i') {
+        event.preventDefault();
+        handleSourceAction('italic');
+        return;
+      }
+
+      if (key === 'u') {
+        event.preventDefault();
+        handleSourceAction('underline');
+        return;
+      }
+
+      if (key === 'e') {
+        event.preventDefault();
+        handleSourceAction('inlineCode');
+        return;
+      }
+    }
+
+    if (event.shiftKey) {
+      if (key === 'e') {
+        event.preventDefault();
+        handleSourceAction('codeBlock');
+        return;
+      }
+
+      if (key === '8') {
+        event.preventDefault();
+        handleSourceAction('bullet');
+        return;
+      }
+
+      if (key === '7') {
+        event.preventDefault();
+        handleSourceAction('numbered');
+        return;
+      }
+
+      if (key === '9') {
+        event.preventDefault();
+        handleSourceAction('blockquote');
+      }
+    }
+  }, [disabled, handleSend, handleSourceAction, mode, onSend, sendButtonDisabled]);
+
   return (
     <div className={`rounded-[10px] border border-[var(--agyn-border-subtle)] bg-white ${className}`}>
       <LexicalComposer initialConfig={initialConfig}>
         <MarkdownComposerToolbar
           disabled={disabled}
+          mode={mode}
+          onModeChange={handleModeChange}
           onOpenFullscreen={() => setIsFullscreenOpen(true)}
+          onSourceAction={handleSourceAction}
         />
         <div className="relative p-2">
-          <MarkdownComposerEditable
-            placeholder={placeholder}
-            minHeight={minHeight}
-            maxHeight={maxHeight}
-            ariaLabel={ariaLabel}
-            ariaDescribedBy={ariaDescribedBy}
-            ariaLabelledBy={ariaLabelledBy}
-            id={editorId}
-            disabled={disabled}
-          />
+          {mode === 'rendered' ? (
+            <MarkdownComposerEditable
+              placeholder={placeholder}
+              minHeight={minHeight}
+              maxHeight={maxHeight}
+              ariaLabel={ariaLabel}
+              ariaDescribedBy={ariaDescribedBy}
+              ariaLabelledBy={ariaLabelledBy}
+              id={editorId}
+              disabled={disabled}
+            />
+          ) : (
+            <AutosizeTextarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleTextareaChange}
+              onKeyDown={handleTextareaKeyDown}
+              id={editorId}
+              placeholder={placeholder}
+              aria-label={ariaLabel}
+              aria-describedby={ariaDescribedBy}
+              aria-labelledby={ariaLabelledBy}
+              disabled={disabled}
+              minLines={minLines}
+              maxLines={maxLines}
+              maxLength={maxLength}
+              size={textareaSize ?? 'sm'}
+              className={sourceTextareaClassName}
+              data-testid="markdown-composer-source-editor"
+              {...restTextareaProps}
+            />
+          )}
           {onSend ? (
             <IconButton
               icon={isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -841,7 +1407,7 @@ export function MarkdownComposerRTE({
             />
           ) : null}
         </div>
-        <MarkdownComposerEditableStatePlugin editable={!disabled} />
+        <MarkdownComposerEditableStatePlugin editable={!disabled && mode === 'rendered'} />
         <MarkdownComposerCodeHighlightPlugin />
         <MarkdownComposerMarkdownPlugin
           markdown={value}
