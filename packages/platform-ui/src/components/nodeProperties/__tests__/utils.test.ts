@@ -157,6 +157,22 @@ describe('nodeProperties utils', () => {
         { name: 'CONFIG', value: { value: 'v2', extra: true } },
       ]);
     });
+
+    it('writes variable references using canonical structure', () => {
+      const initial = readEnvList([
+        { name: 'FROM_VAR', value: { kind: 'var', name: 'SOURCE' }, source: 'variable' },
+      ]);
+      const updated = initial.map((item) =>
+        item.name === 'FROM_VAR'
+          ? { ...item, value: 'TARGET' }
+          : item,
+      );
+
+      const payload = serializeEnvVars(updated);
+      expect(payload).toEqual([
+        { name: 'FROM_VAR', source: 'variable', value: { kind: 'var', name: 'TARGET' } },
+      ]);
+    });
   });
 
   describe('Nix helpers', () => {
