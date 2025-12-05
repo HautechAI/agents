@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref, type UIEvent } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Play, Container, Bell, Send, PanelRightClose, PanelRight, Loader2, MessageSquarePlus, Terminal } from 'lucide-react';
+import {
+  Play,
+  Container,
+  Bell,
+  Send,
+  PanelRightClose,
+  PanelRight,
+  Loader2,
+  MessageSquarePlus,
+  Terminal,
+  Circle,
+  CheckCircle,
+  ChevronDown,
+} from 'lucide-react';
 import { AutocompleteInput, type AutocompleteInputHandle, type AutocompleteOption } from '@/components/AutocompleteInput';
 import { Button } from '../Button';
 import { IconButton } from '../IconButton';
@@ -11,6 +24,13 @@ import { Conversation, type Run } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { StatusIndicator } from '../StatusIndicator';
 import { AutosizeTextarea } from '../AutosizeTextarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 
 const THREAD_MESSAGE_MAX_LENGTH = 8000;
 
@@ -101,6 +121,7 @@ export default function ThreadsScreen({
   const resolvedSelectedThread = selectedThread ?? threads.find((thread) => thread.id === selectedThreadId);
   const [draftRecipientQuery, setDraftRecipientQuery] = useState('');
   const draftRecipientInputRef = useRef<AutocompleteInputHandle | null>(null);
+  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
 
   const resolvedDraftFetchOptions = useCallback(
     async (query: string) => {
@@ -109,6 +130,10 @@ export default function ThreadsScreen({
     },
     [draftFetchOptions],
   );
+
+  useEffect(() => {
+    setIsStatusMenuOpen(false);
+  }, [resolvedSelectedThread?.id]);
 
   useEffect(() => {
     if (!draftMode) {
@@ -128,6 +153,12 @@ export default function ThreadsScreen({
     });
     return () => cancelAnimationFrame(frame);
   }, [draftMode]);
+
+  useEffect(() => {
+    if (isToggleThreadStatusPending) {
+      setIsStatusMenuOpen(false);
+    }
+  }, [isToggleThreadStatusPending]);
 
   const handleDraftRecipientInputChange = useCallback(
     (next: string) => {
@@ -275,9 +306,17 @@ export default function ThreadsScreen({
       ? formatDistanceToNow(createdAtDate, { addSuffix: true })
       : resolvedSelectedThread.createdAt;
     const createdAtTitle = createdAtValid ? createdAtDate.toLocaleString() : undefined;
-    const nextThreadStatus: 'open' | 'closed' = resolvedSelectedThread.isOpen ? 'closed' : 'open';
-    const toggleLabel = resolvedSelectedThread.isOpen ? 'Close thread' : 'Reopen thread';
-    const toggleDisabled = !onToggleThreadStatus || isToggleThreadStatusPending;
+    const currentStatusValue: 'open' | 'closed' = resolvedSelectedThread.isOpen ? 'open' : 'closed';
+    const currentStatusLabel = resolvedSelectedThread.isOpen ? 'Open' : 'Resolved';
+    const CurrentStatusIcon = resolvedSelectedThread.isOpen ? Circle : CheckCircle;
+    const statusSelectionDisabled = !onToggleThreadStatus || isToggleThreadStatusPending;
+
+    const handleStatusChange = (nextStatus: 'open' | 'closed') => {
+      if (!onToggleThreadStatus || isToggleThreadStatusPending) return;
+      if (nextStatus === currentStatusValue) return;
+      setIsStatusMenuOpen(false);
+      onToggleThreadStatus(resolvedSelectedThread.id, nextStatus);
+    };
     const agentDisplayName = resolvedSelectedThread.agentName?.trim().length
       ? resolvedSelectedThread.agentName.trim()
       : resolvedSelectedThread.agentTitle?.trim() ?? '';
@@ -312,6 +351,52 @@ export default function ThreadsScreen({
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <DropdownMenu
+                open={isStatusMenuOpen}
+                onOpenChange={(open) => {
+                  if (statusSelectionDisabled) {
+                    setIsStatusMenuOpen(false);
+                    return;
+                  }
+                  setIsStatusMenuOpen(open);
+                }}
+              >
+                <DropdownMenuTrigger asChild disabled={statusSelectionDisabled}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-[6px] px-2 py-1 transition-colors hover:bg-[var(--agyn-bg-light)]"
+                    aria-label="Thread status"
+                    aria-busy={isToggleThreadStatusPending || undefined}
+                    aria-haspopup="menu"
+                    aria-expanded={isStatusMenuOpen}
+                    disabled={statusSelectionDisabled}
+                  >
+                    <CurrentStatusIcon className="h-4 w-4 text-[var(--agyn-gray)]" />
+                    <span className="text-sm text-[var(--agyn-dark)]">{currentStatusLabel}</span>
+                    <ChevronDown className="h-4 w-4 text-[var(--agyn-gray)]" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[160px]" align="start">
+                  <DropdownMenuRadioGroup
+                    value={currentStatusValue}
+                    onValueChange={(value) => handleStatusChange(value as 'open' | 'closed')}
+                  >
+                    <DropdownMenuRadioItem value="open" disabled={statusSelectionDisabled}>
+                      <div className="flex items-center gap-2">
+                        <Circle className="h-4 w-4 text-[var(--agyn-gray)]" />
+                        <span className="text-sm text-[var(--agyn-dark)]">Open</span>
+                      </div>
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="closed" disabled={statusSelectionDisabled}>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-[var(--agyn-gray)]" />
+                        <span className="text-sm text-[var(--agyn-dark)]">Resolved</span>
+                      </div>
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <div className="flex items-center gap-2">
                 <Play className="h-4 w-4 text-[var(--agyn-gray)]" />
                 <span className="text-sm text-[var(--agyn-dark)]">{runs.length}</span>
@@ -390,19 +475,6 @@ export default function ThreadsScreen({
             </div>
 
             <div className="flex items-center gap-2">
-              {onToggleThreadStatus ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onToggleThreadStatus(resolvedSelectedThread.id, nextThreadStatus)}
-                  disabled={toggleDisabled}
-                  aria-busy={isToggleThreadStatusPending || undefined}
-                >
-                  {toggleLabel}
-                </Button>
-              ) : null}
-
               <IconButton
                 icon={
                   isRunsInfoCollapsed ? <PanelRight className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />
@@ -449,9 +521,9 @@ export default function ThreadsScreen({
         <div className="flex h-[66px] items-center justify-between border-b border-[var(--agyn-border-subtle)] px-4">
           <SegmentedControl
             items={[
-              { value: 'all', label: 'All' },
               { value: 'open', label: 'Open' },
-              { value: 'closed', label: 'Closed' },
+              { value: 'closed', label: 'Resolved' },
+              { value: 'all', label: 'All' },
             ]}
             value={filterMode}
             onChange={(value) => onFilterModeChange?.(value as 'all' | 'open' | 'closed')}

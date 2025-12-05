@@ -17,9 +17,8 @@ describe('AgentsThreads layout', () => {
 
     expect(await screen.findByTestId('threads-list')).toBeInTheDocument();
     expect(screen.getByText('Select a thread to view details')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Open/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Closed/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /All/i })).toBeInTheDocument();
+    const filterButtons = screen.getAllByRole('button', { name: /^(Open|Resolved|All)$/ });
+    expect(filterButtons.map((button) => button.textContent)).toEqual(['Open', 'Resolved', 'All']);
     expect(screen.getByTitle('New thread')).toBeInTheDocument();
   });
 });

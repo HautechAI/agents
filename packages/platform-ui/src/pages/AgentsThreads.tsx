@@ -154,7 +154,7 @@ const THREAD_MESSAGE_MAX_LENGTH = 8000;
 const sendMessageErrorMap: Record<string, string> = {
   bad_message_payload: 'Please enter a message up to 8000 characters.',
   thread_not_found: 'Thread not found. It may have been removed.',
-  thread_closed: 'This thread is closed. Reopen it to send messages.',
+  thread_closed: 'This thread is resolved. Reopen it to send messages.',
   agent_unavailable: 'Agent is not currently available for this thread.',
   agent_unready: 'Agent is starting up. Try again shortly.',
   send_failed: 'Failed to send the message. Please retry.',

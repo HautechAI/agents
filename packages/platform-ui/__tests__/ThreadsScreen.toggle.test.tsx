@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import ThreadsScreen from '../src/components/screens/ThreadsScreen';
@@ -20,7 +21,7 @@ const baseThread: Thread = {
 
 describe('ThreadsScreen thread status toggle', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2024-06-01T12:00:00.000Z'));
   });
 
@@ -28,8 +29,9 @@ describe('ThreadsScreen thread status toggle', () => {
     vi.useRealTimers();
   });
 
-  it('calls onToggleThreadStatus with the next state and shows relative time in the detail header', () => {
+  it('calls onToggleThreadStatus with the next state and shows relative time in the detail header', async () => {
     const handleToggle = vi.fn();
+    const user = userEvent.setup();
 
     render(
       <ThreadsScreen
@@ -49,10 +51,13 @@ describe('ThreadsScreen thread status toggle', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: /close thread/i });
-    expect(button).not.toBeDisabled();
+    const statusTrigger = screen.getByRole('button', { name: 'Thread status' });
+    expect(statusTrigger).not.toBeDisabled();
 
-    button.click();
+    await user.click(statusTrigger);
+
+    const resolvedOption = await screen.findByRole('menuitemradio', { name: 'Resolved' });
+    await user.click(resolvedOption);
 
     expect(handleToggle).toHaveBeenCalledWith(baseThread.id, 'closed');
 
@@ -82,9 +87,9 @@ describe('ThreadsScreen thread status toggle', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: /close thread/i });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('aria-busy', 'true');
+    const statusTrigger = screen.getByRole('button', { name: 'Thread status' });
+    expect(statusTrigger).toBeDisabled();
+    expect(statusTrigger).toHaveAttribute('aria-busy', 'true');
   });
 });
 
@@ -143,6 +148,7 @@ describe('AgentsThreads status toggle integration', () => {
   afterAll(() => server.close());
 
   it('updates the toggle label optimistically and stays in sync after refetch', async () => {
+    const user = userEvent.setup();
     const createdAt = '2024-06-01T11:00:00.000Z';
     let serverStatus: 'open' | 'closed' = 'open';
     let patchCalls = 0;
@@ -221,30 +227,31 @@ describe('AgentsThreads status toggle integration', () => {
     );
 
     const threadRow = await screen.findByText('Investigate production error logs');
-    fireEvent.click(threadRow);
+    await user.click(threadRow);
 
-    const closeToggle = await screen.findByRole('button', { name: /Close thread/i });
-    expect(closeToggle).toBeInTheDocument();
+    let statusTrigger = await screen.findByRole('button', { name: 'Thread status' });
+    expect(within(statusTrigger).getByText('Open')).toBeInTheDocument();
 
     const initialRoots = rootsRequestCount;
 
-    fireEvent.click(closeToggle);
-
-    await screen.findByRole('button', { name: /Reopen thread/i });
-    expect(screen.queryByRole('button', { name: /Close thread/i })).not.toBeInTheDocument();
+    await user.click(statusTrigger);
+    const resolvedOption = await screen.findByRole('menuitemradio', { name: 'Resolved' });
+    await user.click(resolvedOption);
 
     await waitFor(() => expect(patchCalls).toBeGreaterThan(0));
     await waitFor(() => expect(rootsRequestCount).toBeGreaterThan(initialRoots));
-    expect(screen.getByRole('button', { name: /Reopen thread/i })).toBeInTheDocument();
+    statusTrigger = await screen.findByRole('button', { name: 'Thread status' });
+    expect(within(statusTrigger).getByText('Resolved')).toBeInTheDocument();
 
     const beforeSecondToggleRoots = rootsRequestCount;
 
-    const reopenToggle = await screen.findByRole('button', { name: /Reopen thread/i });
-    fireEvent.click(reopenToggle);
+    await user.click(statusTrigger);
+    const openOption = await screen.findByRole('menuitemradio', { name: 'Open' });
+    await user.click(openOption);
 
-    await screen.findByRole('button', { name: /Close thread/i });
     await waitFor(() => expect(patchCalls).toBeGreaterThan(1));
     await waitFor(() => expect(rootsRequestCount).toBeGreaterThan(beforeSecondToggleRoots));
-    expect(screen.getByRole('button', { name: /Close thread/i })).toBeInTheDocument();
+    statusTrigger = await screen.findByRole('button', { name: 'Thread status' });
+    expect(within(statusTrigger).getByText('Open')).toBeInTheDocument();
   });
 });

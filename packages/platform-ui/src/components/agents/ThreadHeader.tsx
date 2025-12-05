@@ -127,7 +127,11 @@ export function ThreadHeader({ thread, runsCount }: { thread: ThreadNode | undef
   const createdAt = thread?.createdAt ? new Date(thread.createdAt) : null;
   const createdAtLabel = createdAt && Number.isFinite(createdAt.getTime()) ? createdAt.toLocaleString() : null;
   const createdRelative = createdAt && Number.isFinite(createdAt.getTime()) ? formatDistanceToNow(createdAt, { addSuffix: true }) : null;
-  const statusLabel = thread?.status ? thread.status.charAt(0).toUpperCase() + thread.status.slice(1) : 'Open';
+  const statusLabel = thread?.status === 'closed'
+    ? 'Resolved'
+    : thread?.status
+      ? thread.status.charAt(0).toUpperCase() + thread.status.slice(1)
+      : 'Open';
 
   if (!thread) {
     return (
