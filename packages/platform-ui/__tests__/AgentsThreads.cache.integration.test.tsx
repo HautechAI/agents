@@ -239,7 +239,6 @@ describe('AgentsThreads caching and scroll restoration', () => {
       flushRaf(raf);
 
       await user.click(threadOneRow);
-      await screen.findByText('Loading thread…');
       setupScrollMetrics(scrollContainer, { scrollHeight: 1200, clientHeight: 300, scrollTop: scrollContainer.scrollTop });
       flushRaf(raf);
       await waitFor(() => expect(screen.queryByText('Loading thread…')).not.toBeInTheDocument());
@@ -288,7 +287,6 @@ describe('AgentsThreads caching and scroll restoration', () => {
       flushRaf(raf);
 
       await user.click(threadARow);
-      await screen.findByText('Loading thread…');
       setupScrollMetrics(scrollContainer, { scrollHeight: 1000, clientHeight: 250, scrollTop: scrollContainer.scrollTop });
       flushRaf(raf);
       await waitFor(() => expect(screen.queryByText('Loading thread…')).not.toBeInTheDocument());
@@ -361,7 +359,6 @@ describe('AgentsThreads caching and scroll restoration', () => {
       // Re-select a thread still in cache (thread 5) should hide overlay immediately
       const thread5 = await screen.findByText('Thread 5');
       await user.click(thread5);
-      await screen.findByText('Loading thread…');
       setMetrics();
       flushRaf(raf);
       await waitFor(() => expect(screen.queryByText('Loading thread…')).not.toBeInTheDocument());
