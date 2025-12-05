@@ -2,6 +2,8 @@ import z from 'zod';
 import { FunctionTool } from '@agyn/llm';
 import type { LLMContext } from '../../../llm/types';
 import { ThreadTransportService } from '../../../messaging/threadTransport.service';
+import type { SendResult } from '../../../messaging/types';
+import { normalizeError } from '../../../utils/error-response';
 
 export const sendMessageInvocationSchema = z.object({ message: z.string().min(1).describe('Message text.') }).strict();
 
@@ -24,7 +26,7 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
     const threadId = ctx?.threadId;
     if (!threadId) return 'missing_thread_context';
     try {
-      const result = await this.transport.sendTextToThread(threadId, args.message, {
+      const result: SendResult = await this.transport.sendTextToThread(threadId, args.message, {
         runId: ctx?.runId,
         source: 'send_message',
       });
@@ -32,9 +34,9 @@ export class SendMessageFunctionTool extends FunctionTool<typeof sendMessageInvo
         return 'message sent successfully';
       }
       return result.error ?? 'unknown_error';
-    } catch (e) {
-      const msg = e instanceof Error && e.message ? e.message : 'unknown_error';
-      return msg;
+    } catch (err) {
+      const normalized = normalizeError(err);
+      return normalized.message;
     }
   }
 }

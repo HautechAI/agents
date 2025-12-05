@@ -33,6 +33,15 @@ describe('SendMessageFunctionTool', () => {
     expect(output).toBe('missing_channel_node');
   });
 
+  it('normalizes thrown transport errors to message text', async () => {
+    const transport = { sendTextToThread: vi.fn().mockRejectedValue(new Error('transport unavailable')) } as unknown as ThreadTransportService;
+    const tool = new SendMessageFunctionTool(transport);
+
+    const output = await tool.execute({ message: 'hello' }, createCtx('thread-3'));
+
+    expect(output).toBe('transport unavailable');
+  });
+
   it('returns missing_thread_context when context lacks thread id', async () => {
     const transport = { sendTextToThread: vi.fn() } as unknown as ThreadTransportService;
     const tool = new SendMessageFunctionTool(transport);
