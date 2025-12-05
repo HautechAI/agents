@@ -8,7 +8,7 @@ import {
   ScreenDialogHeader,
   ScreenDialogTitle,
 } from '../../Dialog';
-import { Button } from '../../ui/button';
+import { Button } from '@/components/Button';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 
@@ -90,10 +90,10 @@ export function CreateDocumentDialog({ open, parentPath, onCancel, onCreate, val
             ) : null}
           </div>
           <ScreenDialogFooter>
-            <Button type="button" variant="ghost" size="default" onClick={onCancel}>
+            <Button type="button" variant="ghost" size="md" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="submit" variant="default" size="default" disabled={disableCreate}>
+            <Button type="submit" variant="primary" size="md" disabled={disableCreate}>
               Create
             </Button>
           </ScreenDialogFooter>

@@ -6,7 +6,7 @@ import {
   ScreenDialogHeader,
   ScreenDialogTitle,
 } from '../../Dialog';
-import { Button } from '../../ui/button';
+import { Button } from '@/components/Button';
 
 type ConfirmDeleteDialogProps = {
   open: boolean;
@@ -35,10 +35,10 @@ export function ConfirmDeleteDialog({ open, path, onConfirm, onCancel }: Confirm
           </ScreenDialogDescription>
         </ScreenDialogHeader>
         <ScreenDialogFooter className="mt-6">
-          <Button type="button" variant="ghost" size="default" onClick={onCancel}>
+          <Button type="button" variant="ghost" size="md" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="button" variant="destructive" size="default" onClick={onConfirm}>
+          <Button type="button" variant="danger" size="md" onClick={onConfirm}>
             Delete
           </Button>
         </ScreenDialogFooter>
