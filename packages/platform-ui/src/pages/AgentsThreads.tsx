@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryKey } from '@tanstack/react-query';
 import ThreadsScreen from '@/components/screens/ThreadsScreen';
 import type { Thread } from '@/components/ThreadItem';
-import type { ConversationMessage, Run as ConversationRun, ReminderData as ConversationReminderData } from '@/components/Conversation';
+import type {
+  ConversationMessage,
+  Run as ConversationRun,
+  ReminderData as ConversationReminderData,
+  QueuedMessageData as ConversationQueuedMessageData,
+} from '@/components/Conversation';
 import type { AutocompleteOption } from '@/components/AutocompleteInput';
 import { formatDuration } from '@/components/agents/runTimelineFormatting';
 import { notifyError } from '@/lib/notify';
@@ -518,6 +523,7 @@ export function AgentsThreads() {
   const [drafts, setDrafts] = useState<ThreadDraft[]>([]);
   const [selectedThreadIdState, setSelectedThreadIdState] = useState<string | null>(params.threadId ?? null);
   const [runMessages, setRunMessages] = useState<Record<string, ConversationMessageWithMeta[]>>({});
+  const [queuedMessages, setQueuedMessages] = useState<ConversationQueuedMessageData[]>([]);
   const [prefetchedRuns, setPrefetchedRuns] = useState<RunMeta[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isRunsInfoCollapsed, setRunsInfoCollapsed] = useState(false);
@@ -775,6 +781,7 @@ export function AgentsThreads() {
     pendingMessagesRef.current = new Map();
     runIdsRef.current = new Set();
     setMessagesError(null);
+    setQueuedMessages([]);
 
     if (!selectedThreadId || isDraftSelected) {
       setRunMessages({});
@@ -940,9 +947,34 @@ export function AgentsThreads() {
   }, [selectedThreadId, isDraftSelected, runMessages, updateCacheEntry]);
 
   useEffect(() => {
+    const knownIds = new Set<string>();
+    for (const messages of Object.values(runMessages)) {
+      for (const message of messages) {
+        knownIds.add(message.id);
+      }
+    }
+    if (knownIds.size === 0) return;
+    setQueuedMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const filtered = prev.filter((item) => !knownIds.has(item.id));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [runMessages]);
+
+  useEffect(() => {
     if (!selectedThreadId) return;
     const offMsg = graphSocket.onMessageCreated(({ threadId, message }) => {
-      if (threadId !== selectedThreadId || !message.runId) return;
+      if (threadId !== selectedThreadId) return;
+      if (!message.runId) {
+        const content = sanitizeSummary(message.text);
+        setQueuedMessages((prev) => {
+          if (prev.some((queued) => queued.id === message.id)) {
+            return prev;
+          }
+          return [...prev, { id: message.id, content }];
+        });
+        return;
+      }
       const runId = message.runId;
       const mapped = mapSocketMessage(message as SocketMessage);
       const seen = seenMessageIdsRef.current.get(runId) ?? new Set<string>();
@@ -1793,7 +1825,7 @@ export function AgentsThreads() {
           runs={conversationRuns}
           containers={containersForScreen}
           reminders={remindersForScreen}
-          conversationQueuedMessages={[]}
+          conversationQueuedMessages={queuedMessages}
           conversationReminders={conversationReminders}
           filterMode={filterMode}
           selectedThreadId={selectedThreadId ?? null}
