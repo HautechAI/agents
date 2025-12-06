@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Badge } from '@/components/Badge';
-import { useContextItems } from '@/api/hooks/contextItems';
 import type { ContextItem } from '@/api/types/agents';
+import { useRunEventContext } from '@/hooks/useRunEventContext';
 
 type LLMContextViewerProps = {
-  ids: readonly string[];
+  runId: string;
+  eventId: string;
+  ids?: readonly string[];
+  highlightIds?: readonly string[];
   highlightLastCount?: number;
-  initialVisibleCount?: number;
   onItemsRendered?: (items: ContextItem[]) => void;
   onBeforeLoadMore?: () => void;
 };
@@ -45,24 +47,32 @@ const ROLE_COLORS: Record<ContextItem['role'], string> = {
 
 const HIGHLIGHT_ROLES: ReadonlySet<ContextItem['role']> = new Set(['user', 'assistant', 'tool']);
 
-export function LLMContextViewer({ ids, highlightLastCount, initialVisibleCount, onItemsRendered, onBeforeLoadMore }: LLMContextViewerProps) {
-  const sanitizedInitialVisibleCount = useMemo(() => {
-    if (typeof initialVisibleCount !== 'number' || !Number.isFinite(initialVisibleCount)) return undefined;
-    const coerced = Math.max(0, Math.floor(initialVisibleCount));
-    return coerced > 0 ? coerced : undefined;
-  }, [initialVisibleCount]);
+export function LLMContextViewer({
+  runId,
+  eventId,
+  ids = [],
+  highlightIds,
+  highlightLastCount,
+  onItemsRendered,
+  onBeforeLoadMore,
+}: LLMContextViewerProps) {
+  const { items, totalCount, hasMore, isInitialLoading, isFetchingMore, error, loadOlder } = useRunEventContext(runId, eventId);
 
-  const { items, hasMore, isInitialLoading, isFetching, error, loadMore, total, targetCount } = useContextItems(ids, {
-    initialCount: sanitizedInitialVisibleCount ?? 10,
-  });
+  const fallbackTotal = useMemo(() => {
+    if (totalCount !== null && totalCount !== undefined && Number.isFinite(totalCount)) {
+      return totalCount;
+    }
+    return Array.isArray(ids) ? ids.length : 0;
+  }, [ids, totalCount]);
 
-  const emptyState = ids.length === 0;
-  const displayedCount = useMemo(() => Math.min(targetCount, total), [targetCount, total]);
   const highlightCount = useMemo(() => {
     if (!highlightLastCount || !Number.isFinite(highlightLastCount)) return 0;
     return Math.max(0, Math.floor(highlightLastCount));
   }, [highlightLastCount]);
   const highlightSet = useMemo(() => {
+    if (Array.isArray(highlightIds) && highlightIds.length > 0) {
+      return new Set(highlightIds);
+    }
     if (highlightCount <= 0 || items.length === 0) return new Set<string>();
     const collected = new Set<string>();
     let remaining = highlightCount;
@@ -76,7 +86,7 @@ export function LLMContextViewer({ ids, highlightLastCount, initialVisibleCount,
       }
     }
     return collected;
-  }, [items, highlightCount]);
+  }, [highlightCount, highlightIds, items]);
   const renderedCallbackRef = useRef<((items: ContextItem[]) => void) | undefined>(undefined);
 
   renderedCallbackRef.current = onItemsRendered;
@@ -85,9 +95,13 @@ export function LLMContextViewer({ ids, highlightLastCount, initialVisibleCount,
     renderedCallbackRef.current?.(items);
   }, [items]);
 
+  const emptyState = !isInitialLoading && items.length === 0 && fallbackTotal === 0;
+
   if (emptyState) {
     return <div className="text-[11px] text-gray-500">No context items</div>;
   }
+
+  const displayedCount = items.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -95,13 +109,13 @@ export function LLMContextViewer({ ids, highlightLastCount, initialVisibleCount,
         <button
           type="button"
           className="self-start rounded border border-gray-300 bg-white px-3 py-1 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-          onClick={() => {
-            onBeforeLoadMore?.();
-            loadMore();
-          }}
-          disabled={isFetching}
+            onClick={() => {
+              onBeforeLoadMore?.();
+              loadOlder().catch(() => {});
+            }}
+          disabled={isFetchingMore}
         >
-          Load older context ({displayedCount} of {total})
+          Load older context ({displayedCount} of {fallbackTotal})
         </button>
       )}
 
@@ -137,8 +151,8 @@ export function LLMContextViewer({ ids, highlightLastCount, initialVisibleCount,
 
       {isInitialLoading && <div className="text-[11px] text-gray-500">Loading context…</div>}
       {!!error && !isInitialLoading && <div className="text-[11px] text-red-600">Failed to load context items</div>}
-      {isFetching && !isInitialLoading && <div className="text-[11px] text-gray-500">Loading…</div>}
-      {!error && !isFetching && !isInitialLoading && items.length === 0 && displayedCount > 0 && (
+      {isFetchingMore && !isInitialLoading && <div className="text-[11px] text-gray-500">Loading…</div>}
+      {!error && !isFetchingMore && !isInitialLoading && items.length === 0 && fallbackTotal > 0 && (
         <div className="text-[11px] text-gray-500">No context items available.</div>
       )}
     </div>

@@ -5,8 +5,8 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { RunTimelineEventDetails } from '../RunTimelineEventDetails';
-import * as contextItemsModule from '@/api/hooks/contextItems';
-import type { UseContextItemsResult } from '@/api/hooks/contextItems';
+import * as runEventContextModule from '@/hooks/useRunEventContext';
+import type { UseRunEventContextResult } from '@/hooks/useRunEventContext';
 import type { ContextItem, RunTimelineEvent } from '@/api/types/agents';
 const useToolOutputStreamingMock = vi.fn();
 
@@ -133,6 +133,19 @@ function buildEvent(overrides: Partial<RunTimelineEvent> = {}): RunTimelineEvent
     toolExecution: finalToolExecution ? { ...base.toolExecution!, ...finalToolExecution } : finalToolExecution,
     message: message ?? base.message,
     attachments: attachments ?? base.attachments,
+  };
+}
+
+function buildRunEventContextResult(overrides: Partial<UseRunEventContextResult> = {}): UseRunEventContextResult {
+  return {
+    items: [],
+    totalCount: 0,
+    hasMore: false,
+    isInitialLoading: false,
+    isFetchingMore: false,
+    error: null,
+    loadOlder: vi.fn(),
+    ...overrides,
   };
 }
 
@@ -821,17 +834,12 @@ describe('RunTimelineEventDetails', () => {
       },
     ];
 
-    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockReturnValue({
-      items: contextItems,
-      total: contextItems.length,
-      loadedCount: contextItems.length,
-      targetCount: contextItems.length,
-      hasMore: false,
-      isInitialLoading: false,
-      isFetching: false,
-      error: null,
-      loadMore: vi.fn(),
-    });
+    const useRunEventContextSpy = vi
+      .spyOn(runEventContextModule, 'useRunEventContext')
+      .mockReturnValue(buildRunEventContextResult({
+        items: contextItems,
+        totalCount: contextItems.length,
+      }));
 
     try {
       const event = buildEvent({
@@ -858,11 +866,11 @@ describe('RunTimelineEventDetails', () => {
       expect(badge).toHaveClass('capitalize');
       expect(within(contextRegion).queryByText('Metadata')).toBeNull();
     } finally {
-      useContextItemsSpy.mockRestore();
+      useRunEventContextSpy.mockRestore();
     }
   });
 
-  it('requests context items using the new item count as initial window', () => {
+  it('fetches event context using run and event identifiers', () => {
     const contextItems: ContextItem[] = [
       {
         id: 'ctx-1',
@@ -902,17 +910,15 @@ describe('RunTimelineEventDetails', () => {
       },
     ];
 
-    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockReturnValue({
-      items: contextItems.slice(2),
-      total: contextItems.length,
-      loadedCount: 2,
-      targetCount: 2,
-      hasMore: true,
-      isInitialLoading: false,
-      isFetching: false,
-      error: null,
-      loadMore: vi.fn(),
-    });
+    const useRunEventContextSpy = vi
+      .spyOn(runEventContextModule, 'useRunEventContext')
+      .mockReturnValue(
+        buildRunEventContextResult({
+          items: contextItems.slice(2),
+          totalCount: contextItems.length,
+          hasMore: true,
+        }),
+      );
 
     try {
       const event = buildEvent({
@@ -934,13 +940,140 @@ describe('RunTimelineEventDetails', () => {
 
       renderDetails(event);
 
-      expect(useContextItemsSpy).toHaveBeenCalled();
-      const call = useContextItemsSpy.mock.calls[0];
-      expect(call?.[0]).toEqual(contextItems.map((item) => item.id));
-      expect(call?.[1]).toMatchObject({ initialCount: 2 });
+      expect(useRunEventContextSpy).toHaveBeenCalledWith(event.runId, event.id);
+      const loadButton = screen.getByRole('button', { name: /Load older context/ });
+      expect(loadButton).toBeInTheDocument();
     } finally {
-      useContextItemsSpy.mockRestore();
+      useRunEventContextSpy.mockRestore();
     }
+  });
+
+  it('shows only new context items for subsequent LLM calls', () => {
+    const firstContextItems: ContextItem[] = [
+      {
+        id: 'ctx-old',
+        role: 'system',
+        contentText: 'System primer',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 64,
+        createdAt: '2024-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'ctx-new-1',
+        role: 'user',
+        contentText: 'Follow-up question',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 72,
+        createdAt: '2024-01-01T00:01:00.000Z',
+      },
+      {
+        id: 'ctx-new-2',
+        role: 'assistant',
+        contentText: 'Assistant reasoning',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 88,
+        createdAt: '2024-01-01T00:02:00.000Z',
+      },
+    ];
+
+    const secondContextItems: ContextItem[] = [
+      {
+        id: 'ctx-new-3',
+        role: 'tool',
+        contentText: 'Tool insight',
+        contentJson: null,
+        metadata: null,
+        sizeBytes: 96,
+        createdAt: '2024-01-01T00:03:00.000Z',
+      },
+    ];
+
+    const contextMap = new Map<string, UseRunEventContextResult>([
+      [
+        'evt-first',
+        buildRunEventContextResult({
+          items: firstContextItems,
+          totalCount: 5,
+        }),
+      ],
+      [
+        'evt-second',
+        buildRunEventContextResult({
+          items: secondContextItems,
+          totalCount: 6,
+        }),
+      ],
+    ]);
+
+    const useRunEventContextSpy = vi
+      .spyOn(runEventContextModule, 'useRunEventContext')
+      .mockImplementation((_runId, eventId) => contextMap.get(eventId ?? '') ?? buildRunEventContextResult());
+
+    const firstEvent = buildEvent({
+      id: 'evt-first',
+      runId: 'run-1',
+      type: 'llm_call',
+      metadata: {
+        contextWindow: {
+          newIds: ['ctx-new-1', 'ctx-new-2'],
+        },
+      },
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-first',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: ['ctx-old', 'ctx-new-1', 'ctx-new-2'],
+        newContextItemCount: 2,
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [],
+      },
+      toolExecution: undefined,
+    });
+
+    const secondEvent = buildEvent({
+      id: 'evt-second',
+      runId: 'run-1',
+      type: 'llm_call',
+      metadata: {
+        contextWindow: {
+          newIds: ['ctx-new-3'],
+        },
+      },
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-second',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: ['ctx-old', 'ctx-new-1', 'ctx-new-2', 'ctx-new-3'],
+        newContextItemCount: 1,
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [],
+      },
+      toolExecution: undefined,
+    });
+
+    const { rerender } = renderDetails(firstEvent);
+
+    const firstContextRegion = screen.getByTestId('llm-context-scroll');
+    expect(within(firstContextRegion).getByText('System primer')).toBeInTheDocument();
+    expect(within(firstContextRegion).getAllByText('New')).toHaveLength(2);
+
+    rerender(secondEvent);
+
+    const secondContextRegion = screen.getByTestId('llm-context-scroll');
+    expect(within(secondContextRegion).queryByText('System primer')).toBeNull();
+    expect(within(secondContextRegion).getByText('Tool insight')).toBeInTheDocument();
+    expect(within(secondContextRegion).getAllByText('New')).toHaveLength(1);
+
+    useRunEventContextSpy.mockRestore();
   });
 
   it('highlights only the last N conversational context items', () => {
@@ -1001,17 +1134,14 @@ describe('RunTimelineEventDetails', () => {
       },
     ];
 
-    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockReturnValue({
-      items: contextItems,
-      total: contextItems.length,
-      loadedCount: contextItems.length,
-      targetCount: contextItems.length,
-      hasMore: false,
-      isInitialLoading: false,
-      isFetching: false,
-      error: null,
-      loadMore: vi.fn(),
-    });
+    const useRunEventContextSpy = vi
+      .spyOn(runEventContextModule, 'useRunEventContext')
+      .mockReturnValue(
+        buildRunEventContextResult({
+          items: contextItems,
+          totalCount: contextItems.length,
+        }),
+      );
 
     try {
       const event = buildEvent({
@@ -1052,7 +1182,7 @@ describe('RunTimelineEventDetails', () => {
         expect(headerText).not.toContain('New');
       });
     } finally {
-      useContextItemsSpy.mockRestore();
+      useRunEventContextSpy.mockRestore();
     }
   });
 
@@ -1078,19 +1208,15 @@ describe('RunTimelineEventDetails', () => {
       },
     ];
 
-    let state = {
-      items: [] as ContextItem[],
-      total: contextItems.length,
-      loadedCount: 0,
-      targetCount: contextItems.length,
+    let state = buildRunEventContextResult({
+      items: [],
+      totalCount: contextItems.length,
       hasMore: false,
       isInitialLoading: true,
-      isFetching: true,
-      error: null as unknown,
-      loadMore: vi.fn(),
-    };
+      isFetchingMore: true,
+    });
 
-    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockImplementation(() => state);
+    const useRunEventContextSpy = vi.spyOn(runEventContextModule, 'useRunEventContext').mockImplementation(() => state);
 
     try {
       const event = buildEvent({
@@ -1120,13 +1246,13 @@ describe('RunTimelineEventDetails', () => {
 
       expect(scrollContainer.scrollTop).toBe(0);
 
-      state = {
-        ...state,
+      state = buildRunEventContextResult({
         items: contextItems,
-        loadedCount: contextItems.length,
+        totalCount: contextItems.length,
+        hasMore: false,
         isInitialLoading: false,
-        isFetching: false,
-      };
+        isFetchingMore: false,
+      });
 
       await act(async () => {
         rerender(buildEvent({
@@ -1142,7 +1268,7 @@ describe('RunTimelineEventDetails', () => {
 
       raf.mockRestore();
     } finally {
-      useContextItemsSpy.mockRestore();
+      useRunEventContextSpy.mockRestore();
     }
   });
 
@@ -1180,24 +1306,24 @@ describe('RunTimelineEventDetails', () => {
       metadata: {},
     };
 
-    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockImplementation((): UseContextItemsResult => {
-      const [stage, setStage] = React.useState<'initial' | 'loaded'>('initial');
-      const items = stage === 'initial' ? [mid, latest] : [older, mid, latest];
-      const hasMore = stage === 'initial';
-      const loadMore = () => setStage('loaded');
+    const useRunEventContextSpy = vi
+      .spyOn(runEventContextModule, 'useRunEventContext')
+      .mockImplementation((): UseRunEventContextResult => {
+        const [stage, setStage] = React.useState<'initial' | 'loaded'>('initial');
+        const items = stage === 'initial' ? [mid, latest] : [older, mid, latest];
+        const hasMore = stage === 'initial';
 
-      return {
-        items,
-        total: 3,
-        loadedCount: items.length,
-        targetCount: stage === 'initial' ? 2 : 3,
-        hasMore,
-        isInitialLoading: false,
-        isFetching: false,
-        error: null,
-        loadMore,
-      };
-    });
+        return buildRunEventContextResult({
+          items,
+          totalCount: 3,
+          hasMore,
+          isInitialLoading: false,
+          isFetchingMore: false,
+          loadOlder: async () => {
+            setStage('loaded');
+          },
+        });
+      });
 
     const event = buildEvent({
       type: 'llm_call',
@@ -1283,7 +1409,7 @@ describe('RunTimelineEventDetails', () => {
     });
     expect(waitForStableScrollHeightMock).toHaveBeenCalled();
 
-    useContextItemsSpy.mockRestore();
+    useRunEventContextSpy.mockRestore();
     raf.mockRestore();
   });
 
