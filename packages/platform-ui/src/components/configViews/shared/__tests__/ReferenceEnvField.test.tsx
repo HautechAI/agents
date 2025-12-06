@@ -1,23 +1,27 @@
 import React, { useState } from 'react';
-import { vi } from 'vitest';
-import type * as TooltipModule from '@/components/ui/tooltip';
-
-vi.mock('@/components/ui/tooltip', async (importOriginal) => {
-  const actual = (await importOriginal()) as TooltipModule;
-  const PassThrough = ({ children }: { children: React.ReactNode }) => <>{children}</>;
-  return {
-    ...actual,
-    TooltipProvider: PassThrough,
-    Tooltip: PassThrough,
-    TooltipTrigger: PassThrough,
-    TooltipContent: PassThrough,
-  };
-});
-
-import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { render, screen, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import ReferenceEnvField from '../ReferenceEnvField';
 import { readEnvList } from '@/components/nodeProperties/utils';
+
+const pointerProto = Element.prototype as unknown as {
+  hasPointerCapture?: (pointerId: number) => boolean;
+  setPointerCapture?: (pointerId: number) => void;
+  releasePointerCapture?: (pointerId: number) => void;
+};
+
+if (!pointerProto.hasPointerCapture) {
+  pointerProto.hasPointerCapture = () => false;
+}
+if (!pointerProto.setPointerCapture) {
+  pointerProto.setPointerCapture = () => {};
+}
+if (!pointerProto.releasePointerCapture) {
+  pointerProto.releasePointerCapture = () => {};
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
 
 describe('ReferenceEnvField', () => {
   it('adds rows and emits array', () => {
@@ -38,11 +42,7 @@ describe('ReferenceEnvField', () => {
       );
     }
 
-    render(
-      <TooltipProvider delayDuration={0}>
-        <Harness />
-      </TooltipProvider>,
-    );
+    render(<Harness />);
     fireEvent.click(screen.getByTestId('env-add'));
     fireEvent.change(screen.getByTestId('env-name-1'), { target: { value: 'BAR' } });
     fireEvent.change(screen.getByTestId('env-value-1'), { target: { value: '2' } });
@@ -57,43 +57,42 @@ describe('ReferenceEnvField', () => {
       return <ReferenceEnvField value={items} onChange={setItems} />;
     }
 
-    render(
-      <TooltipProvider delayDuration={0}>
-        <Harness />
-      </TooltipProvider>,
-    );
+    render(<Harness />);
     const row = screen.getByTestId('env-name-0').closest('div');
     expect(row).toBeTruthy();
     const inputsAndButtons = row!.querySelectorAll('input, button');
     expect(inputsAndButtons.length).toBeGreaterThanOrEqual(3);
     expect(inputsAndButtons[0]).toBe(screen.getByTestId('env-name-0'));
     expect(inputsAndButtons[1]).toBe(screen.getByTestId('env-value-0'));
-    expect(screen.getByTestId('env-source-trigger-0')).toBeTruthy();
     const removeBtn = screen.getByLabelText('Remove variable');
     expect(removeBtn).toBeTruthy();
   });
 
-  it('keyboard a11y: Enter opens menu and Enter selects option', async () => {
+  it('changes source type to secret and resets value', async () => {
     const initial = readEnvList([{ name: 'FOO', value: '', source: 'static' }]);
+    const latest: { current: ReturnType<typeof readEnvList> } = { current: initial };
     function Harness() {
       const [items, setItems] = useState(initial);
-      return <ReferenceEnvField value={items} onChange={setItems} />;
+      return (
+        <ReferenceEnvField
+          value={items}
+          onChange={(next) => {
+            latest.current = next;
+            setItems(next);
+          }}
+        />
+      );
     }
 
-    render(
-      <TooltipProvider delayDuration={0}>
-        <Harness />
-      </TooltipProvider>,
-    );
-    const trigger = screen.getByTestId('env-source-trigger-0');
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-    const menu = await screen.findByTestId('env-source-menu-0');
-    const vaultItem = menu.querySelector('[data-testid="env-source-option-vault-0"]') as HTMLElement;
-    expect(vaultItem).toBeTruthy();
-    vaultItem.focus();
-    fireEvent.keyDown(vaultItem, { key: 'Enter' });
-    const valueInput = screen.getByTestId('env-value-0') as HTMLInputElement;
-    expect(valueInput.placeholder).toBe('mount/path/key');
+    render(<Harness />);
+    const row = screen.getByTestId('env-name-0').closest('div') as HTMLElement;
+    const trigger = within(row).getByRole('combobox');
+    const user = userEvent.setup();
+    await user.click(trigger);
+    const secretOption = await screen.findByText(/secret/i);
+    await user.click(secretOption);
+
+    expect(latest.current[0].source).toBe('vault');
+    expect(latest.current[0].value).toBe('');
   });
 });

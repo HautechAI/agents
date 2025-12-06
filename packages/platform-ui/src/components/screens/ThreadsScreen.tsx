@@ -4,7 +4,6 @@ import {
   Play,
   Container,
   Bell,
-  Send,
   PanelRightClose,
   PanelRight,
   Loader2,
@@ -20,10 +19,10 @@ import { IconButton } from '../IconButton';
 import { ThreadsList } from '../ThreadsList';
 import type { Thread } from '../ThreadItem';
 import { SegmentedControl } from '../SegmentedControl';
-import { Conversation, type Run } from '../Conversation';
+import { Conversation, type Run, type ReminderData as ConversationReminderData, type QueuedMessageData as ConversationQueuedMessageData } from '../Conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/popover';
 import { StatusIndicator } from '../StatusIndicator';
-import { AutosizeTextarea } from '../AutosizeTextarea';
+import { MarkdownComposer } from '../MarkdownComposer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +39,8 @@ interface ThreadsScreenProps {
   runs: Run[];
   containers: { id: string; name: string; status: 'running' | 'finished' }[];
   reminders: { id: string; title: string; time: string }[];
+  conversationQueuedMessages?: ConversationQueuedMessageData[];
+  conversationReminders?: ConversationReminderData[];
   filterMode: 'all' | 'open' | 'closed';
   selectedThreadId: string | null;
   selectedThread?: Thread;
@@ -79,6 +80,8 @@ export default function ThreadsScreen({
   runs,
   containers,
   reminders,
+  conversationQueuedMessages = [],
+  conversationReminders = [],
   filterMode,
   selectedThreadId,
   selectedThread,
@@ -209,29 +212,22 @@ export default function ThreadsScreen({
 
   const renderComposer = (sendDisabled: boolean) => (
     <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] p-4">
-      <div className="relative">
-        <AutosizeTextarea
-          placeholder="Type a message..."
-          value={inputValue}
-          onChange={(event) => onInputValueChange?.(event.target.value)}
-          size="sm"
-          minLines={1}
-          maxLines={8}
-          className="pr-12"
-        />
-        <div className="absolute bottom-[11px] right-[5px]">
-          <IconButton
-            icon={<Send className="h-4 w-4" />}
-            variant="primary"
-            size="sm"
-            onClick={() => onSendMessage?.(inputValue, { threadId: selectedThreadId })}
-            disabled={sendDisabled}
-            title="Send message"
-            aria-label="Send message"
-            aria-busy={isSendMessagePending || undefined}
-          />
-        </div>
-      </div>
+      <MarkdownComposer
+        value={inputValue}
+        onChange={(next) => onInputValueChange?.(next)}
+        placeholder="Type a message..."
+        minLines={1}
+        maxLines={8}
+        onSend={() => {
+          if (!onSendMessage) return;
+          onSendMessage(inputValue, { threadId: selectedThreadId ?? null });
+        }}
+        sendDisabled={sendDisabled}
+        isSending={isSendMessagePending}
+        textareaProps={{
+          maxLength: THREAD_MESSAGE_MAX_LENGTH,
+        }}
+      />
     </div>
   );
 
@@ -508,6 +504,8 @@ export default function ThreadsScreen({
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <Conversation
             runs={runs}
+            queuedMessages={conversationQueuedMessages}
+            reminders={conversationReminders}
             className="h-full rounded-none border-none"
             collapsed={isRunsInfoCollapsed}
             scrollRef={conversationScrollRef}

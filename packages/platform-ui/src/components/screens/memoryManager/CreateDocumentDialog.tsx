@@ -1,6 +1,5 @@
 import { type FormEvent, useEffect, useId, useMemo, useState } from 'react';
 
-import { Button } from '../Button';
 import {
   ScreenDialog,
   ScreenDialogContent,
@@ -8,9 +7,10 @@ import {
   ScreenDialogFooter,
   ScreenDialogHeader,
   ScreenDialogTitle,
-} from '../screens/Dialog';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
+} from '../../Dialog';
+import { Button } from '@/components/Button';
+import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
 
 type CreateDocumentDialogProps = {
   open: boolean;
@@ -90,10 +90,10 @@ export function CreateDocumentDialog({ open, parentPath, onCancel, onCreate, val
             ) : null}
           </div>
           <ScreenDialogFooter>
-            <Button type="button" variant="ghost" onClick={onCancel}>
+            <Button type="button" variant="ghost" size="md" onClick={onCancel}>
               Cancel
             </Button>
-            <Button type="submit" disabled={disableCreate}>
+            <Button type="submit" variant="primary" size="md" disabled={disableCreate}>
               Create
             </Button>
           </ScreenDialogFooter>

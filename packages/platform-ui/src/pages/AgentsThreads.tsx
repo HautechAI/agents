@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryKey } from '@tanstack/react-query';
 import ThreadsScreen from '@/components/screens/ThreadsScreen';
 import type { Thread } from '@/components/ThreadItem';
-import type { ConversationMessage, Run as ConversationRun } from '@/components/Conversation';
+import type {
+  ConversationMessage,
+  Run as ConversationRun,
+  ReminderData as ConversationReminderData,
+  QueuedMessageData as ConversationQueuedMessageData,
+} from '@/components/Conversation';
 import type { AutocompleteOption } from '@/components/AutocompleteInput';
 import { formatDuration } from '@/components/agents/runTimelineFormatting';
 import { notifyError } from '@/lib/notify';
@@ -123,6 +128,22 @@ function formatDate(value: string | null | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function formatReminderScheduledTime(value: string | null | undefined): string {
+  if (!value) return '00:00';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '00:00';
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function formatReminderDate(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
 }
 
 function sanitizeSummary(summary: string | null | undefined): string {
@@ -494,6 +515,7 @@ export function AgentsThreads() {
   const [drafts, setDrafts] = useState<ThreadDraft[]>([]);
   const [selectedThreadIdState, setSelectedThreadIdState] = useState<string | null>(params.threadId ?? null);
   const [runMessages, setRunMessages] = useState<Record<string, ConversationMessageWithMeta[]>>({});
+  const [queuedMessages, setQueuedMessages] = useState<ConversationQueuedMessageData[]>([]);
   const [prefetchedRuns, setPrefetchedRuns] = useState<RunMeta[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isRunsInfoCollapsed, setRunsInfoCollapsed] = useState(false);
@@ -537,6 +559,10 @@ export function AgentsThreads() {
 
   const selectedThreadId = params.threadId ?? selectedThreadIdState;
   const isDraftSelected = isDraftThreadId(selectedThreadId);
+  const activeQueuedMessagesQueryKey = useMemo(
+    () => (selectedThreadId && !isDraftSelected ? (['agents', 'threads', selectedThreadId, 'queued'] as const) : null),
+    [selectedThreadId, isDraftSelected],
+  );
 
   useEffect(() => {
     if (params.threadId) {
@@ -743,6 +769,17 @@ export function AgentsThreads() {
     return sorted;
   }, [runsQuery.data]);
 
+  const hasRunningRun = useMemo(() => runList.some((run) => run.status === 'running'), [runList]);
+  const queuedMessagesQuery = useQuery({
+    queryKey: ['agents', 'threads', selectedThreadId ?? 'draft', 'queued'] as const,
+    queryFn: async () => {
+      return threads.queuedMessages(selectedThreadId!);
+    },
+    enabled: Boolean(selectedThreadId) && !isDraftSelected,
+    refetchInterval: hasRunningRun ? 7000 : false,
+    refetchOnWindowFocus: false,
+  });
+
   useEffect(() => {
     scrollRestoreTokenRef.current += 1;
     if (pendingRestoreFrameRef.current !== null) {
@@ -757,6 +794,7 @@ export function AgentsThreads() {
     pendingMessagesRef.current = new Map();
     runIdsRef.current = new Set();
     setMessagesError(null);
+    setQueuedMessages([]);
 
     if (!selectedThreadId || isDraftSelected) {
       setRunMessages({});
@@ -922,9 +960,57 @@ export function AgentsThreads() {
   }, [selectedThreadId, isDraftSelected, runMessages, updateCacheEntry]);
 
   useEffect(() => {
+    if (!selectedThreadId || isDraftSelected) {
+      return;
+    }
+    if (queuedMessagesQuery.status === 'success') {
+      const items = queuedMessagesQuery.data?.items ?? [];
+      const mapped = items.map((item) => ({ id: item.id, content: item.text ?? '' }));
+      setQueuedMessages((prev) => {
+        if (prev.length === mapped.length) {
+          let unchanged = true;
+          for (let i = 0; i < prev.length; i += 1) {
+            if (prev[i].id !== mapped[i].id || prev[i].content !== mapped[i].content) {
+              unchanged = false;
+              break;
+            }
+          }
+          if (unchanged) return prev;
+        }
+        return mapped;
+      });
+      return;
+    }
+    if (queuedMessagesQuery.status === 'error') {
+      setQueuedMessages([]);
+    }
+  }, [selectedThreadId, isDraftSelected, queuedMessagesQuery.status, queuedMessagesQuery.data]);
+
+  useEffect(() => {
+    const knownIds = new Set<string>();
+    for (const messages of Object.values(runMessages)) {
+      for (const message of messages) {
+        knownIds.add(message.id);
+      }
+    }
+    if (knownIds.size === 0) return;
+    setQueuedMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const filtered = prev.filter((item) => !knownIds.has(item.id));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [runMessages]);
+
+  useEffect(() => {
     if (!selectedThreadId) return;
     const offMsg = graphSocket.onMessageCreated(({ threadId, message }) => {
-      if (threadId !== selectedThreadId || !message.runId) return;
+      if (threadId !== selectedThreadId) return;
+      if (!message.runId) {
+        if (activeQueuedMessagesQueryKey) {
+          void queryClient.invalidateQueries({ queryKey: activeQueuedMessagesQueryKey });
+        }
+        return;
+      }
       const runId = message.runId;
       const mapped = mapSocketMessage(message as SocketMessage);
       const seen = seenMessageIdsRef.current.get(runId) ?? new Set<string>();
@@ -946,9 +1032,12 @@ export function AgentsThreads() {
         if (areMessageListsEqual(existing, merged)) return prev;
         return { ...prev, [runId]: merged };
       });
+      if (activeQueuedMessagesQueryKey) {
+        void queryClient.invalidateQueries({ queryKey: activeQueuedMessagesQueryKey });
+      }
     });
     return () => offMsg();
-  }, [selectedThreadId]);
+  }, [selectedThreadId, activeQueuedMessagesQueryKey, queryClient]);
 
   useEffect(() => {
     if (!selectedThreadId) return;
@@ -975,15 +1064,21 @@ export function AgentsThreads() {
       runIdsRef.current.add(next.id);
       if (!seenMessageIdsRef.current.has(next.id)) seenMessageIdsRef.current.set(next.id, new Set());
       flushPendingForRun(next.id);
+      if (activeQueuedMessagesQueryKey) {
+        void queryClient.invalidateQueries({ queryKey: activeQueuedMessagesQueryKey });
+      }
     });
     const offReconnect = graphSocket.onReconnected(() => {
       queryClient.invalidateQueries({ queryKey });
+      if (activeQueuedMessagesQueryKey) {
+        void queryClient.invalidateQueries({ queryKey: activeQueuedMessagesQueryKey });
+      }
     });
     return () => {
       offRun();
       offReconnect();
     };
-  }, [selectedThreadId, queryClient, flushPendingForRun]);
+  }, [selectedThreadId, queryClient, flushPendingForRun, activeQueuedMessagesQueryKey]);
 
   useEffect(() => {
     if (!selectedThreadId) return;
@@ -1253,6 +1348,18 @@ export function AgentsThreads() {
     () => (isDraftSelected ? [] : mapReminders(remindersQuery.data?.items ?? [])),
     [isDraftSelected, remindersQuery.data],
   );
+  const conversationReminders = useMemo<ConversationReminderData[]>(
+    () =>
+      isDraftSelected
+        ? []
+        : (remindersQuery.data?.items ?? []).map((reminder) => ({
+            id: reminder.id,
+            content: sanitizeSummary(reminder.note),
+            scheduledTime: formatReminderScheduledTime(reminder.at),
+            date: formatReminderDate(reminder.at),
+          })),
+    [isDraftSelected, remindersQuery.data],
+  );
   const containersForScreen = useMemo(
     () => (isDraftSelected ? [] : mapContainers(containerItems)),
     [isDraftSelected, containerItems],
@@ -1302,8 +1409,9 @@ export function AgentsThreads() {
       await threads.sendMessage(threadId, text);
       return { threadId };
     },
-    onSuccess: () => {
+    onSuccess: ({ threadId }) => {
       setInputValue('');
+      void queryClient.invalidateQueries({ queryKey: ['agents', 'threads', threadId, 'queued'] });
     },
     onError: (error: unknown) => {
       notifyError(resolveSendMessageError(error));
@@ -1762,6 +1870,8 @@ export function AgentsThreads() {
           runs={conversationRuns}
           containers={containersForScreen}
           reminders={remindersForScreen}
+          conversationQueuedMessages={queuedMessages}
+          conversationReminders={conversationReminders}
           filterMode={filterMode}
           selectedThreadId={selectedThreadId ?? null}
           inputValue={inputValue}
