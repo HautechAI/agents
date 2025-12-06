@@ -50,13 +50,15 @@ interface ConversationProps {
 
 const EMPTY_QUEUED_MESSAGES: QueuedMessageData[] = [];
 const EMPTY_REMINDERS: ReminderData[] = [];
+const EMPTY_HEADER: ReactNode = null;
+const EMPTY_FOOTER: ReactNode = null;
 
 function ConversationImpl({
   runs,
   queuedMessages = EMPTY_QUEUED_MESSAGES,
   reminders = EMPTY_REMINDERS,
-  header,
-  footer,
+  header = EMPTY_HEADER,
+  footer = EMPTY_FOOTER,
   className = '',
   defaultCollapsed = false,
   collapsed,
@@ -230,7 +232,10 @@ function areEqual(prev: ConversationProps, next: ConversationProps): boolean {
     prev.runs === next.runs &&
     prev.queuedMessages === next.queuedMessages &&
     prev.reminders === next.reminders &&
+    prev.header === next.header &&
+    prev.footer === next.footer &&
     prev.collapsed === next.collapsed &&
+    prev.defaultCollapsed === next.defaultCollapsed &&
     prev.className === next.className &&
     prev.scrollRef === next.scrollRef &&
     prev.onScroll === next.onScroll
