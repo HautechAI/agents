@@ -30,6 +30,7 @@ import { Signal } from '../../signal';
 import { AgentsPersistenceService } from '../../agents/agents.persistence.service';
 import { RunSignalsRegistry } from '../../agents/run-signals.service';
 import { ThreadTransportService } from '../../messaging/threadTransport.service';
+import { normalizeError } from '../../utils/error-response';
 
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
@@ -635,6 +636,29 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
           await persistence.completeRun(runId, 'terminated', []);
         } catch (completeErr) {
           this.logger.error(`Failed to mark run ${runId} as terminated after error:`, completeErr);
+        }
+      }
+
+      const autoSendEnabled = (() => {
+        if (effectiveBehavior) {
+          return effectiveBehavior.autoSendFinalResponseToThread;
+        }
+        try {
+          const cfg = this.config;
+          return cfg.sendFinalResponseToThread ?? true;
+        } catch {
+          return true;
+        }
+      })();
+
+      if (runId && autoSendEnabled) {
+        const normalized = normalizeError(err);
+        const trimmed = normalized.message?.trim() ?? '';
+        const errorText = trimmed.length > 0 ? `Agent run failed: ${trimmed}` : 'Agent run failed.';
+        try {
+          await this.autoSendFinalResponse(thread, ResponseMessage.fromText(errorText), [], runId);
+        } catch (autoErr) {
+          this.logger.error(`Agent error auto-response failed for thread ${thread}:`, autoErr);
         }
       }
 

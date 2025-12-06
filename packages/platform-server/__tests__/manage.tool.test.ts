@@ -398,9 +398,15 @@ describe('ManageTool unit', () => {
 
     const tool = node.getTool();
     const ctx = buildCtx({ threadId: 'p' });
+    const waiterSpy = vi
+      .spyOn(node, 'awaitChildResponse')
+      .mockResolvedValue('Agent run failed: child failure');
+
     await expect(
       tool.execute({ command: 'send_message', worker: 'W', message: 'go', threadAlias: 'alias-W' }, ctx),
-    ).rejects.toThrow('child failure');
+    ).resolves.toBe('Response from: W\nAgent run failed: child failure');
+
+    expect(waiterSpy).toHaveBeenCalledWith('child-t', expect.any(Number));
   });
 });
 

@@ -63,31 +63,11 @@ describe('ManageToolNode sendToChannel', () => {
     expect((messages[0] as HumanMessage).text).toContain('Response from: Async Worker');
   });
 
-  it('flushes queued sync messages before registering a new invocation', async () => {
-    const priorCaller = { invoke: vi.fn().mockResolvedValue(undefined) };
-    await node.registerInvocation({
-      childThreadId: 'child-thread-1',
-      parentThreadId: 'parent-1',
-      workerName: 'Worker One',
-      callerAgent: priorCaller,
-    });
-
-    await node.sendToChannel('child-thread-1', 'stale response');
-
-    const nextCaller = { invoke: vi.fn().mockResolvedValue(undefined) };
-    await node.registerInvocation({
-      childThreadId: 'child-thread-1',
-      parentThreadId: 'parent-2',
-      workerName: 'Worker Two',
-      callerAgent: nextCaller,
-    });
-
-    expect(priorCaller.invoke).toHaveBeenCalledTimes(1);
-    const [threadId, messages] = priorCaller.invoke.mock.calls[0];
-    expect(threadId).toBe('parent-1');
-    expect(messages[0]).toBeInstanceOf(HumanMessage);
-    expect((messages[0] as HumanMessage).text).toContain('stale response');
-    expect((messages[0] as HumanMessage).text).toContain('Worker One');
+  it('returns missing_waiter when sync response arrives before waiter registration', async () => {
+    const result = await node.sendToChannel('child-thread-orphan', 'orphaned');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('missing_waiter');
+    expect(result.threadId).toBe('child-thread-orphan');
   });
 
   it('returns error when async channel response lacks invocation context', async () => {
