@@ -29,7 +29,6 @@ export type ThreadNode = {
   parentId?: string | null;
   createdAt: string;
   metrics?: ThreadMetrics;
-  agentTitle?: string;
   agentRole?: string;
   agentName?: string;
 };
