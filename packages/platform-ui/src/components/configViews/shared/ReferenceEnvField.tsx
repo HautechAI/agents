@@ -1,13 +1,19 @@
 import { useCallback, type ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Brackets, Lock, X } from 'lucide-react';
+import { ReferenceInput } from '@/components/ReferenceInput';
+import { X } from 'lucide-react';
 
 import type { EnvVar } from '@/components/nodeProperties/types';
-import { createEnvVar } from '@/components/nodeProperties/utils';
+import {
+  createEnvVar,
+  encodeReferenceValue,
+  fromReferenceSourceType,
+  toReferenceSourceType,
+  writeReferenceValue,
+  type ReferenceSourceType,
+} from '@/components/nodeProperties/utils';
 
 export interface ReferenceEnvFieldProps {
   label?: string;
@@ -17,14 +23,27 @@ export interface ReferenceEnvFieldProps {
   disabled?: boolean;
   addLabel?: string;
   onValidate?: (errors: string[]) => void;
+  secretKeys?: string[];
+  variableKeys?: string[];
+  onValueFocus?: (index: number) => void;
 }
 
 function isVaultRef(v: string) {
-  // Expect mount/path/key
   return /^(?:[^/]+)\/(?:[^/]+)\/(?:[^/]+)$/.test(v || '');
 }
 
-export default function ReferenceEnvField({ label, value, onChange, readOnly, disabled, addLabel = 'Add env', onValidate }: ReferenceEnvFieldProps) {
+export default function ReferenceEnvField({
+  label,
+  value,
+  onChange,
+  readOnly,
+  disabled,
+  addLabel = 'Add env',
+  onValidate,
+  secretKeys = [],
+  variableKeys = [],
+  onValueFocus,
+}: ReferenceEnvFieldProps) {
   const isDisabled = !!readOnly || !!disabled;
 
   const validate = useCallback(
@@ -38,6 +57,7 @@ export default function ReferenceEnvField({ label, value, onChange, readOnly, di
         if (name) seen.add(name);
         const src = it.source || 'static';
         if (src === 'vault' && it.value && !isVaultRef(it.value)) errors.push(`env ${name || '(blank)'} vault ref must be mount/path/key`);
+        if (src === 'variable' && !(it.value || '').trim()) errors.push(`env ${name || '(blank)'} variable name is required`);
       }
       onValidate?.(errors);
     },
@@ -68,10 +88,41 @@ export default function ReferenceEnvField({ label, value, onChange, readOnly, di
   );
 
   const updateAt = useCallback(
-    (idx: number, next: Partial<EnvVar>) => {
-      commit(value.map((item, i) => (i === idx ? { ...item, ...next } : item)));
+    (idx: number, updater: (current: EnvVar) => EnvVar) => {
+      commit(value.map((item, i) => (i === idx ? updater(item) : item)));
     },
     [value, commit],
+  );
+
+  const handleValueChange = useCallback(
+    (idx: number, nextValue: string) => {
+      updateAt(idx, (current) => {
+        const sourceType = toReferenceSourceType(current.source);
+        const nextShape = writeReferenceValue(current.meta.valueShape, nextValue, sourceType);
+        return {
+          ...current,
+          value: nextValue,
+          meta: { ...current.meta, valueShape: nextShape },
+        } satisfies EnvVar;
+      });
+    },
+    [updateAt],
+  );
+
+  const handleSourceTypeChange = useCallback(
+    (idx: number, nextType: ReferenceSourceType) => {
+      updateAt(idx, (current) => {
+        const nextSource = fromReferenceSourceType(nextType);
+        const nextShape = encodeReferenceValue(nextType, '', current.meta.valueShape);
+        return {
+          ...current,
+          source: nextSource,
+          value: '',
+          meta: { ...current.meta, valueShape: nextShape },
+        } satisfies EnvVar;
+      });
+    },
+    [updateAt],
   );
 
   return (
@@ -84,55 +135,27 @@ export default function ReferenceEnvField({ label, value, onChange, readOnly, di
             <Input
               className="text-xs w-1/3"
               value={it.name}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => updateAt(idx, { name: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                updateAt(idx, (current) => ({ ...current, name: e.target.value }))
+              }
               disabled={isDisabled}
               placeholder="VARIABLE_NAME"
               data-testid={`env-name-${idx}`}
             />
-            <Input
-              className="text-xs flex-1"
+            <ReferenceInput
               value={it.value}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => updateAt(idx, { value: e.target.value })}
+              onChange={(event) => handleValueChange(idx, event.target.value)}
+              sourceType={toReferenceSourceType(it.source)}
+              onSourceTypeChange={(type) => handleSourceTypeChange(idx, type)}
               disabled={isDisabled}
-              placeholder={it.source === 'vault' ? 'mount/path/key' : 'value'}
+              placeholder="Value or reference..."
+              secretKeys={secretKeys}
+              variableKeys={variableKeys}
+              size="sm"
+              className="text-xs"
+              onFocus={() => onValueFocus?.(idx)}
               data-testid={`env-value-${idx}`}
             />
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      disabled={isDisabled}
-                      aria-label={(it.source ?? 'static') === 'vault' ? 'Vault secret' : 'Static value'}
-                      data-testid={`env-source-trigger-${idx}`}
-                    >
-                      {!it.source || it.source === 'static' ? <Brackets aria-hidden className="size-4" /> : <Lock aria-hidden className="size-4" />}
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{(it.source ?? 'static') === 'vault' ? 'Vault secret' : 'Static value'}</TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end">
-                <DropdownMenuRadioGroup
-                  value={it.source || 'static'}
-                  onValueChange={(v: string) => {
-                    const s = v === 'vault' || v === 'static' ? v : 'static';
-                    updateAt(idx, { source: s });
-                  }}
-                  data-testid={`env-source-menu-${idx}`}
-                >
-                  <DropdownMenuRadioItem value="static" data-testid={`env-source-option-static-${idx}`}>
-                    <Brackets className="mr-2 size-4" /> Static
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="vault" data-testid={`env-source-option-vault-${idx}`}>
-                    <Lock className="mr-2 size-4" /> Vault
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
             <Button
               type="button"
               size="icon"

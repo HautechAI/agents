@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReferenceConfigValue } from '@/components/nodeProperties/types';
+import { deepEqual } from '@/lib/utils';
 import type { StaticConfigViewProps } from './types';
-import ReferenceField, { type ReferenceValue } from './shared/ReferenceField';
+import ReferenceField from './shared/ReferenceField';
+import { normalizeReferenceValue, readReferenceDetails } from './shared/referenceUtils';
+import { useSecretKeyOptions } from './shared/useSecretKeyOptions';
+import { useVariableKeyOptions } from './shared/useVariableKeyOptions';
 
 function isVaultRef(v: string) {
   // Expect mount/path/key
@@ -8,61 +13,72 @@ function isVaultRef(v: string) {
 }
 
 export default function SlackTriggerConfigView({ value, onChange, readOnly, disabled, onValidate }: StaticConfigViewProps) {
-  const init = useMemo(() => ({ ...(value || {}) }), [value]);
-  const [app_token, setAppToken] = useState<ReferenceValue | string>(() => {
-    const t = (init as Record<string, unknown>)['app_token'];
-    if (!t) return '';
-    if (typeof t === 'string') return t;
-    if (t && typeof t === 'object' && 'value' in (t as Record<string, unknown>)) return t as ReferenceValue;
-    return '';
-  });
-  const [bot_token, setBotToken] = useState<ReferenceValue | string>(() => {
-    const t = (init as Record<string, unknown>)['bot_token'];
-    if (!t) return '';
-    if (typeof t === 'string') return t;
-    if (t && typeof t === 'object' && 'value' in (t as Record<string, unknown>)) return t as ReferenceValue;
-    return '';
-  });
+  const appTokenRaw = value['app_token'];
+  const botTokenRaw = value['bot_token'];
+  const secretKeys = useSecretKeyOptions();
+  const variableKeys = useVariableKeyOptions();
+
+  const normalizedAppToken = useMemo(() => normalizeReferenceValue(appTokenRaw), [appTokenRaw]);
+  const normalizedBotToken = useMemo(() => normalizeReferenceValue(botTokenRaw), [botTokenRaw]);
+
+  const [appToken, setAppToken] = useState<ReferenceConfigValue>(normalizedAppToken);
+  const [botToken, setBotToken] = useState<ReferenceConfigValue>(normalizedBotToken);
+
+  useEffect(() => {
+    setAppToken(normalizedAppToken);
+  }, [normalizedAppToken]);
+
+  useEffect(() => {
+    setBotToken(normalizedBotToken);
+  }, [normalizedBotToken]);
+
+  const appDetails = useMemo(() => readReferenceDetails(appToken), [appToken]);
+  const botDetails = useMemo(() => readReferenceDetails(botToken), [botToken]);
 
   useEffect(() => {
     const errors: string[] = [];
-    const at = typeof app_token === 'string' ? { value: app_token, source: 'static' as const } : (app_token as ReferenceValue);
-    if ((at.value || '').length === 0) errors.push('app_token is required');
-    if ((at.source || 'static') === 'static' && at.value && !at.value.startsWith('xapp-')) errors.push('app_token must start with xapp-');
-    if ((at.source || 'static') === 'vault' && at.value && !isVaultRef(at.value)) errors.push('app_token vault ref must be mount/path/key');
-    const bt = typeof bot_token === 'string' ? { value: bot_token, source: 'static' as const } : (bot_token as ReferenceValue);
-    if ((bt.value || '').length === 0) errors.push('bot_token is required');
-    if ((bt.source || 'static') === 'static' && bt.value && !bt.value.startsWith('xoxb-')) errors.push('bot_token must start with xoxb-');
-    if ((bt.source || 'static') === 'vault' && bt.value && !isVaultRef(bt.value)) errors.push('bot_token vault ref must be mount/path/key');
+    const trimmedApp = appDetails.value.trim();
+    const trimmedBot = botDetails.value.trim();
+
+    if (!trimmedApp.length) errors.push('app_token is required');
+    if (appDetails.sourceType === 'text' && trimmedApp && !trimmedApp.startsWith('xapp-')) errors.push('app_token must start with xapp-');
+    if (appDetails.sourceType === 'secret' && trimmedApp && !isVaultRef(trimmedApp)) errors.push('app_token vault ref must be mount/path/key');
+    if (appDetails.sourceType === 'variable' && !trimmedApp.length) errors.push('app_token variable name is required');
+
+    if (!trimmedBot.length) errors.push('bot_token is required');
+    if (botDetails.sourceType === 'text' && trimmedBot && !trimmedBot.startsWith('xoxb-')) errors.push('bot_token must start with xoxb-');
+    if (botDetails.sourceType === 'secret' && trimmedBot && !isVaultRef(trimmedBot)) errors.push('bot_token vault ref must be mount/path/key');
+    if (botDetails.sourceType === 'variable' && !trimmedBot.length) errors.push('bot_token variable name is required');
     onValidate?.(errors);
-  }, [app_token, bot_token, onValidate]);
+  }, [appDetails.value, appDetails.sourceType, botDetails.value, botDetails.sourceType, onValidate]);
 
   useEffect(() => {
-    const at = typeof app_token === 'string' ? { value: app_token, source: 'static' as const } : (app_token as ReferenceValue);
-    const bt = typeof bot_token === 'string' ? { value: bot_token, source: 'static' as const } : (bot_token as ReferenceValue);
-    const next = { ...value, app_token: at, bot_token: bt };
-    if (JSON.stringify(value || {}) !== JSON.stringify(next)) onChange(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app_token, bot_token]);
+    const currentApp = value['app_token'];
+    const currentBot = value['bot_token'];
+    if (deepEqual(currentApp, appToken) && deepEqual(currentBot, botToken)) return;
+    onChange({ ...value, app_token: appToken, bot_token: botToken });
+  }, [appToken, botToken, onChange, value]);
 
   return (
     <div className="space-y-3 text-sm">
       <ReferenceField
         label="App token"
-        value={app_token}
-        onChange={(v) => setAppToken(v)}
+        value={appToken}
+        onChange={setAppToken}
         readOnly={readOnly}
         disabled={disabled}
-        placeholder="xapp-... or mount/path/key"
+        secretKeys={secretKeys}
+        variableKeys={variableKeys}
         helpText="Use source=vault to reference a secret as mount/path/key. Must start with xapp- for static."
       />
       <ReferenceField
         label="Bot token"
-        value={bot_token}
-        onChange={(v) => setBotToken(v)}
+        value={botToken}
+        onChange={setBotToken}
         readOnly={readOnly}
         disabled={disabled}
-        placeholder="xoxb-... or mount/path/key"
+        secretKeys={secretKeys}
+        variableKeys={variableKeys}
         helpText="Use source=vault to reference a secret as mount/path/key. Must start with xoxb- for static."
       />
     </div>
