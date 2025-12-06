@@ -77,7 +77,6 @@ type ThreadMock = {
   createdAt: string;
   parentId: string | null;
   metrics: { remindersCount: number; containersCount: number; activity: 'idle' | 'waiting' | 'working'; runsCount: number };
-  agentTitle?: string | null;
   agentRole?: string | null;
   agentName?: string | null;
 };
@@ -109,7 +108,6 @@ function makeThread(overrides: Partial<ThreadMock> = {}): ThreadMock {
     createdAt: t(0),
     parentId: null,
     metrics: { remindersCount: 0, containersCount: 0, activity: 'idle', runsCount: 0 },
-    agentTitle: 'Agent Uno',
     agentRole: 'Lead Planner',
     agentName: 'Planner Uno',
     ...overrides,
@@ -221,7 +219,7 @@ function registerThreadScenario({
   );
 }
 
-function registerGraphAgents(agents: Array<{ id: string; template: string; title: string }>) {
+function registerGraphAgents(agents: Array<{ id: string; template: string; name: string; title?: string }>) {
   const graphPayload = {
     name: 'agents',
     version: 1,
@@ -229,7 +227,7 @@ function registerGraphAgents(agents: Array<{ id: string; template: string; title
     nodes: agents.map((agent) => ({
       id: agent.id,
       template: agent.template,
-      config: { title: agent.title },
+      config: { name: agent.name, title: agent.title },
     })),
     edges: [],
   } satisfies PersistedGraph;
@@ -238,7 +236,7 @@ function registerGraphAgents(agents: Array<{ id: string; template: string; title
     (agent) =>
       ({
         name: agent.template,
-        title: agent.title,
+        title: agent.title ?? agent.name,
         kind: 'agent',
         sourcePorts: [] as string[],
         targetPorts: [] as string[],
@@ -666,8 +664,8 @@ describe('AgentsThreads page', () => {
       const thread = makeThread();
       registerThreadScenario({ thread, runs: [] });
       registerGraphAgents([
-        { id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' },
-        { id: 'agent-2', template: 'agent.template.two', title: 'Agent Cirrus' },
+        { id: 'agent-1', template: 'agent.template.one', name: 'Agent Nimbus', title: 'Agent Nimbus' },
+        { id: 'agent-2', template: 'agent.template.two', name: 'Agent Cirrus', title: 'Agent Cirrus' },
       ]);
 
       renderAt('/agents/threads');
@@ -696,8 +694,8 @@ describe('AgentsThreads page', () => {
       const thread = makeThread();
       registerThreadScenario({ thread, runs: [] });
       registerGraphAgents([
-        { id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' },
-        { id: 'agent-2', template: 'agent.template.two', title: 'Agent Cirrus' },
+        { id: 'agent-1', template: 'agent.template.one', name: 'Agent Nimbus', title: 'Agent Nimbus' },
+        { id: 'agent-2', template: 'agent.template.two', name: 'Agent Cirrus', title: 'Agent Cirrus' },
       ]);
 
       renderAt('/agents/threads');
@@ -724,7 +722,7 @@ describe('AgentsThreads page', () => {
       const user = userEvent.setup();
       const thread = makeThread();
       registerThreadScenario({ thread, runs: [] });
-      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', name: 'Agent Nimbus', title: 'Agent Nimbus' }]);
 
       renderAt('/agents/threads');
 
@@ -828,7 +826,7 @@ describe('AgentsThreads page', () => {
       const user = userEvent.setup();
       const existingThread = makeThread();
       registerThreadScenario({ thread: existingThread, runs: [] });
-      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', name: 'Agent Nimbus', title: 'Agent Nimbus' }]);
 
       const newThreadId = 'thread-new-1';
       const newThread = makeThread({ id: newThreadId, summary: 'Fresh thread', alias: 'alias-new', createdAt: t(500) });
@@ -894,7 +892,7 @@ describe('AgentsThreads page', () => {
       const user = userEvent.setup();
       const thread = makeThread();
       registerThreadScenario({ thread, runs: [] });
-      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', name: 'Agent Nimbus', title: 'Agent Nimbus' }]);
 
       const postHandler = async () => HttpResponse.json({ error: code }, { status });
 
@@ -923,7 +921,7 @@ describe('AgentsThreads page', () => {
       const user = userEvent.setup();
       const thread = makeThread();
       registerThreadScenario({ thread, runs: [] });
-      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', title: 'Agent Nimbus' }]);
+      registerGraphAgents([{ id: 'agent-1', template: 'agent.template.one', name: 'Agent Nimbus', title: 'Agent Nimbus' }]);
 
       const newThreadId = 'thread-new-2';
       const newThread = makeThread({ id: newThreadId, summary: 'Pending thread', alias: 'alias-pending', createdAt: t(600) });

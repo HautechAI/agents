@@ -31,11 +31,15 @@ export const ManageToolStaticConfigSchema = z
   })
   .strict();
 
+const normalizeKey = (value: string): string => value.trim().normalize('NFKC').toLowerCase();
+
 @Injectable({ scope: Scope.TRANSIENT })
 export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStaticConfigSchema>> implements ThreadChannelNode {
   private tool?: ManageFunctionTool;
   private readonly workers: Set<AgentNode> = new Set();
-  private readonly invocationContexts: Map<string, { parentThreadId: string; workerTitle: string; callerAgent: CallerAgent }>
+  private readonly workerNames: Map<AgentNode, { name: string; normalized: string }> = new Map();
+  private readonly workersByName: Map<string, AgentNode> = new Map();
+  private readonly invocationContexts: Map<string, { parentThreadId: string; workerName: string; callerAgent: CallerAgent }>
     = new Map();
   private readonly pendingWaiters: Map<string, { resolve: (text: string) => void; reject: (err: Error) => void }>
     = new Map();
@@ -51,38 +55,77 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
 
   addWorker(agent: AgentNode): void {
     if (!agent) throw new Error('ManageToolNode: agent instance is required');
-    if (this.workers.has(agent)) return;
-    const title = this.resolveAgentTitle(agent);
-    const existing = this.getWorkerByTitle(title);
-    if (existing && existing !== agent) {
-      throw new Error(`ManageToolNode: worker with title "${title}" already exists`);
+    if (!this.workers.has(agent)) {
+      this.workers.add(agent);
     }
-    this.workers.add(agent);
+    try {
+      this.syncWorker(agent);
+    } catch (err) {
+      this.workers.delete(agent);
+      throw err;
+    }
   }
 
   removeWorker(agent: AgentNode): void {
     if (!agent) return;
     this.workers.delete(agent);
+    const info = this.workerNames.get(agent);
+    if (!info) return;
+    const holder = this.workersByName.get(info.normalized);
+    if (holder === agent) {
+      this.workersByName.delete(info.normalized);
+    }
+    this.workerNames.delete(agent);
   }
 
   listWorkers(): string[] {
-    return Array.from(this.workers).map((worker) => this.resolveAgentTitle(worker));
+    this.refreshAllWorkers();
+    return Array.from(this.workers).map((worker) => this.workerNames.get(worker)!.name);
   }
 
   getWorkers(): AgentNode[] {
     return Array.from(this.workers);
   }
 
-  getWorkerByTitle(title: string): AgentNode | undefined {
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) return undefined;
-    for (const agent of this.workers) {
-      if (this.resolveAgentTitle(agent) === trimmedTitle) return agent;
-    }
-    return undefined;
+  getWorkerByName(name: string): AgentNode | undefined {
+    this.refreshAllWorkers();
+    const normalized = normalizeKey(name);
+    if (!normalized) return undefined;
+    const agent = this.workersByName.get(normalized);
+    if (!agent) return undefined;
+    this.syncWorker(agent);
+    return agent;
   }
 
-  private resolveAgentTitle(agent: AgentNode): string {
+  getWorkerName(agent: AgentNode): string {
+    return this.syncWorker(agent).name;
+  }
+
+  private refreshAllWorkers(): void {
+    for (const agent of this.workers) {
+      this.syncWorker(agent);
+    }
+  }
+
+  private syncWorker(agent: AgentNode): { name: string; normalized: string } {
+    const latest = this.extractWorkerName(agent);
+    const current = this.workerNames.get(agent);
+    if (current && current.name === latest.name && current.normalized === latest.normalized) {
+      return current;
+    }
+    if (current) {
+      const holder = this.workersByName.get(current.normalized);
+      if (holder === agent) {
+        this.workersByName.delete(current.normalized);
+      }
+    }
+    this.ensureUniqueName(agent, latest);
+    this.workerNames.set(agent, latest);
+    this.workersByName.set(latest.normalized, agent);
+    return latest;
+  }
+
+  private extractWorkerName(agent: AgentNode): { name: string; normalized: string } {
     let config: AgentNode['config'];
     try {
       config = agent.config;
@@ -90,19 +133,19 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
       throw new Error('ManageToolNode: worker agent missing configuration');
     }
 
-    const normalize = (value?: string | null): string => (typeof value === 'string' ? value.trim() : '');
+    const rawName = typeof config?.name === 'string' ? config.name.trim() : '';
+    if (!rawName) {
+      throw new Error('ManageToolNode: worker agent requires non-empty name');
+    }
 
-    const title = normalize(config.title);
-    if (title) return title;
+    return { name: rawName, normalized: normalizeKey(rawName) };
+  }
 
-    const name = normalize(config.name);
-    const role = normalize(config.role);
-
-    if (name && role) return `${name} (${role})`;
-    if (name) return name;
-    if (role) return role;
-
-    throw new Error('ManageToolNode: worker agent requires non-empty title');
+  private ensureUniqueName(agent: AgentNode, info: { name: string; normalized: string }): void {
+    const existing = this.workersByName.get(info.normalized);
+    if (existing && existing !== agent) {
+      throw new Error(`ManageToolNode: worker with name "${info.name}" already exists`);
+    }
   }
 
   protected createTool() {
@@ -132,7 +175,7 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     return normalized >= 0 ? normalized : 0;
   }
 
-  async registerInvocation(context: { childThreadId: string; parentThreadId: string; workerTitle: string; callerAgent: CallerAgent }): Promise<void> {
+  async registerInvocation(context: { childThreadId: string; parentThreadId: string; workerName: string; callerAgent: CallerAgent }): Promise<void> {
     const trimmedChildId = context.childThreadId.trim();
     if (!trimmedChildId) return;
 
@@ -145,7 +188,7 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
 
     this.invocationContexts.set(trimmedChildId, {
       parentThreadId: context.parentThreadId,
-      workerTitle: context.workerTitle,
+      workerName: context.workerName,
       callerAgent: context.callerAgent,
     });
   }
@@ -240,27 +283,27 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     }
   }
 
-  renderWorkerResponse(workerTitle: string, text: string): string {
-    if (!text) return `Response from: ${workerTitle}`;
-    return `Response from: ${workerTitle}` + '\n' + text;
+  renderWorkerResponse(workerName: string, text: string): string {
+    if (!text) return `Response from: ${workerName}`;
+    return `Response from: ${workerName}` + '\n' + text;
   }
 
-  renderAsyncAcknowledgement(workerTitle: string): string {
-    return `Request sent to ${workerTitle}; response will follow asynchronously.`;
+  renderAsyncAcknowledgement(workerName: string): string {
+    return `Request sent to ${workerName}; response will follow asynchronously.`;
   }
 
   private async forwardToParent(
-    context: { parentThreadId: string; workerTitle: string; callerAgent: CallerAgent },
+    context: { parentThreadId: string; workerName: string; callerAgent: CallerAgent },
     text: string,
     _childThreadId: string,
   ): Promise<void> {
-    const formatted = this.renderWorkerResponse(context.workerTitle, text);
+    const formatted = this.renderWorkerResponse(context.workerName, text);
     await context.callerAgent.invoke(context.parentThreadId, [HumanMessage.fromText(formatted)]);
   }
 
   private async flushQueuedMessages(
     childThreadId: string,
-    context?: { parentThreadId: string; workerTitle: string; callerAgent: CallerAgent },
+    context?: { parentThreadId: string; workerName: string; callerAgent: CallerAgent },
   ): Promise<void> {
     const queue = this.queuedMessages.get(childThreadId);
     if (!queue || queue.length === 0) return;
