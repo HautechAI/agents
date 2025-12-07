@@ -180,6 +180,14 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     if (!trimmedChildId) return;
 
     const existingContext = this.invocationContexts.get(trimmedChildId);
+    if (this.getMode() === 'sync') {
+      const queuedCount = this.queuedMessages.get(trimmedChildId)?.length ?? 0;
+      if (queuedCount > 0) {
+        this.logger.warn?.(
+          `ManageToolNode: queued messages present in sync mode before invocation${this.format({ childThreadId: trimmedChildId, queuedCount })}`,
+        );
+      }
+    }
     if (existingContext) {
       await this.flushQueuedMessages(trimmedChildId, existingContext);
     } else {
@@ -259,8 +267,10 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     }
 
     if (mode === 'sync') {
-      this.enqueueMessage(normalizedThreadId, text);
-      return { ok: true, threadId: normalizedThreadId };
+      this.logger.error?.(
+        `ManageToolNode: sync response received without pending waiter${this.format({ threadId: normalizedThreadId })}`,
+      );
+      return { ok: false, error: 'missing_waiter', threadId: normalizedThreadId };
     }
 
     const context = this.invocationContexts.get(normalizedThreadId);

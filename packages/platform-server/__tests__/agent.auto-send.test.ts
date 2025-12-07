@@ -173,4 +173,22 @@ describe('AgentNode auto-send final response', () => {
 
     await moduleRef.close();
   });
+
+  it('auto-sends terminal error messages when invocation fails', async () => {
+    const { moduleRef, agent, transport } = await createAgentFixture();
+    await agent.setConfig({});
+
+    agent.setResponseFactory(() => {
+      throw new Error('loop failure');
+    });
+
+    await expect(agent.invoke('thread-err', [HumanMessage.fromText('boom')])).rejects.toThrow('loop failure');
+    expect(transport.sendTextToThread).toHaveBeenCalledWith(
+      'thread-err',
+      expect.stringContaining('loop failure'),
+      expect.objectContaining({ runId: 'run-1', source: 'auto_response' }),
+    );
+
+    await moduleRef.close();
+  });
 });

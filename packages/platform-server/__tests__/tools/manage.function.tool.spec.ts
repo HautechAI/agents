@@ -117,6 +117,83 @@ describe('ManageFunctionTool.execute', () => {
     expect(result).toBe('Response from: Worker Alpha\nchild response text');
   });
 
+  it('handles immediate child responses that arrive before invoke settles', async () => {
+    const persistence = {
+      getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-fast'),
+      setThreadChannelNode: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AgentsPersistenceService;
+
+    const workerInvoke = vi.fn().mockImplementation(() => {
+      if (!resolveWaiter) {
+        throw new Error('waiter not registered');
+      }
+      resolveWaiter('fast-response');
+      return Promise.resolve({ text: 'ignored' });
+    });
+
+    let resolveWaiter: ((text: string) => void) | undefined;
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub('Worker Alpha', workerAgent, {
+      nodeId: 'manage-node-fast',
+      awaitChildResponse: vi.fn().mockImplementation(async (_threadId: string) => {
+        return await new Promise<string>((resolve) => {
+          resolveWaiter = resolve;
+        });
+      }),
+    });
+
+    const { tool } = createToolInstance(persistence, manageNode);
+    const ctx = createCtx();
+
+    const result = await tool.execute(
+      { command: 'send_message', worker: 'Worker Alpha', message: 'ping' },
+      ctx,
+    );
+
+    expect(result).toBe('Response from: Worker Alpha\nfast-response');
+    expect(workerInvoke).toHaveBeenCalledTimes(1);
+    expect(resolveWaiter).toBeDefined();
+  });
+
+  it('waits for child error auto-response when invocation rejects in sync mode', async () => {
+    const persistence = {
+      getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-error'),
+      setThreadChannelNode: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AgentsPersistenceService;
+
+    let resolveWaiter: ((text: string) => void) | undefined;
+    const workerInvoke = vi.fn().mockImplementation(() => {
+      if (!resolveWaiter) {
+        throw new Error('waiter not registered');
+      }
+      resolveWaiter('child error message');
+      return Promise.reject(new Error('child failure'));
+    });
+
+    const workerAgent = { invoke: workerInvoke } as unknown as WorkerAgent;
+    const manageNode = createManageNodeStub('Worker Alpha', workerAgent, {
+      nodeId: 'manage-node-error',
+      awaitChildResponse: vi.fn().mockImplementation(async (_threadId: string) => {
+        return await new Promise<string>((resolve) => {
+          resolveWaiter = resolve;
+        });
+      }),
+    });
+
+    const { tool, logger } = createToolInstance(persistence, manageNode);
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+
+    const ctx = createCtx();
+    const result = await tool.execute(
+      { command: 'send_message', worker: 'Worker Alpha', message: 'oops' },
+      ctx,
+    );
+
+    expect(result).toBe('Response from: Worker Alpha\nchild error message');
+    expect(workerInvoke).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('child failure'));
+  });
+
   it('logs warning when parent run linking fails but continues execution', async () => {
     const persistence = {
       getOrCreateSubthreadByAlias: vi.fn().mockResolvedValue('child-thread-link-fail'),
@@ -544,8 +621,6 @@ describe('ManageFunctionTool.execute', () => {
       awaitChildResponse: vi.fn().mockResolvedValue('ignored'),
       getMode: vi.fn().mockReturnValue('sync'),
       getTimeoutMs: vi.fn().mockReturnValue(64000),
-      renderWorkerResponse: vi.fn(),
-      renderAsyncAcknowledgement: vi.fn(),
     });
 
     const { tool, linking, logger } = createToolInstance(persistence, manageNode);
@@ -553,13 +628,15 @@ describe('ManageFunctionTool.execute', () => {
     const loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
 
     const ctx = createCtx();
-    await expect(
-      tool.execute({ command: 'send_message', worker: 'Fail Worker', message: 'fail', threadAlias: undefined }, ctx),
-    ).rejects.toBe('boom');
+    const result = await tool.execute(
+      { command: 'send_message', worker: 'Fail Worker', message: 'fail', threadAlias: undefined },
+      ctx,
+    );
 
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: send_message failed {"workerName":"Fail Worker","childThreadId":"child-thread-sync","error":{"code":"unknown_error","message":"boom","retriable":false}}',
+      'Manage: sync send_message invoke failed {"workerName":"Fail Worker","childThreadId":"child-thread-sync","error":{"code":"unknown_error","message":"boom","retriable":false}}',
     );
+    expect(result).toBe('Response from: Fail Worker\nignored');
     expect(linking.registerParentToolExecution).toHaveBeenCalledWith({
       runId: ctx.runId,
       parentThreadId: 'parent-thread',
@@ -583,8 +660,6 @@ describe('ManageFunctionTool.execute', () => {
       awaitChildResponse: vi.fn().mockResolvedValue('ignored'),
       getMode: vi.fn().mockReturnValue('sync'),
       getTimeoutMs: vi.fn().mockReturnValue(64000),
-      renderWorkerResponse: vi.fn(),
-      renderAsyncAcknowledgement: vi.fn(),
     });
 
     const { tool, linking, logger } = createToolInstance(persistence, manageNode);
@@ -592,13 +667,15 @@ describe('ManageFunctionTool.execute', () => {
     const loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
 
     const ctx = createCtx();
-    await expect(
-      tool.execute({ command: 'send_message', worker: 'Fail Worker', message: 'fail', threadAlias: undefined }, ctx),
-    ).rejects.toEqual(diagnostic);
+    const result = await tool.execute(
+      { command: 'send_message', worker: 'Fail Worker', message: 'fail', threadAlias: undefined },
+      ctx,
+    );
 
     expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'Manage: send_message failed {"workerName":"Fail Worker","childThreadId":"child-thread-sync-object","error":{"code":"Y","message":"sync diagnostic","retriable":false}}',
+      'Manage: sync send_message invoke failed {"workerName":"Fail Worker","childThreadId":"child-thread-sync-object","error":{"code":"Y","message":"sync diagnostic","retriable":false}}',
     );
+    expect(result).toBe('Response from: Fail Worker\nignored');
     expect(linking.registerParentToolExecution).toHaveBeenCalledWith({
       runId: ctx.runId,
       parentThreadId: 'parent-thread',

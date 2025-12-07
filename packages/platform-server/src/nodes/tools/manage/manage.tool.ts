@@ -102,6 +102,34 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     this.logger.error(`${prefix}${this.format({ ...context, error: normalized })}`);
   }
 
+  private verifyChildAutoResponseEnabled(
+    candidate: unknown,
+    context: { workerName: string; childThreadId: string },
+  ): void {
+    try {
+      const config = (candidate as { config?: { sendFinalResponseToThread?: boolean } } | null)?.config;
+      const autoSend =
+        typeof config?.sendFinalResponseToThread === 'boolean' ? config.sendFinalResponseToThread : true;
+      if (!autoSend) {
+        this.logger.warn(
+          `Manage: sync send_message invoked on worker without auto-response${this.format({
+            workerName: context.workerName,
+            childThreadId: context.childThreadId,
+          })}`,
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.debug(
+        `Manage: unable to verify child auto-response${this.format({
+          workerName: context.workerName,
+          childThreadId: context.childThreadId,
+          error: message,
+        })}`,
+      );
+    }
+  }
+
   async execute(args: ManageInvocationArgs, ctx: LLMContext): Promise<ManageInvocationSuccess> {
     const { command, worker, message, threadAlias } = args;
     const parentThreadId = ctx.threadId;
@@ -183,6 +211,8 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
       const mode = this.node.getMode();
       const timeoutMs = this.node.getTimeoutMs();
       let waitPromise: Promise<string> | null = null;
+      let invocationPromise: Promise<InvocationOutcome> | undefined;
+      let invocationIsPromise = false;
       try {
         await this.node.registerInvocation({
           childThreadId,
@@ -193,27 +223,40 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
         if (mode === 'sync') {
           waitPromise = this.node.awaitChildResponse(childThreadId, timeoutMs);
         }
+        if (mode === 'sync' && !waitPromise) {
+          throw new Error('Manage: missing waiter in sync mode');
+        }
+
         const invocationResult: InvocationResult = targetAgent.invoke(childThreadId, [HumanMessage.fromText(messageText)]);
-        const { promise: invocationPromise, isPromise } = this.toInvocationPromise(invocationResult);
+        const normalizedInvocation = this.toInvocationPromise(invocationResult);
+        invocationPromise = normalizedInvocation.promise;
+        invocationIsPromise = normalizedInvocation.isPromise;
 
         if (mode === 'sync') {
-          const [responseText] = await Promise.all([waitPromise!, invocationPromise]);
+          invocationPromise?.catch((err) => {
+            this.logError('Manage: sync send_message invoke failed', { workerName: resolvedName, childThreadId }, err);
+          });
+          this.verifyChildAutoResponseEnabled(targetAgent, {
+            workerName: resolvedName,
+            childThreadId,
+          });
+          const responseText = await waitPromise!;
           return this.node.renderWorkerResponse(resolvedName, responseText);
         }
 
-        if (!isPromise) {
+        if (!invocationIsPromise) {
           const resultType = invocationResult === null ? 'null' : typeof invocationResult;
           this.logger.error(
             `Manage: async send_message invoke returned non-promise${this.format({
               workerName: resolvedName,
               childThreadId,
               resultType,
-              promiseLike: isPromise,
+              promiseLike: invocationIsPromise,
             })}`,
           );
         }
 
-        invocationPromise.catch((err) => {
+        invocationPromise?.catch((err) => {
           this.logError('Manage: async send_message failed', { workerName: resolvedName, childThreadId }, err);
         });
 
