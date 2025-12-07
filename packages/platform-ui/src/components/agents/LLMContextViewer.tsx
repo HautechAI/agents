@@ -48,8 +48,7 @@ const HIGHLIGHT_ROLES: ReadonlySet<ContextItem['role']> = new Set(['user', 'assi
 export function LLMContextViewer({ ids, highlightLastCount, initialVisibleCount, onItemsRendered, onBeforeLoadMore }: LLMContextViewerProps) {
   const sanitizedInitialVisibleCount = useMemo(() => {
     if (typeof initialVisibleCount !== 'number' || !Number.isFinite(initialVisibleCount)) return undefined;
-    const coerced = Math.max(0, Math.floor(initialVisibleCount));
-    return coerced > 0 ? coerced : undefined;
+    return Math.max(0, Math.floor(initialVisibleCount));
   }, [initialVisibleCount]);
 
   const { items, hasMore, isInitialLoading, isFetching, error, loadMore, total, targetCount } = useContextItems(ids, {

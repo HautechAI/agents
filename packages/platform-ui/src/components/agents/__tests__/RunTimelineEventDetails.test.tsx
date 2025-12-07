@@ -943,6 +943,55 @@ describe('RunTimelineEventDetails', () => {
     }
   });
 
+  it('renders an empty initial context window when new count is zero and loads older items on demand', async () => {
+    const loadMore = vi.fn();
+    const useContextItemsSpy = vi.spyOn(contextItemsModule, 'useContextItems').mockReturnValue({
+      items: [],
+      total: 3,
+      loadedCount: 0,
+      targetCount: 0,
+      hasMore: true,
+      isInitialLoading: false,
+      isFetching: false,
+      error: null,
+      loadMore,
+    });
+
+    try {
+      const event = buildEvent({
+        type: 'llm_call',
+        llmCall: {
+          provider: 'openai',
+          model: 'gpt-empty-tail',
+          temperature: null,
+          topP: null,
+          stopReason: null,
+          contextItemIds: ['ctx-1', 'ctx-2', 'ctx-3'],
+          newContextItemCount: 0,
+          responseText: null,
+          rawResponse: null,
+          toolCalls: [],
+        },
+        toolExecution: undefined,
+      });
+
+      const { container } = renderDetails(event);
+
+      expect(useContextItemsSpy).toHaveBeenCalled();
+      const call = useContextItemsSpy.mock.calls[0];
+      expect(call?.[1]).toMatchObject({ initialCount: 0 });
+
+      const loadButton = screen.getByRole('button', { name: /Load older context \(0 of 3\)/i });
+      expect(loadButton).toBeInTheDocument();
+      expect(container.querySelectorAll('[data-context-item-id]')).toHaveLength(0);
+
+      await userEvent.click(loadButton);
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    } finally {
+      useContextItemsSpy.mockRestore();
+    }
+  });
+
   it('highlights only the last N conversational context items', () => {
     const contextItems: ContextItem[] = [
       {

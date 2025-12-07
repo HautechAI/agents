@@ -678,11 +678,9 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
     if (!llmCall) return undefined;
     const rawCount = llmCall.newContextItemCount;
     if (typeof rawCount !== 'number' || !Number.isFinite(rawCount)) return undefined;
-    const coerced = Math.max(0, Math.floor(rawCount));
-    if (coerced <= 0) return undefined;
     const total = llmCall.contextItemIds.length;
-    if (total <= 0) return undefined;
-    return Math.min(coerced, total);
+    if (total <= 0) return 0;
+    return Math.min(Math.max(0, Math.floor(rawCount)), total);
   }, [llmCall]);
   const toolExecution = event.toolExecution;
   const callAgentMeta = useMemo(() => {

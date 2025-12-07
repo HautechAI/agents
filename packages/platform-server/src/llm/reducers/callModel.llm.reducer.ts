@@ -282,8 +282,6 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       context.summary = undefined;
     }
 
-    const conversationIsNew: boolean[] = [];
-
     for (const entry of sequence) {
       switch (entry.kind) {
         case 'system': {
@@ -334,7 +332,6 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
         case 'conversation': {
           const idx = conversationIndex;
           const existingId = context.messageIds[idx] ?? null;
-          const priorId = existingId && existingId.length > 0 ? existingId : null;
           this.collectContextId({
             existingId,
             pending,
@@ -345,7 +342,6 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
               } else {
                 context.messageIds.push(id);
               }
-              conversationIsNew[idx] = !priorId || id !== priorId;
             },
           });
           conversationIndex += 1;
@@ -371,7 +367,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       kind: SequenceEntry['kind'];
       place?: 'after_system' | 'last_message';
       id: string | null;
-      isNew?: boolean;
+      message?: LLMMessage;
     }> = [];
     for (const entry of sequence) {
       switch (entry.kind) {
@@ -403,7 +399,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
           const id = context.messageIds[entry.index] ?? null;
           if (id) {
             contextItemIds.push(id);
-            orderedKinds.push({ kind: 'conversation', id, isNew: conversationIsNew[entry.index] ?? false });
+            orderedKinds.push({ kind: 'conversation', id, message: entry.message });
           }
           break;
         }
@@ -411,26 +407,37 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     }
 
     let tailConversationCount = 0;
+    let countedNonHuman = false;
     for (let i = orderedKinds.length - 1; i >= 0; i -= 1) {
       const entry = orderedKinds[i];
       if (entry.kind === 'memory' && entry.place === 'last_message' && tailConversationCount === 0) {
         continue;
       }
-      if (entry.kind === 'conversation') {
-        if (entry.id && entry.isNew) {
-          tailConversationCount += 1;
-          continue;
+      if (entry.kind !== 'conversation') {
+        if (tailConversationCount > 0) {
+          break;
         }
-        if (tailConversationCount === 0) {
-          continue;
-        }
-        break;
-      }
-      if (entry.kind === 'memory' && entry.place === 'last_message') {
         continue;
       }
+      if (!entry.id) {
+        continue;
+      }
+      const message = entry.message;
+      const isHuman = message instanceof HumanMessage;
       if (tailConversationCount === 0) {
+        tailConversationCount = 1;
+        if (isHuman) {
+          break;
+        }
+        countedNonHuman = true;
         continue;
+      }
+      if (!isHuman) {
+        tailConversationCount += 1;
+        continue;
+      }
+      if (!countedNonHuman) {
+        tailConversationCount += 1;
       }
       break;
     }

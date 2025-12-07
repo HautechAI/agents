@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CallModelLLMReducer } from '../src/llm/reducers/callModel.llm.reducer';
-import { AIMessage, HumanMessage, ResponseMessage, SystemMessage } from '@agyn/llm';
+import { AIMessage, HumanMessage, ResponseMessage, SystemMessage, ToolCallOutputMessage } from '@agyn/llm';
 import { Signal } from '../src/signal';
 
 describe('CallModelLLMReducer usage metrics', () => {
@@ -184,5 +184,81 @@ describe('CallModelLLMReducer usage metrics', () => {
       summaryIncluded: true,
       memoryPlacement: 'after_system',
     });
+  });
+
+  it('includes assistant responses and tool outputs in the next tail window', async () => {
+    const startLLMCall = vi.fn(async () => ({ id: `evt-tail-${startLLMCall.mock.calls.length + 1}` }));
+    const createContextItems = vi
+      .fn()
+      .mockResolvedValueOnce(['ctx-user-initial'])
+      .mockResolvedValueOnce(['ctx-assistant-initial'])
+      .mockResolvedValueOnce(['ctx-assistant-next']);
+
+    const runEvents = {
+      startLLMCall,
+      publishEvent: vi.fn(async () => {}),
+      completeLLMCall: vi.fn(async () => {}),
+      createContextItems,
+      connectContextItemsToRun: vi.fn(async () => {}),
+      createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
+    };
+
+    const firstResponse = new ResponseMessage({ output: [] as any, text: 'assistant step 1' } as any);
+    const secondResponse = new ResponseMessage({ output: [] as any, text: 'assistant step 2' } as any);
+    const llm = {
+      call: vi.fn().mockResolvedValueOnce(firstResponse).mockResolvedValueOnce(secondResponse),
+    };
+
+    const eventsBus = { publishEvent: vi.fn(async () => {}), subscribeToRunEvents: vi.fn(() => vi.fn()) };
+    const reducer = new CallModelLLMReducer(runEvents as any, eventsBus as any).init({
+      llm: llm as any,
+      model: 'gpt-tail-window',
+      systemPrompt: 'SYS',
+      tools: [],
+    });
+
+    const firstState = {
+      messages: [HumanMessage.fromText('Trigger tool execution')],
+      context: { messageIds: [], memory: [], system: { id: 'ctx-system-1' } },
+    } as any;
+
+    const ctxBase = {
+      threadId: 'thread-tail-window',
+      runId: 'run-tail-window',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: { getAgentNodeId: () => 'agent-tail-window' } as any,
+    };
+
+    const afterFirstCall = await reducer.invoke(firstState, ctxBase);
+
+    const firstStartArgs = startLLMCall.mock.calls[0]?.[0];
+    expect(firstStartArgs?.newContextItemCount).toBe(1);
+    expect(firstStartArgs?.contextItemIds).toEqual(['ctx-system-1', 'ctx-user-initial']);
+
+    const toolOutput = ToolCallOutputMessage.fromResponse('tool-1', 'tool output payload');
+    const secondState = {
+      ...afterFirstCall,
+      messages: [...afterFirstCall.messages, toolOutput],
+      context: {
+        ...afterFirstCall.context,
+        messageIds: [...afterFirstCall.context.messageIds, 'ctx-tool-output-1'],
+      },
+    };
+
+    await reducer.invoke(secondState as any, {
+      ...ctxBase,
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+    });
+
+    const secondStartArgs = startLLMCall.mock.calls[1]?.[0];
+    expect(secondStartArgs?.newContextItemCount).toBe(2);
+    expect(secondStartArgs?.contextItemIds).toEqual([
+      'ctx-system-1',
+      'ctx-user-initial',
+      'ctx-assistant-initial',
+      'ctx-tool-output-1',
+    ]);
   });
 });
