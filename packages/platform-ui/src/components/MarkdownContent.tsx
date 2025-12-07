@@ -15,6 +15,10 @@ type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & {
   node?: unknown;
 };
 
+type MarkdownPreProps = ComponentPropsWithoutRef<'pre'> & {
+  node?: unknown;
+};
+
 export function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
   const markdownComponents: Components = {
     // Headings
@@ -136,7 +140,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
     },
 
     // Code blocks
-    pre: ({ children }) => {
+    pre: ({ children, className: preClassName, style: preStyle, node: _node, ...props }: MarkdownPreProps) => {
       const childArray = Children.toArray(children) as ReactElement[];
       const firstElement = childArray.find((item) => isValidElement(item)) as ReactElement | undefined;
 
@@ -144,19 +148,27 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
         return firstElement;
       }
 
-      if (firstElement && typeof firstElement.props?.className === 'string' && /language-/.test(firstElement.props.className)) {
-        return <>{children}</>;
-      }
-
       if (firstElement && firstElement.type === 'pre') {
         return firstElement;
       }
 
+      const mergedClassName = [
+        'my-4 w-full overflow-x-auto rounded-[10px] bg-[var(--agyn-bg-light)] p-3 font-mono text-sm leading-relaxed text-[var(--agyn-dark)]',
+        preClassName,
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      const mergedStyle = {
+        whiteSpace: 'pre-wrap' as const,
+        wordBreak: 'break-word' as const,
+        minWidth: 0,
+        maxWidth: '100%',
+        ...(preStyle ?? {}),
+      };
+
       return (
-        <pre
-          className="my-4 w-full overflow-x-auto rounded-[10px] bg-[var(--agyn-bg-light)] p-3 font-mono text-sm leading-relaxed text-[var(--agyn-dark)]"
-          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', minWidth: 0, maxWidth: '100%' }}
-        >
+        <pre className={mergedClassName} style={mergedStyle} {...props}>
           {childArray.map((item) =>
             isValidElement(item)
               ? cloneElement(item, {

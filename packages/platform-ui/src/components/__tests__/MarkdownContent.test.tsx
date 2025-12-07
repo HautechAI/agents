@@ -38,6 +38,8 @@ const newlineSeparatedText = ['First line', 'Second line', 'Third line'].join('\
 
 const listMarkdown = ['- First item', '- Second item'].join('\n');
 
+const sanitizedHtmlCodeBlock = '<pre><code>alpha\nbeta\ngamma</code></pre>';
+
 describe('MarkdownContent rendering', () => {
   it('renders expected markdown primitives including underline and lists', () => {
     render(<MarkdownContent content={richMarkdown} className="prose" />);
@@ -104,6 +106,18 @@ describe('MarkdownContent rendering', () => {
     const code = pre?.querySelector('code');
     expect(code).not.toBeNull();
     expect(code?.textContent).toBe('line one\nline two');
+  });
+
+  it('renders sanitized raw HTML code blocks within pre containers', () => {
+    const { container } = render(<MarkdownContent content={sanitizedHtmlCodeBlock} />);
+
+    const pre = container.querySelector('pre');
+    expect(pre).not.toBeNull();
+    expect(pre).toHaveStyle({ whiteSpace: 'pre-wrap', wordBreak: 'break-word' });
+    expect(pre?.textContent).toBe('alpha\nbeta\ngamma');
+
+    const code = pre?.querySelector('code');
+    expect(code).not.toBeNull();
   });
 
   it('preserves single newlines as line breaks in paragraphs', () => {
