@@ -21,6 +21,13 @@ Graph persistence
 - Set `NCPS_URL_SERVER` (host-reachable) and `NCPS_URL_CONTAINER` (in-network, e.g., `http://ncps:8501`) together so Nix substituters resolve correctly inside workspaces.
 - When the server injects `NIX_CONFIG`, workspace startup logs the resolved substituters/trusted keys and runs `getent hosts ncps` plus `curl http://ncps:8501/nix-cache-info`, emitting warnings if connectivity fails.
 -
+- Workspace volume GC runs in the background (enabled by default). Tune with:
+  - `VOLUME_GC_ENABLED` (default `true`)
+  - `VOLUME_GC_INTERVAL_MS` (default `60000`)
+  - `VOLUME_GC_MAX_PER_SWEEP` (default `100`)
+  - `VOLUME_GC_CONCURRENCY` (default `3`)
+  - `VOLUME_GC_COOLDOWN_MS` (default `600000`)
+-
 Storage layout (format: 2)
 - Preferred working tree layout is root-level per-entity: `graph.meta.yaml`, `nodes/`, `edges/`.
 - Filenames are `encodeURIComponent(id)`; edge id is deterministic: `<src>-<srcH>__<tgt>-<tgtH>`.

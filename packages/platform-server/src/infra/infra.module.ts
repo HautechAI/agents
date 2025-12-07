@@ -6,6 +6,7 @@ import { VaultModule } from '../vault/vault.module';
 import { ContainerRegistry } from './container/container.registry';
 import { ContainerService } from './container/container.service';
 import { ContainerCleanupService } from './container/containerCleanup.job';
+import { VolumeGcService } from './container/volumeGc.job';
 import { ContainerThreadTerminationService } from './container/containerThreadTermination.service';
 import { GithubService } from './github/github.client';
 import { PRService } from './github/pr.usecase';
@@ -42,6 +43,16 @@ import { DockerWorkspaceEventsWatcher } from './container/containerEvent.watcher
         return svc;
       },
       inject: [ContainerRegistry, ContainerService],
+    },
+    {
+      provide: VolumeGcService,
+      useFactory: (prisma: PrismaService, containers: ContainerService) => {
+        const svc = new VolumeGcService(prisma, containers);
+        const interval = Number(process.env.VOLUME_GC_INTERVAL_MS ?? '') || 60_000;
+        svc.start(interval);
+        return svc;
+      },
+      inject: [PrismaService, ContainerService],
     },
     {
       provide: ContainerService,
@@ -84,6 +95,7 @@ import { DockerWorkspaceEventsWatcher } from './container/containerEvent.watcher
     VaultModule,
     ContainerService,
     ContainerCleanupService,
+    VolumeGcService,
     TerminalSessionsService,
     ContainerTerminalGateway,
     ContainerThreadTerminationService,
