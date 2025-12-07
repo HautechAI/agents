@@ -101,6 +101,7 @@ const makeCoordinator = () => {
     reminders,
     eventsBus,
     callOrder,
+    logger,
   };
 };
 
@@ -295,7 +296,7 @@ describe('ThreadCleanupCoordinator', () => {
     prismaStub.thread.findMany.mockResolvedValue([]);
     prismaStub.run.findMany.mockResolvedValue([]);
 
-    const { coordinator, containerService, registry } = makeCoordinator();
+    const { coordinator, containerService, registry, logger } = makeCoordinator();
     registry.listByThread.mockResolvedValue([]);
     registry.findByVolume.mockResolvedValue([
       { containerId: 'root-c1', threadId: 'root', status: 'terminating' },
@@ -308,6 +309,7 @@ describe('ThreadCleanupCoordinator', () => {
     expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
     expect(registry.markStopped).toHaveBeenCalledTimes(1);
     expect(registry.markStopped).toHaveBeenCalledWith('root-c1', 'workspace_volume_removed');
+    expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
   it('removes workspace volume when registry reports foreign references', async () => {
@@ -316,7 +318,7 @@ describe('ThreadCleanupCoordinator', () => {
     prismaStub.thread.findMany.mockResolvedValue([]);
     prismaStub.run.findMany.mockResolvedValue([]);
 
-    const { coordinator, containerService, registry } = makeCoordinator();
+    const { coordinator, containerService, registry, logger } = makeCoordinator();
     registry.listByThread.mockResolvedValue([]);
     registry.findByVolume.mockResolvedValue([
       { containerId: 'foreign-c1', threadId: 'other-thread', status: 'running' },
@@ -327,5 +329,27 @@ describe('ThreadCleanupCoordinator', () => {
 
     expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
     expect(registry.markStopped).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not warn when registry references are already stopped for the thread', async () => {
+    const now = new Date();
+    prismaStub.thread.findUnique.mockResolvedValue({ id: 'root', parentId: null, status: 'closed', createdAt: now });
+    prismaStub.thread.findMany.mockResolvedValue([]);
+    prismaStub.run.findMany.mockResolvedValue([]);
+
+    const { coordinator, containerService, registry, logger } = makeCoordinator();
+    registry.listByThread.mockResolvedValue([]);
+    registry.findByVolume.mockResolvedValue([
+      { containerId: 'root-c1', threadId: 'root', status: 'stopped' },
+      { containerId: 'root-c2', threadId: 'root', status: 'stopped' },
+    ]);
+    containerService.listContainersByVolume.mockResolvedValue([]);
+
+    await coordinator.closeThreadWithCascade('root');
+
+    expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
+    expect(registry.markStopped).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

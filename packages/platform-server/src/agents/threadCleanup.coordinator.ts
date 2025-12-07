@@ -187,13 +187,17 @@ export class ThreadCleanupCoordinator {
       }
 
       const registryRefs = await this.registry.findByVolume(volumeName);
-      if (registryRefs.length > 0) {
+      const mismatchedRefs = registryRefs.filter(
+        (ref) => ref.threadId !== threadId || ref.status !== 'stopped',
+      );
+      if (mismatchedRefs.length > 0) {
         this.logger.warn(
-          `ThreadCleanup: registry still tracks workspace volume${this.format({
+          `ThreadCleanup: registry discrepancy for workspace volume${this.format({
             threadId,
             volumeName,
             referenceCount: registryRefs.length,
-            references: registryRefs,
+            mismatchedCount: mismatchedRefs.length,
+            mismatchedRefs,
           })}`,
         );
       }
