@@ -15,6 +15,67 @@ export const configSchema = z.object({
   // Optional LiteLLM details for auto-provisioning
   litellmBaseUrl: z.string().optional(),
   litellmMasterKey: z.string().optional(),
+  litellmServiceTeamAlias: z
+    .string()
+    .default('agents-service')
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, 'LiteLLM service team alias must not be empty'),
+  litellmServiceKeyAlias: z
+    .string()
+    .default('agents-service')
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, 'LiteLLM service key alias must not be empty'),
+  litellmServiceModels: z
+    .preprocess((value) => {
+      if (value === undefined || value === null) return undefined;
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        return value
+          .split(',')
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0);
+      }
+      return value;
+    }, z.array(z.string().min(1)).nonempty())
+    .default(['all-team-models']),
+  litellmServiceKeyDuration: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      if (!trimmed) return undefined;
+      return trimmed;
+    })
+    .refine(
+      (value) =>
+        value === undefined || ['30m', '30h', '30d', '90d'].includes(value),
+      'Invalid LiteLLM service key duration',
+    ),
+  litellmCleanupOldKeys: z
+    .union([z.boolean(), z.string()])
+    .default('true')
+    .transform((value) => (typeof value === 'string' ? value.toLowerCase() === 'true' : !!value)),
+  litellmKeyValidationTimeoutMs: z
+    .union([z.string(), z.number()])
+    .default('2000')
+    .transform((value) => {
+      const n = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(n) && n > 0 ? n : 2000;
+    }),
+  litellmKeyApiRetryMax: z
+    .union([z.string(), z.number()])
+    .default('3')
+    .transform((value) => {
+      const n = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 3;
+    }),
+  litellmKeyApiRetryBaseMs: z
+    .union([z.string(), z.number()])
+    .default('300')
+    .transform((value) => {
+      const n = typeof value === 'number' ? value : Number(value);
+      return Number.isFinite(n) && n > 0 ? n : 300;
+    }),
   // Optional explicit OpenAI base URL passthrough
   openaiBaseUrl: z.string().optional(),
   githubToken: z.string().min(1).optional(),
@@ -203,6 +264,30 @@ export class ConfigService implements Config {
   get litellmMasterKey(): string | undefined {
     return this.params.litellmMasterKey;
   }
+  get litellmServiceTeamAlias(): string {
+    return this.params.litellmServiceTeamAlias;
+  }
+  get litellmServiceKeyAlias(): string {
+    return this.params.litellmServiceKeyAlias;
+  }
+  get litellmServiceModels(): string[] {
+    return this.params.litellmServiceModels;
+  }
+  get litellmServiceKeyDuration(): string | undefined {
+    return this.params.litellmServiceKeyDuration;
+  }
+  get litellmCleanupOldKeys(): boolean {
+    return this.params.litellmCleanupOldKeys;
+  }
+  get litellmKeyValidationTimeoutMs(): number {
+    return this.params.litellmKeyValidationTimeoutMs;
+  }
+  get litellmKeyApiRetryMax(): number {
+    return this.params.litellmKeyApiRetryMax;
+  }
+  get litellmKeyApiRetryBaseMs(): number {
+    return this.params.litellmKeyApiRetryBaseMs;
+  }
   get openaiBaseUrl(): string | undefined {
     return this.params.openaiBaseUrl;
   }
@@ -340,6 +425,18 @@ export class ConfigService implements Config {
         process.env.LITELLM_BASE_URL ||
         (process.env.OPENAI_BASE_URL ? process.env.OPENAI_BASE_URL.replace(/\/v1$/, '') : undefined),
       litellmMasterKey: process.env.LITELLM_MASTER_KEY,
+      litellmServiceTeamAlias:
+        process.env.LITELLM_SERVICE_TEAM_ALIAS || process.env.LITELLM_TEAM_ALIAS || 'agents-service',
+      litellmServiceKeyAlias:
+        process.env.LITELLM_SERVICE_KEY_ALIAS || process.env.LITELLM_KEY_ALIAS || 'agents-service',
+      litellmServiceModels:
+        process.env.LITELLM_SERVICE_MODELS || process.env.LITELLM_MODELS || 'all-team-models',
+      litellmServiceKeyDuration:
+        process.env.LITELLM_SERVICE_KEY_DURATION || process.env.LITELLM_KEY_DURATION,
+      litellmCleanupOldKeys: process.env.LITELLM_CLEANUP_OLD_KEYS,
+      litellmKeyValidationTimeoutMs: process.env.LITELLM_KEY_VALIDATION_TIMEOUT_MS,
+      litellmKeyApiRetryMax: process.env.LITELLM_KEY_API_RETRY_MAX,
+      litellmKeyApiRetryBaseMs: process.env.LITELLM_KEY_API_RETRY_BASE_MS,
       openaiBaseUrl: process.env.OPENAI_BASE_URL,
       githubToken: process.env.GH_TOKEN,
       // Pass raw env; schema will validate/assign default

@@ -26,17 +26,24 @@ Initial configuration (via UI)
   - Choose any name you prefer (e.g., gpt-5) and point it to a real backend model target (e.g., gpt-4o, gpt-4o-mini, or openai/gpt-4o).
   - In the Agents UI, the Model field now accepts free-text. Enter either your alias name (e.g., gpt-5) or a provider-prefixed identifier (e.g., openai/gpt-4o-mini). The UI does not validate availability; runtime will surface errors if misconfigured.
 
-App configuration: auto-provision virtual key
-- The server can auto-provision a LiteLLM virtual key at startup when OPENAI_API_KEY is not set.
-- Provide env vars to enable auto-provisioning:
-  - LITELLM_BASE_URL=http://localhost:4000
-  - LITELLM_MASTER_KEY=sk-<master-key>
-  - Optional overrides:
-    - LITELLM_MODELS=gpt-5 (comma-separated list)
-    - LITELLM_KEY_DURATION=30d
-    - LITELLM_KEY_ALIAS=agents-${process.pid}
-    - Limits: LITELLM_MAX_BUDGET, LITELLM_RPM_LIMIT, LITELLM_TPM_LIMIT, LITELLM_TEAM_ID
-- On success, the server sets OPENAI_API_KEY and OPENAI_BASE_URL automatically (defaults to `${LITELLM_BASE_URL}/v1` if not provided).
+App configuration: long-lived service token
+- When `OPENAI_API_KEY` is unset, the platform-server provisions **one** LiteLLM virtual key using a constant alias (`agents-service`).
+- The active token is persisted to `packages/platform-server/config/secrets/litellm/service_token.json` (mode `600`). Multiple instances coordinate with an advisory lock (`service_token.lock`) so only one token is created.
+- On restart the server validates the stored token (via `GET /key/info`) and reuses it. If the token is invalid or missing, the server deletes stale aliases, ensures the service team exists, and generates a replacement before updating the secrets file.
+- LiteLLM admin access still requires the base URL and master key:
+  - `LITELLM_BASE_URL=http://localhost:4000`
+  - `LITELLM_MASTER_KEY=sk-<master-key>`
+- Optional environment controls (defaults in parentheses):
+  - `LITELLM_SERVICE_TEAM_ALIAS` (`agents-service`)
+  - `LITELLM_SERVICE_KEY_ALIAS` (`agents-service`)
+  - `LITELLM_SERVICE_MODELS` (`all-team-models`, comma-separated list)
+  - `LITELLM_SERVICE_KEY_DURATION` (unset for non-expiring; supports `30m`, `30h`, `30d`, `90d`)
+  - `LITELLM_CLEANUP_OLD_KEYS` (`true`)
+  - `LITELLM_KEY_VALIDATION_TIMEOUT_MS` (`2000`)
+  - `LITELLM_KEY_API_RETRY_MAX` (`3`)
+  - `LITELLM_KEY_API_RETRY_BASE_MS` (`300`)
+- To force rotation, delete `service_token.json` (and optionally clean up the alias in LiteLLM); the next startup will provision a fresh token.
+- Successful provisioning still exports `OPENAI_API_KEY` and `OPENAI_BASE_URL` to the runtime (`${LITELLM_BASE_URL}/v1` if not explicitly provided).
 
 Model naming guidance
 - Use the exact LiteLLM model name as configured in the LiteLLM UI. For OpenAI via LiteLLM, provider prefixes may be required (e.g., openai/gpt-4o-mini).

@@ -20,3 +20,4 @@ packages/.DS_Store
 
 packages/platform-ui/storybook-static/
 packages/platform-server/data/
+packages/platform-server/config/secrets/

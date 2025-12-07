@@ -3,16 +3,28 @@ import OpenAI from 'openai';
 import { ConfigService } from '../../core/services/config.service';
 import { LLMProvisioner } from './llm.provisioner';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { LiteLLMTokenStore, StoredLiteLLMServiceToken } from './litellm.token-store';
+import { LiteLLMAdminClient } from './litellm.admin-client';
 
-type ProvisionResult = { apiKey?: string; baseUrl?: string };
+interface LiteLLMProvisionerOverrides {
+  tokenStore?: LiteLLMTokenStore;
+  now?: () => Date;
+  fetchImpl?: typeof fetch;
+}
 
 @Injectable()
 export class LiteLLMProvisioner extends LLMProvisioner {
   private readonly logger = new Logger(LiteLLMProvisioner.name);
+  private readonly tokenStore: LiteLLMTokenStore;
+  private readonly now: () => Date;
+  private readonly fetchImpl?: typeof fetch;
   private llm?: LLM;
 
-  constructor(@Inject(ConfigService) private cfg: ConfigService) {
+  constructor(@Inject(ConfigService) private cfg: ConfigService, overrides: LiteLLMProvisionerOverrides = {}) {
     super();
+    this.tokenStore = overrides.tokenStore ?? new LiteLLMTokenStore();
+    this.now = overrides.now ?? (() => new Date());
+    this.fetchImpl = overrides.fetchImpl;
   }
 
   async getLLM(): Promise<LLM> {
@@ -30,127 +42,130 @@ export class LiteLLMProvisioner extends LLMProvisioner {
       return { apiKey: this.cfg.openaiApiKey, baseUrl: this.cfg.openaiBaseUrl };
     }
 
-    // Otherwise require LiteLLM config to be present for provisioning
     if (!this.cfg.litellmBaseUrl || !this.cfg.litellmMasterKey) {
       throw new Error('litellm_missing_config');
     }
 
-    const { apiKey: provKey, baseUrl } = await this.provisionWithRetry();
-    if (provKey) return { apiKey: provKey, baseUrl };
-
-    // Fallback to configured envs
-    const fallbackKey = this.cfg.litellmMasterKey as string; // ensureKeys guarantees presence
-    const base =
-      this.cfg.openaiBaseUrl ||
-      (this.cfg.litellmBaseUrl ? `${this.cfg.litellmBaseUrl.replace(/\/$/, '')}/v1` : undefined);
-    return { apiKey: fallbackKey, baseUrl: base };
+    return this.resolveServiceToken();
   }
 
-  private async provisionWithRetry(): Promise<ProvisionResult> {
-    const base = this.cfg.litellmBaseUrl;
-    const master = this.cfg.litellmMasterKey;
-    if (!base || !master) return {};
+  private async resolveServiceToken(): Promise<{ apiKey: string; baseUrl: string }> {
+    const base = this.sanitizeBaseUrl(this.cfg.litellmBaseUrl as string);
+    const master = this.cfg.litellmMasterKey as string;
+    const inferenceBase = this.cfg.openaiBaseUrl || `${base}/v1`;
+    const admin = this.createAdminClient(base, master);
 
-    const models = this.toList(process.env.LITELLM_MODELS, ['all-team-models']);
-    const duration = process.env.LITELLM_KEY_DURATION || '30d';
-    const keyAlias = process.env.LITELLM_KEY_ALIAS || `agents-${process.pid}`;
-    const maxBudget = process.env.LITELLM_MAX_BUDGET;
-    const rpm = process.env.LITELLM_RPM_LIMIT;
-    const tpm = process.env.LITELLM_TPM_LIMIT;
-    const teamId = process.env.LITELLM_TEAM_ID;
+    const initialRecord = await this.tokenStore.read();
+    const reused = await this.tryReuseToken(admin, inferenceBase, initialRecord);
+    if (reused) return reused;
 
-    const url = `${base.replace(/\/$/, '')}/key/generate`;
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      authorization: `Bearer ${master}`,
-    };
-    const body: Record<string, unknown> = { models, duration, key_alias: keyAlias };
-    const num = (s?: string) => {
-      if (!s) return undefined;
-      const n = Number(s);
-      return Number.isFinite(n) && n >= 0 ? n : undefined;
-    };
-    const mb = num(maxBudget);
-    const r = num(rpm);
-    const t = num(tpm);
-    if (mb !== undefined) body.max_budget = mb;
-    if (r !== undefined) body.rpm_limit = r;
-    if (t !== undefined) body.tpm_limit = t;
-    if (typeof teamId === 'string' && teamId.length > 0) body.team_id = teamId;
+    return this.tokenStore.withLock(async () => {
+      const currentRecord = await this.tokenStore.read();
+      const lockedReuse = await this.tryReuseToken(admin, inferenceBase, currentRecord);
+      if (lockedReuse) return lockedReuse;
+      return this.provisionNewToken(admin, base, inferenceBase, currentRecord);
+    });
+  }
 
-    const maxAttempts = 3;
-    const baseDelayMs = 300;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-        if (!resp.ok && (await this.handleProvisionNonOk(resp, attempt, maxAttempts, baseDelayMs))) continue;
-        const data = (await this.safeReadJson(resp)) as { key?: string } | undefined;
-        const key = data?.key;
-        if (!key || typeof key !== 'string') throw new Error('litellm_provision_invalid_response');
-        const baseUrl = this.cfg.openaiBaseUrl || `${base.replace(/\/$/, '')}/v1`;
-        return { apiKey: key, baseUrl };
-      } catch (e: unknown) {
-        const msg = e && typeof e === 'object' && 'message' in e ? (e as { message?: string }).message : String(e);
-        if (attempt < maxAttempts) {
-          this.logger.debug(
-            `LiteLLM provisioning attempt failed ${JSON.stringify({ attempt, error: msg || String(e) })}`,
-          );
-          await this.delay(baseDelayMs * Math.pow(2, attempt - 1));
-          continue;
-        }
-        this.logger.error(
-          `LiteLLM provisioning failed after retries ${JSON.stringify({ attempts: maxAttempts })}`,
-        );
-        return {};
+  private createAdminClient(base: string, masterKey: string): LiteLLMAdminClient {
+    return new LiteLLMAdminClient(masterKey, base, {
+      logger: this.logger,
+      maxAttempts: this.cfg.litellmKeyApiRetryMax,
+      baseDelayMs: this.cfg.litellmKeyApiRetryBaseMs,
+      fetchImpl: this.fetchImpl,
+    });
+  }
+
+  private sanitizeBaseUrl(base: string): string {
+    return base.replace(/\/+$/, '');
+  }
+
+  private async tryReuseToken(
+    admin: LiteLLMAdminClient,
+    inferenceBase: string,
+    record?: StoredLiteLLMServiceToken,
+  ): Promise<{ apiKey: string; baseUrl: string } | undefined> {
+    if (!record) return undefined;
+    try {
+      const valid = await admin.validateKey(record.token, this.cfg.litellmKeyValidationTimeoutMs);
+      if (valid) {
+        return { apiKey: record.token, baseUrl: inferenceBase };
       }
-    }
-    return {};
-  }
-
-  private async handleProvisionNonOk(
-    resp: Response,
-    attempt: number,
-    maxAttempts: number,
-    baseDelayMs: number,
-  ): Promise<boolean> {
-    const text = await this.safeReadText(resp);
-    this.logger.error(
-      `LiteLLM provisioning failed ${JSON.stringify({ status: String(resp.status), body: this.redact(text) })}`,
-    );
-    const shouldRetry = resp.status >= 500 && attempt < maxAttempts;
-    if (shouldRetry) {
-      await this.delay(baseDelayMs * Math.pow(2, attempt - 1));
-      return true;
-    }
-    throw new Error(`litellm_provision_failed_${resp.status}`);
-  }
-
-  private toList(v: string | undefined, dflt: string[]): string[] {
-    const parts = (v || '')
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean);
-    return parts.length ? parts : dflt;
-  }
-  private async safeReadText(resp: Response): Promise<string> {
-    try {
-      return await resp.text();
-    } catch {
-      return '';
-    }
-  }
-  private async safeReadJson(resp: Response): Promise<unknown> {
-    try {
-      return await resp.json();
-    } catch {
+      this.logger.warn(
+        `LiteLLM service token invalid; regenerating ${JSON.stringify({ alias: record.alias })}`,
+      );
       return undefined;
+    } catch (error) {
+      this.logger.error(
+        `LiteLLM service token validation failed ${JSON.stringify({ alias: record.alias, error: this.toErrorMessage(error) })}`,
+      );
+      throw error;
     }
   }
-  private redact(s: string): string {
-    if (!s) return s;
-    return s.replace(/(sk-[A-Za-z0-9_-]{6,})/g, '[REDACTED]');
+
+  private async provisionNewToken(
+    admin: LiteLLMAdminClient,
+    adminBase: string,
+    inferenceBase: string,
+    previous?: StoredLiteLLMServiceToken,
+  ): Promise<{ apiKey: string; baseUrl: string }> {
+    const alias = this.cfg.litellmServiceKeyAlias;
+    if (this.cfg.litellmCleanupOldKeys) {
+      await admin.deleteByAlias(alias).catch((error) => this.logCleanupFailure('delete_by_alias', error));
+    }
+
+    const teamId = await this.ensureServiceTeam(admin, previous);
+    const generated = await admin.generateKey({
+      alias,
+      teamId,
+      models: this.cfg.litellmServiceModels,
+      duration: this.cfg.litellmServiceKeyDuration,
+    });
+
+    const record: StoredLiteLLMServiceToken = {
+      token: generated.key,
+      alias,
+      team_id: teamId ?? generated.teamId ?? previous?.team_id,
+      base_url: adminBase,
+      created_at: this.now().toISOString(),
+    };
+    await this.tokenStore.write(record);
+
+    if (this.cfg.litellmCleanupOldKeys && previous?.token && previous.token !== generated.key) {
+      await admin.deleteKeys([previous.token]).catch((error) => this.logCleanupFailure('delete_previous', error));
+    }
+
+    return { apiKey: record.token, baseUrl: inferenceBase };
   }
-  private async delay(ms: number) {
-    await new Promise((res) => setTimeout(res, ms));
+
+  private async ensureServiceTeam(
+    admin: LiteLLMAdminClient,
+    previous?: StoredLiteLLMServiceToken,
+  ): Promise<string | undefined> {
+    const alias = this.cfg.litellmServiceTeamAlias;
+    if (previous?.team_id) {
+      const existing = await admin.fetchTeamById(previous.team_id);
+      if (existing) return existing.id;
+    }
+    const existingByAlias = await admin.fetchTeamByAlias(alias);
+    if (existingByAlias) return existingByAlias.id;
+    const created = await admin.createTeam(alias);
+    return created.id;
+  }
+
+  private logCleanupFailure(action: string, error: unknown): void {
+    this.logger.warn(
+      `LiteLLM cleanup failed ${JSON.stringify({ action, error: this.toErrorMessage(error) })}`,
+    );
+  }
+
+  private toErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return 'unknown_error';
+    }
   }
 }
