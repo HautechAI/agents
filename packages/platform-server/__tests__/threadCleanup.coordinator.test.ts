@@ -37,7 +37,11 @@ const makeCoordinator = () => {
   };
   const registry = {
     listByThread: vi.fn(async () => [] as Array<{ containerId: string; status: 'running' }>),
-    findByVolume: vi.fn(async () => [] as Array<{ containerId: string; threadId: string | null; status: 'running' }>),
+    findByVolume: vi.fn(
+      async () =>
+        [] as Array<{ containerId: string; threadId: string | null; status: 'running' | 'terminating' | 'stopped' }>,
+    ),
+    markStopped: vi.fn(async () => undefined),
   };
   const containerService = {
     listContainersByVolume: vi.fn(async () => [] as string[]),
@@ -261,7 +265,7 @@ describe('ThreadCleanupCoordinator', () => {
     expect(callOrder.indexOf('metricsAncestors:root')).toBeGreaterThan(callOrder.indexOf('metrics:root'));
   });
 
-  it('skips workspace volume removal when references remain', async () => {
+  it('skips workspace volume removal when Docker reports references', async () => {
     const now = new Date();
     prismaStub.thread.findUnique.mockResolvedValue({ id: 'root', parentId: null, status: 'closed', createdAt: now });
     prismaStub.thread.findMany.mockResolvedValue([]);
@@ -269,12 +273,13 @@ describe('ThreadCleanupCoordinator', () => {
 
     const { coordinator, containerService, registry, reminders, eventsBus, callOrder } = makeCoordinator();
     registry.listByThread.mockResolvedValue([]);
-    registry.findByVolume.mockResolvedValue([{ containerId: 'other', threadId: 'other-thread', status: 'running' }]);
-    containerService.listContainersByVolume.mockResolvedValue([]);
+    registry.findByVolume.mockResolvedValue([]);
+    containerService.listContainersByVolume.mockResolvedValue(['docker-c1']);
 
     await coordinator.closeThreadWithCascade('root');
 
     expect(containerService.removeVolume).not.toHaveBeenCalled();
+    expect(registry.markStopped).not.toHaveBeenCalled();
     expect(reminders.cancelThreadReminders).toHaveBeenCalledWith({ threadId: 'root' });
     expect(eventsBus.emitThreadMetrics).toHaveBeenCalledWith({ threadId: 'root' });
     expect(eventsBus.emitThreadMetricsAncestors).toHaveBeenCalledWith({ threadId: 'root' });
@@ -282,5 +287,45 @@ describe('ThreadCleanupCoordinator', () => {
     const metricsIndex = callOrder.indexOf('metrics:root');
     expect(metricsIndex).toBeGreaterThan(callOrder.indexOf('reminders:root'));
     expect(callOrder.indexOf('metricsAncestors:root')).toBeGreaterThan(metricsIndex);
+  });
+
+  it('removes workspace volume when registry references belong to closing thread', async () => {
+    const now = new Date();
+    prismaStub.thread.findUnique.mockResolvedValue({ id: 'root', parentId: null, status: 'closed', createdAt: now });
+    prismaStub.thread.findMany.mockResolvedValue([]);
+    prismaStub.run.findMany.mockResolvedValue([]);
+
+    const { coordinator, containerService, registry } = makeCoordinator();
+    registry.listByThread.mockResolvedValue([]);
+    registry.findByVolume.mockResolvedValue([
+      { containerId: 'root-c1', threadId: 'root', status: 'terminating' },
+      { containerId: 'root-c2', threadId: 'root', status: 'stopped' },
+    ]);
+    containerService.listContainersByVolume.mockResolvedValue([]);
+
+    await coordinator.closeThreadWithCascade('root');
+
+    expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
+    expect(registry.markStopped).toHaveBeenCalledTimes(1);
+    expect(registry.markStopped).toHaveBeenCalledWith('root-c1', 'workspace_volume_removed');
+  });
+
+  it('removes workspace volume when registry reports foreign references', async () => {
+    const now = new Date();
+    prismaStub.thread.findUnique.mockResolvedValue({ id: 'root', parentId: null, status: 'closed', createdAt: now });
+    prismaStub.thread.findMany.mockResolvedValue([]);
+    prismaStub.run.findMany.mockResolvedValue([]);
+
+    const { coordinator, containerService, registry } = makeCoordinator();
+    registry.listByThread.mockResolvedValue([]);
+    registry.findByVolume.mockResolvedValue([
+      { containerId: 'foreign-c1', threadId: 'other-thread', status: 'running' },
+    ]);
+    containerService.listContainersByVolume.mockResolvedValue([]);
+
+    await coordinator.closeThreadWithCascade('root');
+
+    expect(containerService.removeVolume).toHaveBeenCalledWith('ha_ws_root', { force: true });
+    expect(registry.markStopped).not.toHaveBeenCalled();
   });
 });

@@ -41,7 +41,7 @@ describe('ContainerCleanupService.sweepSelective', () => {
     expect(containers.stopContainer.mock.calls.map(([id]) => id)).toEqual(['sidecar', 'workspace']);
     expect(containers.removeContainer.mock.calls).toEqual([
       ['sidecar', { force: true, removeVolumes: true }],
-      ['workspace', { force: true, removeVolumes: false }],
+      ['workspace', { force: true, removeVolumes: true }],
     ]);
     expect(registry.markStopped).toHaveBeenCalledWith('workspace', 'thread_closed');
   });
