@@ -3,32 +3,20 @@ import OpenAI from 'openai';
 import { ConfigService } from '../../core/services/config.service';
 import { LLMProvisioner } from './llm.provisioner';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { LiteLLMTokenStore, StoredLiteLLMServiceToken } from './litellm.token-store';
 import { LiteLLMAdminClient } from './litellm.admin-client';
 
 interface LiteLLMProvisionerOverrides {
-  tokenStore?: LiteLLMTokenStore;
-  now?: () => Date;
   fetchImpl?: typeof fetch;
 }
 
 @Injectable()
 export class LiteLLMProvisioner extends LLMProvisioner {
   private readonly logger = new Logger(LiteLLMProvisioner.name);
-  private readonly tokenStore: LiteLLMTokenStore;
-  private readonly now: () => Date;
   private readonly fetchImpl?: typeof fetch;
   private llm?: LLM;
 
   constructor(@Inject(ConfigService) private cfg: ConfigService, overrides: LiteLLMProvisionerOverrides = {}) {
     super();
-    this.tokenStore =
-      overrides.tokenStore ??
-      new LiteLLMTokenStore({
-        lockStaleThresholdMs: cfg.litellmTokenLockStaleMs,
-        logger: this.logger,
-      });
-    this.now = overrides.now ?? (() => new Date());
     this.fetchImpl = overrides.fetchImpl;
   }
 
@@ -51,117 +39,38 @@ export class LiteLLMProvisioner extends LLMProvisioner {
       throw new Error('litellm_missing_config');
     }
 
-    return this.resolveServiceToken();
+    return this.provisionLiteLLMToken();
   }
 
-  private async resolveServiceToken(): Promise<{ apiKey: string; baseUrl: string }> {
+  private async provisionLiteLLMToken(): Promise<{ apiKey: string; baseUrl: string }> {
     const base = this.sanitizeBaseUrl(this.cfg.litellmBaseUrl as string);
     const master = this.cfg.litellmMasterKey as string;
     const inferenceBase = this.cfg.openaiBaseUrl || `${base}/v1`;
     const admin = this.createAdminClient(base, master);
 
-    const initialRecord = await this.tokenStore.read();
-    const reused = await this.tryReuseToken(admin, inferenceBase, initialRecord);
-    if (reused) return reused;
+    await admin
+      .deleteByAlias(SERVICE_KEY_ALIAS)
+      .catch((error) => this.logger.warn(`LiteLLM delete alias failed ${this.toErrorMessage(error)}`));
 
-    return this.tokenStore.withLock(async () => {
-      const currentRecord = await this.tokenStore.read();
-      const lockedReuse = await this.tryReuseToken(admin, inferenceBase, currentRecord);
-      if (lockedReuse) return lockedReuse;
-      return this.provisionNewToken(admin, base, inferenceBase, currentRecord);
+    const generated = await admin.generateKey({
+      alias: SERVICE_KEY_ALIAS,
+      models: this.parseModels(process.env.LITELLM_MODELS),
     });
+
+    return { apiKey: generated.key, baseUrl: inferenceBase };
   }
 
   private createAdminClient(base: string, masterKey: string): LiteLLMAdminClient {
     return new LiteLLMAdminClient(masterKey, base, {
       logger: this.logger,
-      maxAttempts: this.cfg.litellmKeyApiRetryMax,
-      baseDelayMs: this.cfg.litellmKeyApiRetryBaseMs,
+      maxAttempts: ADMIN_MAX_ATTEMPTS,
+      baseDelayMs: ADMIN_BASE_DELAY_MS,
       fetchImpl: this.fetchImpl,
     });
   }
 
   private sanitizeBaseUrl(base: string): string {
     return base.replace(/\/+$/, '');
-  }
-
-  private async tryReuseToken(
-    admin: LiteLLMAdminClient,
-    inferenceBase: string,
-    record?: StoredLiteLLMServiceToken,
-  ): Promise<{ apiKey: string; baseUrl: string } | undefined> {
-    if (!record) return undefined;
-    try {
-      const valid = await admin.validateKey(record.token, this.cfg.litellmKeyValidationTimeoutMs);
-      if (valid) {
-        return { apiKey: record.token, baseUrl: inferenceBase };
-      }
-      this.logger.warn(
-        `LiteLLM service token invalid; regenerating ${JSON.stringify({ alias: record.alias })}`,
-      );
-      return undefined;
-    } catch (error) {
-      this.logger.error(
-        `LiteLLM service token validation failed ${JSON.stringify({ alias: record.alias, error: this.toErrorMessage(error) })}`,
-      );
-      throw error;
-    }
-  }
-
-  private async provisionNewToken(
-    admin: LiteLLMAdminClient,
-    adminBase: string,
-    inferenceBase: string,
-    previous?: StoredLiteLLMServiceToken,
-  ): Promise<{ apiKey: string; baseUrl: string }> {
-    const alias = this.cfg.litellmServiceKeyAlias;
-    if (this.cfg.litellmCleanupOldKeys) {
-      await admin.deleteByAlias(alias).catch((error) => this.logCleanupFailure('delete_by_alias', error));
-    }
-
-    const teamId = await this.ensureServiceTeam(admin, previous);
-    const generated = await admin.generateKey({
-      alias,
-      teamId,
-      models: this.cfg.litellmServiceModels,
-      duration: this.cfg.litellmServiceKeyDuration,
-    });
-
-    const record: StoredLiteLLMServiceToken = {
-      token: generated.key,
-      alias,
-      team_id: teamId ?? generated.teamId ?? previous?.team_id,
-      base_url: adminBase,
-      created_at: this.now().toISOString(),
-    };
-    await this.tokenStore.write(record);
-
-    if (this.cfg.litellmCleanupOldKeys && previous?.token && previous.token !== generated.key) {
-      await admin.deleteKeys([previous.token]).catch((error) => this.logCleanupFailure('delete_previous', error));
-    }
-
-    return { apiKey: record.token, baseUrl: inferenceBase };
-  }
-
-  private async ensureServiceTeam(
-    admin: LiteLLMAdminClient,
-    previous?: StoredLiteLLMServiceToken,
-  ): Promise<string | undefined> {
-    const alias = this.cfg.litellmServiceTeamAlias;
-    if (previous?.team_id) {
-      const existing = await admin.fetchTeamById(previous.team_id);
-      if (existing) return existing.id;
-    }
-    const existingByAlias = await admin.fetchTeamByAlias(alias);
-    if (existingByAlias) return existingByAlias.id;
-    const created = await admin.createTeam(alias);
-    return created.id;
-  }
-
-  private logCleanupFailure(action: string, error: unknown): void {
-    this.logger.warn(
-      `LiteLLM cleanup failed ${JSON.stringify({ action, error: this.toErrorMessage(error) })}`,
-    );
   }
 
   private toErrorMessage(error: unknown): string {
@@ -173,4 +82,17 @@ export class LiteLLMProvisioner extends LLMProvisioner {
       return 'unknown_error';
     }
   }
+
+  private parseModels(raw: string | undefined): string[] {
+    const list = (raw || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return list.length > 0 ? list : DEFAULT_SERVICE_MODELS;
+  }
 }
+
+const SERVICE_KEY_ALIAS = 'agents-service';
+const DEFAULT_SERVICE_MODELS = ['all-team-models'];
+const ADMIN_MAX_ATTEMPTS = 3;
+const ADMIN_BASE_DELAY_MS = 300;
