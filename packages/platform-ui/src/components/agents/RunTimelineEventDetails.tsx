@@ -8,6 +8,7 @@ import type {
   ToolOutputTerminal,
   ToolOutputSource,
 } from '@/api/types/agents';
+import { extractLlmResponse } from '@/utils/llmResponse';
 import { STATUS_COLORS, formatDuration, getEventTypeLabel } from './runTimelineFormatting';
 import { LLMContextViewer } from './LLMContextViewer';
 import { waitForStableScrollHeight } from './waitForStableScrollHeight';
@@ -671,7 +672,8 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
   const hasOtherSections = otherSections.length > 0;
 
   const llmCall = event.llmCall;
-  const hasLlmResponse = Boolean(llmCall?.responseText);
+  const responseText = extractLlmResponse(event);
+  const hasLlmResponse = Boolean(responseText && responseText.trim().length > 0);
   const hasLlmToolCalls = (llmCall?.toolCalls.length ?? 0) > 0;
   const usageMetrics = llmCall?.usage;
   const contextInitialVisibleCount = useMemo(() => {
@@ -908,7 +910,7 @@ export function RunTimelineEventDetails({ event }: { event: RunTimelineEvent }) 
                   {hasLlmResponse && (
                     <div className="flex min-h-0 flex-col overflow-hidden rounded border border-gray-200 bg-white md:flex-1">
                       <header className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Response</header>
-                      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">{textBlock(llmCall.responseText ?? '', 'default', '', false)}</div>
+                  <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">{textBlock(responseText, 'default', '', false)}</div>
                     </div>
                   )}
                   {hasLlmToolCalls && (

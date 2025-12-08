@@ -248,6 +248,41 @@ describe('RunTimelineEventDetails', () => {
     expect(screen.queryByText('Raw response')).toBeNull();
   });
 
+  it('renders response text derived from raw response when responseText is missing', () => {
+    const event = buildEvent({
+      type: 'llm_call',
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-derived',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [],
+        responseText: null,
+        rawResponse: {
+          outputs: [
+            {
+              content: {
+                type: 'text',
+                text: 'Synthesized assistant reasoning',
+              },
+            },
+          ],
+        },
+        toolCalls: [],
+      },
+      toolExecution: undefined,
+    });
+
+    renderDetails(event);
+
+    const responseSection = screen.getByText('Response').parentElement;
+    expect(responseSection).toBeTruthy();
+    if (responseSection) {
+      expect(within(responseSection).getByText('Synthesized assistant reasoning')).toBeInTheDocument();
+    }
+  });
+
   it('keeps tool calls isolated between events when rerendering', () => {
     const firstEvent = buildEvent({
       id: 'evt-first',
