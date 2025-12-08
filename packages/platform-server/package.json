@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc -p packages/platform-server/tsconfig.json",
+    "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "pnpm run prisma:generate && eslint .",
