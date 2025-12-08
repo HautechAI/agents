@@ -56,4 +56,4 @@ USER node
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD node -e "const net = require('node:net'); const port = Number(process.env.PORT) || 3010; const host = process.env.HEALTHCHECK_HOST || '127.0.0.1'; const socket = net.connect({ port, host }, () => { socket.end(); process.exit(0); }); socket.on('error', () => process.exit(1)); setTimeout(() => { socket.destroy(); process.exit(1); }, 2000);"
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "--experimental-specifier-resolution=node", "dist/index.js"]
