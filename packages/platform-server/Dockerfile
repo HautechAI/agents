@@ -34,7 +34,8 @@ RUN pnpm deploy --filter @agyn/platform-server --prod --legacy /opt/app
 FROM node:20-slim AS runtime
 
 ENV NODE_ENV=production \
-    PORT=3010
+    PORT=3010 \
+    NODE_PATH=/usr/local/lib/node_modules
 
 WORKDIR /opt/app/packages/platform-server
 
@@ -50,11 +51,13 @@ COPY --from=build --chown=node:node /workspace/packages/platform-server/src /opt
 COPY --from=build --chown=node:node /workspace/packages/platform-server/tsconfig.json /opt/app/packages/platform-server/tsconfig.json
 COPY --from=build --chown=node:node /workspace/packages/platform-server/prisma /opt/app/packages/platform-server/prisma
 
-RUN cd /opt/app/packages/platform-server && prisma generate
-
-RUN for dir in /opt/app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client; do \
-    ln -sf ../../.prisma "$dir/.prisma"; \
-  done
+RUN cd /opt/app/packages/platform-server \
+ && prisma generate \
+ && for dir in /opt/app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client; do \
+      [ -d "$dir" ] || continue; \
+      ln -sf ../../.prisma "$dir/.prisma"; \
+    done \
+ && chown -R node:node /opt/app/node_modules
 
 EXPOSE 3010
 
