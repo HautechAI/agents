@@ -760,7 +760,13 @@ function createUiEvent(event: RunTimelineEvent, options?: CreateUiEventOptions):
   if (event.type === 'llm_call') {
     const usage = event.llmCall?.usage;
     const fallbackContext = toRecordArray(event.metadata);
-    const context = options?.context && options.context.length > 0 ? options.context : fallbackContext;
+    const fullContext = options?.context && options.context.length > 0 ? options.context : fallbackContext;
+    const rawInitialCount = event.llmCall?.newContextItemCount;
+    const initialContextCount = typeof rawInitialCount === 'number' && Number.isFinite(rawInitialCount)
+      ? Math.max(0, Math.floor(rawInitialCount))
+      : fullContext.length;
+    const windowStart = Math.max(0, fullContext.length - Math.min(initialContextCount, fullContext.length));
+    const windowedContext = fullContext.slice(windowStart);
     const response = extractLlmResponse(event);
     return {
       id: event.id,
@@ -769,7 +775,9 @@ function createUiEvent(event: RunTimelineEvent, options?: CreateUiEventOptions):
       duration,
       status,
       data: {
-        context,
+        context: fullContext,
+        windowedContext,
+        initialContextCount,
         response,
         model: event.llmCall?.model ?? undefined,
         tokens: usage

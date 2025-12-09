@@ -1,5 +1,5 @@
 import { Clock, MessageSquare, Bot, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, ExternalLink } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToolOutputStreaming } from '@/hooks/useToolOutputStreaming';
 import { Badge } from './Badge';
@@ -36,6 +36,8 @@ export interface RunEventData extends Record<string, unknown> {
   toolName?: string;
   response?: string;
   context?: unknown;
+  windowedContext?: unknown;
+  initialContextCount?: number;
   tokens?: {
     total?: number;
     [key: string]: unknown;
@@ -80,6 +82,30 @@ export interface RunEvent {
 export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
   const [outputViewMode, setOutputViewMode] = useState<OutputViewMode>('text');
   const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
+  const fullContext = asRecordArray(event.data.context);
+  const initialContextCountRaw = asNumber(event.data.initialContextCount);
+  const normalizedInitialContextCount = typeof initialContextCountRaw === 'number' && Number.isFinite(initialContextCountRaw)
+    ? Math.max(0, Math.floor(initialContextCountRaw))
+    : fullContext.length;
+  const initialWindowFromData = asRecordArray(event.data.windowedContext);
+  const desiredInitialCount = initialWindowFromData.length > 0
+    ? Math.min(initialWindowFromData.length, fullContext.length)
+    : normalizedInitialContextCount;
+  const computeContextStartIndex = (total: number, count: number) => {
+    if (total === 0) return 0;
+    const clampedCount = Math.min(Math.max(count, 0), total);
+    return total - clampedCount;
+  };
+  const [contextStartIndex, setContextStartIndex] = useState(() =>
+    computeContextStartIndex(fullContext.length, desiredInitialCount),
+  );
+
+  useEffect(() => {
+    setContextStartIndex(computeContextStartIndex(fullContext.length, desiredInitialCount));
+  }, [event.id, fullContext.length, desiredInitialCount]);
+
+  const windowedContext = fullContext.slice(contextStartIndex);
+  const hasHiddenOlderContext = contextStartIndex > 0;
 
   const isShellToolEvent =
     event.type === 'tool' &&
@@ -215,11 +241,14 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
   };
 
   const renderLLMEvent = () => {
-    const context = asRecordArray(event.data.context);
     const response = asString(event.data.response);
     const totalTokens = asNumber(event.data.tokens?.total);
     const cost = typeof event.data.cost === 'string' ? event.data.cost : '';
     const model = asString(event.data.model);
+    const handleLoadOlderContextClick = () => {
+      if (!hasHiddenOlderContext) return;
+      setContextStartIndex(0);
+    };
 
     return (
       <div className="space-y-6 h-full flex flex-col">
@@ -280,12 +309,16 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
                 <span className="text-sm text-[var(--agyn-gray)]">Context</span>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0 border border-[var(--agyn-border-subtle)] rounded-[10px] p-4">
-                {context.length > 0 ? (
+                {fullContext.length > 0 ? (
                   <div>
-                    <button className="w-full text-sm text-[var(--agyn-blue)] hover:text-[var(--agyn-blue)]/80 py-2 mb-4 border border-[var(--agyn-border-subtle)] rounded-[6px] transition-colors">
+                    <button
+                      type="button"
+                      className="w-full text-sm text-[var(--agyn-blue)] hover:text-[var(--agyn-blue)]/80 py-2 mb-4 border border-[var(--agyn-border-subtle)] rounded-[6px] transition-colors"
+                      onClick={handleLoadOlderContextClick}
+                    >
                       Load older context
                     </button>
-                    {renderContextMessages(context)}
+                    {windowedContext.length > 0 ? renderContextMessages(windowedContext) : null}
                   </div>
                 ) : (
                   <div className="text-sm text-[var(--agyn-gray)]">No context messages</div>
