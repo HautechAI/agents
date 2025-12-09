@@ -5,7 +5,7 @@ import { ContainerThreadTerminationService } from '../infra/container/containerT
 import { ContainerCleanupService } from '../infra/container/containerCleanup.job';
 import { RunSignalsRegistry } from './run-signals.service';
 import { PrismaService } from '../core/services/prisma.service';
-import { ContainerRegistry } from '../infra/container/container.registry';
+import { ContainerRegistry, type ContainerStatus } from '../infra/container/container.registry';
 import { ContainerService } from '../infra/container/container.service';
 import { RemindersService } from './reminders.service';
 import { EventsBusService } from '../events/events-bus.service';
@@ -187,23 +187,53 @@ export class ThreadCleanupCoordinator {
       }
 
       const registryRefs = await this.registry.findByVolume(volumeName);
-      const activeRefs = registryRefs.filter((ref) => ref.threadId !== threadId || ref.status !== 'stopped');
-      if (activeRefs.length > 0) {
+      const mismatchedRefs = registryRefs.filter(
+        (ref) => ref.threadId !== threadId || ref.status !== 'stopped',
+      );
+      if (mismatchedRefs.length > 0) {
         this.logger.warn(
-          `ThreadCleanup: workspace volume referenced in registry; skipping deletion${this.format({
+          `ThreadCleanup: registry discrepancy for workspace volume${this.format({
             threadId,
             volumeName,
-            references: activeRefs,
+            referenceCount: registryRefs.length,
+            mismatchedCount: mismatchedRefs.length,
+            mismatchedRefs,
           })}`,
         );
-        return;
       }
 
       await this.containerService.removeVolume(volumeName, { force: true });
-        this.logger.log(`ThreadCleanup: workspace volume removed${this.format({ threadId, volumeName })}`);
+      this.logger.log(`ThreadCleanup: workspace volume removed${this.format({ threadId, volumeName })}`);
+
+      if (registryRefs.length > 0) {
+        await this.reconcileRegistryVolumeReferences(threadId, volumeName, registryRefs);
+      }
     } catch (error) {
       this.logger.error(
         `ThreadCleanup: failed to remove workspace volume${this.format({ threadId, volumeName, error })}`,
+      );
+    }
+  }
+
+  private async reconcileRegistryVolumeReferences(
+    threadId: string,
+    volumeName: string,
+    registryRefs: Array<{ containerId: string; threadId: string | null; status: ContainerStatus }>,
+  ): Promise<void> {
+    const staleRefs = registryRefs.filter((ref) => ref.threadId === threadId && ref.status !== 'stopped');
+    if (!staleRefs.length) return;
+
+    try {
+      await Promise.all(
+        staleRefs.map((ref) => this.registry.markStopped(ref.containerId, 'workspace_volume_removed')),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `ThreadCleanup: failed to reconcile registry after workspace volume removal${this.format({
+          threadId,
+          volumeName,
+          error,
+        })}`,
       );
     }
   }

@@ -133,6 +133,7 @@ export class ContainerCleanupService {
         await this.stopAndRemoveContainer(record.containerId, {
           graceSeconds: opts.graceSeconds,
           force: opts.force,
+          removeVolumes: opts.deleteEphemeral,
         });
         await this.registry.markStopped(record.containerId, 'thread_closed');
       } catch (error) {

@@ -20,6 +20,14 @@ Graph persistence
 - DinD sidecars keep `networkMode=container:<workspaceId>` so the workspace and sidecar share namespaces regardless of the workspace network.
 - Set `NCPS_URL_SERVER` (host-reachable) and `NCPS_URL_CONTAINER` (in-network, e.g., `http://ncps:8501`) together so Nix substituters resolve correctly inside workspaces.
 - When the server injects `NIX_CONFIG`, workspace startup logs the resolved substituters/trusted keys and runs `getent hosts ncps` plus `curl http://ncps:8501/nix-cache-info`, emitting warnings if connectivity fails.
+-
+- Workspace volume GC runs in the background (enabled by default). Tune with:
+  - `VOLUME_GC_ENABLED` (default `true`)
+  - `VOLUME_GC_INTERVAL_MS` (default `60000`)
+  - `VOLUME_GC_MAX_PER_SWEEP` (default `100`)
+  - `VOLUME_GC_CONCURRENCY` (default `3`)
+  - `VOLUME_GC_COOLDOWN_MS` (default `600000`)
+-
 ## MCP environment configuration
 
 Local MCP server nodes accept an environment overlay via the `env` array in node config. Each entry includes a `name` and a `value`, where `value` may be a literal string or a reference resolved at runtime.
