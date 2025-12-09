@@ -25,6 +25,8 @@ COPY . .
 
 RUN pnpm install --filter @agyn/platform-server... --offline --frozen-lockfile
 
+RUN pnpm --filter @agyn/platform-server run prisma:generate
+
 RUN pnpm --filter @agyn/platform-server run prebuild
 
 RUN pnpm deploy --filter @agyn/platform-server --prod --legacy /opt/app
@@ -47,6 +49,12 @@ COPY --from=build --chown=node:node /workspace/packages/platform-server/package.
 COPY --from=build --chown=node:node /workspace/packages/platform-server/src /opt/app/packages/platform-server/src
 COPY --from=build --chown=node:node /workspace/packages/platform-server/tsconfig.json /opt/app/packages/platform-server/tsconfig.json
 COPY --from=build --chown=node:node /workspace/packages/platform-server/prisma /opt/app/packages/platform-server/prisma
+
+RUN cd /opt/app/packages/platform-server && prisma generate
+
+RUN for dir in /opt/app/node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client; do \
+    ln -sf ../../.prisma "$dir/.prisma"; \
+  done
 
 EXPOSE 3010
 
