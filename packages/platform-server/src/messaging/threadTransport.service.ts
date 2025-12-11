@@ -87,6 +87,10 @@ export class ThreadTransportService {
         return result;
       }
 
+      if (result.persist === false) {
+        return result;
+      }
+
       try {
         await this.persistence.recordTransportAssistantMessage({
           threadId: normalizedThreadId,

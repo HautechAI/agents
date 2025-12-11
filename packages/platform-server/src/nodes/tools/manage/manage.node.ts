@@ -263,7 +263,7 @@ export class ManageToolNode extends BaseToolNode<z.infer<typeof ManageToolStatic
     const waiter = this.pendingWaiters.get(normalizedThreadId);
     if (waiter) {
       waiter.resolve(text);
-      return { ok: true, threadId: normalizedThreadId };
+      return { ok: true, threadId: normalizedThreadId, persist: false };
     }
 
     if (mode === 'sync') {

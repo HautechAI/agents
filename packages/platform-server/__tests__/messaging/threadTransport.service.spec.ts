@@ -39,12 +39,25 @@ describe('ThreadTransportService', () => {
     expect(sendToChannel).toHaveBeenCalledWith('thread-1', 'hello world');
     expect(result.ok).toBe(true);
     expect(result.threadId).toBe('thread-1');
+    expect(result.persist).toBeUndefined();
     expect(recordTransportAssistantMessage).toHaveBeenCalledWith({
       threadId: 'thread-1',
       text: 'hello world',
       runId: 'run-1',
       source: 'auto_response',
     });
+  });
+
+  it('skips persistence when channel result sets persist false', async () => {
+    threadFindUnique.mockResolvedValue({ channelNodeId: 'node-123' });
+    const sendToChannel = vi.fn().mockResolvedValue({ ok: true, threadId: 'thread-7', persist: false });
+    getNodeInstance.mockReturnValue({ sendToChannel });
+
+    const result = await service.sendTextToThread('thread-7', 'reply text');
+
+    expect(sendToChannel).toHaveBeenCalledWith('thread-7', 'reply text');
+    expect(result).toEqual({ ok: true, threadId: 'thread-7', persist: false });
+    expect(recordTransportAssistantMessage).not.toHaveBeenCalled();
   });
 
   it('returns error when channel node does not implement transport interface', async () => {
