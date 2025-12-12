@@ -13,8 +13,10 @@ describe('ThreadTransportService', () => {
   const getNodeInstance = vi.fn();
   const runtime = { getNodeInstance } as unknown as LiveGraphRuntime;
   const recordTransportAssistantMessage = vi.fn();
+  const getLastRunAssistantOutput = vi.fn();
   const persistence = {
     recordTransportAssistantMessage,
+    getLastRunAssistantOutput,
   } as unknown as AgentsPersistenceService;
   let service: ThreadTransportService;
 
@@ -23,6 +25,8 @@ describe('ThreadTransportService', () => {
     getNodeInstance.mockReset();
     recordTransportAssistantMessage.mockReset();
     recordTransportAssistantMessage.mockResolvedValue({ messageId: 'msg-1' });
+    getLastRunAssistantOutput.mockReset();
+    getLastRunAssistantOutput.mockResolvedValue(null);
     service = new ThreadTransportService(prismaService, runtime, persistence);
   });
 
@@ -39,7 +43,6 @@ describe('ThreadTransportService', () => {
     expect(sendToChannel).toHaveBeenCalledWith('thread-1', 'hello world');
     expect(result.ok).toBe(true);
     expect(result.threadId).toBe('thread-1');
-    expect(result.persist).toBeUndefined();
     expect(recordTransportAssistantMessage).toHaveBeenCalledWith({
       threadId: 'thread-1',
       text: 'hello world',
@@ -48,16 +51,69 @@ describe('ThreadTransportService', () => {
     });
   });
 
-  it('skips persistence when channel result sets persist false', async () => {
+  it('dedups manage sync auto_response outputs', async () => {
     threadFindUnique.mockResolvedValue({ channelNodeId: 'node-123' });
-    const sendToChannel = vi.fn().mockResolvedValue({ ok: true, threadId: 'thread-7', persist: false });
-    getNodeInstance.mockReturnValue({ sendToChannel });
+    const sendToChannel = vi.fn().mockResolvedValue({ ok: true, threadId: 'thread-1' });
+    const getMode = vi.fn().mockReturnValue('sync');
+    getNodeInstance.mockReturnValue({ sendToChannel, getMode });
+    getLastRunAssistantOutput.mockResolvedValue('hello world');
 
-    const result = await service.sendTextToThread('thread-7', 'reply text');
+    const result = await service.sendTextToThread('thread-1', 'hello world', {
+      runId: 'run-1',
+      source: 'auto_response',
+    });
 
-    expect(sendToChannel).toHaveBeenCalledWith('thread-7', 'reply text');
-    expect(result).toEqual({ ok: true, threadId: 'thread-7', persist: false });
+    expect(sendToChannel).toHaveBeenCalledWith('thread-1', 'hello world');
+    expect(getMode).toHaveBeenCalled();
+    expect(getLastRunAssistantOutput).toHaveBeenCalledWith('run-1', 'thread-1');
     expect(recordTransportAssistantMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, threadId: 'thread-1' });
+  });
+
+  it('persists for async-mode channel even with auto_response', async () => {
+    threadFindUnique.mockResolvedValue({ channelNodeId: 'node-123' });
+    const sendToChannel = vi.fn().mockResolvedValue({ ok: true, threadId: 'thread-async' });
+    const getMode = vi.fn().mockReturnValue('async');
+    getNodeInstance.mockReturnValue({ sendToChannel, getMode });
+
+    const result = await service.sendTextToThread('thread-async', 'text', {
+      runId: 'run-2',
+      source: 'auto_response',
+    });
+
+    expect(sendToChannel).toHaveBeenCalledWith('thread-async', 'text');
+    expect(getMode).toHaveBeenCalled();
+    expect(getLastRunAssistantOutput).not.toHaveBeenCalled();
+    expect(recordTransportAssistantMessage).toHaveBeenCalledWith({
+      threadId: 'thread-async',
+      text: 'text',
+      runId: 'run-2',
+      source: 'auto_response',
+    });
+    expect(result).toEqual({ ok: true, threadId: 'thread-async' });
+  });
+
+  it('persists when runId missing or source differs', async () => {
+    threadFindUnique.mockResolvedValue({ channelNodeId: 'node-123' });
+    const sendToChannel = vi.fn().mockResolvedValue({ ok: true, threadId: 'thread-3' });
+    const getMode = vi.fn().mockReturnValue('sync');
+    getNodeInstance.mockReturnValue({ sendToChannel, getMode });
+
+    const result = await service.sendTextToThread('thread-3', 'text', {
+      runId: null,
+      source: 'manual',
+    });
+
+    expect(sendToChannel).toHaveBeenCalledWith('thread-3', 'text');
+    expect(getMode).toHaveBeenCalled();
+    expect(getLastRunAssistantOutput).not.toHaveBeenCalled();
+    expect(recordTransportAssistantMessage).toHaveBeenCalledWith({
+      threadId: 'thread-3',
+      text: 'text',
+      runId: null,
+      source: 'manual',
+    });
+    expect(result).toEqual({ ok: true, threadId: 'thread-3' });
   });
 
   it('returns error when channel node does not implement transport interface', async () => {

@@ -199,17 +199,6 @@ describe('ManageTool unit', () => {
     });
   });
 
-  it('sendToChannel resolves sync waiter without requesting persistence', async () => {
-    const harness = await createHarness();
-    harness.awaitSpy.mockRestore();
-
-    const waiterPromise = harness.node.awaitChildResponse('child-default', 0);
-    const result = await harness.node.sendToChannel('child-default', 'child reply');
-
-    await expect(waiterPromise).resolves.toBe('child reply');
-    expect(result).toEqual({ ok: true, threadId: 'child-default', persist: false });
-  });
-
   it('send_message: prefixes multi-line worker response preserving content', async () => {
     const harness = await createHarness();
     const worker = await addWorker(harness.module, harness.node, 'Multi Worker');

@@ -1015,6 +1015,26 @@ export class AgentsPersistenceService {
     return msgs;
   }
 
+  async getLastRunAssistantOutput(runId: string, threadId: string): Promise<string | null> {
+    const normalizedRunId = runId?.trim();
+    const normalizedThreadId = threadId?.trim();
+    if (!normalizedRunId || !normalizedThreadId) return null;
+
+    const link = await this.prisma.runMessage.findFirst({
+      where: { runId: normalizedRunId, type: 'output' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        message: { select: { text: true, kind: true } },
+        run: { select: { threadId: true } },
+      },
+    });
+
+    if (!link) return null;
+    if (link.run.threadId !== normalizedThreadId) return null;
+    if (link.message.kind !== 'assistant') return null;
+    return link.message.text ?? '';
+  }
+
   async listReminders(
     filter: 'active' | 'completed' | 'cancelled' | 'all' = 'active',
     take: number = 100,
