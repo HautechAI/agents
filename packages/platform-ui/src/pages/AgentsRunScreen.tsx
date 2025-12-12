@@ -17,7 +17,7 @@ import type {
 import { graphSocket } from '@/lib/graph/socket';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { formatDuration } from '@/components/agents/runTimelineFormatting';
-import { computeTailNewIndices, type ContextMessage } from '@/lib/llmContextDiff';
+import { computeNewTailCount } from '@/lib/llmNewTailCount';
 
 const EVENT_FILTER_OPTIONS: EventFilter[] = ['message', 'llm', 'tool', 'summary'];
 const STATUS_FILTER_OPTIONS: StatusFilter[] = ['running', 'finished', 'failed', 'terminated'];
@@ -98,6 +98,16 @@ function compareEvents(a: RunTimelineEvent, b: RunTimelineEvent): number {
 function sortEvents(events: RunTimelineEvent[]): RunTimelineEvent[] {
   if (events.length <= 1) return events.slice();
   return [...events].sort(compareEvents);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (Number.isNaN(value) || !Number.isFinite(value)) {
+    if (!Number.isFinite(value) && value > 0) return max;
+    return min;
+  }
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
 }
 
 function matchesFilters(event: RunTimelineEvent, types: RunEventType[], statuses: RunEventStatus[]): boolean {
@@ -718,7 +728,7 @@ function resolveContextRecords(
 type CreateUiEventOptions = {
   context?: Record<string, unknown>[];
   tool?: ToolLinkData;
-  newContextIndices?: number[];
+  newContextCount?: number;
 };
 
 function createUiEvent(event: RunTimelineEvent, options?: CreateUiEventOptions): UiRunEvent {
@@ -764,7 +774,7 @@ function createUiEvent(event: RunTimelineEvent, options?: CreateUiEventOptions):
     const fallbackContext = toRecordArray(event.metadata);
     const context = options?.context && options.context.length > 0 ? options.context : fallbackContext;
     const response = extractLlmResponse(event);
-    const newContextIndices = Array.isArray(options?.newContextIndices) && options.newContextIndices.length > 0 ? options.newContextIndices : undefined;
+    const newContextCount = typeof options?.newContextCount === 'number' ? options.newContextCount : undefined;
     return {
       id: event.id,
       type: 'llm',
@@ -773,7 +783,7 @@ function createUiEvent(event: RunTimelineEvent, options?: CreateUiEventOptions):
       status,
       data: {
         context,
-        newContextIndices,
+        newContextCount,
         response,
         model: event.llmCall?.model ?? undefined,
         tokens: usage
@@ -1590,30 +1600,63 @@ export function AgentsRunScreen() {
 
   const tokenTotals = useMemo(() => aggregateTokens(allEvents), [allEvents]);
 
+  const llmEventContext = useMemo(() => {
+    const mapping = new Map<string, { previous?: RunTimelineEvent; eventsBetween: RunTimelineEvent[] }>();
+    let previousLlm: RunTimelineEvent | undefined;
+    let buffer: RunTimelineEvent[] = [];
+
+    for (const event of allEvents) {
+      if (event.type === 'llm_call') {
+        mapping.set(event.id, { previous: previousLlm, eventsBetween: buffer.slice() });
+        previousLlm = event;
+        buffer = [];
+      } else if (previousLlm) {
+        buffer.push(event);
+      }
+    }
+
+    return mapping;
+  }, [allEvents]);
+
   const uiEvents = useMemo<UiRunEvent[]>(() => {
     const lookup = contextItemsRef.current;
     void contextItemsVersion;
-
-    let previousLlmContext: ContextMessage[] | undefined;
-
     return events.map((event) => {
       let contextRecords: Record<string, unknown>[] = [];
-      let newContextIndices: number[] | undefined;
+      let newContextCount: number | undefined;
 
       if (event.type === 'llm_call') {
         contextRecords = resolveContextRecords(event.llmCall?.contextItemIds ?? [], lookup, event.llmCall?.toolCalls ?? []);
-        const currentMessages = contextRecords as ContextMessage[];
-        const indices = computeTailNewIndices(previousLlmContext, currentMessages);
-        if (indices.length > 0) {
-          newContextIndices = indices;
+        const contextLength = contextRecords.length;
+
+        const apiCount = event.llmCall?.newContextItemCount;
+
+        if (typeof apiCount === 'number' && Number.isFinite(apiCount)) {
+          newContextCount = clamp(Math.floor(apiCount), 0, contextLength);
+        } else {
+          const fallback = llmEventContext.get(event.id);
+          const computed = computeNewTailCount(
+            fallback?.previous,
+            event,
+            fallback?.eventsBetween ?? [],
+          );
+          const rawCount = Number.isFinite(computed) ? computed : contextLength;
+          newContextCount = clamp(
+            Number.isFinite(rawCount) ? Math.floor(rawCount) : rawCount,
+            0,
+            contextLength,
+          );
         }
-        previousLlmContext = currentMessages;
+
+        if (newContextCount === undefined) {
+          newContextCount = clamp(0, 0, contextLength);
+        }
       }
 
       const toolLinks = event.type === 'tool_execution' ? buildToolLinkData(event) : undefined;
-      return createUiEvent(event, { context: contextRecords, tool: toolLinks, newContextIndices });
+      return createUiEvent(event, { context: contextRecords, tool: toolLinks, newContextCount });
     });
-  }, [events, contextItemsVersion]);
+  }, [events, contextItemsVersion, llmEventContext]);
 
   const isLoading = eventsQuery.isLoading || summaryQuery.isLoading;
   const hasMoreEvents = Boolean(nextCursor);

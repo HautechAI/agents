@@ -659,7 +659,7 @@ describe('AgentsRunScreen', () => {
     expect(assistant['reasoning']).toEqual({ tokens: 12 });
   });
 
-  it('computes tail context indices for sequential llm events', async () => {
+  it('marks the last N context entries using API-provided counts', async () => {
     const contextA: ContextItem = {
       id: 'ctx-user',
       role: 'user',
@@ -782,12 +782,163 @@ describe('AgentsRunScreen', () => {
     );
 
     await waitFor(() => {
-      const props = latestRunScreenProps<{ events: Array<{ type: string; data: { newContextIndices?: number[] } }> }>();
+      const props = latestRunScreenProps<{ events: Array<{ type: string; data: { newContextCount?: number } }> }>();
       expect(props).toBeDefined();
       const llmEvents = props?.events.filter((event) => event.type === 'llm') ?? [];
       expect(llmEvents.length).toBe(2);
-      expect(llmEvents[0].data.newContextIndices).toEqual([0, 1]);
-      expect(llmEvents[1].data.newContextIndices).toEqual([2]);
+      expect(llmEvents[0].data.newContextCount).toBe(2);
+      expect(llmEvents[1].data.newContextCount).toBe(1);
+    });
+  });
+
+  it('falls back to counting intermediate events when API counts are unavailable', async () => {
+    const contexts: ContextItem[] = [
+      { id: 'ctx-user-initial', role: 'user', contentText: 'Initial question', contentJson: null, metadata: null, sizeBytes: 64, createdAt: '2024-01-01T00:00:00.000Z' },
+      { id: 'ctx-assistant-initial', role: 'assistant', contentText: 'Initial answer', contentJson: null, metadata: null, sizeBytes: 128, createdAt: '2024-01-01T00:00:01.000Z' },
+      { id: 'ctx-user-followup', role: 'user', contentText: 'Follow-up prompt', contentJson: null, metadata: null, sizeBytes: 64, createdAt: '2024-01-01T00:00:05.000Z' },
+      { id: 'ctx-tool-output', role: 'tool', contentText: 'tool output', contentJson: null, metadata: null, sizeBytes: 64, createdAt: '2024-01-01T00:00:06.000Z' },
+      { id: 'ctx-injection', role: 'system', contentText: 'policy reminder', contentJson: null, metadata: null, sizeBytes: 32, createdAt: '2024-01-01T00:00:07.000Z' },
+      { id: 'ctx-assistant-final', role: 'assistant', contentText: 'Final answer', contentJson: null, metadata: null, sizeBytes: 128, createdAt: '2024-01-01T00:00:08.000Z' },
+    ];
+
+    const lookup = new Map(contexts.map((item) => [item.id, item] as const));
+    contextItemsMocks.getMany.mockImplementation(async (ids: readonly string[]) =>
+      ids.map((id) => lookup.get(id)).filter((value): value is ContextItem => Boolean(value)),
+    );
+
+    const llmEventA = buildEvent({
+      id: 'event-llm-1',
+      type: 'llm_call',
+      ts: '2024-01-01T00:00:01.000Z',
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-4o',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [contexts[0].id, contexts[1].id],
+        newContextItemCount: 2,
+        responseText: contexts[1].contentText,
+        rawResponse: null,
+        toolCalls: [],
+        usage: undefined,
+      },
+      metadata: {},
+    });
+
+    const invocationEvent = buildEvent({
+      id: 'event-invocation',
+      type: 'invocation_message',
+      ts: '2024-01-01T00:00:02.000Z',
+      toolExecution: undefined,
+      llmCall: undefined,
+      message: {
+        messageId: 'msg-invocation',
+        role: 'user',
+        kind: 'prompt',
+        text: contexts[2].contentText,
+        source: null,
+        createdAt: '2024-01-01T00:00:05.000Z',
+      },
+    });
+
+    const toolEvent = buildEvent({
+      id: 'event-tool',
+      type: 'tool_execution',
+      ts: '2024-01-01T00:00:03.000Z',
+      toolExecution: {
+        toolName: 'delegate_agent',
+        toolCallId: 'call-tool',
+        execStatus: 'success',
+        input: {},
+        output: contexts[3].contentText,
+        errorMessage: null,
+        raw: null,
+      },
+    });
+
+    const summarizationEvent = buildEvent({
+      id: 'event-summary',
+      type: 'summarization',
+      ts: '2024-01-01T00:00:04.000Z',
+      toolExecution: undefined,
+      llmCall: undefined,
+      summarization: {
+        summaryText: 'summaries',
+        newContextCount: 0,
+        oldContextTokens: null,
+        raw: null,
+      },
+    });
+
+    const injectionEvent = buildEvent({
+      id: 'event-injection',
+      type: 'injection',
+      ts: '2024-01-01T00:00:05.000Z',
+      toolExecution: undefined,
+      llmCall: undefined,
+      injection: {
+        messageIds: ['msg-injection'],
+        reason: 'compliance reminder',
+      },
+    });
+
+    const llmEventB = buildEvent({
+      id: 'event-llm-2',
+      type: 'llm_call',
+      ts: '2024-01-01T00:00:06.000Z',
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-4o',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: contexts.map((item) => item.id),
+        newContextItemCount: Number.NaN,
+        responseText: contexts[5].contentText,
+        rawResponse: null,
+        toolCalls: [],
+        usage: undefined,
+      },
+      metadata: {},
+    });
+
+    runsHookMocks.summary.mockReturnValue({
+      ...buildSummary(),
+      countsByType: {
+        invocation_message: 1,
+        injection: 1,
+        llm_call: 2,
+        tool_execution: 1,
+        summarization: 1,
+      },
+      totalEvents: 6,
+    });
+
+    runsHookMocks.events.mockReturnValue({
+      items: [llmEventA, invocationEvent, toolEvent, summarizationEvent, injectionEvent, llmEventB],
+      nextCursor: null,
+    });
+
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/threads/thread-1/runs/${llmEventB.runId}`]}>
+          <Routes>
+            <Route path="/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      const props = latestRunScreenProps<{ events: Array<{ type: string; data: { newContextCount?: number } }> }>();
+      expect(props).toBeDefined();
+      const llmEvents = props?.events.filter((event) => event.type === 'llm') ?? [];
+      expect(llmEvents.length).toBe(2);
+      expect(llmEvents[0].data.newContextCount).toBe(2);
+      expect(llmEvents[1].data.newContextCount).toBe(4);
     });
   });
 });

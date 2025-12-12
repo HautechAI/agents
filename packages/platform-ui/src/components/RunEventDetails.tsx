@@ -36,7 +36,7 @@ export interface RunEventData extends Record<string, unknown> {
   toolName?: string;
   response?: string;
   context?: unknown;
-  newContextIndices?: number[];
+  newContextCount?: number;
   tokens?: {
     total?: number;
     [key: string]: unknown;
@@ -286,7 +286,7 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
                     <button className="w-full text-sm text-[var(--agyn-blue)] hover:text-[var(--agyn-blue)]/80 py-2 mb-4 border border-[var(--agyn-border-subtle)] rounded-[6px] transition-colors">
                       Load older context
                     </button>
-                    {renderContextMessages(context, event.data.newContextIndices)}
+                    {renderContextMessages(context, event.data.newContextCount)}
                   </div>
                 ) : (
                   <div className="text-sm text-[var(--agyn-gray)]">No context messages</div>
@@ -316,17 +316,20 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
     );
   };
 
-  const renderContextMessages = (contextArray: Record<string, unknown>[], highlightedIndices?: readonly number[]) => {
-    const highlightSet = Array.isArray(highlightedIndices) && highlightedIndices.length > 0
-      ? new Set<number>(
-          highlightedIndices.filter((value): value is number => Number.isInteger(value) && value >= 0),
-        )
-      : null;
+const renderContextMessages = (
+  contextArray: Record<string, unknown>[],
+  highlightedCount?: number,
+) => {
+  const total = contextArray.length;
+  const normalizedCount = typeof highlightedCount === 'number' && Number.isFinite(highlightedCount)
+    ? Math.max(0, Math.min(Math.floor(highlightedCount), total))
+    : 0;
+  const highlightStartIndex = normalizedCount > 0 ? total - normalizedCount : total + 1;
 
-    return contextArray.map((message, index) => {
-      const roleValue = asString(message.role).toLowerCase();
-      const role = roleValue || 'user';
-      const isNew = highlightSet?.has(index) ?? false;
+  return contextArray.map((message, index) => {
+    const roleValue = asString(message.role).toLowerCase();
+    const role = roleValue || 'user';
+    const isNew = index >= highlightStartIndex;
 
       const getRoleConfig = () => {
         switch (role) {
