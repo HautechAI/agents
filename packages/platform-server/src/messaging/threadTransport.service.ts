@@ -87,15 +87,7 @@ export class ThreadTransportService {
         return result;
       }
 
-      const skipPersistence = await this.shouldSkipAutoResponsePersistence({
-        node,
-        text,
-        threadId: normalizedThreadId,
-        channelNodeId,
-        runId,
-        source,
-      });
-      if (skipPersistence) {
+      if (source === 'auto_response') {
         return result;
       }
 
@@ -123,48 +115,7 @@ export class ThreadTransportService {
       return { ok: false, error: message };
     }
   }
-
   private format(context?: Record<string, unknown>): string {
     return context ? ` ${JSON.stringify(context)}` : '';
-  }
-
-  private async shouldSkipAutoResponsePersistence(params: {
-    node: ThreadChannelNode;
-    text: string;
-    threadId: string;
-    channelNodeId: string;
-    runId: string | null;
-    source: string | null;
-  }): Promise<boolean> {
-    const getMode = (params.node as { getMode?: () => unknown }).getMode;
-    if (typeof getMode !== 'function') return false;
-
-    let mode: unknown;
-    try {
-      mode = getMode.call(params.node);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        `ThreadTransportService: failed to read channel mode${this.format({ threadId: params.threadId, channelNodeId: params.channelNodeId, error: message })}`,
-      );
-      return false;
-    }
-
-    if (mode !== 'sync') return false;
-
-    if (params.source !== 'auto_response') return false;
-    const trimmedRunId = params.runId?.trim();
-    if (!trimmedRunId) return false;
-
-    try {
-      const lastOutput = await this.persistence.getLastRunAssistantOutput(trimmedRunId, params.threadId);
-      return lastOutput !== null && lastOutput === params.text;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        `ThreadTransportService: dedup lookup failed${this.format({ threadId: params.threadId, channelNodeId: params.channelNodeId, runId: trimmedRunId, error: message })}`,
-      );
-      return false;
-    }
   }
 }
