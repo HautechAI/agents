@@ -12,7 +12,7 @@ export interface NumberFieldProps extends Omit<FieldProps, 'children'> {
   max?: number;
   step?: number;
   disabled?: boolean;
-  inputProps?: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>;
+  inputProps?: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'size'>;
 }
 
 export function NumberField({

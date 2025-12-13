@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 
 import { Input } from '../Input';
 import { Dropdown } from '../Dropdown';
@@ -228,7 +228,7 @@ function ConfigPanelSidebar({
   const StaticPanel = entry.staticComponent;
   const DynamicPanel = entry.dynamicComponent;
 
-  const panelElements: JSX.Element[] = [];
+  const panelElements: ReactElement[] = [];
   if (CombinedPanel) {
     panelElements.push(<CombinedPanel key="combined" {...combinedProps} />);
   } else {
