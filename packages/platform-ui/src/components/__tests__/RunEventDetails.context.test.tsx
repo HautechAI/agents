@@ -59,4 +59,32 @@ describe('RunEventDetails – context badges', () => {
       expect(within(userHeader).queryByLabelText('Added since previous LLM call')).toBeNull();
     }
   });
+
+  it('omits new badges when newContextCount is zero or missing', () => {
+    const event: RunEvent = {
+      id: 'event-llm-2',
+      type: 'llm',
+      timestamp: '2024-01-01T00:01:00.000Z',
+      data: {
+        context: [
+          {
+            role: 'user',
+            content: 'Another prompt',
+            timestamp: '2024-01-01T00:01:00.000Z',
+          },
+          {
+            role: 'assistant',
+            content: 'Another answer',
+            timestamp: '2024-01-01T00:01:01.000Z',
+          },
+        ],
+        response: 'Another answer',
+        model: 'gpt-4o-mini',
+      },
+    };
+
+    render(<RunEventDetails event={event} />);
+
+    expect(screen.queryByLabelText('Added since previous LLM call')).toBeNull();
+  });
 });

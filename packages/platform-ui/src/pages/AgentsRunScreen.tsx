@@ -17,7 +17,6 @@ import type {
 import { graphSocket } from '@/lib/graph/socket';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { formatDuration } from '@/components/agents/runTimelineFormatting';
-import { computeNewTailCount } from '@/lib/llmNewTailCount';
 
 const EVENT_FILTER_OPTIONS: EventFilter[] = ['message', 'llm', 'tool', 'summary'];
 const STATUS_FILTER_OPTIONS: StatusFilter[] = ['running', 'finished', 'failed', 'terminated'];
@@ -1600,24 +1599,6 @@ export function AgentsRunScreen() {
 
   const tokenTotals = useMemo(() => aggregateTokens(allEvents), [allEvents]);
 
-  const llmEventContext = useMemo(() => {
-    const mapping = new Map<string, { previous?: RunTimelineEvent; eventsBetween: RunTimelineEvent[] }>();
-    let previousLlm: RunTimelineEvent | undefined;
-    let buffer: RunTimelineEvent[] = [];
-
-    for (const event of allEvents) {
-      if (event.type === 'llm_call') {
-        mapping.set(event.id, { previous: previousLlm, eventsBetween: buffer.slice() });
-        previousLlm = event;
-        buffer = [];
-      } else if (previousLlm) {
-        buffer.push(event);
-      }
-    }
-
-    return mapping;
-  }, [allEvents]);
-
   const uiEvents = useMemo<UiRunEvent[]>(() => {
     const lookup = contextItemsRef.current;
     void contextItemsVersion;
@@ -1629,34 +1610,14 @@ export function AgentsRunScreen() {
         contextRecords = resolveContextRecords(event.llmCall?.contextItemIds ?? [], lookup, event.llmCall?.toolCalls ?? []);
         const contextLength = contextRecords.length;
 
-        const apiCount = event.llmCall?.newContextItemCount;
-
-        if (typeof apiCount === 'number' && Number.isFinite(apiCount)) {
-          newContextCount = clamp(Math.floor(apiCount), 0, contextLength);
-        } else {
-          const fallback = llmEventContext.get(event.id);
-          const computed = computeNewTailCount(
-            fallback?.previous,
-            event,
-            fallback?.eventsBetween ?? [],
-          );
-          const rawCount = Number.isFinite(computed) ? computed : contextLength;
-          newContextCount = clamp(
-            Number.isFinite(rawCount) ? Math.floor(rawCount) : rawCount,
-            0,
-            contextLength,
-          );
-        }
-
-        if (newContextCount === undefined) {
-          newContextCount = clamp(0, 0, contextLength);
-        }
+        const apiCount = event.llmCall?.newContextItemCount ?? 0;
+        newContextCount = clamp(Math.floor(apiCount), 0, contextLength);
       }
 
       const toolLinks = event.type === 'tool_execution' ? buildToolLinkData(event) : undefined;
       return createUiEvent(event, { context: contextRecords, tool: toolLinks, newContextCount });
     });
-  }, [events, contextItemsVersion, llmEventContext]);
+  }, [events, contextItemsVersion]);
 
   const isLoading = eventsQuery.isLoading || summaryQuery.isLoading;
   const hasMoreEvents = Boolean(nextCursor);
