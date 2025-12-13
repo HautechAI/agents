@@ -877,6 +877,7 @@ export function GraphLayout({ services }: GraphLayoutProps) {
       </div>
       {selectedNode && sidebarConfig ? (
         <NodePropertiesSidebar
+          nodeId={selectedNode.id}
           config={sidebarConfig}
           state={sidebarState}
           displayTitle={sidebarDisplayTitle}

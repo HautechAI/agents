@@ -61,6 +61,7 @@ export interface McpToolDescriptor {
 export type SimpleOption = { value: string; label: string };
 
 export interface NodePropertiesSidebarProps {
+  nodeId?: string;
   config: NodeConfig;
   state: NodeState;
   displayTitle?: string;

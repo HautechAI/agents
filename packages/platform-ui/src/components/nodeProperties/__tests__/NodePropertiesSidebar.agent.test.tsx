@@ -29,6 +29,7 @@ describe('NodePropertiesSidebar - agent', () => {
     render(
       <TooltipProvider delayDuration={0}>
         <NodePropertiesSidebar
+          nodeId="node-1"
           config={config}
           state={state}
           onConfigChange={onConfigChange}
@@ -77,6 +78,7 @@ describe('NodePropertiesSidebar - agent', () => {
     render(
       <TooltipProvider delayDuration={0}>
         <NodePropertiesSidebar
+          nodeId="node-1"
           config={config}
           state={state}
           onConfigChange={vi.fn()}
@@ -107,6 +109,7 @@ describe('NodePropertiesSidebar - agent', () => {
     render(
       <TooltipProvider delayDuration={0}>
         <NodePropertiesSidebar
+          nodeId="node-1"
           config={config}
           state={state}
           onConfigChange={vi.fn()}
@@ -137,6 +140,7 @@ describe('NodePropertiesSidebar - agent', () => {
     render(
       <TooltipProvider delayDuration={0}>
         <NodePropertiesSidebar
+          nodeId="node-1"
           config={config}
           state={state}
           onConfigChange={vi.fn()}
@@ -167,6 +171,7 @@ describe('NodePropertiesSidebar - agent', () => {
     render(
       <TooltipProvider delayDuration={0}>
         <NodePropertiesSidebar
+          nodeId="node-1"
           config={config}
           state={state}
           onConfigChange={vi.fn()}

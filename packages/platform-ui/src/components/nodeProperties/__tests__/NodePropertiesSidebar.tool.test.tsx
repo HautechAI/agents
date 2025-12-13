@@ -1,6 +1,5 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NodePropertiesSidebar from '../index';
@@ -28,8 +27,7 @@ describe('NodePropertiesSidebar - shell tool', () => {
     latestReferenceProps.current = null;
   });
 
-  it('renders shell tool controls and propagates config updates', async () => {
-    const user = userEvent.setup();
+  it('renders shell tool controls and propagates config updates', () => {
     const onConfigChange = vi.fn();
 
     const config: NodeConfig = {
@@ -51,6 +49,7 @@ describe('NodePropertiesSidebar - shell tool', () => {
     render(
       <TooltipProvider delayDuration={0}>
         <NodePropertiesSidebar
+          nodeId="node-1"
           config={config}
           state={state}
           onConfigChange={onConfigChange}
@@ -63,7 +62,7 @@ describe('NodePropertiesSidebar - shell tool', () => {
       </TooltipProvider>,
     );
 
-    const workdirInput = screen.getByPlaceholderText('/workspace') as HTMLInputElement;
+    const workdirInput = screen.getByLabelText('Working directory') as HTMLInputElement;
     fireEvent.change(workdirInput, { target: { value: '/tmp' } });
     expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ workdir: '/tmp' }));
 
@@ -78,14 +77,16 @@ describe('NodePropertiesSidebar - shell tool', () => {
       }),
     );
 
-    const limitsTrigger = screen.getByRole('button', { name: /limits/i });
-    await user.click(limitsTrigger);
-    const executionTimeoutInput = screen.getByPlaceholderText('3600000') as HTMLInputElement;
+    const executionTimeoutInput = screen.getByLabelText('Execution timeout (ms)') as HTMLInputElement;
     fireEvent.change(executionTimeoutInput, { target: { value: '2500' } });
     expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ executionTimeoutMs: 2500 }));
 
-    const logToggle = screen.getByLabelText(/log to pid 1/i);
-    await user.click(logToggle);
-    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ logToPid1: false }));
+    const idleTimeoutInput = screen.getByLabelText('Idle timeout (ms)') as HTMLInputElement;
+    fireEvent.change(idleTimeoutInput, { target: { value: '4000' } });
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ idleTimeoutMs: 4000 }));
+
+    const outputLimitInput = screen.getByLabelText('Output limit (characters)') as HTMLInputElement;
+    fireEvent.change(outputLimitInput, { target: { value: '8192' } });
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ outputLimitChars: 8192 }));
   });
 });

@@ -42,6 +42,7 @@ function renderTriggerSidebar(overrides?: Partial<NodeConfig>) {
     return (
       <TooltipProvider delayDuration={0}>
         <NodePropertiesSidebar
+          nodeId="node-1"
           config={currentConfig}
           state={state}
           displayTitle={currentConfig.title}

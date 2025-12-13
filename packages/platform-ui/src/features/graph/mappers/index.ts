@@ -109,6 +109,32 @@ function deriveCapabilities(template?: TemplateSchema): GraphNodeConfig['capabil
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function normalizeMemoryScopeValue(scope: unknown): 'global' | 'perThread' | undefined {
+  if (scope === 'global') return 'global';
+  if (scope === 'perThread') return 'perThread';
+  if (scope === 'thread') return 'perThread';
+  return undefined;
+}
+
+function normalizeMemoryConfig(
+  template: string,
+  config: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (template !== 'memory' || !config) {
+    return config;
+  }
+  const next: Record<string, unknown> = { ...config };
+  if (Object.prototype.hasOwnProperty.call(next, 'scope')) {
+    const normalized = normalizeMemoryScopeValue(next.scope);
+    if (normalized) {
+      next.scope = normalized;
+    } else {
+      delete next.scope;
+    }
+  }
+  return next;
+}
+
 export function mapPersistedGraphToNodes(
   graph: GraphPersisted,
   templates: TemplateSchema[],
@@ -124,7 +150,8 @@ export function mapPersistedGraphToNodes(
     const tpl = byTemplate.get(node.template);
     const position = normalizePosition(node.position);
     const title = deriveTitle(node, tpl);
-    const config = node.config ? { ...(node.config as Record<string, unknown>) } : undefined;
+    const rawConfig = node.config ? { ...(node.config as Record<string, unknown>) } : undefined;
+    const config = normalizeMemoryConfig(node.template, rawConfig);
     const state = node.state ? { ...(node.state as Record<string, unknown>) } : undefined;
     metadata.set(node.id, {
       template: node.template,
@@ -186,7 +213,8 @@ export function buildGraphNodeFromTemplate(
 
   const status = desiredStatus ?? DEFAULT_STATUS;
 
-  const config = initialConfig ? { ...initialConfig } : undefined;
+  const rawConfig = initialConfig ? { ...initialConfig } : undefined;
+  const config = normalizeMemoryConfig(template.name, rawConfig);
   const state = initialState ? { ...initialState } : undefined;
   const ports: GraphNodeConfig['ports'] = {
     inputs: toPortList(template?.targetPorts),
@@ -227,11 +255,14 @@ function toPersistedNode(node: GraphNodeConfig, meta: GraphNodeMetadata): GraphP
     x: Number.isFinite(node.x) ? node.x : meta.position?.x ?? 0,
     y: Number.isFinite(node.y) ? node.y : meta.position?.y ?? 0,
   };
+  const rawConfig = meta.config ? { ...meta.config } : undefined;
+  const config = normalizeMemoryConfig(meta.template, rawConfig);
+
   return {
     id: node.id,
     template: meta.template,
     position,
-    config: meta.config ? { ...meta.config } : undefined,
+    config,
     state: meta.state ? { ...meta.state } : undefined,
   } satisfies GraphPersistedNode;
 }

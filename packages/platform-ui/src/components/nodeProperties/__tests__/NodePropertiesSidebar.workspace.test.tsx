@@ -53,6 +53,7 @@ function WorkspaceSidebarHarness({
   return (
     <TooltipProvider delayDuration={0}>
       <NodePropertiesSidebar
+        nodeId="workspace-1"
         config={config}
         state={state}
         displayTitle={config.title}

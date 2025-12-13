@@ -82,7 +82,13 @@ export default function ShellToolConfigView({ value, onChange, readOnly, disable
     <div className="space-y-3 text-sm">
       <div>
         <ToolNameLabel />
-        <Input value={name} onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)} disabled={isDisabled} placeholder={namePlaceholder || 'shell_command'} />
+        <Input
+          value={name}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+          disabled={isDisabled}
+          placeholder={namePlaceholder || 'shell_command'}
+          aria-invalid={nameError ? 'true' : undefined}
+        />
         {nameError && <div className="text-[10px] text-red-600 mt-1">{nameError}</div>}
       </div>
       <div>

@@ -25,6 +25,7 @@ function setup(overrides?: Partial<NodePropertiesSidebarProps>) {
   render(
     <TooltipProvider delayDuration={0}>
       <NodePropertiesSidebar
+        nodeId="node-123"
         config={config}
         state={state}
         displayTitle={config.title}
@@ -67,7 +68,7 @@ describe('NodePropertiesSidebar tool name field', () => {
     await user.type(input, 'custom_tool');
 
     expect(onConfigChange).toHaveBeenCalled();
-    expect(onConfigChange.mock.calls.at(-1)?.[0]).toEqual({ name: 'custom_tool' });
+    expect(onConfigChange.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ name: 'custom_tool' }));
     expect(screen.queryByText('Name must match ^[a-z0-9_]{1,64}$')).not.toBeInTheDocument();
   });
 
@@ -82,7 +83,7 @@ describe('NodePropertiesSidebar tool name field', () => {
     await waitFor(() => {
       expect(onConfigChange).toHaveBeenCalled();
     });
-    expect(onConfigChange.mock.calls.at(-1)?.[0]).toEqual({ name: 'custom_tool' });
+    expect(onConfigChange.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ name: 'custom_tool' }));
     expect(screen.queryByText('Name must match ^[a-z0-9_]{1,64}$')).not.toBeInTheDocument();
   });
 
@@ -96,7 +97,8 @@ describe('NodePropertiesSidebar tool name field', () => {
 
     const emittedNames = onConfigChange.mock.calls.map((call) => call[0].name);
     expect(emittedNames).not.toContain('bad-name');
-    expect(await screen.findByText('Name must match ^[a-z0-9_]{1,64}$')).toBeInTheDocument();
+    const errorMessages = await screen.findAllByText('Name must match ^[a-z0-9_]{1,64}$');
+    expect(errorMessages.length).toBeGreaterThan(0);
     expect(input.getAttribute('aria-invalid')).toBe('true');
   });
 
@@ -110,7 +112,7 @@ describe('NodePropertiesSidebar tool name field', () => {
     await user.clear(input);
 
     await waitFor(() => {
-      expect(onConfigChange).toHaveBeenCalledWith({ name: undefined });
+      expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ name: undefined }));
     });
     expect(screen.queryByText('Name must match ^[a-z0-9_]{1,64}$')).not.toBeInTheDocument();
   });
@@ -126,7 +128,7 @@ describe('NodePropertiesSidebar tool name field', () => {
     await user.type(input, '   ');
 
     await waitFor(() => {
-      expect(onConfigChange).toHaveBeenCalledWith({ name: undefined });
+      expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ name: undefined }));
     });
     expect(screen.queryByText('Name must match ^[a-z0-9_]{1,64}$')).not.toBeInTheDocument();
   });

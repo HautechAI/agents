@@ -47,6 +47,11 @@ import type {
   WorkspaceFlakeRepo,
   WorkspaceNixPackage,
 } from './types';
+import { getConfigPanel } from '../configPanels/registry';
+import { installDefaultConfigPanels } from '../configPanels/registerDefaults';
+import type { ConfigPanelEntry } from '../configPanels/types';
+
+installDefaultConfigPanels();
 
 type ToolLimitKey =
   | 'executionTimeoutMs'
@@ -56,7 +61,243 @@ type ToolLimitKey =
   | 'chunkSizeBytes'
   | 'clientBufferLimitBytes';
 
-function NodePropertiesSidebar({
+const LEGACY_TEMPLATE_FALLBACK = new Set<string>(['workspace']);
+
+type ConfigPanelHostProps = NodePropertiesSidebarProps & {
+  template: string;
+  entry: ConfigPanelEntry;
+};
+
+function ConfigPanelSidebar({
+  nodeId,
+  config,
+  state,
+  displayTitle,
+  onConfigChange,
+  onProvision,
+  onDeprovision,
+  canProvision = false,
+  canDeprovision = false,
+  isActionPending = false,
+  tools,
+  enabledTools,
+  onToggleTool,
+  toolsLoading = false,
+  nixPackageSearch,
+  fetchNixPackageVersions,
+  resolveNixPackageSelection,
+  secretKeys,
+  variableKeys,
+  ensureSecretKeys,
+  ensureVariableKeys,
+  template,
+  entry,
+}: ConfigPanelHostProps) {
+  const configRecord = useMemo(
+    () => ({ ...(config as Record<string, unknown>) }),
+    [config],
+  );
+  const nodeKind = config.kind;
+  const { status } = state;
+  const nodeTitleValue = typeof configRecord.title === 'string' ? (configRecord.title as string) : '';
+  const agentNameValue = typeof configRecord.name === 'string' ? (configRecord.name as string) : '';
+  const agentRoleValue = typeof configRecord.role === 'string' ? (configRecord.role as string) : '';
+  const agentDefaultTitle = useMemo(
+    () => computeAgentDefaultTitle(agentNameValue.trim(), agentRoleValue.trim(), 'Agent'),
+    [agentNameValue, agentRoleValue],
+  );
+  const headerTitle = useMemo(() => {
+    if (nodeKind === 'Agent') {
+      return agentDefaultTitle;
+    }
+    const providedDisplay = typeof displayTitle === 'string' ? displayTitle.trim() : '';
+    if (providedDisplay.length > 0) {
+      return providedDisplay;
+    }
+    return nodeTitleValue.trim();
+  }, [agentDefaultTitle, displayTitle, nodeKind, nodeTitleValue]);
+
+  const panelValue = useMemo(() => {
+    const next = { ...configRecord };
+    delete next.kind;
+    delete next.template;
+    return next;
+  }, [configRecord]);
+
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    setValidationErrors([]);
+  }, [template, entry.component, entry.staticComponent, entry.dynamicComponent]);
+
+  const handleValidate = useCallback((errors: string[]) => {
+    setValidationErrors(errors);
+  }, []);
+
+  const handleConfigChange = useCallback(
+    (partial: Record<string, unknown>) => {
+      if (!onConfigChange) return;
+      const next = { ...partial };
+      if (nodeKind === 'Agent' && Object.prototype.hasOwnProperty.call(next, 'title')) {
+        const rawTitle = next.title;
+        const stringTitle = typeof rawTitle === 'string' ? rawTitle : '';
+        next.title = stringTitle.trim();
+      }
+      onConfigChange(next);
+    },
+    [onConfigChange, nodeKind],
+  );
+
+  const handleTitleChange = useCallback(
+    (value: string) => {
+      handleConfigChange({ title: value });
+    },
+    [handleConfigChange],
+  );
+
+  const hasSecretSupport =
+    (Array.isArray(secretKeys) && secretKeys.length > 0) ||
+    (Array.isArray(variableKeys) && variableKeys.length > 0) ||
+    typeof ensureSecretKeys === 'function' ||
+    typeof ensureVariableKeys === 'function';
+
+  const hasMcpSupport =
+    (Array.isArray(tools) && tools.length > 0) ||
+    (Array.isArray(enabledTools) && enabledTools.length > 0) ||
+    typeof onToggleTool === 'function' ||
+    toolsLoading;
+
+  const panelContext = useMemo(() => {
+    const nix =
+      nixPackageSearch || fetchNixPackageVersions || resolveNixPackageSelection
+        ? {
+            search: nixPackageSearch,
+            fetchVersions: fetchNixPackageVersions,
+            resolve: resolveNixPackageSelection,
+          }
+        : undefined;
+    const mcp = hasMcpSupport
+      ? {
+          tools: Array.isArray(tools) ? tools : [],
+          enabledTools: Array.isArray(enabledTools) ? enabledTools : enabledTools ?? null,
+          toggleTool: onToggleTool,
+          loading: toolsLoading,
+        }
+      : undefined;
+    if (!nodeId && !hasSecretSupport && !nix && !mcp) {
+      return undefined;
+    }
+    return {
+      nodeId,
+      secretKeys,
+      variableKeys,
+      ensureSecretKeys,
+      ensureVariableKeys,
+      nix,
+      mcp,
+    };
+  }, [
+    nodeId,
+    secretKeys,
+    variableKeys,
+    ensureSecretKeys,
+    ensureVariableKeys,
+    nixPackageSearch,
+    fetchNixPackageVersions,
+    resolveNixPackageSelection,
+    tools,
+    enabledTools,
+    onToggleTool,
+    toolsLoading,
+    hasSecretSupport,
+    hasMcpSupport,
+  ]);
+
+  const combinedProps = {
+    template,
+    nodeId,
+    value: panelValue,
+    onChange: handleConfigChange,
+    readOnly: false,
+    disabled: isActionPending,
+    context: panelContext,
+    onValidate: handleValidate,
+  };
+
+  const CombinedPanel = entry.component;
+  const StaticPanel = entry.staticComponent;
+  const DynamicPanel = entry.dynamicComponent;
+
+  const panelElements: JSX.Element[] = [];
+  if (CombinedPanel) {
+    panelElements.push(<CombinedPanel key="combined" {...combinedProps} />);
+  } else {
+    if (StaticPanel) {
+      panelElements.push(<StaticPanel key="static" {...combinedProps} />);
+    }
+    if (DynamicPanel) {
+      panelElements.push(
+        <div key="dynamic" className="border-t border-[var(--agyn-border-subtle)] pt-6">
+          <DynamicPanel {...combinedProps} />
+        </div>,
+      );
+    }
+  }
+
+  return (
+    <div className="w-[420px] bg-white border-l border-[var(--agyn-border-default)] flex flex-col">
+      <Header
+        title={headerTitle}
+        status={status}
+        canProvision={canProvision}
+        canDeprovision={canDeprovision}
+        isActionPending={isActionPending}
+        onProvision={onProvision}
+        onDeprovision={onDeprovision}
+      />
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="space-y-6">
+          <section>
+            <FieldLabel label="Title" hint="The display name for this node" />
+            <Input
+              value={nodeTitleValue}
+              onChange={(event) => handleTitleChange(event.target.value)}
+              size="sm"
+              placeholder={nodeKind === 'Agent' ? agentDefaultTitle : undefined}
+            />
+          </section>
+          {validationErrors.length > 0 ? (
+            <div className="space-y-1 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {validationErrors.map((error, index) => (
+                <div key={`${error}-${index}`}>{error}</div>
+              ))}
+            </div>
+          ) : null}
+          <div className="space-y-8">{panelElements}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NodePropertiesSidebar(props: NodePropertiesSidebarProps) {
+  const { config } = props;
+  const configRecord = config as Record<string, unknown>;
+  const configTemplate = typeof config.template === 'string' ? config.template : undefined;
+  const recordTemplate =
+    typeof configRecord.template === 'string' ? (configRecord.template as string) : undefined;
+  const template = configTemplate ?? recordTemplate;
+  if (!template || LEGACY_TEMPLATE_FALLBACK.has(template)) {
+    return <LegacyNodePropertiesSidebar {...props} />;
+  }
+  const entry = getConfigPanel(template);
+  if (!entry) {
+    return <LegacyNodePropertiesSidebar {...props} />;
+  }
+  return <ConfigPanelSidebar {...props} template={template} entry={entry} />;
+}
+
+function LegacyNodePropertiesSidebar({
   config,
   state,
   displayTitle,

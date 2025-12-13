@@ -310,6 +310,7 @@ export default function GraphScreen({
         {/* Right Sidebar - Node Properties or Empty State */}
         {selectedNode && sidebarEntry ? (
           <NodePropertiesSidebar
+            nodeId={selectedNode.id}
             config={sidebarEntry.config}
             state={{
               status: selectedNode.status,

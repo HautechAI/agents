@@ -1,37 +1,86 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { Input } from '@/components/ui/input';
+import { SelectField, Field } from '@/components/sharedFormFields';
 import type { StaticConfigViewProps } from './types';
+
+const SCOPE_OPTIONS = [
+  { value: 'global', label: 'Global (shared across threads)' },
+  { value: 'perThread', label: 'Per thread' },
+];
+
+function normalizeScope(value: unknown): 'global' | 'perThread' {
+  if (value === 'perThread' || value === 'thread') {
+    return 'perThread';
+  }
+  return 'global';
+}
+
+function readOptionalString(source: unknown): string {
+  return typeof source === 'string' ? (source as string) : '';
+}
 
 export default function MemoryServiceConfigView({ value, onChange, readOnly, disabled }: StaticConfigViewProps) {
   const init = useMemo(() => ({ ...(value || {}) }), [value]);
-  const [scope, setScope] = useState<string>((init.scope as string) || 'global');
-  const [collectionPrefix, setCollectionPrefix] = useState<string>((init.collectionPrefix as string) || '');
-  const [title, setTitle] = useState<string>((init.title as string) || '');
+  const [scope, setScope] = useState<'global' | 'perThread'>(normalizeScope(init.scope));
+  const [collectionPrefix, setCollectionPrefix] = useState<string>(readOptionalString(init.collectionPrefix));
+  const [title, setTitle] = useState<string>(readOptionalString(init.title));
   const isDisabled = !!readOnly || !!disabled;
 
   useEffect(() => {
-    const next = { ...value, scope, collectionPrefix: collectionPrefix || undefined, title: title || undefined };
-    if (JSON.stringify(value || {}) !== JSON.stringify(next)) onChange(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, collectionPrefix, title]);
+    setScope(normalizeScope(init.scope));
+    setCollectionPrefix(readOptionalString(init.collectionPrefix));
+    setTitle(readOptionalString(init.title));
+  }, [init]);
+
+  useEffect(() => {
+    const trimmedPrefix = collectionPrefix.trim();
+    const normalizedPrefix = trimmedPrefix.length > 0 ? trimmedPrefix : undefined;
+    const trimmedTitle = title.trim();
+    const normalizedTitle = trimmedTitle.length > 0 ? trimmedTitle : undefined;
+
+    const prevRecord = (value ?? {}) as Record<string, unknown>;
+    const prevScope = normalizeScope(prevRecord.scope);
+    const prevPrefix = typeof prevRecord.collectionPrefix === 'string'
+      ? (prevRecord.collectionPrefix as string)
+      : undefined;
+    const prevTitle = typeof prevRecord.title === 'string' ? (prevRecord.title as string) : undefined;
+
+    if (prevScope === scope && prevPrefix === normalizedPrefix && prevTitle === normalizedTitle) {
+      return;
+    }
+
+    onChange({
+      ...value,
+      scope,
+      collectionPrefix: normalizedPrefix,
+      title: normalizedTitle,
+    });
+  }, [collectionPrefix, scope, title, value, onChange]);
 
   return (
-    <div className="space-y-3 text-sm">
-      <div>
-        <label className="block text-xs mb-1">Scope</label>
-        <select className="w-full border rounded px-2 py-1" value={scope} onChange={(e: ChangeEvent<HTMLSelectElement>) => setScope(e.target.value)} disabled={isDisabled}>
-          <option value="global">global</option>
-          <option value="thread">thread</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs mb-1">Collection prefix (optional)</label>
-        <Input value={collectionPrefix} onChange={(e: ChangeEvent<HTMLInputElement>) => setCollectionPrefix(e.target.value)} disabled={isDisabled} />
-      </div>
-      <div>
-        <label className="block text-xs mb-1">Title (optional)</label>
-        <Input value={title} onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} disabled={isDisabled} />
-      </div>
+    <div className="space-y-4 text-sm">
+      <SelectField
+        label="Scope"
+        hint="Choose where memory entries are stored"
+        value={scope}
+        onChange={(next) => setScope(next === 'perThread' ? 'perThread' : 'global')}
+        options={SCOPE_OPTIONS}
+        disabled={isDisabled}
+      />
+      <Field label="Collection prefix (optional)">
+        <Input
+          value={collectionPrefix}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setCollectionPrefix(event.target.value)}
+          disabled={isDisabled}
+        />
+      </Field>
+      <Field label="Title (optional)" hint="Display name shown in the UI">
+        <Input
+          value={title}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
+          disabled={isDisabled}
+        />
+      </Field>
     </div>
   );
 }
