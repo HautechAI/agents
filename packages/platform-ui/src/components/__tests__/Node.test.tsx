@@ -23,6 +23,11 @@ describe('components/Node', () => {
       </ReactFlowProvider>,
     );
 
+    const card = screen.getByTestId('graph-node-card');
+    expect(card).toHaveStyle(
+      'box-shadow: 0 0 0 2px var(--agyn-status-failed), 0 4px 12px rgba(220, 38, 38, 0.15)',
+    );
+
     const errorButton = screen.getByRole('button', { name: /view node error details/i });
     await user.hover(errorButton);
 

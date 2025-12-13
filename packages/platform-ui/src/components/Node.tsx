@@ -79,9 +79,8 @@ export default function GraphNode({
   const baseBoxShadow = selected
     ? '0 4px 12px rgba(0, 0, 0, 0.12)'
     : '0 2px 8px rgba(0, 0, 0, 0.08)';
-  const boxShadow = isProvisioningError
-    ? '0 0 0 2px var(--agyn-status-failed), 0 6px 18px rgba(220, 38, 38, 0.28)'
-    : baseBoxShadow;
+  const errorBoxShadow = '0 0 0 2px var(--agyn-status-failed), 0 4px 12px rgba(220, 38, 38, 0.15)';
+  const boxShadow = isProvisioningError ? errorBoxShadow : baseBoxShadow;
   const borderColor = isProvisioningError ? 'var(--agyn-status-failed)' : `${config.borderColor}40`;
   const selectionOutlineColor = isProvisioningError ? 'var(--agyn-status-failed)' : config.borderColor;
 
@@ -90,6 +89,7 @@ export default function GraphNode({
       {/* Node Container */}
       <div 
         className="relative bg-white rounded-[10px] w-[280px] transition-all cursor-pointer"
+        data-testid="graph-node-card"
         style={{ 
           border: `1px solid ${borderColor}`,
           boxShadow,
@@ -101,6 +101,7 @@ export default function GraphNode({
             className="pointer-events-none absolute inset-0 rounded-[10px]"
             style={{
               boxShadow: `0 0 0 2px ${selectionOutlineColor}`,
+              zIndex: 1,
             }}
           />
         )}
