@@ -73,7 +73,7 @@ export default function GraphNode({
     ? createAvatar(avataaars, { seed: avatarSeed }).toString()
     : undefined;
   const showAvatar = kind === 'Agent' && (avatar || avatarSvg);
-  const isProvisioningError = status === 'provisioning_error';
+  const isProvisioningError = status === 'provisioning_error' || status === 'error';
   const trimmedErrorDetail = typeof errorDetail === 'string' ? errorDetail.trim() : '';
   const errorMessage = trimmedErrorDetail.length > 0 ? trimmedErrorDetail : ERROR_FALLBACK_MESSAGE;
   const baseBoxShadow = selected
@@ -81,7 +81,7 @@ export default function GraphNode({
     : '0 2px 8px rgba(0, 0, 0, 0.08)';
   const errorBoxShadow = '0 0 0 2px var(--agyn-status-failed), 0 4px 12px rgba(220, 38, 38, 0.15)';
   const boxShadow = isProvisioningError ? errorBoxShadow : baseBoxShadow;
-  const borderColor = isProvisioningError ? 'var(--agyn-status-failed)' : `${config.borderColor}40`;
+  const borderColor = isProvisioningError ? 'var(--agyn-status-failed)' : config.borderColor;
   const selectionOutlineColor = isProvisioningError ? 'var(--agyn-status-failed)' : config.borderColor;
 
   return (
@@ -110,7 +110,7 @@ export default function GraphNode({
           className="px-4 py-3 rounded-t-[10px] overflow-hidden"
           style={{ 
             background: kind === 'Agent' ? (config.gradient || config.bgColor) : `${config.bgColor}`,
-            borderBottom: `1px solid ${config.borderColor}40`,
+            borderBottom: `1px solid ${config.borderColor}`,
           }}
         >
           <div className="flex items-center gap-3">
