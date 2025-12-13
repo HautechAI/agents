@@ -54,8 +54,7 @@ function renderTriggerSidebar(overrides?: Partial<NodeConfig>) {
 
   render(<Harness />);
 
-  const appTokenInput = screen.getByPlaceholderText('Select or enter app token...') as HTMLInputElement;
-  const botTokenInput = screen.getByPlaceholderText('Select or enter bot token...') as HTMLInputElement;
+  const [, appTokenInput, botTokenInput] = screen.getAllByRole('textbox') as HTMLInputElement[];
 
   return { onConfigChange, appTokenInput, botTokenInput };
 }

@@ -152,6 +152,65 @@ const applyBrowserMocks = () => {
   }
 
   forceAxiosFetchAdapter();
+
+  const canvasProto =
+    (typeof g.HTMLCanvasElement !== 'undefined' && g.HTMLCanvasElement?.prototype) ||
+    (typeof window !== 'undefined' && window.HTMLCanvasElement ? window.HTMLCanvasElement.prototype : undefined);
+
+  if (canvasProto && !(canvasProto as { __agynMockedGetContext?: boolean }).__agynMockedGetContext) {
+    const contextStub = () => ({
+      fillRect: vi.fn(),
+      clearRect: vi.fn(),
+      getImageData: vi.fn(() => ({ data: [] })),
+      putImageData: vi.fn(),
+      createImageData: vi.fn(() => ({ data: [] })),
+      setTransform: vi.fn(),
+      drawImage: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      beginPath: vi.fn(),
+      closePath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      translate: vi.fn(),
+      scale: vi.fn(),
+      rotate: vi.fn(),
+      arc: vi.fn(),
+      fillText: vi.fn(),
+      strokeText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 0 })),
+      getLineDash: vi.fn(() => []),
+      setLineDash: vi.fn(),
+      createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+      createPattern: vi.fn(() => ({ setTransform: vi.fn() })),
+      clip: vi.fn(),
+    });
+
+    Object.defineProperty(canvasProto, 'getContext', {
+      value: vi.fn(() => contextStub()),
+      configurable: true,
+      writable: true,
+    });
+
+    Object.defineProperty(canvasProto, '__agynMockedGetContext', {
+      value: true,
+      configurable: true,
+    });
+  }
+
+  if (canvasProto && !(canvasProto as { __agynMockedToDataURL?: boolean }).__agynMockedToDataURL) {
+    Object.defineProperty(canvasProto, 'toDataURL', {
+      value: vi.fn(() => 'data:image/png;base64,'),
+      configurable: true,
+      writable: true,
+    });
+
+    Object.defineProperty(canvasProto, '__agynMockedToDataURL', {
+      value: true,
+      configurable: true,
+    });
+  }
 };
 
 applyBrowserMocks();

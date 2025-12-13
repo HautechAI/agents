@@ -88,5 +88,21 @@ describe('NodePropertiesSidebar - shell tool', () => {
     const outputLimitInput = screen.getByLabelText('Output limit (characters)') as HTMLInputElement;
     fireEvent.change(outputLimitInput, { target: { value: '8192' } });
     expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ outputLimitChars: 8192 }));
+
+    const chunkCoalesceInput = screen.getByLabelText('Chunk coalesce (ms)') as HTMLInputElement;
+    fireEvent.change(chunkCoalesceInput, { target: { value: '55' } });
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ chunkCoalesceMs: 55 }));
+
+    const chunkSizeInput = screen.getByLabelText('Chunk size (bytes)') as HTMLInputElement;
+    fireEvent.change(chunkSizeInput, { target: { value: '8192' } });
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ chunkSizeBytes: 8192 }));
+
+    const clientBufferInput = screen.getByLabelText('Client buffer limit (bytes)') as HTMLInputElement;
+    fireEvent.change(clientBufferInput, { target: { value: '2048' } });
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ clientBufferLimitBytes: 2048 }));
+
+    const logToggle = screen.getByLabelText('Log to PID 1') as HTMLInputElement;
+    fireEvent.click(logToggle);
+    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ logToPid1: false }));
   });
 });
