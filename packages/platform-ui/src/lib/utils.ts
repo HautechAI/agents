@@ -21,3 +21,10 @@ export function shallowEqual<T extends Record<string, unknown>>(a: T | undefined
   }
   return true;
 }
+
+export function normalizeEscapedNewlines(text: string): string {
+  if (!text.includes('\\n')) {
+    return text;
+  }
+  return text.replaceAll('\\n', ' ');
+}
