@@ -8,6 +8,7 @@ import { InfraModule } from '../infra/infra.module';
 import { StartupRecoveryService } from '../core/services/startupRecovery.service';
 import { NodesModule } from '../nodes/nodes.module';
 import { OnboardingModule } from '../onboarding/onboarding.module';
+import { UserProfileModule } from '../user-profile/user-profile.module';
 
 type PinoLoggerModule = {
   forRoot: (options: {
@@ -56,6 +57,7 @@ const createLoggerModule = (): DynamicModule => {
     GraphApiModule,
     NodesModule,
     GatewayModule,
+    UserProfileModule,
     OnboardingModule,
   ],
   providers: [StartupRecoveryService],

@@ -1,8 +1,6 @@
-export type OnboardingProfileData = {
-  firstName: string;
-  lastName: string;
-  email: string;
-};
+import type { UserProfileData } from '../user-profile/user-profile.types';
+
+export type OnboardingProfileData = UserProfileData;
 
 export type OnboardingDataSnapshot = {
   profile: OnboardingProfileData | null;
@@ -14,8 +12,6 @@ export type OnboardingStatusResponse = {
   completedSteps: string[];
   data: OnboardingDataSnapshot;
 };
-
-export type OnboardingProfileInput = OnboardingProfileData;
 
 export type OnboardingStepContext = {
   appVersion: string;

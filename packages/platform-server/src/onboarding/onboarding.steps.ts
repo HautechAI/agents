@@ -13,7 +13,7 @@ const profileBasicStep: OnboardingStepDefinition = {
   stepId: PROFILE_BASIC_STEP_ID,
   introducedIn: '1.0.0',
   isRequired: () => true,
-  isFulfilled: (ctx) => ctx.completedSteps.has(PROFILE_BASIC_STEP_ID) && hasCompleteProfile(ctx),
+  isFulfilled: (ctx) => hasCompleteProfile(ctx),
 };
 
 @Injectable()

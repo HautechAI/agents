@@ -26,5 +26,5 @@ export async function fetchOnboardingStatus(appVersion: string): Promise<Onboard
 }
 
 export async function submitOnboardingProfile(payload: OnboardingProfilePayload): Promise<OnboardingDataSnapshot> {
-  return asData(http.post<OnboardingDataSnapshot>('/api/onboarding/profile', payload));
+  return asData(http.post<OnboardingDataSnapshot>('/api/user-profile', payload));
 }
