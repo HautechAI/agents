@@ -1,8 +1,11 @@
 import type { Preview } from '@storybook/react-vite';
-import { TooltipProvider } from '../src/components/ui/tooltip';
+import { initConfigViewsRegistry } from '../src/configViews.init';
+import { ScreenStoryProviders, type ScreenParameters } from './ScreenStoryProviders';
 import '../src/styles/tailwind.css';
 import '../src/styles/globals.css';
 import '../src/styles/shadcn-compat.css';
+
+initConfigViewsRegistry();
 
 const preview: Preview = {
   tags: ['autodocs'],
@@ -27,11 +30,16 @@ const preview: Preview = {
     },
   },
   decorators: [
-    (Story) => (
-      <TooltipProvider>
-        <Story />
-      </TooltipProvider>
-    ),
+    (Story, context) => {
+      const screen = (context.parameters.screen ?? {}) as ScreenParameters;
+      const routePath = screen.routePath ?? '*';
+      const initialEntry = screen.initialEntry ?? '/';
+      return (
+        <ScreenStoryProviders routePath={routePath} initialEntry={initialEntry}>
+          <Story />
+        </ScreenStoryProviders>
+      );
+    },
   ],
 };
 

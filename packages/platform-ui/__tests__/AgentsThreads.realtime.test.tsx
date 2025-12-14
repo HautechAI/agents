@@ -4,7 +4,7 @@ import { act, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
-import { AgentsThreads } from '../src/pages/AgentsThreads';
+import { AgentsThreadsScreen } from '../src/components/screens/agents/ThreadsScreen';
 import { TestProviders, server, abs } from './integration/testUtils';
 import { graphSocket } from '../src/lib/graph/socket';
 
@@ -68,7 +68,7 @@ describe('AgentsThreads realtime updates', () => {
     render(
       <TestProviders>
         <MemoryRouter>
-          <AgentsThreads />
+          <AgentsThreadsScreen />
         </MemoryRouter>
       </TestProviders>,
     );
@@ -108,7 +108,7 @@ describe('AgentsThreads realtime updates', () => {
     render(
       <TestProviders>
         <MemoryRouter>
-          <AgentsThreads />
+          <AgentsThreadsScreen />
         </MemoryRouter>
       </TestProviders>,
     );

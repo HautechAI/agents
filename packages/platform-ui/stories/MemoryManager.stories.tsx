@@ -137,12 +137,12 @@ const INITIAL_DUMPS: Record<string, DumpResponse> = {
 };
 
 const meta: Meta<typeof MemoryManager> = {
-  title: 'Screens/MemoryManager',
+  title: 'Components/MemoryManager',
   component: MemoryManager,
   decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
-    selectedMenuItem: 'graph',
+    selectedMenuItem: 'memory',
   },
   tags: ['!autodocs'],
 };

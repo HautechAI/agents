@@ -6,7 +6,7 @@ type TracingDisabledProps = {
 const DEFAULT_TITLE = 'Tracing unavailable';
 const DEFAULT_MESSAGE = 'Tracing has been removed from the platform. Historical spans and realtime tracing views are no longer available.';
 
-export function TracingDisabledPage({ title = DEFAULT_TITLE, message = DEFAULT_MESSAGE }: TracingDisabledProps) {
+export function TracingDisabledScreen({ title = DEFAULT_TITLE, message = DEFAULT_MESSAGE }: TracingDisabledProps) {
   return (
     <div className="p-6 space-y-3 max-w-xl">
       <h1 className="text-xl font-semibold tracking-tight">{title}</h1>

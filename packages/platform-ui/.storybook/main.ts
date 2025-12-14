@@ -1,5 +1,9 @@
+import path from 'path';
+import { fileURLToPath } from 'node:url';
 import type { StorybookConfig } from '@storybook/react-vite';
 import tailwindcss from '@tailwindcss/vite';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const config: StorybookConfig = {
   stories: [
@@ -19,6 +23,20 @@ const config: StorybookConfig = {
   async viteFinal(config) {
     return {
       ...config,
+      resolve: {
+        ...config.resolve,
+        alias: {
+          ...(config.resolve?.alias ?? {}),
+          '@': path.resolve(dirname, '../src'),
+          '@agyn/ui-new': path.resolve(dirname, '../ui-new/src'),
+          'react/jsx-runtime': path.resolve(dirname, '../node_modules/react/jsx-runtime.js'),
+          'react/jsx-dev-runtime': path.resolve(
+            dirname,
+            '../node_modules/react/jsx-dev-runtime.js'
+          ),
+          react: path.resolve(dirname, '../node_modules/react/index.js'),
+        },
+      },
       plugins: [
         ...(config.plugins ?? []), //
         tailwindcss(),

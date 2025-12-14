@@ -9,7 +9,7 @@ import { normalizeMemoryPath } from '@/components/memory/path';
 
 const THREAD_STORAGE_PREFIX = 'ui.memory.selectedThread.';
 
-export function MemoryNodeDetailPage() {
+export function MemoryNodeDetailScreen() {
   const params = useParams();
   const nodeIdParam = params.nodeId ?? '';
   const nodeId = decodeURIComponent(nodeIdParam);

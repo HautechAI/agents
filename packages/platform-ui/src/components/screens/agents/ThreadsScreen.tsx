@@ -502,7 +502,7 @@ function mapContainers(items: ContainerItem[]): { id: string; name: string; stat
   }));
 }
 
-export function AgentsThreads() {
+export function AgentsThreadsScreen() {
   const params = useParams<{ threadId?: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

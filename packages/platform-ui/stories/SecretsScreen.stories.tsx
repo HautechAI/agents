@@ -1,60 +1,24 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import SecretsScreen, { type Secret } from '../src/components/screens/SecretsScreen';
+import { SettingsSecretsScreen } from '@/components/screens/settings/SecretsScreen';
 import { withMainLayout } from './decorators/withMainLayout';
 
-const meta: Meta<typeof SecretsScreen> = {
+const meta: Meta<typeof SettingsSecretsScreen> = {
   title: 'Screens/Secrets',
-  component: SecretsScreen,
+  component: SettingsSecretsScreen,
   decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
+    screen: {
+      routePath: '/settings/secrets',
+      initialEntry: '/settings/secrets',
+    },
+    selectedMenuItem: 'secrets',
   },
   tags: ['!autodocs'],
 };
 
 export default meta;
 
-type Story = StoryObj<typeof SecretsScreen>;
+type Story = StoryObj<typeof SettingsSecretsScreen>;
 
-const sampleSecrets: Secret[] = [
-  {
-    id: 'sec-1',
-    key: 'OPENAI_API_KEY',
-    value: 'sk-***',
-    status: 'used',
-  },
-  {
-    id: 'sec-2',
-    key: 'SLACK_BOT_TOKEN',
-    value: 'xoxb-***',
-    status: 'missing',
-  },
-];
-
-const manySecrets: Secret[] = Array.from({ length: 75 }).map((_, index) => {
-  const id = index + 1;
-  return {
-    id: `sec-${id}`,
-    key: `SERVICE_${id.toString().padStart(3, '0')}_API_KEY`,
-    value: `sk-demo-${id.toString().padStart(6, '0')}`,
-    status: id % 7 === 0 ? 'missing' : 'used',
-  };
-});
-
-export const Default: Story = {
-  args: {
-    secrets: sampleSecrets,
-  },
-  parameters: {
-    selectedMenuItem: 'secrets',
-  },
-};
-
-export const ManySecretsPagination: Story = {
-  args: {
-    secrets: manySecrets,
-  },
-  parameters: {
-    selectedMenuItem: 'secrets',
-  },
-};
+export const Default: Story = {};

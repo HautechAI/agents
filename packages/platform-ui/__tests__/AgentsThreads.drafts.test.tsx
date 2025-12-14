@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 
-import { AgentsThreads } from '../src/pages/AgentsThreads';
+import { AgentsThreadsScreen } from '../src/components/screens/agents/ThreadsScreen';
 import { TestProviders, server, abs } from './integration/testUtils';
 import { makeDraftKey } from '@/utils/draftStorage';
 import { UserContext } from '@/user/user.runtime';
@@ -145,7 +145,7 @@ function renderThreads(): RenderResult {
     <TestProviders>
       <UserContext.Provider value={{ user: TEST_USER }}>
         <MemoryRouter>
-          <AgentsThreads />
+          <AgentsThreadsScreen />
         </MemoryRouter>
       </UserContext.Provider>
     </TestProviders>,

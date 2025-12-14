@@ -4,8 +4,8 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
-import { AgentsThreads } from '../AgentsThreads';
-import { TestProviders, server, abs } from '../../../__tests__/integration/testUtils';
+import { AgentsThreadsScreen } from '../ThreadsScreen';
+import { TestProviders, server, abs } from '../../../../../__tests__/integration/testUtils';
 
 type ThreadMock = {
   id: string;
@@ -98,8 +98,8 @@ function renderAt(path: string) {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/agents/threads">
-            <Route index element={<AgentsThreads />} />
-            <Route path=":threadId" element={<AgentsThreads />} />
+            <Route index element={<AgentsThreadsScreen />} />
+            <Route path=":threadId" element={<AgentsThreadsScreen />} />
           </Route>
         </Routes>
       </MemoryRouter>

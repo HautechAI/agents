@@ -28,7 +28,7 @@ vi.mock('@/lib/notify', () => ({
   notifyError: vi.fn(),
 }));
 
-import { SettingsVariables } from '../SettingsVariables';
+import { SettingsVariablesScreen as SettingsVariables } from '../VariablesScreen';
 import { notifyError } from '@/lib/notify';
 
 let latestProps: VariablesPageProps | undefined;

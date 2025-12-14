@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { AgentsThreads } from '../src/pages/AgentsThreads';
+import { AgentsThreadsScreen } from '../src/components/screens/agents/ThreadsScreen';
 import { TestProviders } from './integration/testUtils';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -10,7 +10,7 @@ describe('AgentsThreads layout', () => {
     render(
       <TestProviders>
         <MemoryRouter>
-          <AgentsThreads />
+          <AgentsThreadsScreen />
         </MemoryRouter>
       </TestProviders>,
     );

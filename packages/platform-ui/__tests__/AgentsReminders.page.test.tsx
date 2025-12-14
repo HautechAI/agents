@@ -16,7 +16,7 @@ vi.mock('react-router-dom', async () => {
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { TestProviders, server, abs } from './integration/testUtils';
-import { AgentsReminders } from '../src/pages/AgentsReminders';
+import { AgentsRemindersScreen } from '../src/components/screens/agents/RemindersScreen';
 
 type ReminderApi = {
   id: string;
@@ -99,7 +99,7 @@ function renderPage() {
       initialEntries={[{ pathname: '/agents/reminders' }]}
     >
       <TestProviders>
-        <AgentsReminders />
+        <AgentsRemindersScreen />
       </TestProviders>
     </MemoryRouter>,
   );

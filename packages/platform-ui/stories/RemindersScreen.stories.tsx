@@ -1,44 +1,24 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import RemindersScreen, { type Reminder } from '../src/components/screens/RemindersScreen';
+import { AgentsRemindersScreen } from '@/components/screens/agents/RemindersScreen';
 import { withMainLayout } from './decorators/withMainLayout';
 
-const meta: Meta<typeof RemindersScreen> = {
+const meta: Meta<typeof AgentsRemindersScreen> = {
   title: 'Screens/Reminders',
-  component: RemindersScreen,
+  component: AgentsRemindersScreen,
   decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
+    screen: {
+      routePath: '/agents/reminders',
+      initialEntry: '/agents/reminders',
+    },
+    selectedMenuItem: 'reminders',
   },
   tags: ['!autodocs'],
 };
 
 export default meta;
 
-type Story = StoryObj<typeof RemindersScreen>;
+type Story = StoryObj<typeof AgentsRemindersScreen>;
 
-const sampleReminders: Reminder[] = [
-  {
-    id: 'rem-1',
-    note: 'Follow up on authentication API design',
-    scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    status: 'scheduled',
-    threadId: 'thread-1',
-  },
-  {
-    id: 'rem-2',
-    note: 'Check container health after deploy',
-    scheduledAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    status: 'executed',
-    runId: 'run-42',
-    executedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-  },
-];
-
-export const Default: Story = {
-  args: {
-    reminders: sampleReminders,
-  },
-  parameters: {
-    selectedMenuItem: 'reminders',
-  },
-};
+export const Default: Story = {};
