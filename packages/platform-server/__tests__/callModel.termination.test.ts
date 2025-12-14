@@ -4,15 +4,20 @@ import { Signal } from '../src/signal';
 import { HumanMessage, ResponseMessage, SystemMessage } from '@agyn/llm';
 import { RunEventStatus } from '@prisma/client';
 
-const createRunEventsStub = () => ({
-  startLLMCall: vi.fn(async () => ({ id: 'evt-1' })),
-  publishEvent: vi.fn(async () => {}),
-  completeLLMCall: vi.fn(async () => {}),
-  createContextItems: vi.fn(async () => []),
-  updateLLMCallNewContextItemCount: vi.fn(async () => {}),
-  connectContextItemsToRun: vi.fn(async () => {}),
-  createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
-});
+const createRunEventsStub = () => {
+  let ctxCounter = 0;
+  return {
+    startLLMCall: vi.fn(async () => ({ id: 'evt-1' })),
+    publishEvent: vi.fn(async () => {}),
+    completeLLMCall: vi.fn(async () => {}),
+    createContextItems: vi.fn(async (items: Array<{ id?: string }> = []) => {
+      return items.map((item) => item?.id ?? `ctx-${++ctxCounter}`);
+    }),
+    updateLLMCallNewContextItemCount: vi.fn(async () => {}),
+    connectContextItemsToRun: vi.fn(async () => {}),
+    createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
+  };
+};
 
 const createEventsBusStub = () => ({
   publishEvent: vi.fn(async () => {}),
@@ -76,5 +81,6 @@ describe('CallModelLLMReducer termination handling', () => {
     const inputs = runEvents.createContextItems.mock.calls[0][0] as Array<{ role?: string }>;
     const roles = inputs.map((item) => item.role);
     expect(roles).not.toContain('assistant');
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledWith({ eventId: 'evt-1', newContextItemCount: 1 });
   });
 });

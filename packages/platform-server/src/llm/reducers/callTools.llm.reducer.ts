@@ -111,6 +111,9 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
     const toolsMap = this.createToolsMap();
     const nodeId = ctx?.callerAgent?.getAgentNodeId?.() ?? null;
     const llmEventId = state.meta?.lastLLMEventId ?? null;
+    if (toolsToCall.length > 0 && !llmEventId) {
+      throw new Error('CallToolsLLMReducer missing LLM event id for tool outputs');
+    }
     const contextCounter = new LLMCallContextItemCounter(this.runEvents, {
       eventId: llmEventId ?? undefined,
       count: state.meta?.lastLLMNewContextItemCount ?? 0,
