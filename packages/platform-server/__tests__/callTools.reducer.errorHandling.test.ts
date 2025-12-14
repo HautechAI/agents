@@ -17,7 +17,7 @@ const buildState = (name: string, callId: string, args: string) => {
   });
   return {
     messages: [response],
-    meta: { lastLLMEventId: `evt-${callId}`, lastLLMNewContextItemCount: 0 },
+    meta: { lastLLMEventId: `evt-${callId}` },
     context: { messageIds: [], memory: [] },
   } as any;
 };

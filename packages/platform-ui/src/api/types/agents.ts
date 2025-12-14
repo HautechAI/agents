@@ -98,6 +98,7 @@ export type RunTimelineEvent = {
     stopReason: string | null;
     contextItemIds: string[];
     newContextItemCount: number;
+    newContextItemIds: string[];
     responseText: string | null;
     rawResponse: unknown;
     toolCalls: Array<{ callId: string; name: string; arguments: unknown }>;

@@ -337,7 +337,7 @@ describe('AgentsRunScreen', () => {
     expect(data.childRunId).toBe('metadata-run');
   });
 
-  it('hydrates assistant context from stringified content text including tool calls and reasoning', async () => {
+  it('excludes assistant context from the LLM input list', async () => {
     const assistantContext: ContextItem = {
       id: 'ctx-1',
       role: 'assistant',
@@ -363,6 +363,7 @@ describe('AgentsRunScreen', () => {
         stopReason: null,
         contextItemIds: [assistantContext.id],
         newContextItemCount: 1,
+        newContextItemIds: [assistantContext.id],
         responseText: 'Final response',
         rawResponse: null,
         toolCalls: [
@@ -412,40 +413,17 @@ describe('AgentsRunScreen', () => {
 
     await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalledWith([assistantContext.id]));
 
-    let capturedProps: { events: Array<{ data: Record<string, unknown> }> } | undefined;
-    await waitFor(() => {
-      const call = [...runScreenMocks.props.mock.calls]
-        .reverse()
-        .find(([callProps]) => {
-          const events = (callProps as { events?: unknown[] }).events;
-          if (!Array.isArray(events) || events.length === 0) return false;
-          const candidate = events[0] as { data?: { context?: unknown[] } };
-          return Array.isArray(candidate.data?.context) && candidate.data.context.length > 0;
-        });
-      expect(call).toBeDefined();
-      capturedProps = call?.[0] as { events: Array<{ data: Record<string, unknown> }> };
-    });
-
-    if (!capturedProps) {
-      throw new Error('RunScreen props were not captured.');
-    }
+    await waitFor(() => expect(runScreenMocks.props).toHaveBeenCalled());
+    const lastCall = runScreenMocks.props.mock.calls.at(-1);
+    const capturedProps = lastCall?.[0] as { events: Array<{ data: Record<string, unknown> }> } | undefined;
+    if (!capturedProps) throw new Error('RunScreen props were not captured.');
 
     const [capturedEvent] = capturedProps.events;
     const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
-    expect(context).toHaveLength(1);
-    const assistant = context[0];
-    expect(assistant.role).toBe('assistant');
-    expect(assistant.content).toBe('Final response');
-
-    const toolCalls = assistant['tool_calls'] as Record<string, unknown>[] | undefined;
-    expect(Array.isArray(toolCalls)).toBe(true);
-    expect(toolCalls?.[0]?.name).toBe('write_file');
-    expect(toolCalls?.[0]?.arguments).toEqual({ path: '/tmp/file.ts' });
-    expect(assistant['toolCalls']).toEqual(toolCalls);
-    expect(assistant['reasoning']).toEqual({ tokens: 88 });
+    expect(context).toEqual([]);
   });
 
-  it('falls back to llmCall tool calls and metadata reasoning when assistant context lacks tool_calls', async () => {
+  it('highlights new user context items when IDs are provided', async () => {
     const assistantContext: ContextItem = {
       id: 'ctx-2',
       role: 'assistant',
@@ -460,13 +438,15 @@ describe('AgentsRunScreen', () => {
       createdAt: '2024-01-01T00:00:03.000Z',
     };
 
-    const fallbackToolCalls = [
-      {
-        callId: 'call-fallback',
-        name: 'delegate_agent',
-        arguments: { target: 'agent-security' },
-      },
-    ];
+    const userContext: ContextItem = {
+      id: 'ctx-3',
+      role: 'user',
+      contentText: 'Please finish the draft.',
+      contentJson: null,
+      metadata: null,
+      sizeBytes: 144,
+      createdAt: '2024-01-01T00:00:04.000Z',
+    };
 
     const event = buildEvent({
       type: 'llm_call',
@@ -477,11 +457,12 @@ describe('AgentsRunScreen', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItemIds: [assistantContext.id],
+        contextItemIds: [userContext.id, assistantContext.id],
         newContextItemCount: 1,
+        newContextItemIds: [userContext.id],
         responseText: 'Working on it.',
         rawResponse: null,
-        toolCalls: fallbackToolCalls.map((call) => ({ ...call })),
+        toolCalls: [],
         usage: undefined,
       },
       metadata: {},
@@ -506,7 +487,7 @@ describe('AgentsRunScreen', () => {
       totalEvents: 1,
     });
     runsHookMocks.events.mockReturnValue({ items: [event], nextCursor: null });
-    contextItemsMocks.getMany.mockImplementation(async () => [assistantContext]);
+    contextItemsMocks.getMany.mockImplementation(async () => [assistantContext, userContext]);
 
     const queryClient = new QueryClient();
 
@@ -520,38 +501,24 @@ describe('AgentsRunScreen', () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalledWith([assistantContext.id]));
+    await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalled());
+    expect(contextItemsMocks.getMany).toHaveBeenCalledWith(expect.arrayContaining([assistantContext.id, userContext.id]));
 
-    let capturedProps: { events: Array<{ data: Record<string, unknown> }> } | undefined;
-    await waitFor(() => {
-      const call = [...runScreenMocks.props.mock.calls]
-        .reverse()
-        .find(([callProps]) => {
-          const events = (callProps as { events?: unknown[] }).events;
-          if (!Array.isArray(events) || events.length === 0) return false;
-          const candidate = events[0] as { data?: { context?: unknown[] } };
-          return Array.isArray(candidate.data?.context) && candidate.data.context.length > 0;
-        });
-      expect(call).toBeDefined();
-      capturedProps = call?.[0] as { events: Array<{ data: Record<string, unknown> }> };
-    });
-
-    if (!capturedProps) {
-      throw new Error('RunScreen props were not captured.');
-    }
+    await waitFor(() => expect(runScreenMocks.props).toHaveBeenCalled());
+    const lastCall = runScreenMocks.props.mock.calls.at(-1);
+    const capturedProps = lastCall?.[0] as { events: Array<{ data: Record<string, unknown> }> } | undefined;
+    if (!capturedProps) throw new Error('RunScreen props were not captured.');
 
     const [capturedEvent] = capturedProps.events;
     const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
     expect(context).toHaveLength(1);
-    const assistant = context[0];
-    const toolCalls = assistant['tool_calls'] as Record<string, unknown>[] | undefined;
-    expect(Array.isArray(toolCalls)).toBe(true);
-    expect(toolCalls?.[0]?.name).toBe('delegate_agent');
-    expect(toolCalls?.[0]?.arguments).toEqual({ target: 'agent-security' });
-    expect(assistant['reasoning']).toEqual({ tokens: 55, score: 0.42 });
+    const [userEntry] = context;
+    expect(userEntry.role).toBe('user');
+    expect(userEntry.content).toBe('Please finish the draft.');
+    expect(userEntry['__agynIsNew']).toBe(true);
   });
 
-  it('omits assistant content when context lacks textual fields but exposes tool calls and reasoning', async () => {
+  it('still excludes assistant contexts that contain only tool data', async () => {
     const assistantContext: ContextItem = {
       id: 'ctx-structured',
       role: 'assistant',
@@ -583,6 +550,7 @@ describe('AgentsRunScreen', () => {
         stopReason: null,
         contextItemIds: [assistantContext.id],
         newContextItemCount: 1,
+        newContextItemIds: [assistantContext.id],
         responseText: null,
         rawResponse: null,
         toolCalls: [],
@@ -627,36 +595,14 @@ describe('AgentsRunScreen', () => {
 
     await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalledWith([assistantContext.id]));
 
-    let capturedProps: { events: Array<{ data: Record<string, unknown> }> } | undefined;
-    await waitFor(() => {
-      const call = [...runScreenMocks.props.mock.calls]
-        .reverse()
-        .find(([callProps]) => {
-          const events = (callProps as { events?: unknown[] }).events;
-          if (!Array.isArray(events) || events.length === 0) return false;
-          const candidate = events[0] as { data?: { context?: unknown[] } };
-          return Array.isArray(candidate.data?.context) && candidate.data.context.length > 0;
-        });
-      expect(call).toBeDefined();
-      capturedProps = call?.[0] as { events: Array<{ data: Record<string, unknown> }> };
-    });
-
-    if (!capturedProps) {
-      throw new Error('RunScreen props were not captured.');
-    }
+    await waitFor(() => expect(runScreenMocks.props).toHaveBeenCalled());
+    const lastCall = runScreenMocks.props.mock.calls.at(-1);
+    const capturedProps = lastCall?.[0] as { events: Array<{ data: Record<string, unknown> }> } | undefined;
+    if (!capturedProps) throw new Error('RunScreen props were not captured.');
 
     const [capturedEvent] = capturedProps.events;
     const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
-    expect(context).toHaveLength(1);
-    const assistant = context[0];
-
-    expect(assistant.role).toBe('assistant');
-    expect(assistant['content']).toBeUndefined();
-    expect(assistant['response']).toBeUndefined();
-    expect(assistant['tool_calls']).toEqual([
-      expect.objectContaining({ name: 'lookup_status', arguments: { ticket: 'INC-42' } }),
-    ]);
-    expect(assistant['reasoning']).toEqual({ tokens: 12 });
+    expect(context).toEqual([]);
   });
 });
 
@@ -699,6 +645,7 @@ describe('extractLlmResponse', () => {
         stopReason: null,
         contextItemIds: [],
         newContextItemCount: 0,
+        newContextItemIds: [],
         responseText: null,
         rawResponse: null,
         toolCalls: [],

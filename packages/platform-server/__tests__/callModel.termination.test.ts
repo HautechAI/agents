@@ -81,6 +81,10 @@ describe('CallModelLLMReducer termination handling', () => {
     const inputs = runEvents.createContextItems.mock.calls[0][0] as Array<{ role?: string }>;
     const roles = inputs.map((item) => item.role);
     expect(roles).not.toContain('assistant');
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledWith({ eventId: 'evt-1', newContextItemCount: 1 });
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledWith({
+      eventId: 'evt-1',
+      newContextItemCount: 1,
+      newContextItemIds: [expect.stringMatching(/^ctx-/)],
+    });
   });
 });

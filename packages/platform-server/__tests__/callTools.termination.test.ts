@@ -21,7 +21,7 @@ describe('CallToolsLLMReducer termination handling', () => {
     const response = new ResponseMessage({ output: [call.toPlain() as any] as any });
     const state = {
       messages: [HumanMessage.fromText('start'), response],
-      meta: { lastLLMEventId: 'evt-tools-terminate', lastLLMNewContextItemCount: 0 },
+      meta: { lastLLMEventId: 'evt-tools-terminate' },
       context: { messageIds: [], memory: [] },
     } as any;
 
@@ -60,7 +60,7 @@ describe('CallToolsLLMReducer termination handling', () => {
     const response = new ResponseMessage({ output: [call.toPlain() as any] as any });
     const state = {
       messages: [HumanMessage.fromText('start'), response],
-      meta: { lastLLMEventId: 'evt-tools-terminate-2', lastLLMNewContextItemCount: 0 },
+      meta: { lastLLMEventId: 'evt-tools-terminate-2' },
       context: { messageIds: [], memory: [] },
     } as any;
 

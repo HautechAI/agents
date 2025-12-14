@@ -20,6 +20,7 @@ export async function persistContextItemsWithCounting(params: {
   const ids = await runEvents.createContextItems(inputs);
 
   let countableApplied = 0;
+  const countedIds: string[] = [];
   ids.forEach((id, index) => {
     const entry = entries[index];
     if (!entry) return;
@@ -28,11 +29,12 @@ export async function persistContextItemsWithCounting(params: {
     }
     if (entry.countable && id) {
       countableApplied += 1;
+      countedIds.push(id);
     }
   });
 
   if (countableApplied > 0 && counter) {
-    await counter.increment(countableApplied);
+    await counter.increment(countableApplied, countedIds);
   }
 
   return ids;

@@ -257,6 +257,7 @@ export interface LLMCallContextCountUpdateArgs {
   tx?: Tx;
   eventId: string;
   newContextItemCount: number;
+  newContextItemIds?: string[];
 }
 
 export interface ToolCallRecord {
@@ -535,6 +536,7 @@ export class RunEventsService {
           stopReason: event.llmCall.stopReason ?? null,
           contextItemIds,
           newContextItemCount: event.llmCall.newContextItemCount,
+          newContextItemIds: event.llmCall.newContextItemIds ? [...event.llmCall.newContextItemIds] : [],
           responseText: event.llmCall.responseText ?? null,
           rawResponse: this.toPlainJson(event.llmCall.rawResponse ?? null),
           toolCalls: event.llmCall.toolCalls.map((tc) => ({
@@ -1130,7 +1132,10 @@ export class RunEventsService {
     const tx = args.tx ?? this.prisma;
     await tx.lLMCall.update({
       where: { eventId: args.eventId },
-      data: { newContextItemCount: args.newContextItemCount },
+      data: {
+        newContextItemCount: args.newContextItemCount,
+        newContextItemIds: args.newContextItemIds ?? [],
+      },
     });
   }
 

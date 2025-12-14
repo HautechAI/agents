@@ -319,6 +319,7 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
     contextArray.map((message, index) => {
       const roleValue = asString(message.role).toLowerCase();
       const role = roleValue || 'user';
+      const isNewContext = message['__agynIsNew'] === true;
 
       const getRoleConfig = () => {
         switch (role) {
@@ -410,6 +411,11 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
             <span className={`text-xs font-medium ${role === 'tool' ? '' : 'capitalize'}`}>
               {role === 'tool' ? asString(message.name, 'Tool') : role}
             </span>
+            {isNewContext && (
+              <Badge variant="success" size="sm" className="ml-2">
+                New
+              </Badge>
+            )}
             {timestamp && (
               <span className="text-xs text-[var(--agyn-gray)] ml-1">{timestamp}</span>
             )}

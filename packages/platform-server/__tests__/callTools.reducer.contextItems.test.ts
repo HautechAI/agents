@@ -36,7 +36,7 @@ describe('CallToolsLLMReducer context items', () => {
     const response = new ResponseMessage({ output: toolCalls.map((call) => call.toPlain() as any) as any });
     const initialState = {
       messages: [HumanMessage.fromText('hello'), response],
-      meta: { lastLLMEventId: 'evt-tools', lastLLMNewContextItemCount: 0 },
+      meta: { lastLLMEventId: 'evt-tools' },
       context: { messageIds: ['existing-1', 'assistant-existing'], memory: [] },
     } as any;
     const ctx = {
@@ -89,7 +89,7 @@ describe('CallToolsLLMReducer context items', () => {
     const response = new ResponseMessage({ output: [call.toPlain() as any] as any });
     const state = {
       messages: [HumanMessage.fromText('hi'), response],
-      meta: { lastLLMEventId: 'evt-tools-fail', lastLLMNewContextItemCount: 0 },
+      meta: { lastLLMEventId: 'evt-tools-fail' },
       context: { messageIds: ['existing-ctx', 'assistant-ctx'], memory: [] },
     } as any;
     const ctx = {
@@ -245,7 +245,7 @@ describe('CallToolsLLMReducer context items', () => {
     expect(Array.isArray(secondAssistantItem.contentJson?.output)).toBe(true);
   });
 
-  it('increments new context count when tool outputs are appended', async () => {
+  it('does not increment new context count when tool outputs are appended', async () => {
     const runEvents = createRunEventsStub();
     const updateMock = runEvents.updateLLMCallNewContextItemCount as unknown as MockFn;
     const eventsBus = createEventsBusStub();
@@ -268,7 +268,7 @@ describe('CallToolsLLMReducer context items', () => {
 
     const state = {
       messages: [HumanMessage.fromText('ping'), response],
-      meta: { lastLLMEventId: 'evt-last', lastLLMNewContextItemCount: 1 },
+      meta: { lastLLMEventId: 'evt-last' },
       context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [] },
     } as any;
     const ctx = {
@@ -281,13 +281,12 @@ describe('CallToolsLLMReducer context items', () => {
 
     const result = await reducer.invoke(state, ctx);
 
-    expect(updateMock).toHaveBeenCalledWith({ eventId: 'evt-last', newContextItemCount: 2 });
-    expect(result.meta?.lastLLMNewContextItemCount).toBe(2);
+    expect(updateMock).not.toHaveBeenCalled();
     expect(result.context.messageIds).toHaveLength(3);
     expect(result.messages.at(-1)?.text).toBe('alpha-output');
   });
 
-  it('increments context count by batch size for multiple tool outputs', async () => {
+  it('does not increment new context count for batched tool outputs', async () => {
     const runEvents = createRunEventsStub();
     const updateMock = runEvents.updateLLMCallNewContextItemCount as unknown as MockFn;
     const eventsBus = createEventsBusStub();
@@ -311,7 +310,7 @@ describe('CallToolsLLMReducer context items', () => {
 
     const state = {
       messages: [HumanMessage.fromText('ping'), response],
-      meta: { lastLLMEventId: 'evt-last', lastLLMNewContextItemCount: 3 },
+      meta: { lastLLMEventId: 'evt-last' },
       context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [] },
     } as any;
     const ctx = {
@@ -325,8 +324,7 @@ describe('CallToolsLLMReducer context items', () => {
     const result = await reducer.invoke(state, ctx);
 
     expect(tool.execute).toHaveBeenCalledTimes(2);
-    expect(updateMock).toHaveBeenCalledWith({ eventId: 'evt-last', newContextItemCount: 5 });
-    expect(result.meta?.lastLLMNewContextItemCount).toBe(5);
+    expect(updateMock).not.toHaveBeenCalled();
     expect(result.context.messageIds).toHaveLength(4);
     expect(result.messages.slice(-2).map((msg) => msg.text)).toEqual(['alpha-output-1', 'alpha-output-2']);
   });

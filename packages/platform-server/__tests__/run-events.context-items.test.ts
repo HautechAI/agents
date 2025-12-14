@@ -171,19 +171,24 @@ if (!shouldRunDbTests) {
         threadId: thread.id,
         contextItems: contextInputs,
       });
+      const newIds = ['ctx-new-user', 'ctx-new-assistant'];
       await runEvents.updateLLMCallNewContextItemCount({
         eventId: event.id,
         newContextItemCount: contextInputs.length,
+        newContextItemIds: newIds,
       });
 
       const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
       expect(callRecord.newContextItemCount).toBe(contextInputs.length);
+      expect(callRecord.newContextItemIds).toEqual(newIds);
 
       const snapshot = await runEvents.getEventSnapshot(event.id);
       expect(snapshot?.llmCall?.newContextItemCount).toBe(contextInputs.length);
+      expect(snapshot?.llmCall?.newContextItemIds).toEqual(newIds);
 
       const page = await runEvents.listRunEvents({ runId: run.id, limit: 10, order: 'asc' });
       expect(page.items[0]?.llmCall?.newContextItemCount).toBe(contextInputs.length);
+      expect(page.items[0]?.llmCall?.newContextItemIds).toEqual(newIds);
 
       await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
     });

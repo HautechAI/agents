@@ -99,14 +99,11 @@ describe('CallModelLLMReducer usage metrics', () => {
       callerAgent: { getAgentNodeId: () => 'agent-context' } as any,
     });
 
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledTimes(2);
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(1, {
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledTimes(1);
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledWith({
       eventId: 'evt-context-1',
       newContextItemCount: 1,
-    });
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(2, {
-      eventId: 'evt-context-1',
-      newContextItemCount: 2,
+      newContextItemIds: ['ctx-user-new'],
     });
   });
 
@@ -160,13 +157,11 @@ describe('CallModelLLMReducer usage metrics', () => {
       callerAgent: { getAgentNodeId: () => 'agent-context-tail' } as any,
     });
 
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(1, {
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledTimes(1);
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledWith({
       eventId: 'evt-context-2',
       newContextItemCount: 1,
-    });
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(2, {
-      eventId: 'evt-context-2',
-      newContextItemCount: 2,
+      newContextItemIds: ['ctx-user-tail'],
     });
   });
 });

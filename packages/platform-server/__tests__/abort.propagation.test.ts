@@ -39,7 +39,7 @@ describe('Abort propagation', () => {
     const p = reducer.invoke(
       {
         messages: [response],
-        meta: { lastLLMEventId: 'evt-abort', lastLLMNewContextItemCount: 0 },
+        meta: { lastLLMEventId: 'evt-abort' },
         context: { messageIds: [], memory: [] },
       } as any,
       {
