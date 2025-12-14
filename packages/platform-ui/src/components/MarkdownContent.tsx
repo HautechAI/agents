@@ -138,7 +138,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       return (
         <code
           className="bg-[var(--agyn-bg-light)] text-[var(--agyn-purple)] px-1.5 py-0.5 rounded text-sm break-words max-w-full whitespace-pre-wrap"
-          style={style}
+          style={{ overflowWrap: 'break-word', wordBreak: 'break-word', ...style }}
           {...props}
         >
           {children}
@@ -275,7 +275,10 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
   };
 
   return (
-    <div className={`markdown-content w-full min-w-0 ${className}`} style={{ overflowWrap: 'anywhere' }}>
+    <div
+      className={`markdown-content w-full min-w-0 ${className}`}
+      style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
+    >
       <ReactMarkdown
         remarkPlugins={MARKDOWN_REMARK_PLUGINS}
         rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
