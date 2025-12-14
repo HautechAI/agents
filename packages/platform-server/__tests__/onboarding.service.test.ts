@@ -9,6 +9,10 @@ class FakePrismaClient {
   private completionSeq = 0;
   private completions = new Map<string, OnboardingStepCompletion>();
 
+  async $transaction<T>(callback: (tx: this) => Promise<T>): Promise<T> {
+    return callback(this);
+  }
+
   onboardingState = {
     findUnique: async () => (this.state ? { ...this.state } : null),
     upsert: async ({ create, update }: { create: Partial<OnboardingState>; update: Partial<OnboardingState> }) => {

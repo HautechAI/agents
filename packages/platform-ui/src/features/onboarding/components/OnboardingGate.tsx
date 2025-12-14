@@ -1,5 +1,5 @@
 import { AlertTriangle, Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useOnboardingStatus } from '../hooks';
@@ -8,12 +8,16 @@ export function OnboardingGate() {
   const statusQuery = useOnboardingStatus();
   const navigate = useNavigate();
   const location = useLocation();
+  const returnTo = useMemo(
+    () => `${location.pathname}${location.search}${location.hash}`,
+    [location.pathname, location.search, location.hash],
+  );
 
   useEffect(() => {
     if (!statusQuery.data) return;
     if (statusQuery.data.isComplete) return;
-    navigate('/onboarding', { replace: true, state: { from: location.pathname } });
-  }, [statusQuery.data, navigate, location.pathname]);
+    navigate('/onboarding', { replace: true, state: { from: returnTo } });
+  }, [statusQuery.data, navigate, returnTo]);
 
   if (statusQuery.isLoading) {
     return <GateMessage variant="loading" />;
