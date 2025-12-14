@@ -215,4 +215,46 @@ describe('CallToolsLLMReducer context items', () => {
     expect(secondAssistantItem.contentText).toBe('done');
     expect(Array.isArray(secondAssistantItem.contentJson?.output)).toBe(true);
   });
+
+  it('increments new context count when tool outputs are appended', async () => {
+    const runEvents = createRunEventsStub();
+    const updateMock = runEvents.updateLLMCallNewContextItemCount as unknown as MockFn;
+    const eventsBus = createEventsBusStub();
+
+    const tool = {
+      name: 'alpha',
+      description: 'Alpha tool',
+      schema: { safeParse: (value: unknown) => ({ success: true, data: value }) },
+      execute: vi.fn(async () => 'alpha-output'),
+    };
+
+    const reducer = new CallToolsLLMReducer(runEvents as any, eventsBus as any).init({ tools: [tool as any] });
+    const call = new ToolCallMessage({
+      type: 'function_call',
+      call_id: 'call-alpha',
+      name: 'alpha',
+      arguments: JSON.stringify({ foo: 'bar' }),
+    } as any);
+    const response = new ResponseMessage({ output: [call.toPlain() as any] as any });
+
+    const state = {
+      messages: [HumanMessage.fromText('ping'), response],
+      meta: { lastLLMEventId: 'evt-last', lastLLMNewContextItemCount: 1 },
+      context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [] },
+    } as any;
+    const ctx = {
+      threadId: 'thread-count',
+      runId: 'run-count',
+      finishSignal: new Signal(),
+      terminateSignal: new Signal(),
+      callerAgent: { getAgentNodeId: () => 'agent-node' },
+    } as any;
+
+    const result = await reducer.invoke(state, ctx);
+
+    expect(updateMock).toHaveBeenCalledWith({ eventId: 'evt-last', newContextItemCount: 2 });
+    expect(result.meta?.lastLLMNewContextItemCount).toBe(2);
+    expect(result.context.messageIds).toHaveLength(3);
+    expect(result.messages.at(-1)?.text).toBe('alpha-output');
+  });
 });

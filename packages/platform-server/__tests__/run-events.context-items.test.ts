@@ -170,6 +170,9 @@ if (!shouldRunDbTests) {
         runId: run.id,
         threadId: thread.id,
         contextItems: contextInputs,
+      });
+      await runEvents.updateLLMCallNewContextItemCount({
+        eventId: event.id,
         newContextItemCount: contextInputs.length,
       });
 

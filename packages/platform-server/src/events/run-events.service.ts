@@ -246,12 +246,17 @@ export interface LLMCallStartArgs {
   topP?: number | null;
   contextItemIds?: string[];
   contextItems?: ContextItemInput[];
-  newContextItemCount?: number;
   metadata?: RunEventMetadata;
   sourceKind?: EventSourceKind;
   sourceSpanId?: string | null;
   idempotencyKey?: string | null;
   startedAt?: Date;
+}
+
+export interface LLMCallContextCountUpdateArgs {
+  tx?: Tx;
+  eventId: string;
+  newContextItemCount: number;
 }
 
 export interface ToolCallRecord {
@@ -1113,12 +1118,20 @@ export class RunEventsService {
         topP: args.topP ?? null,
         stopReason: null,
         contextItemIds,
-        newContextItemCount: args.newContextItemCount ?? 0,
+        newContextItemCount: 0,
         responseText: null,
         rawResponse: Prisma.JsonNull,
       },
     });
     return event;
+  }
+
+  async updateLLMCallNewContextItemCount(args: LLMCallContextCountUpdateArgs): Promise<void> {
+    const tx = args.tx ?? this.prisma;
+    await tx.lLMCall.update({
+      where: { eventId: args.eventId },
+      data: { newContextItemCount: args.newContextItemCount },
+    });
   }
 
   async completeLLMCall(args: LLMCallCompleteArgs): Promise<void> {

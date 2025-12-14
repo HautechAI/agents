@@ -21,6 +21,8 @@ import {
   contextItemInputFromSummary,
   contextItemInputFromSystem,
 } from '../services/context-items.utils';
+import { persistContextItemsWithCounting } from '../services/context-items.append';
+import { LLMCallContextItemCounter } from '../services/llm-call-context-item-counter';
 import type { ContextItemInput } from '../services/context-items.utils';
 
 type SequenceEntry =
@@ -91,6 +93,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     const summaryText = state.summary?.trim() ?? null;
     const summaryMsg = summaryText ? HumanMessage.fromText(summaryText) : null;
     const memoryResult = this.memoryProvider ? await this.memoryProvider(ctx, state) : null;
+    const contextCounter = new LLMCallContextItemCounter(this.runEvents);
 
     const context = this.cloneContext(state.context);
     if (memoryResult && !memoryResult.msg) {
@@ -98,10 +101,11 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     }
 
     const sequence = this.buildSequence(system, summaryMsg, memoryResult, state.messages);
-    const { contextItemIds, context: nextContext, newContextCount } = await this.resolveContextIds(
+    const { contextItemIds, context: nextContext } = await this.resolveContextIds(
       context,
       sequence,
       summaryText,
+      contextCounter,
     );
     const input = sequence.map((entry) => entry.message);
 
@@ -112,12 +116,12 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       nodeId,
       model: this.model,
       contextItemIds,
-      newContextItemCount: newContextCount,
       metadata: {
         summaryIncluded: Boolean(summaryMsg),
         memoryPlacement: memoryResult?.msg ? memoryResult.place : null,
       },
     });
+    await contextCounter.bind(llmEvent.id);
     await this.eventsBus.publishEvent(llmEvent.id, 'append');
 
     const cancelAndReturn = async (params?: {
@@ -153,10 +157,21 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       );
       const rawResponse = this.trySerialize(rawMessage);
 
-      const assistantContextItems = await this.runEvents.createContextItems([
-        contextItemInputFromMessage(rawMessage),
-      ]);
-      const assistantContextId = assistantContextItems[0];
+      let assistantContextId: string | null = null;
+      await persistContextItemsWithCounting({
+        runEvents: this.runEvents,
+        entries: [
+          {
+            input: contextItemInputFromMessage(rawMessage),
+            assign: (id) => {
+              assistantContextId = id;
+            },
+            countable: true,
+          },
+        ],
+        counter: contextCounter,
+      });
+
       if (!assistantContextId) {
         throw new Error('Failed to persist assistant response context item');
       }
@@ -181,7 +196,11 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
         ...state,
         messages: [...state.messages, rawMessage],
         context: contextWithAssistant,
-        meta: { ...state.meta, lastLLMEventId: llmEvent.id },
+        meta: {
+          ...state.meta,
+          lastLLMEventId: llmEvent.id,
+          lastLLMNewContextItemCount: contextCounter.value,
+        },
       };
       return updated;
     } catch (error) {
@@ -260,8 +279,9 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     context: LLMContextState,
     sequence: SequenceEntry[],
     summaryText: string | null,
-  ): Promise<{ contextItemIds: string[]; context: LLMContextState; newContextCount: number }> {
-    const pending: Array<{ input: ContextItemInput; assign: (id: string) => void; isConversation?: boolean }> = [];
+    counter: LLMCallContextItemCounter,
+  ): Promise<{ contextItemIds: string[]; context: LLMContextState }> {
+    const pending: Array<{ input: ContextItemInput; assign: (id: string) => void; countable?: boolean }> = [];
     let conversationIndex = 0;
     const initialConversationCount = context.messageIds.length;
 
@@ -319,6 +339,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
         case 'conversation': {
           const idx = conversationIndex;
           const existingId = context.messageIds[idx] ?? null;
+          const isNewConversation = existingId === null || idx >= initialConversationCount;
           this.collectContextId({
             existingId,
             pending,
@@ -330,7 +351,7 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
                 context.messageIds.push(id);
               }
             },
-            isConversation: existingId === null || idx >= initialConversationCount,
+            countable: isNewConversation && this.isCountableConversationMessage(entry.message),
           });
           conversationIndex += 1;
           break;
@@ -342,15 +363,11 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       context.messageIds = context.messageIds.slice(0, conversationIndex);
     }
 
-    let newContextCount = 0;
     if (pending.length > 0) {
-      const inputs = pending.map((item) => item.input);
-      const created = await this.runEvents.createContextItems(inputs);
-      created.forEach((id, index) => {
-        pending[index].assign(id);
-        if (pending[index].isConversation && typeof id === 'string' && id.length > 0) {
-          newContextCount += 1;
-        }
+      await persistContextItemsWithCounting({
+        runEvents: this.runEvents,
+        entries: pending,
+        counter,
       });
     }
 
@@ -380,17 +397,17 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       }
     }
 
-    return { contextItemIds, context, newContextCount };
+    return { contextItemIds, context };
   }
 
   private collectContextId(params: {
     existingId: string | null;
-    pending: Array<{ input: ContextItemInput; assign: (id: string) => void; isConversation?: boolean }>;
+    pending: Array<{ input: ContextItemInput; assign: (id: string) => void; countable?: boolean }>;
     input: () => ContextItemInput;
     assign: (id: string) => void;
-    isConversation?: boolean;
+    countable?: boolean;
   }): void {
-    const { existingId, pending, input, assign, isConversation } = params;
+    const { existingId, pending, input, assign, countable } = params;
     const normalizedId = existingId && existingId.length > 0 ? existingId : null;
     if (normalizedId) {
       assign(normalizedId);
@@ -399,8 +416,12 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
     pending.push({
       input: input(),
       assign,
-      isConversation,
+      countable,
     });
+  }
+
+  private isCountableConversationMessage(message: LLMMessage): boolean {
+    return message instanceof HumanMessage;
   }
 
   private serializeToolCalls(calls: ToolCallMessage[]): ToolCallRecord[] {

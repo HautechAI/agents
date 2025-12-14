@@ -10,6 +10,7 @@ describe('CallModelLLMReducer usage metrics', () => {
       publishEvent: vi.fn(async () => {}),
       completeLLMCall: vi.fn(async () => {}),
       createContextItems: vi.fn(async () => ['ctx-assistant']),
+      updateLLMCallNewContextItemCount: vi.fn(async () => {}),
       connectContextItemsToRun: vi.fn(async () => {}),
       createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
     };
@@ -63,12 +64,13 @@ describe('CallModelLLMReducer usage metrics', () => {
     );
   });
 
-  it('passes new context item count to startLLMCall args', async () => {
+  it('increments context count for user and assistant messages', async () => {
     const runEvents = {
       startLLMCall: vi.fn(async () => ({ id: 'evt-context-1' })),
       publishEvent: vi.fn(async () => {}),
       completeLLMCall: vi.fn(async () => {}),
       createContextItems: vi.fn().mockResolvedValueOnce(['ctx-user-new']).mockResolvedValueOnce(['ctx-assistant']),
+      updateLLMCallNewContextItemCount: vi.fn(async () => {}),
       connectContextItemsToRun: vi.fn(async () => {}),
       createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
     };
@@ -97,12 +99,15 @@ describe('CallModelLLMReducer usage metrics', () => {
       callerAgent: { getAgentNodeId: () => 'agent-context' } as any,
     });
 
-    expect(runEvents.startLLMCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        newContextItemCount: 1,
-        contextItemIds: expect.arrayContaining(['ctx-system-1', 'ctx-user-new']),
-      }),
-    );
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledTimes(2);
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(1, {
+      eventId: 'evt-context-1',
+      newContextItemCount: 1,
+    });
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(2, {
+      eventId: 'evt-context-1',
+      newContextItemCount: 2,
+    });
   });
 
   it('ignores summary and memory additions when counting new context items', async () => {
@@ -114,6 +119,7 @@ describe('CallModelLLMReducer usage metrics', () => {
         .fn()
         .mockResolvedValueOnce(['ctx-summary-new', 'ctx-memory-new', 'ctx-user-tail'])
         .mockResolvedValueOnce(['ctx-assistant-latest']),
+      updateLLMCallNewContextItemCount: vi.fn(async () => {}),
       connectContextItemsToRun: vi.fn(async () => {}),
       createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
     };
@@ -154,11 +160,13 @@ describe('CallModelLLMReducer usage metrics', () => {
       callerAgent: { getAgentNodeId: () => 'agent-context-tail' } as any,
     });
 
-    expect(runEvents.startLLMCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        newContextItemCount: 1,
-        contextItemIds: expect.arrayContaining(['ctx-summary-new', 'ctx-memory-new', 'ctx-user-tail']),
-      }),
-    );
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(1, {
+      eventId: 'evt-context-2',
+      newContextItemCount: 1,
+    });
+    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(2, {
+      eventId: 'evt-context-2',
+      newContextItemCount: 2,
+    });
   });
 });

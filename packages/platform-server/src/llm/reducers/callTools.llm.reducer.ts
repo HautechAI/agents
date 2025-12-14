@@ -8,6 +8,8 @@ import { ToolExecStatus, Prisma } from '@prisma/client';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 import type { ResponseFunctionCallOutputItemList } from 'openai/resources/responses/responses.mjs';
 import { contextItemInputFromMessage } from '../services/context-items.utils';
+import { persistContextItemsWithCounting } from '../services/context-items.append';
+import { LLMCallContextItemCounter } from '../services/llm-call-context-item-counter';
 import { ShellCommandTool } from '../../nodes/tools/shell_command/shell_command.tool';
 
 type ToolCallErrorCode =
@@ -109,6 +111,10 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
     const toolsMap = this.createToolsMap();
     const nodeId = ctx?.callerAgent?.getAgentNodeId?.() ?? null;
     const llmEventId = state.meta?.lastLLMEventId ?? null;
+    const contextCounter = new LLMCallContextItemCounter(this.runEvents, {
+      eventId: llmEventId ?? undefined,
+      count: state.meta?.lastLLMNewContextItemCount ?? 0,
+    });
 
     const results = await Promise.all(
       toolsToCall.map(async (toolCall) => {
@@ -138,12 +144,29 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
 
     const context = this.cloneContext(state.context);
     if (results.length > 0) {
-      const inputs = results.map((msg) => contextItemInputFromMessage(msg));
-      const created = await this.runEvents.createContextItems(inputs);
-      context.messageIds = [...context.messageIds, ...created];
+      const appended: string[] = [];
+      await persistContextItemsWithCounting({
+        runEvents: this.runEvents,
+        entries: results.map((msg) => ({
+          input: contextItemInputFromMessage(msg),
+          assign: (id: string) => {
+            appended.push(id);
+          },
+          countable: true,
+        })),
+        counter: contextCounter,
+      });
+      if (appended.length > 0) {
+        context.messageIds = [...context.messageIds, ...appended];
+      }
     }
 
-    return { ...state, messages: [...state.messages, ...results], meta, context };
+    const nextMeta = {
+      ...meta,
+      lastLLMNewContextItemCount: contextCounter.value,
+    };
+
+    return { ...state, messages: [...state.messages, ...results], meta: nextMeta, context };
   }
 
   private async executeToolCall(params: {

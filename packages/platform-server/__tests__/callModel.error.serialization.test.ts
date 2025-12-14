@@ -8,6 +8,7 @@ const createRunEventsStub = () => ({
   startLLMCall: vi.fn(async () => ({ id: 'evt-llm' })),
   completeLLMCall: vi.fn(async () => {}),
   createContextItems: vi.fn(async () => []),
+  updateLLMCallNewContextItemCount: vi.fn(async () => {}),
 });
 
 const createEventsBusStub = () => ({

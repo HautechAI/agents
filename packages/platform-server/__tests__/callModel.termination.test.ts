@@ -9,6 +9,7 @@ const createRunEventsStub = () => ({
   publishEvent: vi.fn(async () => {}),
   completeLLMCall: vi.fn(async () => {}),
   createContextItems: vi.fn(async () => []),
+  updateLLMCallNewContextItemCount: vi.fn(async () => {}),
   connectContextItemsToRun: vi.fn(async () => {}),
   createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
 });
