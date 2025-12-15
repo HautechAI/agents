@@ -4,6 +4,7 @@ import { Children, cloneElement, isValidElement, type ComponentPropsWithoutRef, 
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MARKDOWN_REMARK_PLUGINS, MARKDOWN_REHYPE_PLUGINS } from '@/lib/markdown/config';
+import { cn } from '@/lib/utils';
 
 interface MarkdownContentProps {
   content: string;
@@ -18,6 +19,18 @@ type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & {
 type MarkdownPreProps = ComponentPropsWithoutRef<'pre'> & {
   node?: unknown;
 };
+
+type ReactMarkdownListInternals = {
+  node?: unknown;
+  ordered?: boolean;
+  depth?: number;
+  index?: number;
+  checked?: boolean | null;
+};
+
+type MarkdownOrderedListProps = ComponentPropsWithoutRef<'ol'> & ReactMarkdownListInternals;
+type MarkdownUnorderedListProps = ComponentPropsWithoutRef<'ul'> & ReactMarkdownListInternals;
+type MarkdownListItemProps = ComponentPropsWithoutRef<'li'> & ReactMarkdownListInternals;
 
 export function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
   const markdownComponents: Components = {
@@ -61,18 +74,24 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
     ),
 
     // Lists
-    ul: ({ children }) => (
-      <ul className="list-disc list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]">
+    ul: ({ children, className, node: _node, depth: _depth, ordered: _ordered, ...domProps }: MarkdownUnorderedListProps) => (
+      <ul
+        className={cn('list-disc list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]', className)}
+        {...domProps}
+      >
         {children}
       </ul>
     ),
-    ol: ({ children }) => (
-      <ol className="list-decimal list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]">
+    ol: ({ children, className, node: _node, depth: _depth, ordered: _ordered, index: _index, ...domProps }: MarkdownOrderedListProps) => (
+      <ol
+        className={cn('list-decimal list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]', className)}
+        {...domProps}
+      >
         {children}
       </ol>
     ),
-    li: ({ children }) => (
-      <li className="text-[var(--agyn-dark)] leading-relaxed">
+    li: ({ children, className, node: _node, ordered: _ordered, index: _index, checked: _checked, depth: _depth, ...domProps }: MarkdownListItemProps) => (
+      <li className={cn('text-[var(--agyn-dark)] leading-relaxed', className)} {...domProps}>
         {children}
       </li>
     ),

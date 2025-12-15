@@ -37,6 +37,7 @@ const codeBlockNoLanguage = ['```', 'line one', 'line two', '```'].join('\n');
 const newlineSeparatedText = ['First line', 'Second line', 'Third line'].join('\n');
 
 const listMarkdown = ['- First item', '- Second item'].join('\n');
+const orderedListWithParagraph = ['1. First item', '', 'Extra context between items.', '', '2. Second item'].join('\n');
 
 const sanitizedHtmlCodeBlock = '<pre><code>alpha\nbeta\ngamma</code></pre>';
 const wrappingMarkdown = 'Discuss removing break-all without forced breaks.';
@@ -170,5 +171,19 @@ describe('MarkdownContent rendering', () => {
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('First item');
     expect(items[1]).toHaveTextContent('Second item');
+  });
+
+  it('maintains ordered list numbering across separated segments', () => {
+    const { container } = render(<MarkdownContent content={orderedListWithParagraph} />);
+
+    const orderedLists = container.querySelectorAll('ol');
+    expect(orderedLists).toHaveLength(2);
+
+    const [firstList, secondList] = Array.from(orderedLists);
+    expect(firstList.querySelectorAll('li')).toHaveLength(1);
+    expect(secondList.querySelectorAll('li')).toHaveLength(1);
+
+    expect(secondList).toHaveAttribute('start', '2');
+    expect(screen.getByText('Extra context between items.').tagName).toBe('P');
   });
 });

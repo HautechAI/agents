@@ -43,6 +43,14 @@ export const markdownSanitizeSchema: Schema = {
     code: [
       ['className', /^language-[\w-]+$/],
     ],
+    ol: [
+      ['start', /^-?\d+$/],
+      ['type', '1', 'a', 'A', 'i', 'I'],
+      'reversed',
+    ],
+    li: [
+      ['value', /^-?\d+$/],
+    ],
     th: ['align'],
     td: ['align'],
   },
