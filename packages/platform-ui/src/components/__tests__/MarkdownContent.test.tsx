@@ -39,10 +39,12 @@ const newlineSeparatedText = ['First line', 'Second line', 'Third line'].join('\
 const listMarkdown = ['- First item', '- Second item'].join('\n');
 
 const sanitizedHtmlCodeBlock = '<pre><code>alpha\nbeta\ngamma</code></pre>';
+const wrappingMarkdown = 'Discuss removing break-all without forced breaks.';
+const inlineCodeWrappingMarkdown = 'Inline code like `removing_break_all()` should stay put.';
 
 describe('MarkdownContent rendering', () => {
   it('renders expected markdown primitives including underline and lists', () => {
-    render(<MarkdownContent content={richMarkdown} className="prose" />);
+    const { container } = render(<MarkdownContent content={richMarkdown} className="prose" />);
 
     expect(screen.getByRole('heading', { name: 'Heading' })).toBeInTheDocument();
     expect(screen.getByText('Bold').tagName).toBe('STRONG');
@@ -56,8 +58,11 @@ describe('MarkdownContent rendering', () => {
     const blockquote = screen.getByText('Blockquote').closest('blockquote');
     expect(blockquote).not.toBeNull();
 
-    const inlineCode = screen.getByText('code');
-    expect(inlineCode.tagName).toBe('CODE');
+    const inlineCode = container.querySelector('p code');
+    expect(inlineCode?.tagName).toBe('CODE');
+    expect(inlineCode).toHaveTextContent('code');
+    expect(inlineCode).toHaveClass('break-words');
+    expect(inlineCode).not.toHaveClass('break-all');
 
     const codeElements = screen.getAllByText((_, element) => element?.tagName === 'CODE');
     const blockCode = codeElements.find((element) => element.textContent?.includes('const'));
@@ -94,6 +99,31 @@ describe('MarkdownContent rendering', () => {
 
     const blockedData = screen.getByText('Blocked Data');
     expect(blockedData.closest('a')).not.toHaveAttribute('href');
+  });
+
+  it('keeps regular prose words intact without injecting breaks', () => {
+    const { container } = render(<MarkdownContent content={wrappingMarkdown} />);
+
+    const wrapper = container.querySelector('.markdown-content');
+    expect(wrapper).toHaveStyle({ overflowWrap: 'break-word' });
+
+    const paragraph = container.querySelector('p');
+    expect(paragraph?.textContent).toBe(wrappingMarkdown);
+    expect(paragraph).not.toHaveTextContent(/\n/);
+  });
+
+  it('keeps inline code contiguous with punctuation', () => {
+    const { container } = render(<MarkdownContent content={inlineCodeWrappingMarkdown} />);
+
+    const inlineCode = container.querySelector('code');
+    expect(inlineCode?.tagName).toBe('CODE');
+    expect(inlineCode).toHaveClass('break-words');
+    expect(inlineCode).toHaveStyle({ overflowWrap: 'break-word', wordBreak: 'break-word' });
+    expect(inlineCode).not.toHaveTextContent(/\n/);
+
+    const paragraph = inlineCode?.closest('p');
+    expect(paragraph?.textContent).toBe('Inline code like removing_break_all() should stay put.');
+    expect(paragraph).not.toHaveTextContent(/\n/);
   });
 
   it('renders fenced code blocks without language using preformatted whitespace', () => {
