@@ -40,15 +40,15 @@ type MarkdownOrderedListProps = ComponentPropsWithoutRef<'ol'> & ReactMarkdownLi
 type MarkdownUnorderedListProps = ComponentPropsWithoutRef<'ul'> & ReactMarkdownListInternals;
 type MarkdownListItemProps = ComponentPropsWithoutRef<'li'> & ReactMarkdownListInternals;
 
-const evaluateCodeRender = (props: MarkdownCodeProps) => {
-  const match = /language-(\w+)/.exec(props.className || '');
-  const position = (props.node as { position?: { start?: { line?: number }; end?: { line?: number } } })?.position;
+const getCodeRenderMeta = ({ inline, className, node }: MarkdownCodeProps) => {
+  const match = /language-(\w+)/.exec(className || '');
+  const position = (node as { position?: { start?: { line?: number }; end?: { line?: number } } })?.position;
   const spansMultipleLines = Boolean(
     position?.start?.line !== undefined &&
       position?.end?.line !== undefined &&
       position.start.line !== position.end.line
   );
-  const isInlineCode = (props.inline ?? !spansMultipleLines) && !match;
+  const isInlineCode = (inline ?? !spansMultipleLines) && !match;
 
   return { match, isInlineCode } as const;
 };
@@ -66,7 +66,7 @@ const oneDarkWithoutTextShadow = stripTextShadowFromTheme(oneDark);
 
 export function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
   const renderCode = ({ inline, className: codeClassName, children, style, node, ...props }: MarkdownCodeProps) => {
-    const { match, isInlineCode } = evaluateCodeRender({ inline, className: codeClassName, children, style, node });
+    const { match, isInlineCode } = getCodeRenderMeta({ inline, className: codeClassName, node });
     const text = String(children).replace(/\n$/, '');
 
     if (!isInlineCode && match) {
@@ -198,7 +198,7 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
       const firstElement = childArray.find((node): node is ReactElement => isValidElement(node));
 
       if (firstElement && firstElement.type === renderCode) {
-        const { match, isInlineCode } = evaluateCodeRender(firstElement.props as MarkdownCodeProps);
+        const { match, isInlineCode } = getCodeRenderMeta(firstElement.props as MarkdownCodeProps);
         if (!isInlineCode && match) {
           return firstElement;
         }
