@@ -4,6 +4,7 @@ import { Children, cloneElement, isValidElement, type ComponentPropsWithoutRef, 
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MARKDOWN_REMARK_PLUGINS, MARKDOWN_REHYPE_PLUGINS } from '@/lib/markdown/config';
+import { cn } from '@/lib/utils';
 
 interface MarkdownContentProps {
   content: string;
@@ -18,6 +19,10 @@ type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & {
 type MarkdownPreProps = ComponentPropsWithoutRef<'pre'> & {
   node?: unknown;
 };
+
+type MarkdownOrderedListProps = ComponentPropsWithoutRef<'ol'>;
+type MarkdownUnorderedListProps = ComponentPropsWithoutRef<'ul'>;
+type MarkdownListItemProps = ComponentPropsWithoutRef<'li'>;
 
 export function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
   const markdownComponents: Components = {
@@ -61,18 +66,24 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
     ),
 
     // Lists
-    ul: ({ children }) => (
-      <ul className="list-disc list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]">
+    ul: ({ children, className, ...props }: MarkdownUnorderedListProps) => (
+      <ul
+        className={cn('list-disc list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]', className)}
+        {...props}
+      >
         {children}
       </ul>
     ),
-    ol: ({ children }) => (
-      <ol className="list-decimal list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]">
+    ol: ({ children, className, ...props }: MarkdownOrderedListProps) => (
+      <ol
+        className={cn('list-decimal list-outside ml-5 mb-4 space-y-1 text-[var(--agyn-dark)]', className)}
+        {...props}
+      >
         {children}
       </ol>
     ),
-    li: ({ children }) => (
-      <li className="text-[var(--agyn-dark)] leading-relaxed">
+    li: ({ children, className, ...props }: MarkdownListItemProps) => (
+      <li className={cn('text-[var(--agyn-dark)] leading-relaxed', className)} {...props}>
         {children}
       </li>
     ),
