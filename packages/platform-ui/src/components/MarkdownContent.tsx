@@ -187,19 +187,6 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
     pre: ({ children, className: preClassName, style: preStyle, node: _node, ...props }: MarkdownPreProps) => {
       const childArray = Children.toArray(children);
       const firstElement = childArray.find((node): node is ReactElement => isValidElement(node));
-
-      if (firstElement && firstElement.type === SyntaxHighlighter) {
-        return (
-          <pre className={mergedClassName} style={mergedStyle} {...props}>
-            {firstElement}
-          </pre>
-        );
-      }
-
-      if (firstElement && firstElement.type === 'pre') {
-        return firstElement;
-      }
-
       const mergedClassName = [
         'my-4 w-full overflow-x-auto rounded-[10px] bg-[var(--agyn-bg-light)] p-3 font-mono text-sm leading-relaxed text-[var(--agyn-dark)]',
         preClassName,
@@ -214,6 +201,18 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
         maxWidth: '100%',
         ...(preStyle ?? {}),
       };
+
+      if (firstElement && firstElement.type === SyntaxHighlighter) {
+        return (
+          <pre className={mergedClassName} style={mergedStyle} {...props}>
+            {firstElement}
+          </pre>
+        );
+      }
+
+      if (firstElement && firstElement.type === 'pre') {
+        return firstElement;
+      }
 
       return (
         <pre className={mergedClassName} style={mergedStyle} {...props}>
