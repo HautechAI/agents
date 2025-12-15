@@ -250,13 +250,9 @@ function buildContextSource(llmCall?: RunTimelineEvent['llmCall']): ContextSourc
   const rows = Array.isArray(llmCall.contextItemsV2) ? llmCall.contextItemsV2 : [];
   if (rows.length > 0) {
     const sorted = [...rows].sort((a, b) => a.idx - b.idx);
-    const ids = sorted
-      .filter((row) => row.purpose === 'prompt_input')
-      .map((row) => row.contextItemId)
-      .filter(isNonEmptyString);
-    const highlightIds = sorted
-      .filter((row) => row.isNew && isNonEmptyString(row.contextItemId))
-      .map((row) => row.contextItemId);
+    const inputRows = sorted.filter((row) => row.direction === 'input');
+    const ids = inputRows.map((row) => row.contextItemId).filter(isNonEmptyString);
+    const highlightIds = inputRows.filter((row) => row.isNew && isNonEmptyString(row.contextItemId)).map((row) => row.contextItemId);
     return { ids, highlightIds };
   }
   const fallbackIds = Array.isArray(llmCall.contextItemIds) ? llmCall.contextItemIds.filter(isNonEmptyString) : [];

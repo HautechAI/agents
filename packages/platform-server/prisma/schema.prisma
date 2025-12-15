@@ -190,9 +190,9 @@ enum RunEventStatus {
   cancelled
 }
 
-enum LLMCallContextItemPurpose {
-  prompt_input
-  produced_tail
+enum LLMCallContextItemDirection {
+  input
+  output
 }
 
 enum EventSourceKind {
@@ -316,13 +316,13 @@ model LLMCall {
 }
 
 model LLMCallContextItem {
-  id             String                      @id @default(uuid()) @db.Uuid
-  llmCallEventId String                      @map("llm_call_event_id") @db.Uuid
-  contextItemId  String                      @map("context_item_id") @db.Uuid
+  id             String                         @id @default(uuid()) @db.Uuid
+  llmCallEventId String                         @map("llm_call_event_id") @db.Uuid
+  contextItemId  String                         @map("context_item_id") @db.Uuid
   idx            Int
-  purpose        LLMCallContextItemPurpose
-  isNew          Boolean                     @map("is_new") @default(false)
-  createdAt      DateTime                    @map("created_at") @default(now())
+  direction      LLMCallContextItemDirection
+  isNew          Boolean                        @map("is_new") @default(false)
+  createdAt      DateTime                       @map("created_at") @default(now())
 
   llmCall     LLMCall     @relation(fields: [llmCallEventId], references: [eventId], onDelete: Cascade)
   contextItem ContextItem @relation(fields: [contextItemId], references: [id], onDelete: Cascade)

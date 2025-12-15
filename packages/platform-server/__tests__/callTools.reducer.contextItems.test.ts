@@ -37,7 +37,7 @@ describe('CallToolsLLMReducer context items', () => {
     const initialState = {
       messages: [HumanMessage.fromText('hello'), response],
       meta: { lastLLMEventId: 'evt-tools' },
-      context: { messageIds: ['existing-1', 'assistant-existing'], memory: [] },
+      context: { messageIds: ['existing-1', 'assistant-existing'], memory: [], pendingNewContextItemIds: [] },
     } as any;
     const ctx = {
       threadId: 'thread-1',
@@ -90,7 +90,7 @@ describe('CallToolsLLMReducer context items', () => {
     const state = {
       messages: [HumanMessage.fromText('hi'), response],
       meta: { lastLLMEventId: 'evt-tools-fail' },
-      context: { messageIds: ['existing-ctx', 'assistant-ctx'], memory: [] },
+      context: { messageIds: ['existing-ctx', 'assistant-ctx'], memory: [], pendingNewContextItemIds: [] },
     } as any;
     const ctx = {
       threadId: 'thread',
@@ -128,7 +128,7 @@ describe('CallToolsLLMReducer context items', () => {
     const state = {
       messages: [HumanMessage.fromText('hello'), response],
       meta: {},
-      context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [] },
+      context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [], pendingNewContextItemIds: [] },
     } as any;
     const ctx = {
       threadId: 'thread-missing',
@@ -192,7 +192,12 @@ describe('CallToolsLLMReducer context items', () => {
     const initialState = {
       messages: [HumanMessage.fromText('what is the plan?')],
       meta: {},
-      context: { messageIds: ['ctx-user-1'], memory: [], system: { id: 'ctx-system-1' } },
+      context: {
+        messageIds: ['ctx-user-1'],
+        memory: [],
+        system: { id: 'ctx-system-1' },
+        pendingNewContextItemIds: [],
+      },
     } as any;
 
     const afterFirstModel = await callModel.invoke(initialState, ctx);
@@ -245,12 +250,10 @@ describe('CallToolsLLMReducer context items', () => {
     expect(Array.isArray(secondAssistantItem.contentJson?.output)).toBe(true);
   });
 
-  it('increments new context count when tool outputs are appended', async () => {
+  it('appends tool outputs and defers new flags to next call', async () => {
     const runEvents = createRunEventsStub();
     const createContextItemsMock = runEvents.createContextItems as unknown as MockFn;
-    const updateMock = runEvents.updateLLMCallNewContextItemCount as unknown as MockFn;
-    const counterStateMock = runEvents.getLLMCallContextCounterState as unknown as MockFn;
-    counterStateMock.mockResolvedValueOnce({ count: 2, ids: ['ctx-user-existing', 'ctx-assistant-existing'] });
+    const appendMock = runEvents.appendLLMCallContextItems as unknown as MockFn;
     const eventsBus = createEventsBusStub();
 
     const tool = {
@@ -272,7 +275,7 @@ describe('CallToolsLLMReducer context items', () => {
     const state = {
       messages: [HumanMessage.fromText('ping'), response],
       meta: { lastLLMEventId: 'evt-last' },
-      context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [] },
+      context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [], pendingNewContextItemIds: [] },
     } as any;
     const ctx = {
       threadId: 'thread-count',
@@ -284,23 +287,25 @@ describe('CallToolsLLMReducer context items', () => {
 
     const result = await reducer.invoke(state, ctx);
 
-    expect(updateMock).toHaveBeenCalledTimes(1);
     const appendedIds = await (createContextItemsMock.mock.results[0]?.value as Promise<string[]>);
-    expect(updateMock).toHaveBeenCalledWith({
-      eventId: 'evt-last',
-      newContextItemCount: 3,
-      newContextItemIds: ['ctx-user-existing', 'ctx-assistant-existing', ...appendedIds],
+    expect(appendMock).toHaveBeenCalledTimes(1);
+    const appendedArgs = appendMock.mock.calls[0][0];
+    expect(appendedArgs.eventId).toBe('evt-last');
+    expect(appendedArgs.items).toHaveLength(appendedIds.length);
+    appendedArgs.items.forEach((item: any, idx: number) => {
+      expect(item.contextItemId).toBe(appendedIds[idx]);
+      expect(item.direction).toBe('output');
+      expect(item.isNew).toBe(false);
     });
     expect(result.context.messageIds).toHaveLength(3);
+    expect(result.context.pendingNewContextItemIds).toEqual(appendedIds);
     expect(result.messages.at(-1)?.text).toBe('alpha-output');
   });
 
-  it('increments new context count for batched tool outputs', async () => {
+  it('handles batched tool outputs with deferred new tracking', async () => {
     const runEvents = createRunEventsStub();
     const createContextItemsMock = runEvents.createContextItems as unknown as MockFn;
-    const updateMock = runEvents.updateLLMCallNewContextItemCount as unknown as MockFn;
-    const counterStateMock = runEvents.getLLMCallContextCounterState as unknown as MockFn;
-    counterStateMock.mockResolvedValueOnce({ count: 2, ids: ['ctx-user-existing', 'ctx-assistant-existing'] });
+    const appendMock = runEvents.appendLLMCallContextItems as unknown as MockFn;
     const eventsBus = createEventsBusStub();
 
     const tool = {
@@ -323,7 +328,7 @@ describe('CallToolsLLMReducer context items', () => {
     const state = {
       messages: [HumanMessage.fromText('ping'), response],
       meta: { lastLLMEventId: 'evt-last' },
-      context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [] },
+      context: { messageIds: ['ctx-user', 'ctx-assistant'], memory: [], pendingNewContextItemIds: [] },
     } as any;
     const ctx = {
       threadId: 'thread-batch',
@@ -336,14 +341,17 @@ describe('CallToolsLLMReducer context items', () => {
     const result = await reducer.invoke(state, ctx);
 
     expect(tool.execute).toHaveBeenCalledTimes(2);
-    expect(updateMock).toHaveBeenCalledTimes(1);
     const appendedIds = await (createContextItemsMock.mock.results[0]?.value as Promise<string[]>);
-    expect(updateMock).toHaveBeenCalledWith({
-      eventId: 'evt-last',
-      newContextItemCount: 4,
-      newContextItemIds: ['ctx-user-existing', 'ctx-assistant-existing', ...appendedIds],
+    expect(appendMock).toHaveBeenCalledTimes(1);
+    const appendedArgs = appendMock.mock.calls[0][0];
+    expect(appendedArgs.items).toHaveLength(appendedIds.length);
+    appendedArgs.items.forEach((item: any, idx: number) => {
+      expect(item.contextItemId).toBe(appendedIds[idx]);
+      expect(item.direction).toBe('output');
+      expect(item.isNew).toBe(false);
     });
     expect(result.context.messageIds).toHaveLength(4);
+    expect(result.context.pendingNewContextItemIds).toEqual(appendedIds);
     expect(result.messages.slice(-2).map((msg) => msg.text)).toEqual(['alpha-output-1', 'alpha-output-2']);
   });
 });

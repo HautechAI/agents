@@ -94,7 +94,6 @@ describe('AppModule bootstrap smoke test', () => {
       startLLMCall: vi.fn(),
       completeLLMCall: vi.fn(),
       appendLLMCallContextItems: vi.fn(),
-      updateLLMCallNewContextItemCount: vi.fn(),
       createContextItems: vi.fn(),
       startToolExecution: vi.fn(),
       completeToolExecution: vi.fn(),

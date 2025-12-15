@@ -3,7 +3,7 @@ import {
   AttachmentKind,
   ContextItemRole,
   EventSourceKind,
-  LLMCallContextItemPurpose,
+  LLMCallContextItemDirection,
   Prisma,
   PrismaClient,
   RunEvent,
@@ -38,7 +38,7 @@ const RUN_EVENT_INCLUDE = {
         orderBy: { idx: 'asc' as const },
       },
       contextItems: {
-        select: { contextItemId: true, idx: true, purpose: true, isNew: true, createdAt: true },
+        select: { contextItemId: true, idx: true, direction: true, isNew: true, createdAt: true },
         orderBy: { idx: 'asc' as const },
       },
     },
@@ -64,7 +64,7 @@ export type SerializedContextItem = {
 export type SerializedLLMCallContextItem = {
   idx: number;
   contextItemId: string;
-  purpose: 'prompt_input' | 'produced_tail';
+  direction: 'input' | 'output';
   isNew: boolean;
   createdAt: string;
 };
@@ -261,6 +261,7 @@ export interface LLMCallStartArgs {
   topP?: number | null;
   contextItemIds?: string[];
   contextItems?: ContextItemInput[];
+  newContextItemIds?: string[];
   metadata?: RunEventMetadata;
   sourceKind?: EventSourceKind;
   sourceSpanId?: string | null;
@@ -268,19 +269,12 @@ export interface LLMCallStartArgs {
   startedAt?: Date;
 }
 
-export interface LLMCallContextCountUpdateArgs {
-  tx?: Tx;
-  eventId: string;
-  newContextItemCount: number;
-  newContextItemIds?: string[];
-}
-
 export interface LLMCallContextItemsAppendArgs {
   tx?: Tx;
   eventId: string;
   items: Array<{
     contextItemId: string;
-    purpose: LLMCallContextItemPurpose;
+    direction: LLMCallContextItemDirection;
     isNew?: boolean;
     createdAt?: Date;
   }>;
@@ -533,7 +527,7 @@ export class RunEventsService {
       ? args.items
           .map((item) => ({
             contextItemId: typeof item.contextItemId === 'string' ? item.contextItemId : '',
-            purpose: item.purpose,
+            direction: item.direction,
             isNew: Boolean(item.isNew),
             createdAt: item.createdAt,
           }))
@@ -552,7 +546,7 @@ export class RunEventsService {
         llmCallEventId: args.eventId,
         contextItemId: item.contextItemId,
         idx: nextIdx++,
-        purpose: item.purpose,
+        direction: item.direction,
         isNew: item.isNew ?? false,
         createdAt: item.createdAt ?? now,
       })),
@@ -589,15 +583,14 @@ export class RunEventsService {
       ? contextItemRows.map((row) => ({
           idx: row.idx,
           contextItemId: row.contextItemId,
-          purpose: row.purpose,
+          direction: row.direction,
           isNew: row.isNew,
           createdAt: row.createdAt.toISOString(),
         }))
       : undefined;
-    const derivedPromptIds = contextItemsV2
-      ? contextItemsV2.filter((row) => row.purpose === 'prompt_input').map((row) => row.contextItemId)
-      : [];
-    const derivedNewIds = contextItemsV2 ? contextItemsV2.filter((row) => row.isNew).map((row) => row.contextItemId) : [];
+    const inputRows = contextItemsV2 ? contextItemsV2.filter((row) => row.direction === 'input') : [];
+    const derivedPromptIds = inputRows.length > 0 ? inputRows.map((row) => row.contextItemId) : [];
+    const derivedNewIds = inputRows.length > 0 ? inputRows.filter((row) => row.isNew).map((row) => row.contextItemId) : [];
     const fallbackContextIds = event.llmCall?.contextItemIds ? [...event.llmCall.contextItemIds] : [];
     const fallbackNewIds = event.llmCall?.newContextItemIds ? [...event.llmCall.newContextItemIds] : [];
     const contextItemIds = derivedPromptIds.length > 0 ? derivedPromptIds : fallbackContextIds;
@@ -1188,6 +1181,17 @@ export class RunEventsService {
       providedIds: args.contextItemIds,
       provided: args.contextItems,
     });
+    const normalizedNewIds = Array.isArray(args.newContextItemIds)
+      ? args.newContextItemIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+    const candidateSet = new Set(normalizedNewIds);
+    const newContextItemIds: string[] = [];
+    for (const id of contextItemIds) {
+      if (!candidateSet.has(id)) continue;
+      candidateSet.delete(id);
+      newContextItemIds.push(id);
+    }
+    const newIdLookup = new Set(newContextItemIds);
     await tx.lLMCall.create({
       data: {
         eventId: event.id,
@@ -1197,7 +1201,8 @@ export class RunEventsService {
         topP: args.topP ?? null,
         stopReason: null,
         contextItemIds,
-        newContextItemCount: 0,
+        newContextItemCount: newContextItemIds.length,
+        newContextItemIds,
         responseText: null,
         rawResponse: Prisma.JsonNull,
       },
@@ -1208,38 +1213,13 @@ export class RunEventsService {
         eventId: event.id,
         items: contextItemIds.map((contextItemId) => ({
           contextItemId,
-          purpose: LLMCallContextItemPurpose.prompt_input,
-          isNew: false,
+          direction: LLMCallContextItemDirection.input,
+          isNew: newIdLookup.has(contextItemId),
           createdAt: startedAt,
         })),
       });
     }
     return event;
-  }
-
-  async updateLLMCallNewContextItemCount(args: LLMCallContextCountUpdateArgs): Promise<void> {
-    const tx = args.tx ?? this.prisma;
-    await tx.lLMCall.update({
-      where: { eventId: args.eventId },
-      data: {
-        newContextItemCount: args.newContextItemCount,
-        newContextItemIds: args.newContextItemIds ?? [],
-      },
-    });
-  }
-
-  async getLLMCallContextCounterState(eventId: string): Promise<{ count: number; ids: string[] } | null> {
-    if (!eventId) return null;
-    const record = await this.prisma.lLMCall.findUnique({
-      where: { eventId },
-      select: { newContextItemCount: true, newContextItemIds: true },
-    });
-    if (!record) return null;
-    const ids = Array.isArray(record.newContextItemIds) ? [...record.newContextItemIds] : [];
-    return {
-      count: record.newContextItemCount ?? 0,
-      ids,
-    };
   }
 
   async completeLLMCall(args: LLMCallCompleteArgs): Promise<void> {

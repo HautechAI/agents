@@ -3,6 +3,8 @@ import { CallModelLLMReducer } from '../src/llm/reducers/callModel.llm.reducer';
 import { AIMessage, HumanMessage, ResponseMessage, SystemMessage } from '@agyn/llm';
 import { Signal } from '../src/signal';
 
+type MockFn = ReturnType<typeof vi.fn>;
+
 describe('CallModelLLMReducer usage metrics', () => {
   it('passes usage metrics to completeLLMCall', async () => {
     const runEvents = {
@@ -11,7 +13,6 @@ describe('CallModelLLMReducer usage metrics', () => {
       completeLLMCall: vi.fn(async () => {}),
       createContextItems: vi.fn(async () => ['ctx-assistant']),
       appendLLMCallContextItems: vi.fn(async () => {}),
-      updateLLMCallNewContextItemCount: vi.fn(async () => {}),
       connectContextItemsToRun: vi.fn(async () => {}),
       createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
     };
@@ -41,7 +42,7 @@ describe('CallModelLLMReducer usage metrics', () => {
 
     const initialState = {
       messages: [SystemMessage.fromText('SYS'), HumanMessage.fromText('Hello')],
-      context: { messageIds: ['ctx-1'], memory: [] },
+      context: { messageIds: ['ctx-1'], memory: [], pendingNewContextItemIds: [] },
     } as any;
 
     await reducer.invoke(initialState, {
@@ -72,7 +73,6 @@ describe('CallModelLLMReducer usage metrics', () => {
       completeLLMCall: vi.fn(async () => {}),
       createContextItems: vi.fn().mockResolvedValueOnce(['ctx-user-new']).mockResolvedValueOnce(['ctx-assistant']),
       appendLLMCallContextItems: vi.fn(async () => {}),
-      updateLLMCallNewContextItemCount: vi.fn(async () => {}),
       connectContextItemsToRun: vi.fn(async () => {}),
       createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
     };
@@ -90,10 +90,10 @@ describe('CallModelLLMReducer usage metrics', () => {
 
     const initialState = {
       messages: [HumanMessage.fromText('Hello there')],
-      context: { messageIds: [], memory: [], system: { id: 'ctx-system-1' } },
+      context: { messageIds: [], memory: [], system: { id: 'ctx-system-1' }, pendingNewContextItemIds: [] },
     } as any;
 
-    await reducer.invoke(initialState, {
+    const result = await reducer.invoke(initialState, {
       threadId: 'thread-context',
       runId: 'run-context',
       finishSignal: new Signal(),
@@ -101,17 +101,10 @@ describe('CallModelLLMReducer usage metrics', () => {
       callerAgent: { getAgentNodeId: () => 'agent-context' } as any,
     });
 
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledTimes(2);
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(1, {
-      eventId: 'evt-context-1',
-      newContextItemCount: 1,
-      newContextItemIds: ['ctx-user-new'],
-    });
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(2, {
-      eventId: 'evt-context-1',
-      newContextItemCount: 2,
-      newContextItemIds: ['ctx-user-new', 'ctx-assistant'],
-    });
+    const startMock = runEvents.startLLMCall as unknown as MockFn;
+    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(startMock.mock.calls[0][0]?.newContextItemIds).toEqual(['ctx-user-new']);
+    expect(result?.context?.pendingNewContextItemIds).toEqual(['ctx-assistant']);
   });
 
   it('ignores summary and memory additions when counting new context items', async () => {
@@ -124,7 +117,6 @@ describe('CallModelLLMReducer usage metrics', () => {
         .mockResolvedValueOnce(['ctx-summary-new', 'ctx-memory-new', 'ctx-user-tail'])
         .mockResolvedValueOnce(['ctx-assistant-latest']),
       appendLLMCallContextItems: vi.fn(async () => {}),
-      updateLLMCallNewContextItemCount: vi.fn(async () => {}),
       connectContextItemsToRun: vi.fn(async () => {}),
       createContextItemsAndConnect: vi.fn(async () => ({ messageIds: [] })),
     };
@@ -154,10 +146,11 @@ describe('CallModelLLMReducer usage metrics', () => {
         memory: [],
         system: { id: 'ctx-system-1' },
         summary: { id: 'ctx-summary-old', text: 'Stale summary' },
+        pendingNewContextItemIds: [],
       },
     } as any;
 
-    await reducer.invoke(initialState, {
+    const result = await reducer.invoke(initialState, {
       threadId: 'thread-context-tail',
       runId: 'run-context-tail',
       finishSignal: new Signal(),
@@ -165,16 +158,9 @@ describe('CallModelLLMReducer usage metrics', () => {
       callerAgent: { getAgentNodeId: () => 'agent-context-tail' } as any,
     });
 
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenCalledTimes(2);
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(1, {
-      eventId: 'evt-context-2',
-      newContextItemCount: 1,
-      newContextItemIds: ['ctx-user-tail'],
-    });
-    expect(runEvents.updateLLMCallNewContextItemCount).toHaveBeenNthCalledWith(2, {
-      eventId: 'evt-context-2',
-      newContextItemCount: 2,
-      newContextItemIds: ['ctx-user-tail', 'ctx-assistant-latest'],
-    });
+    const startMock = runEvents.startLLMCall as unknown as MockFn;
+    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(startMock.mock.calls[0][0]?.newContextItemIds).toEqual(['ctx-user-tail']);
+    expect(result?.context?.pendingNewContextItemIds).toEqual(['ctx-assistant-latest']);
   });
 });

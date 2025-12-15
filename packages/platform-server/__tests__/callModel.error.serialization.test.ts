@@ -8,7 +8,6 @@ const createRunEventsStub = () => ({
   startLLMCall: vi.fn(async () => ({ id: 'evt-llm' })),
   completeLLMCall: vi.fn(async () => {}),
   createContextItems: vi.fn(async () => []),
-  updateLLMCallNewContextItemCount: vi.fn(async () => {}),
   appendLLMCallContextItems: vi.fn(async () => {}),
 });
 
@@ -33,7 +32,7 @@ describe('CallModelLLMReducer error serialization', () => {
 
     const state = {
       messages: [SystemMessage.fromText('SYS'), HumanMessage.fromText('start')],
-      context: { messageIds: [], memory: [] },
+      context: { messageIds: [], memory: [], pendingNewContextItemIds: [] },
       meta: {},
     } as any;
 

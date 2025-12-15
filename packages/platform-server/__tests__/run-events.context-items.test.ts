@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, beforeEach } from 'vitest';
-import { PrismaClient, ContextItemRole } from '@prisma/client';
+import { PrismaClient, ContextItemRole, LLMCallContextItemDirection } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../src/core/services/prisma.service';
 import { RunEventsService } from '../src/events/run-events.service';
@@ -69,7 +69,7 @@ if (!shouldRunDbTests) {
         orderBy: { idx: 'asc' },
       });
       expect(relationRows.map((row) => row.contextItemId)).toEqual([systemId, userId]);
-      expect(relationRows.every((row) => row.purpose === 'prompt_input')).toBe(true);
+      expect(relationRows.every((row) => row.direction === 'input')).toBe(true);
 
       const afterCount = await prisma.contextItem.count();
       expect(afterCount).toBe(beforeCount);
@@ -153,7 +153,7 @@ if (!shouldRunDbTests) {
       expect(summaryEvent.llmCall?.contextItemIds).toEqual(callRecord.contextItemIds);
       const relation = summaryEvent.llmCall?.contextItemsV2 ?? [];
       expect(relation.map((row) => row.contextItemId)).toEqual(callRecord.contextItemIds);
-      expect(relation.every((row) => row.purpose === 'prompt_input')).toBe(true);
+      expect(relation.every((row) => row.direction === 'input')).toBe(true);
       expect(summaryEvent.llmCall).not.toHaveProperty('prompt');
       expect(summaryEvent.llmCall).not.toHaveProperty('promptPreview');
 
@@ -167,38 +167,55 @@ if (!shouldRunDbTests) {
       await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
     });
 
-    it('persists new context item count on llm call events', async () => {
+    it('records new context ids using input rows only', async () => {
       const { thread, run } = await createThreadAndRun();
-      const contextInputs: ContextItemInput[] = [
-        { role: ContextItemRole.user, contentText: 'fresh question' },
-        { role: ContextItemRole.assistant, contentText: 'previous assistant reply' },
-      ];
+      const ids = await createContextItems([
+        { role: ContextItemRole.system, contentText: 'sys prompt' },
+        { role: ContextItemRole.user, contentText: 'latest user input' },
+        { role: ContextItemRole.assistant, contentText: 'prior assistant output' },
+      ]);
 
+      const [systemId, userId, assistantId] = ids;
       const event = await runEvents.startLLMCall({
         runId: run.id,
         threadId: thread.id,
-        contextItems: contextInputs,
+        contextItemIds: [systemId, userId, assistantId],
+        newContextItemIds: [userId],
       });
-      const newIds = ['ctx-new-user', 'ctx-new-assistant'];
-      await runEvents.updateLLMCallNewContextItemCount({
+
+      const [freshAssistantId] = await createContextItems([
+        { role: ContextItemRole.assistant, contentText: 'current assistant output' },
+      ]);
+
+      await runEvents.appendLLMCallContextItems({
         eventId: event.id,
-        newContextItemCount: contextInputs.length,
-        newContextItemIds: newIds,
+        items: [
+          {
+            contextItemId: freshAssistantId,
+            direction: LLMCallContextItemDirection.output,
+            isNew: false,
+            createdAt: new Date(),
+          },
+        ],
       });
 
       const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
-      expect(callRecord.newContextItemCount).toBe(contextInputs.length);
-      expect(callRecord.newContextItemIds).toEqual(newIds);
+      expect(callRecord.newContextItemCount).toBe(1);
+      expect(callRecord.newContextItemIds).toEqual([userId]);
 
       const snapshot = await runEvents.getEventSnapshot(event.id);
-      expect(snapshot?.llmCall?.newContextItemCount).toBe(contextInputs.length);
-      expect(snapshot?.llmCall?.newContextItemIds).toEqual(newIds);
+      expect(snapshot?.llmCall?.newContextItemCount).toBe(1);
+      expect(snapshot?.llmCall?.newContextItemIds).toEqual([userId]);
+      const contextRows = snapshot?.llmCall?.contextItemsV2 ?? [];
+      expect(contextRows).toHaveLength(4);
+      const inputRows = contextRows.filter((row) => row.direction === 'input');
+      expect(inputRows.map((row) => row.contextItemId)).toEqual([systemId, userId, assistantId]);
+      expect(inputRows.filter((row) => row.isNew).map((row) => row.contextItemId)).toEqual([userId]);
+      const outputRows = contextRows.filter((row) => row.direction === 'output');
+      expect(outputRows.map((row) => row.contextItemId)).toEqual([freshAssistantId]);
+      expect(outputRows.every((row) => row.isNew === false)).toBe(true);
 
-      const page = await runEvents.listRunEvents({ runId: run.id, limit: 10, order: 'asc' });
-      expect(page.items[0]?.llmCall?.newContextItemCount).toBe(contextInputs.length);
-      expect(page.items[0]?.llmCall?.newContextItemIds).toEqual(newIds);
-
-      await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
+      await cleanup(thread.id, run.id, Array.from(new Set([...ids, freshAssistantId])));
     });
   });
 }

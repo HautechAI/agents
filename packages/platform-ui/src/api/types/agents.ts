@@ -102,7 +102,7 @@ export type RunTimelineEvent = {
     contextItemsV2?: Array<{
       idx: number;
       contextItemId: string;
-      purpose: 'prompt_input' | 'produced_tail';
+      direction: 'input' | 'output';
       isNew: boolean;
       createdAt: string;
     }>;

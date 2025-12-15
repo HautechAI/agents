@@ -124,7 +124,6 @@ if (!shouldRunDbTests) {
         startLLMCall: vi.fn(),
         completeLLMCall: vi.fn(),
         appendLLMCallContextItems: vi.fn(),
-        updateLLMCallNewContextItemCount: vi.fn(),
         startToolExecution: vi.fn(),
         completeToolExecution: vi.fn(),
         recordSummarization: vi.fn(),

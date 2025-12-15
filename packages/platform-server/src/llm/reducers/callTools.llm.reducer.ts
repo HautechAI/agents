@@ -4,12 +4,11 @@ import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
 import { McpError } from '../../nodes/mcp/types';
 import { RunEventsService } from '../../events/run-events.service';
 import { EventsBusService } from '../../events/events-bus.service';
-import { ToolExecStatus, Prisma } from '@prisma/client';
+import { ToolExecStatus, Prisma, LLMCallContextItemDirection } from '@prisma/client';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 import type { ResponseFunctionCallOutputItemList } from 'openai/resources/responses/responses.mjs';
 import { contextItemInputFromMessage } from '../services/context-items.utils';
-import { persistContextItemsWithCounting } from '../services/context-items.append';
-import { LLMCallContextItemCounter } from '../services/llm-call-context-item-counter';
+import { persistContextItems } from '../services/context-items.append';
 import { ShellCommandTool } from '../../nodes/tools/shell_command/shell_command.tool';
 
 type ToolCallErrorCode =
@@ -147,16 +146,7 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
       if (!llmEventId) {
         throw new Error('CallToolsLLMReducer missing LLM event id while persisting tool outputs');
       }
-      let contextCounter: LLMCallContextItemCounter | undefined;
-      if (llmEventId) {
-        const existingCounter = await this.runEvents.getLLMCallContextCounterState(llmEventId);
-        contextCounter = new LLMCallContextItemCounter(this.runEvents, {
-          eventId: llmEventId,
-          count: existingCounter?.count ?? 0,
-          ids: existingCounter?.ids ?? [],
-        });
-      }
-      await persistContextItemsWithCounting({
+      await persistContextItems({
         runEvents: this.runEvents,
         entries: results.map((msg) => ({
           input: contextItemInputFromMessage(msg),
@@ -165,10 +155,19 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
           },
           countable: true,
         })),
-        counter: contextCounter,
       });
       if (appended.length > 0) {
         context.messageIds = [...context.messageIds, ...appended];
+        this.appendPendingContextItems(context, appended);
+        await this.runEvents.appendLLMCallContextItems({
+          eventId: llmEventId,
+          items: appended.map((id) => ({
+            contextItemId: id,
+            direction: LLMCallContextItemDirection.output,
+            isNew: false,
+            createdAt: new Date(),
+          })),
+        });
       }
     }
 
@@ -422,13 +421,31 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
   }
 
   private cloneContext(context?: LLMContextState): LLMContextState {
-    if (!context) return { messageIds: [], memory: [] };
+    if (!context) return { messageIds: [], memory: [], pendingNewContextItemIds: [] };
     return {
       messageIds: [...context.messageIds],
       memory: context.memory.map((entry) => ({ id: entry.id ?? null, place: entry.place })),
       summary: context.summary ? { id: context.summary.id ?? null, text: context.summary.text ?? null } : undefined,
       system: context.system ? { id: context.system.id ?? null } : undefined,
+      pendingNewContextItemIds: context.pendingNewContextItemIds
+        ? [...context.pendingNewContextItemIds]
+        : undefined,
     };
+  }
+
+  private appendPendingContextItems(context: LLMContextState, ids: string[]): void {
+    if (!ids.length) return;
+    const existing = new Set(context.pendingNewContextItemIds ?? []);
+    let mutated = false;
+    for (const id of ids) {
+      if (typeof id !== 'string' || id.length === 0) continue;
+      if (existing.has(id)) continue;
+      existing.add(id);
+      mutated = true;
+    }
+    if (mutated) {
+      context.pendingNewContextItemIds = Array.from(existing);
+    }
   }
 
   private async finalizeToolExecutionEvent(
