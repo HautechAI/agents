@@ -1,11 +1,14 @@
 import type { Preview } from '@storybook/react-vite';
+import { initialize, mswDecorator } from 'msw-storybook-addon';
 import { initConfigViewsRegistry } from '../src/configViews.init';
 import { ScreenStoryProviders, type ScreenParameters } from './ScreenStoryProviders';
+import { screenHandlers } from './msw-handlers';
 import '../src/styles/tailwind.css';
 import '../src/styles/globals.css';
 import '../src/styles/shadcn-compat.css';
 
 initConfigViewsRegistry();
+initialize({ onUnhandledRequest: 'bypass' });
 
 const preview: Preview = {
   tags: ['autodocs'],
@@ -28,8 +31,14 @@ const preview: Preview = {
       // 'off' - skip a11y checks entirely
       test: 'todo',
     },
+    msw: {
+      handlers: {
+        global: screenHandlers,
+      },
+    },
   },
   decorators: [
+    mswDecorator,
     (Story, context) => {
       const screen = (context.parameters.screen ?? {}) as ScreenParameters;
       const routePath = screen.routePath ?? '*';
