@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { userEvent, waitForElementToBeRemoved, within } from '@storybook/testing-library';
 import type { Meta, StoryObj } from '@storybook/react';
 
@@ -318,20 +318,21 @@ export const InteractivePlayground: Story = {
     await userEvent.click(nodeSelector);
     const portal = within(canvasElement.ownerDocument.body);
     await userEvent.click(await portal.findByRole('option', { name: /thread: customer-onboarding/i }));
-    await canvas.findByText(/customer-onboarding/i);
+    await canvas.findAllByText(/customer-onboarding/i);
 
-    const addButton = await canvas.findByRole('button', { name: /add subdocument/i });
-    await userEvent.click(addButton);
-    const nameField = await canvas.findByLabelText(/name/i);
+    const addButtons = await canvas.findAllByRole('button', { name: /add subdocument/i });
+    await userEvent.click(addButtons[0]!);
+    const nameField = await portal.findByLabelText(/name/i);
     await userEvent.clear(nameField);
     await userEvent.type(nameField, 'weekly-summary');
-    await userEvent.click(await canvas.findByRole('button', { name: /^create$/i }));
-    await canvas.findByRole('treeitem', { name: /weekly-summary/i });
+    await userEvent.click(await portal.findByRole('button', { name: /^create$/i }));
+    const newTreeItem = await canvas.findByRole('treeitem', { name: /weekly-summary/i });
+    const treeItemContainer = newTreeItem.parentElement ?? newTreeItem;
 
-    const deleteButton = await canvas.findByRole('button', { name: /delete document/i });
+    const deleteButton = within(treeItemContainer).getByRole('button', { name: /delete document/i });
     await userEvent.click(deleteButton);
-    const dialog = await within(canvasElement.ownerDocument.body).findByRole('dialog', { name: /delete memory node/i });
+    const dialog = await portal.findByRole('dialog', { name: /delete memory node/i });
     await userEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
-    await waitForElementToBeRemoved(() => within(canvasElement.ownerDocument.body).queryByRole('dialog', { name: /delete memory node/i }));
+    await waitForElementToBeRemoved(() => portal.queryByRole('dialog', { name: /delete memory node/i }));
   },
 };

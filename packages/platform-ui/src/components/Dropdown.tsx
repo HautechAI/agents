@@ -20,6 +20,8 @@ interface DropdownGroup {
 
 interface DropdownProps {
   label?: string;
+  hideLabel?: boolean;
+  ariaLabel?: string;
   placeholder?: string;
   value?: string;
   defaultValue?: string;
@@ -36,6 +38,8 @@ interface DropdownProps {
 
 export function Dropdown({
   label,
+  hideLabel = false,
+  ariaLabel,
   placeholder = 'Select an option...',
   value,
   defaultValue,
@@ -52,7 +56,9 @@ export function Dropdown({
   return (
     <div className={`w-full ${className}`}>
       {label && (
-        <label className="block mb-2 text-[var(--agyn-dark)]">
+        <label
+          className={`block mb-2 text-[var(--agyn-dark)] ${hideLabel ? 'sr-only' : ''}`}
+        >
           {label}
         </label>
       )}
@@ -64,6 +70,7 @@ export function Dropdown({
         disabled={disabled}
       >
         <SelectTrigger
+          aria-label={ariaLabel}
           size={size}
           className={`
             w-full

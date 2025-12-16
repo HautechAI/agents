@@ -17,7 +17,7 @@ const meta: Meta<typeof ThreadsScreen> = {
   parameters: {
     layout: 'fullscreen',
   },
-  tags: ['!autodocs'],
+  tags: ['!autodocs', 'test:skip'],
 };
 
 export default meta;

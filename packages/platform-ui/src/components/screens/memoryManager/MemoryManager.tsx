@@ -309,6 +309,7 @@ export function MemoryManager({
             <div className="flex h-[66px] items-center border-b border-[var(--agyn-border-subtle)] px-6">
               <Dropdown
                 placeholder="Select memory node"
+                ariaLabel="Select memory node"
                 value={selectedNodeKey ?? ''}
                 onValueChange={handleSelectNode}
                 options={nodes.map((option) => ({ value: option.key, label: option.label }))}

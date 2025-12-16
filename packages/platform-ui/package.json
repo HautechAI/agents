@@ -13,7 +13,9 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "test:watch": "vitest",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "storybook:test": "pnpm exec test-storybook --config-dir .storybook --url http://127.0.0.1:6006",
+    "storybook:test:ci": "node ./scripts/run-storybook-smoke.mjs"
   },
   "dependencies": {
     "@agyn/shared": "workspace:*",
@@ -106,6 +108,7 @@
     "@storybook/addon-a11y": "^10.0.8",
     "@storybook/addon-docs": "^10.0.8",
     "@storybook/addon-vitest": "^10.0.8",
+    "@storybook/test-runner": "^0.24.2",
     "@storybook/react": "^10.0.8",
     "@storybook/react-vite": "^10.0.8",
     "@storybook/testing-library": "^0.2.2",
@@ -121,8 +124,10 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.4.0",
+    "http-server": "^14.1.1",
     "jsdom": "27.1.0",
     "msw": "^2.11.3",
+    "playwright": "^1.57.0",
     "storybook": "^10.0.8",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.3.8",

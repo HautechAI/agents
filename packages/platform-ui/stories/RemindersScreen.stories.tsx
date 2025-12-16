@@ -34,10 +34,26 @@ const sampleReminders: Reminder[] = [
   },
 ];
 
-export const Default: Story = {
-  args: {
-    reminders: sampleReminders,
+const countsByStatus = sampleReminders.reduce(
+  (acc, reminder) => {
+    acc[reminder.status] += 1;
+    return acc;
   },
+  { scheduled: 0, executed: 0, cancelled: 0 },
+);
+
+const baseArgs = {
+  reminders: sampleReminders,
+  countsByStatus,
+  totalCount: sampleReminders.length,
+  page: 1,
+  pageSize: sampleReminders.length,
+  pageCount: 1,
+  filter: 'all' as const,
+};
+
+export const Default: Story = {
+  args: baseArgs,
   parameters: {
     selectedMenuItem: 'reminders',
   },
