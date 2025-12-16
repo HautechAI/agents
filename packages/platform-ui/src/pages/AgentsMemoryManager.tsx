@@ -104,7 +104,7 @@ function buildTreeFromDump(label: string, dump?: DumpResponse): MemoryTree {
   return root;
 }
 
-export function AgentsMemoryManagerScreen() {
+export function AgentsMemoryManager() {
   const queryClient = useQueryClient();
 
   const docsQuery = useQuery({

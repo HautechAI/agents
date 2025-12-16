@@ -4,7 +4,7 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
-import { AgentsThreadsScreen } from '../src/components/screens/agents/ThreadsScreen';
+import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { TestProviders, server, abs } from './integration/testUtils';
 
 const navigateMock = vi.fn();
@@ -197,7 +197,7 @@ function renderThreads() {
   render(
     <TestProviders>
       <MemoryRouter>
-        <AgentsThreadsScreen />
+        <AgentsThreads />
       </MemoryRouter>
     </TestProviders>,
   );

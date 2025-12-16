@@ -9,7 +9,7 @@ import {
   useVariables,
 } from '@/features/variables/hooks';
 
-export function SettingsVariablesScreen() {
+export function SettingsVariables() {
   const variablesQuery = useVariables();
   const createVariable = useCreateVariable();
   const updateVariable = useUpdateVariable();

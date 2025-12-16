@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import ThreadsScreen from '../src/components/screens/ThreadsScreen';
 import { ThreadItem, type Thread } from '../src/components/ThreadItem';
-import { AgentsThreadsScreen } from '../src/components/screens/agents/ThreadsScreen';
+import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { TestProviders, server, abs } from './integration/testUtils';
 
 const baseThread: Thread = {
@@ -222,7 +222,7 @@ describe('AgentsThreads status toggle integration', () => {
     render(
       <TestProviders>
         <MemoryRouter>
-          <AgentsThreadsScreen />
+          <AgentsThreads />
         </MemoryRouter>
       </TestProviders>,
     );

@@ -9,7 +9,7 @@ type NodeSummary = {
   threadCount: number;
 };
 
-export function MemoryNodesListScreen() {
+export function MemoryNodesListPage() {
   const docsQuery = useQuery({
     queryKey: ['memory/docs'],
     queryFn: () => memoryApi.listDocs(),

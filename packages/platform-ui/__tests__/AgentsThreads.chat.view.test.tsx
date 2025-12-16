@@ -4,7 +4,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
-import { AgentsThreadsScreen } from '../src/components/screens/agents/ThreadsScreen';
+import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { TestProviders, server, abs } from './integration/testUtils';
 
 const navigateMock = vi.fn();
@@ -117,7 +117,7 @@ describe('AgentsThreads conversation view', () => {
     render(
       <TestProviders>
         <MemoryRouter>
-          <AgentsThreadsScreen />
+          <AgentsThreads />
         </MemoryRouter>
       </TestProviders>,
     );
@@ -181,7 +181,7 @@ describe('AgentsThreads conversation view', () => {
     render(
       <TestProviders>
         <MemoryRouter>
-          <AgentsThreadsScreen />
+          <AgentsThreads />
         </MemoryRouter>
       </TestProviders>,
     );

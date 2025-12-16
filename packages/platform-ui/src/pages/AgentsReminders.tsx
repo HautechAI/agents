@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
 const DEFAULT_SORT: ListRemindersSort = 'latest';
 const DEFAULT_ORDER: ListRemindersOrder = 'desc';
 
-export function AgentsRemindersScreen() {
+export function AgentsReminders() {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<UiFilter>('all');
   const [page, setPage] = useState(1);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, act, fireEvent } from '@testing-library/react';
-import { MonitoringContainersScreen } from '../ContainersScreen';
+import { MonitoringContainers } from '../MonitoringContainers';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ContainerItem } from '@/api/modules/containers';
@@ -98,7 +98,7 @@ vi.mock('@/api/hooks/containers', () => ({
 function renderPage() {
   return render(
     <TooltipProvider>
-      <MonitoringContainersScreen />
+      <MonitoringContainers />
     </TooltipProvider>
   );
 }

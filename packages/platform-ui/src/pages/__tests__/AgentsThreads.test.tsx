@@ -4,11 +4,11 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
-import { AgentsThreadsScreen } from '../ThreadsScreen';
-import { TestProviders, server, abs } from '../../../../../__tests__/integration/testUtils';
+import { AgentsThreads } from '../AgentsThreads';
+import { TestProviders, server, abs } from '../../../__tests__/integration/testUtils';
 import type { PersistedGraph } from '@agyn/shared';
 import type { TemplateSchema } from '@/api/types/graph';
-import type { MarkdownComposerProps } from '@/components/MarkdownComposer';
+import type { MarkdownComposerProps } from '../../components/MarkdownComposer';
 
 const notifyMocks = vi.hoisted(() => ({
   success: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock('@/lib/notify', () => ({
   notifyError: (...args: unknown[]) => notifyMocks.error(...args),
 }));
 
-vi.mock('@/components/MarkdownComposer', () => {
+vi.mock('../../components/MarkdownComposer', () => {
   const MockMarkdownComposer = ({
     value,
     onChange,
@@ -295,8 +295,8 @@ describe('AgentsThreads page', () => {
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/agents/threads">
-              <Route index element={<AgentsThreadsScreen />} />
-              <Route path=":threadId" element={<AgentsThreadsScreen />} />
+              <Route index element={<AgentsThreads />} />
+              <Route path=":threadId" element={<AgentsThreads />} />
             </Route>
           </Routes>
         </MemoryRouter>

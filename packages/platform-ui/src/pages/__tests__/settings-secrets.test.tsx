@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
-import { server, TestProviders, abs } from '../../../../../__tests__/integration/testUtils';
-import { SettingsSecretsScreen as SettingsSecrets } from '../SecretsScreen';
+import { server, TestProviders, abs } from '../../../__tests__/integration/testUtils';
+import { SettingsSecrets } from '../../pages/SettingsSecrets';
 
 const notifyMocks = vi.hoisted(() => ({
   success: vi.fn(),

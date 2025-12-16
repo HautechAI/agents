@@ -861,7 +861,7 @@ function getMemoryStat(path: string) {
   return { exists, hasSubdocs, contentLength: getMemoryContent(normalized).length };
 }
 
-export const screenHandlers = [
+export const pageHandlers = [
   http.get('/api/graph', () => HttpResponse.json(graphResponse)),
   http.post('/api/graph', async ({ request }) => {
     const body = await request.json().catch(() => ({}));

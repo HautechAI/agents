@@ -3,7 +3,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { TestProviders, server, abs } from './integration/testUtils';
-import { AgentsThreadsScreen } from '../src/components/screens/agents/ThreadsScreen';
+import { AgentsThreads } from '../src/pages/AgentsThreads';
 import { MemoryRouter } from 'react-router-dom';
 
 function t(offsetMs: number) {
@@ -35,7 +35,7 @@ describe('AgentsThreads placeholder for missing summary', () => {
     render(
       <TestProviders>
         <MemoryRouter>
-          <AgentsThreadsScreen />
+          <AgentsThreads />
         </MemoryRouter>
       </TestProviders>,
     );

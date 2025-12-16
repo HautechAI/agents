@@ -5,7 +5,7 @@ import { ContainerTerminalDialog } from '@/components/monitoring/ContainerTermin
 import { ContainersPageContent } from '@/components/monitoring/ContainersPageContent';
 import { useMonitoringContainers } from '@/features/monitoring/containers/hooks';
 
-export function MonitoringContainersScreen() {
+export function MonitoringContainers() {
   const navigate = useNavigate();
   const { containers, itemById, isLoading, error, refetch } = useMonitoringContainers();
   const [terminalContainer, setTerminalContainer] = useState<ContainerItem | null>(null);

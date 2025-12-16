@@ -4,7 +4,7 @@ import { GraphLayout } from '@/components/agents/GraphLayout';
 import { graphApiService } from '@/features/graph/services/api';
 import { listVariables } from '@/features/variables/api';
 
-export function GraphScreen() {
+export function AgentsGraphContainer() {
   const services = useMemo(() => ({
     searchNixPackages: graphApiService.searchNixPackages,
     listNixPackageVersions: graphApiService.listNixPackageVersions,
