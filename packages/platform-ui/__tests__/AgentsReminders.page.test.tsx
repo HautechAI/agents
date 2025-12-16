@@ -99,7 +99,7 @@ function renderPage() {
       initialEntries={[{ pathname: '/agents/reminders' }]}
     >
       <TestProviders>
-        <AgentsReminders />
+          <AgentsReminders />
       </TestProviders>
     </MemoryRouter>,
   );

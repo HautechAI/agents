@@ -1,6 +1,31 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import RemindersScreen, { type Reminder } from '../src/components/screens/RemindersScreen';
+import RemindersScreen from '@/components/screens/RemindersScreen';
 import { withMainLayout } from './decorators/withMainLayout';
+
+const reminders = [
+  {
+    id: 'reminder-1',
+    note: 'Review staging metrics',
+    scheduledAt: '2024-11-05T11:30:00Z',
+    status: 'scheduled' as const,
+    threadId: 'thread-alpha',
+  },
+  {
+    id: 'reminder-2',
+    note: 'Post incident summary',
+    scheduledAt: '2024-11-05T14:00:00Z',
+    status: 'scheduled' as const,
+    threadId: 'thread-bravo',
+  },
+  {
+    id: 'reminder-3',
+    note: 'Confirm actions completed',
+    scheduledAt: '2024-11-04T09:00:00Z',
+    status: 'executed' as const,
+    runId: 'run-alpha-1',
+    executedAt: '2024-11-04T09:05:00Z',
+  },
+];
 
 const meta: Meta<typeof RemindersScreen> = {
   title: 'Screens/Reminders',
@@ -8,6 +33,30 @@ const meta: Meta<typeof RemindersScreen> = {
   decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
+    screen: {
+      routePath: '/agents/reminders',
+      initialEntry: '/agents/reminders',
+    },
+    selectedMenuItem: 'reminders',
+  },
+  args: {
+    reminders,
+    countsByStatus: {
+      scheduled: 2,
+      executed: 1,
+      cancelled: 0,
+    },
+    totalCount: reminders.length,
+    page: 1,
+    pageSize: 10,
+    pageCount: 1,
+    filter: 'all',
+    sortApplied: { key: 'scheduled_at', order: 'desc' },
+    onViewThread: () => undefined,
+    onViewRun: () => undefined,
+    onDeleteReminder: () => undefined,
+    onFilterChange: () => undefined,
+    onPageChange: () => undefined,
   },
   tags: ['!autodocs'],
 };
@@ -16,29 +65,4 @@ export default meta;
 
 type Story = StoryObj<typeof RemindersScreen>;
 
-const sampleReminders: Reminder[] = [
-  {
-    id: 'rem-1',
-    note: 'Follow up on authentication API design',
-    scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    status: 'scheduled',
-    threadId: 'thread-1',
-  },
-  {
-    id: 'rem-2',
-    note: 'Check container health after deploy',
-    scheduledAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    status: 'executed',
-    runId: 'run-42',
-    executedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-  },
-];
-
-export const Default: Story = {
-  args: {
-    reminders: sampleReminders,
-  },
-  parameters: {
-    selectedMenuItem: 'reminders',
-  },
-};
+export const Default: Story = {};

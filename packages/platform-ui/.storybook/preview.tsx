@@ -1,15 +1,20 @@
 import type { Preview } from '@storybook/react-vite';
-import { TooltipProvider } from '../src/components/ui/tooltip';
+import { initialize, mswDecorator } from 'msw-storybook-addon';
+import { initConfigViewsRegistry } from '../src/configViews.init';
+import { ScreenStoryProviders, type ScreenParameters } from './ScreenStoryProviders';
 import '../src/styles/tailwind.css';
 import '../src/styles/globals.css';
 import '../src/styles/shadcn-compat.css';
+
+initConfigViewsRegistry();
+initialize({ onUnhandledRequest: 'bypass' });
 
 const preview: Preview = {
   tags: ['autodocs'],
   parameters: {
     options: {
       storySort: {
-        order: ['Brand', 'Foundation', 'Components', 'Layouts', 'Screens'],
+        order: ['Brand', 'Foundation', 'Components', 'Layouts', 'Screens', 'Pages'],
       },
     },
     controls: {
@@ -27,11 +32,17 @@ const preview: Preview = {
     },
   },
   decorators: [
-    (Story) => (
-      <TooltipProvider>
-        <Story />
-      </TooltipProvider>
-    ),
+    mswDecorator,
+    (Story, context) => {
+      const screen = (context.parameters.screen ?? {}) as ScreenParameters;
+      const routePath = screen.routePath ?? '*';
+      const initialEntry = screen.initialEntry ?? '/';
+      return (
+        <ScreenStoryProviders routePath={routePath} initialEntry={initialEntry}>
+          <Story />
+        </ScreenStoryProviders>
+      );
+    },
   ],
 };
 

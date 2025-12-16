@@ -1,6 +1,28 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import VariablesScreen, { type Variable } from '../src/components/screens/VariablesScreen';
+import VariablesScreen from '@/components/screens/VariablesScreen';
+import type { Variable } from '@/components/screens/VariablesScreen';
 import { withMainLayout } from './decorators/withMainLayout';
+
+const variables: Variable[] = [
+  {
+    id: 'var-1',
+    key: 'OPS_REGION',
+    graphValue: 'iad',
+    localValue: 'iad',
+  },
+  {
+    id: 'var-2',
+    key: 'OPS_DEFAULT_AGENT',
+    graphValue: 'atlas',
+    localValue: 'atlas',
+  },
+  {
+    id: 'var-3',
+    key: 'OPS_SLACK_CHANNEL',
+    graphValue: 'ops-alerts',
+    localValue: 'ops-alerts',
+  },
+];
 
 const meta: Meta<typeof VariablesScreen> = {
   title: 'Screens/Variables',
@@ -8,6 +30,18 @@ const meta: Meta<typeof VariablesScreen> = {
   decorators: [withMainLayout],
   parameters: {
     layout: 'fullscreen',
+    screen: {
+      routePath: '/settings/variables',
+      initialEntry: '/settings/variables',
+    },
+    selectedMenuItem: 'variables',
+  },
+  args: {
+    variables,
+    onCreateVariable: () => undefined,
+    onUpdateVariable: () => undefined,
+    onDeleteVariable: () => undefined,
+    onBack: () => undefined,
   },
   tags: ['!autodocs'],
 };
@@ -16,45 +50,4 @@ export default meta;
 
 type Story = StoryObj<typeof VariablesScreen>;
 
-const sampleVariables: Variable[] = [
-  {
-    id: 'var-1',
-    key: 'OPENAI_API_KEY',
-    graphValue: '${{ secrets.OPENAI_API_KEY }}',
-    localValue: 'sk-***',
-  },
-  {
-    id: 'var-2',
-    key: 'ENV',
-    graphValue: 'production',
-    localValue: 'development',
-  },
-];
-
-const manyVariables: Variable[] = Array.from({ length: 80 }).map((_, index) => {
-  const id = index + 1;
-  return {
-    id: `var-${id}`,
-    key: `SETTING_${id.toString().padStart(3, '0')}`,
-    graphValue: `graph-value-${id}`,
-    localValue: id % 5 === 0 ? '' : `local-override-${id}`,
-  };
-});
-
-export const Default: Story = {
-  args: {
-    variables: sampleVariables,
-  },
-  parameters: {
-    selectedMenuItem: 'variables',
-  },
-};
-
-export const ManyVariablesPagination: Story = {
-  args: {
-    variables: manyVariables,
-  },
-  parameters: {
-    selectedMenuItem: 'variables',
-  },
-};
+export const Default: Story = {};
