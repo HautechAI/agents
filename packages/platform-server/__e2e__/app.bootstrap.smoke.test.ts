@@ -154,7 +154,9 @@ describe('App bootstrap smoke test', () => {
     } as unknown as LiveGraphRuntime;
 
     class StubProvisioner extends LLMProvisioner {
+      async init(): Promise<void> {}
       getLLM = vi.fn(async () => ({} as LLM));
+      async teardown(): Promise<void> {}
     }
     const llmProvisionerStub = new StubProvisioner();
 

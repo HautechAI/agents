@@ -118,9 +118,11 @@ class StubVaultService extends VaultService {
   }
 }
 class StubLLMProvisioner extends LLMProvisioner {
+  async init(): Promise<void> {}
   async getLLM(): Promise<{ call: (messages: unknown) => Promise<{ text: string; output: unknown[] }> }> {
     return { call: async () => ({ text: 'ok', output: [] }) };
   }
+  async teardown(): Promise<void> {}
 }
 
 describe('Boot respects MCP enabledTools from persisted state', () => {

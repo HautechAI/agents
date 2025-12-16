@@ -16,7 +16,7 @@ import {
 import { PrismaService } from '../core/services/prisma.service';
 import { toPrismaJsonValue } from '../llm/services/messages.serialization';
 import { ContextItemInput, NormalizedContextItem, normalizeContextItems } from '../llm/services/context-items.utils';
-import { upsertNormalizedContextItems } from '../llm/services/context-items.repository';
+import { ContextItemsRepository, upsertNormalizedContextItems } from '../llm/services/context-items.repository';
 
 type Tx = PrismaClient | Prisma.TransactionClient;
 
@@ -460,6 +460,10 @@ export class RunEventsService {
       sizeBytes: row.sizeBytes,
       createdAt: row.createdAt.toISOString(),
     };
+  }
+
+  private getContextRepository(client: Tx): ContextItemsRepository {
+    return new ContextItemsRepository(client, this.logger);
   }
 
   private async resolveContextItemIds(
@@ -966,7 +970,8 @@ export class RunEventsService {
     if (!Array.isArray(ids) || ids.length === 0) return [];
     const unique = Array.from(new Set(ids));
     if (unique.length === 0) return [];
-    const rows = await this.prisma.contextItem.findMany({
+    const repository = this.getContextRepository(this.prisma);
+    const rows = await repository.findMany({
       where: { id: { in: unique } },
       select: {
         id: true,

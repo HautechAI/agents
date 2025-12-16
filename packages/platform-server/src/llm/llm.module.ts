@@ -47,6 +47,6 @@ import { LiteLLMKeyStore } from './provisioners/litellm.key.store';
     StaticLLMRouter,
     ConditionalLLMRouter,
   ],
-  exports: [LLMProvisioner],
+  exports: [LLMProvisioner, LiteLLMProvisioner, LiteLLMKeyStore],
 })
 export class LLMModule {}

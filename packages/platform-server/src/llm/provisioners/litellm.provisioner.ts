@@ -18,6 +18,7 @@ const REFRESH_RETRY_MAX_DELAY_MS = 5 * 60_000;
 export class LiteLLMProvisioner extends LLMProvisioner {
   private readonly logger = new Logger(LiteLLMProvisioner.name);
   private readonly fetchImpl: typeof fetch;
+  private readonly keyStore: LiteLLMKeyStore;
   private readonly keyAlias: string;
 
   private llm?: LLM;
@@ -30,11 +31,15 @@ export class LiteLLMProvisioner extends LLMProvisioner {
 
   constructor(
     @Inject(ConfigService) private readonly cfg: ConfigService,
-    private readonly keyStore: LiteLLMKeyStore,
+    @Inject(LiteLLMKeyStore) keyStore: LiteLLMKeyStore,
     fetchImpl?: typeof fetch,
   ) {
     super();
     ConfigService.assertInitialized(cfg);
+    if (!keyStore) {
+      throw new Error('LiteLLMProvisioner missing LiteLLMKeyStore dependency');
+    }
+    this.keyStore = keyStore;
     this.fetchImpl = fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.keyAlias = this.resolveAlias();
   }

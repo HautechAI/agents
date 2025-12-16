@@ -22,9 +22,11 @@ import { ReferenceResolverService } from '../src/utils/reference-resolver.servic
 import { createReferenceResolverStub } from './helpers/reference-resolver.stub';
 
 class StubLLMProvisioner extends LLMProvisioner {
+  async init(): Promise<void> {}
   async getLLM(): Promise<{ call: (messages: unknown) => Promise<{ text: string; output: unknown[] }> }> {
     return { call: async () => ({ text: 'ok', output: [] }) };
   }
+  async teardown(): Promise<void> {}
 }
 
 class FakeAgent extends AgentNode {

@@ -21,6 +21,10 @@ export class ContextItemsRepository {
     return this.delegate.update({ ...args, data: sanitizedData });
   }
 
+  async findMany<T extends Prisma.ContextItemFindManyArgs>(args: T): Promise<Array<Prisma.ContextItemGetPayload<T>>> {
+    return this.delegate.findMany(args as Prisma.ContextItemFindManyArgs) as Promise<Array<Prisma.ContextItemGetPayload<T>>>;
+  }
+
   async createNormalized(item: NormalizedContextItem): Promise<string> {
     const record = await this.create({
       data: {

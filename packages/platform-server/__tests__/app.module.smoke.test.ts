@@ -144,7 +144,9 @@ describe('AppModule bootstrap smoke test', () => {
 
 
     class StubProvisioner extends LLMProvisioner {
+      async init(): Promise<void> {}
       getLLM = vi.fn(async () => ({} as never));
+      async teardown(): Promise<void> {}
     }
     const llmProvisionerStub = new StubProvisioner();
 

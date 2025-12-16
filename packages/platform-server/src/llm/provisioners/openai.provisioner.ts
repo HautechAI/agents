@@ -12,6 +12,10 @@ export class OpenAILLMProvisioner extends LLMProvisioner {
     ConfigService.assertInitialized(cfg);
   }
 
+  async init(): Promise<void> {
+    await this.getLLM();
+  }
+
   async getLLM(): Promise<LLM> {
     if (this.llm) return this.llm;
 
@@ -21,5 +25,9 @@ export class OpenAILLMProvisioner extends LLMProvisioner {
     const client = new OpenAI({ apiKey, baseURL: baseUrl ?? undefined });
     this.llm = new LLM(client);
     return this.llm;
+  }
+
+  async teardown(): Promise<void> {
+    this.llm = undefined;
   }
 }
