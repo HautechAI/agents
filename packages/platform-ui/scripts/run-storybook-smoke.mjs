@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { accessSync, constants as fsConstants } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -19,17 +20,48 @@ const BIN_DIRECTORY = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../node_modules/.bin',
 );
+const require = createRequire(import.meta.url);
 
 function ensureBin(name) {
-  const extension = process.platform === 'win32' ? '.cmd' : '';
-  const candidate = path.join(BIN_DIRECTORY, `${name}${extension}`);
+  const candidate = tryResolveBin(name);
+  if (candidate !== null) {
+    return candidate;
+  }
 
+  throw new Error(`Unable to locate executable for ${name} at ${formatBinPath(name)}`);
+}
+
+function resolveTestRunnerInvocation() {
+  const direct = tryResolveBin('test-storybook');
+  if (direct !== null) {
+    return { command: direct, args: [] };
+  }
+
+  const moduleEntry = resolveModuleEntry('@storybook/test-runner/dist/test-storybook.js');
+  return { command: process.execPath, args: [moduleEntry] };
+}
+
+function resolveModuleEntry(specifier) {
+  try {
+    return require.resolve(specifier);
+  } catch (error) {
+    throw new Error(`Unable to resolve module entry for ${specifier}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function tryResolveBin(name) {
+  const candidate = formatBinPath(name);
   try {
     accessSync(candidate, fsConstants.X_OK);
     return candidate;
   } catch {
-    throw new Error(`Unable to locate executable for ${name} at ${candidate}`);
+    return null;
   }
+}
+
+function formatBinPath(name) {
+  const extension = process.platform === 'win32' ? '.cmd' : '';
+  return path.join(BIN_DIRECTORY, `${name}${extension}`);
 }
 
 const storybookProcess = spawn(ensureBin('storybook'), ['dev', '--ci', '--host', HOST, '--port', PORT, '--no-open'], {
@@ -85,9 +117,10 @@ async function waitForServer() {
 
 async function runTests() {
   await new Promise((resolve, reject) => {
+    const { command, args: prefixArgs } = resolveTestRunnerInvocation();
     const runner = spawn(
-      ensureBin('test-storybook'),
-      ['--ci', '--maxWorkers=2', '--testTimeout=60000', '--url', URL],
+      command,
+      [...prefixArgs, '--ci', '--maxWorkers=2', '--testTimeout=60000', '--url', URL],
       { env, stdio: 'inherit' },
     );
 
