@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { accessSync, constants as fsConstants } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const HOST = process.env.STORYBOOK_SMOKE_HOST ?? '127.0.0.1';
@@ -11,6 +14,23 @@ const env = {
   ...process.env,
   VITE_API_BASE_URL: process.env.VITE_API_BASE_URL ?? 'http://localhost:4173/api',
 };
+
+const BIN_DIRECTORY = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../node_modules/.bin',
+);
+
+function bin(name) {
+  const extension = process.platform === 'win32' ? '.cmd' : '';
+  const candidate = path.join(BIN_DIRECTORY, `${name}${extension}`);
+
+  try {
+    accessSync(candidate, fsConstants.F_OK);
+    return candidate;
+  } catch {
+    return `${name}${extension}`;
+  }
+}
 
 const storybookProcess = spawn(bin('storybook'), ['dev', '--ci', '--host', HOST, '--port', PORT, '--no-open'], {
   env,
@@ -88,10 +108,6 @@ async function runTests() {
       reject(error);
     });
   });
-}
-
-function bin(name) {
-  return process.platform === 'win32' ? `${name}.cmd` : name;
 }
 
 async function cleanup() {
