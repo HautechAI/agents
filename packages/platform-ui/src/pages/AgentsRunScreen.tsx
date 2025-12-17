@@ -241,15 +241,15 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 type ContextSource = {
-  inputIds: string[];
-  outputIds: string[];
+  ids: string[];
   highlightIds: string[];
+  outputIds?: string[];
 };
 
 const EMPTY_CONTEXT_SOURCE: ContextSource = {
-  inputIds: [],
-  outputIds: [],
+  ids: [],
   highlightIds: [],
+  outputIds: [],
 };
 
 function buildContextSource(llmCall?: RunTimelineEvent['llmCall']): ContextSource {
@@ -259,18 +259,18 @@ function buildContextSource(llmCall?: RunTimelineEvent['llmCall']): ContextSourc
     const sorted = [...rows].sort((a, b) => a.idx - b.idx);
     const inputRows = sorted.filter((row) => row.direction === 'input');
     const outputRows = sorted.filter((row) => row.direction === 'output');
-    const inputIds = inputRows.map((row) => row.contextItemId).filter(isNonEmptyString);
+    const ids = inputRows.map((row) => row.contextItemId).filter(isNonEmptyString);
     const outputIds = outputRows.map((row) => row.contextItemId).filter(isNonEmptyString);
     const highlightIds = inputRows
       .filter((row) => row.isNew && isNonEmptyString(row.contextItemId))
       .map((row) => row.contextItemId);
-    return { inputIds, outputIds, highlightIds };
+    return { ids, highlightIds, outputIds: outputIds.length > 0 ? outputIds : undefined };
   }
   const fallbackIds = Array.isArray(llmCall.contextItemIds) ? llmCall.contextItemIds.filter(isNonEmptyString) : [];
   const fallbackHighlight = Array.isArray(llmCall.newContextItemIds)
     ? llmCall.newContextItemIds.filter(isNonEmptyString)
     : [];
-  return { inputIds: fallbackIds, outputIds: [], highlightIds: fallbackHighlight };
+  return { ids: fallbackIds, highlightIds: fallbackHighlight };
 }
 
 type LinkTargets = {
@@ -1199,8 +1199,8 @@ export function AgentsRunScreen() {
     const ids = new Set<string>();
     for (const event of allEvents) {
       if (event.type !== 'llm_call') continue;
-      const { inputIds, outputIds } = buildContextSource(event.llmCall);
-      for (const id of [...inputIds, ...outputIds]) {
+      const { ids: inputIds, outputIds } = buildContextSource(event.llmCall);
+      for (const id of [...inputIds, ...(outputIds ?? [])]) {
         if (!isNonEmptyString(id)) continue;
         if (lookup.has(id)) continue;
         ids.add(id);
@@ -1650,18 +1650,27 @@ export function AgentsRunScreen() {
     void contextItemsVersion;
     return events.map((event) => {
       const contextSource = event.type === 'llm_call' ? buildContextSource(event.llmCall) : EMPTY_CONTEXT_SOURCE;
-      const contextRecords =
+      const fallbackToolCalls = event.llmCall?.toolCalls ?? [];
+      const inputRecords =
         event.type === 'llm_call'
-          ? resolveContextRecords(contextSource.inputIds, lookup, event.llmCall?.toolCalls ?? [], {
+          ? resolveContextRecords(contextSource.ids, lookup, fallbackToolCalls, {
               highlightIds: contextSource.highlightIds,
               includeAssistant: false,
             })
           : [];
+      const outputRecords =
+        event.type === 'llm_call'
+          ? resolveContextRecords(contextSource.outputIds ?? [], lookup, fallbackToolCalls, {
+              includeAssistant: true,
+            })
+          : [];
       const assistantRecords =
         event.type === 'llm_call'
-          ? resolveContextRecords(contextSource.outputIds, lookup, event.llmCall?.toolCalls ?? [], {
-              includeAssistant: true,
-            }).filter((record) => (typeof record.role === 'string' ? record.role.toLowerCase() === 'assistant' : false))
+          ? outputRecords.filter((record) => (typeof record.role === 'string' ? record.role.toLowerCase() === 'assistant' : false))
+          : [];
+      const contextRecords =
+        event.type === 'llm_call'
+          ? [...inputRecords, ...outputRecords]
           : [];
       const toolLinks = event.type === 'tool_execution' ? buildToolLinkData(event) : undefined;
       return createUiEvent(event, { context: contextRecords, assistant: assistantRecords, tool: toolLinks });

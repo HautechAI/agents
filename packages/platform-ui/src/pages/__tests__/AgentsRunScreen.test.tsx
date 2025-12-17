@@ -337,15 +337,21 @@ describe('AgentsRunScreen', () => {
     expect(data.childRunId).toBe('metadata-run');
   });
 
-  it('excludes assistant context from the LLM input list', async () => {
+  it('includes assistant outputs in the context list', async () => {
+    const userContext: ContextItem = {
+      id: 'ctx-user-1',
+      role: 'user',
+      contentText: 'How are you?',
+      contentJson: null,
+      metadata: null,
+      sizeBytes: 128,
+      createdAt: '2024-01-01T00:00:01.000Z',
+    };
+
     const assistantContext: ContextItem = {
-      id: 'ctx-1',
+      id: 'ctx-assistant-1',
       role: 'assistant',
-      contentText: JSON.stringify({
-        content: 'Final response',
-        tool_calls: [{ name: 'write_file', arguments: { path: '/tmp/file.ts' } }],
-        reasoning: { tokens: 88 },
-      }),
+      contentText: 'I am fine, thanks!',
       contentJson: null,
       metadata: null,
       sizeBytes: 256,
@@ -361,16 +367,16 @@ describe('AgentsRunScreen', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItemIds: [assistantContext.id],
-        newContextItemCount: 1,
-        newContextItemIds: [assistantContext.id],
+        contextItemIds: [userContext.id, assistantContext.id],
+        newContextItemCount: 0,
+        newContextItemIds: [],
         contextItemsV2: [
           {
             idx: 0,
-            contextItemId: assistantContext.id,
+            contextItemId: userContext.id,
             direction: 'input',
             isNew: false,
-            createdAt: assistantContext.createdAt,
+            createdAt: userContext.createdAt,
           },
           {
             idx: 1,
@@ -380,7 +386,7 @@ describe('AgentsRunScreen', () => {
             createdAt: assistantContext.createdAt,
           },
         ],
-        responseText: 'Final response',
+        responseText: 'I am fine, thanks!',
         rawResponse: null,
         toolCalls: [
           {
@@ -413,7 +419,7 @@ describe('AgentsRunScreen', () => {
       totalEvents: 1,
     });
     runsHookMocks.events.mockReturnValue({ items: [event], nextCursor: null });
-    contextItemsMocks.getMany.mockImplementation(async () => [assistantContext]);
+    contextItemsMocks.getMany.mockImplementation(async () => [assistantContext, userContext]);
 
     const queryClient = new QueryClient();
 
@@ -427,7 +433,9 @@ describe('AgentsRunScreen', () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalledWith([assistantContext.id]));
+    await waitFor(() =>
+      expect(contextItemsMocks.getMany).toHaveBeenCalledWith(expect.arrayContaining([assistantContext.id, userContext.id])),
+    );
 
     await waitFor(() => expect(runScreenMocks.props).toHaveBeenCalled());
     const lastCall = runScreenMocks.props.mock.calls.at(-1);
@@ -436,11 +444,12 @@ describe('AgentsRunScreen', () => {
 
     const [capturedEvent] = capturedProps.events;
     const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
-    expect(context).toEqual([]);
-    const assistantOutputs = (capturedEvent.data.assistantContext as Record<string, unknown>[] | undefined) ?? [];
-    expect(assistantOutputs).toHaveLength(1);
-    expect(assistantOutputs[0]?.role).toBe('assistant');
-    expect(assistantOutputs[0]?.content).toContain('Final response');
+    expect(context).toHaveLength(2);
+    const [userEntry, assistantEntry] = context;
+    expect(userEntry.role).toBe('user');
+    expect(userEntry.content).toContain('How are you?');
+    expect(assistantEntry.role).toBe('assistant');
+    expect(assistantEntry.content).toContain('I am fine, thanks!');
   });
 
   it('highlights new user context items when IDs are provided', async () => {
@@ -497,13 +506,6 @@ describe('AgentsRunScreen', () => {
           },
           {
             idx: 2,
-            contextItemId: userContext.id,
-            direction: 'output',
-            isNew: false,
-            createdAt: userContext.createdAt,
-          },
-          {
-            idx: 3,
             contextItemId: assistantContext.id,
             direction: 'output',
             isNew: false,
@@ -561,16 +563,15 @@ describe('AgentsRunScreen', () => {
 
     const [capturedEvent] = capturedProps.events;
     const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
-    expect(context).toHaveLength(1);
-    const [userEntry] = context;
+    expect(context).toHaveLength(2);
+    const userEntry = context.find((entry) => entry.id === userContext.id) ?? context[0];
+    const assistantEntry = context.find((entry) => entry.id === assistantContext.id) ?? context[1];
     expect(userEntry.role).toBe('user');
     expect(userEntry.content).toBe('Please finish the draft.');
     expect(userEntry['__agynIsNew']).toBe(true);
-    const assistantOutputs = (capturedEvent.data.assistantContext as Record<string, unknown>[] | undefined) ?? [];
-    expect(assistantOutputs).toHaveLength(1);
-    const [assistantEntry] = assistantOutputs;
     expect(assistantEntry.role).toBe('assistant');
     expect(assistantEntry.content).toContain('Working on it.');
+    expect(assistantEntry['__agynIsNew']).toBeUndefined();
   });
 
   it('still excludes assistant contexts that contain only tool data', async () => {
@@ -673,10 +674,8 @@ describe('AgentsRunScreen', () => {
 
     const [capturedEvent] = capturedProps.events;
     const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
-    expect(context).toEqual([]);
-    const assistantOutputs = (capturedEvent.data.assistantContext as Record<string, unknown>[] | undefined) ?? [];
-    expect(assistantOutputs).toHaveLength(1);
-    const [assistantEntry] = assistantOutputs;
+    expect(context).toHaveLength(1);
+    const [assistantEntry] = context;
     expect(assistantEntry.role).toBe('assistant');
     expect(Array.isArray(assistantEntry.tool_calls) || Array.isArray(assistantEntry.toolCalls)).toBe(true);
   });
