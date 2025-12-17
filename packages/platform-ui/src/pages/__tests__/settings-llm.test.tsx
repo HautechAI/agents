@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import React from 'react';
 import userEvent from '@testing-library/user-event';
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { SettingsLlm } from '../../pages/SettingsLlm';
 import { server, TestProviders, abs } from '../../../__tests__/integration/testUtils';
@@ -62,6 +65,35 @@ vi.mock('@/lib/notify', () => ({
   notifySuccess: (...args: unknown[]) => notifyMocks.success(...args),
   notifyError: (...args: unknown[]) => notifyMocks.error(...args),
 }));
+
+const currentFile = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFile);
+const projectRoot = path.resolve(currentDir, '../../..');
+const llmFeaturesDir = path.join(projectRoot, 'src/features/llmSettings');
+const paddingClassPrefixes = ['p-', 'px-', 'py-', 'pt-', 'pb-', 'pl-', 'pr-'];
+
+function collectTsFiles(dir: string): string[] {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectTsFiles(fullPath));
+    } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+const LLM_SETTINGS_FILE_PATHS = [
+  path.join(projectRoot, 'src/components/screens/LlmSettingsScreen.tsx'),
+  ...collectTsFiles(llmFeaturesDir),
+];
+
+function containerHasPadding(element: HTMLElement): boolean {
+  return Array.from(element.classList).some((cls) => paddingClassPrefixes.some((prefix) => cls.startsWith(prefix)));
+}
 
 describe('Settings/LLM page', () => {
   beforeAll(() => server.listen());
@@ -151,6 +183,81 @@ describe('Settings/LLM page', () => {
     const modelRow = screen.getByTestId('llm-model-row-assistant-prod');
     expect(within(modelRow).getByText('openai-prod')).toBeInTheDocument();
     expect(within(modelRow).getByText('gpt-4o-mini')).toBeInTheDocument();
+  }, 12000);
+
+  it('matches the Secrets layout structure (single header, flush tables, sticky tabs)', async () => {
+    const providers = [
+      {
+        provider: 'OpenAI',
+        provider_display_name: 'OpenAI',
+        litellm_provider: 'openai',
+        credential_fields: [
+          { key: 'api_key', label: 'OpenAI API Key', field_type: 'password', required: true, placeholder: null, tooltip: null, options: null, default_value: null },
+        ],
+        default_model_placeholder: 'gpt-4o-mini',
+      },
+    ];
+    const credentialRecords = [
+      {
+        credential_name: 'openai-prod',
+        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_values: { api_key: 'sk****prod' },
+      },
+    ];
+    const modelRecords = [
+      {
+        model_name: 'assistant-prod',
+        litellm_params: {
+          model: 'gpt-4o-mini',
+          custom_llm_provider: 'openai',
+          litellm_credential_name: 'openai-prod',
+          temperature: 0.4,
+        },
+        model_info: { id: 'assistant-prod', mode: 'chat', rpm: 120, tpm: 60000 },
+      },
+    ];
+
+    server.use(
+      http.get(abs('/api/settings/llm/admin-status'), () =>
+        HttpResponse.json({
+          configured: true,
+          baseUrl: 'http://127.0.0.1:4000',
+          hasMasterKey: true,
+          provider: 'litellm',
+          adminReachable: true,
+        }),
+      ),
+      http.get(abs('/api/settings/llm/providers'), () => HttpResponse.json(providers)),
+      http.get(abs('/api/settings/llm/credentials'), () => HttpResponse.json(credentialRecords)),
+      http.get(abs('/api/settings/llm/models'), () => HttpResponse.json({ models: modelRecords })),
+      http.get(abs('/api/settings/llm/health-check-modes'), () => HttpResponse.json({ modes: DEFAULT_HEALTH_CHECK_MODES })),
+    );
+
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <TestProviders>
+        <SettingsLlm />
+      </TestProviders>,
+    );
+
+    await screen.findByText('openai-prod');
+
+    const screenRoot = screen.getByTestId('llm-settings-screen');
+    const header = screen.getByTestId('llm-settings-header');
+    const tabs = screen.getByTestId('llm-settings-tabs');
+    expect(screenRoot.firstElementChild).toBe(header);
+    expect(header.nextElementSibling).toBe(tabs);
+    expect(within(header).getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(within(tabs).getByRole('tablist')).toBeInTheDocument();
+
+    const credentialContainer = screen.getByTestId('llm-credentials-table-container');
+    expect(containerHasPadding(credentialContainer)).toBe(false);
+
+    const modelsTab = screen.getByRole('tab', { name: 'Models' });
+    await user.click(modelsTab);
+    await screen.findByTestId('llm-models-table-container');
+    const modelsContainer = screen.getByTestId('llm-models-table-container');
+    expect(containerHasPadding(modelsContainer)).toBe(false);
   }, 12000);
 
   it('shows provider warning when LiteLLM admin is reachable but no providers are detected', async () => {
@@ -471,7 +578,7 @@ describe('Settings/LLM page', () => {
     const deleteButton = screen.getByLabelText('Delete credential openai-prod');
     await user.click(deleteButton);
 
-    const confirmDialog = await screen.findByRole('alertdialog');
+    const confirmDialog = await screen.findByRole('dialog');
     const confirmButton = within(confirmDialog).getByRole('button', { name: 'Delete' });
     await user.click(confirmButton);
 
@@ -534,16 +641,9 @@ describe('Settings/LLM page', () => {
     const dialog = await screen.findByRole('dialog', { name: /Test Credential/i });
     const modeCombobox = within(dialog).getByRole('combobox');
     await waitFor(() => expect(modeCombobox).toBeEnabled());
-    fireEvent.pointerDown(modeCombobox);
-    fireEvent.keyDown(modeCombobox, { key: 'ArrowDown' });
-
-    await waitFor(() => {
-      const items = Array.from(document.querySelectorAll('[data-slot="select-item"]')) as HTMLElement[];
-      expect(items).toHaveLength(modeOptions.length);
-      const optionLabels = items.map((item) => item.textContent);
-      expect(optionLabels).toEqual(modeOptions);
-      expect(optionLabels).not.toContain('moderation');
-    });
+    const renderedOptions = Array.from(modeCombobox.querySelectorAll('option:not([hidden])')) as HTMLOptionElement[];
+    const optionLabels = renderedOptions.map((option) => option.textContent?.trim());
+    expect(optionLabels).toEqual(modeOptions);
   });
 
   it('disables admin actions and shows banner when LiteLLM admin auth is missing', async () => {
@@ -761,5 +861,12 @@ describe('Settings/LLM page', () => {
     await user.click(modelsTab);
     const addModelButton = await screen.findByRole('button', { name: 'Add Model' });
     expect(addModelButton).toBeDisabled();
+  });
+
+  it('disallows direct @/components/ui imports inside LiteLLM settings files', () => {
+    for (const filePath of LLM_SETTINGS_FILE_PATHS) {
+      const contents = readFileSync(filePath, 'utf8');
+      expect(contents).not.toMatch(/@\/components\/ui\//);
+    }
   });
 });

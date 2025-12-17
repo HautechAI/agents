@@ -2,7 +2,6 @@ import type { ReactElement } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Play, Pencil, Trash2 } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { IconButton } from '@/components/IconButton';
 import { Badge } from '@/components/Badge';
 import type { ModelRecord } from '../types';
@@ -26,22 +25,21 @@ export function ModelsTab({ models, loading, readOnly, canCreateModel, error, on
   const showErrorState = Boolean(error) && models.length === 0 && !loading;
 
   return (
-    <section className="flex h-full flex-col gap-4">
-
+    <div className="flex h-full flex-col overflow-hidden bg-white" data-testid="llm-models-panel">
       {!canCreateModel ? (
-        <Alert className="rounded-[14px] border border-dashed border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)]/60 text-[var(--agyn-text-subtle)]">
-          <AlertTitle className="text-[var(--agyn-dark)]">Models require credentials</AlertTitle>
-          <AlertDescription>
+        <div className="border-b border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-3 text-sm text-[var(--agyn-text-subtle)]">
+          <p className="font-semibold text-[var(--agyn-dark)]">Models require credentials</p>
+          <p className="mt-1">
             Create at least one credential before adding models. Models reference stored credentials for LiteLLM access.
-          </AlertDescription>
-        </Alert>
+          </p>
+        </div>
       ) : null}
 
       {showErrorState ? (
-        <Alert variant="destructive">
-          <AlertTitle>Unable to load models</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div role="alert" className="border-b border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-4 text-sm">
+          <p className="font-semibold text-[var(--agyn-dark)]">Unable to load models</p>
+          <p className="mt-1 text-[var(--agyn-text-subtle)]">{error}</p>
+        </div>
       ) : (
         <Tooltip.Provider delayDuration={tooltipDelay}>
           <div data-testid="llm-models-table-container" className="flex-1 overflow-auto">
@@ -215,11 +213,9 @@ export function ModelsTab({ models, loading, readOnly, canCreateModel, error, on
         </Tooltip.Provider>
       )}
 
-      <div className="text-sm text-[var(--agyn-text-subtle)]">
-        <p>
-          Include advanced params (e.g. mock responses) by adding JSON under “Advanced Params”. Values merge with LiteLLM payloads.
-        </p>
+      <div className="border-t border-[var(--agyn-border-subtle)] bg-white px-6 py-4 text-sm text-[var(--agyn-text-subtle)]">
+        Include advanced params (e.g. mock responses) by adding JSON under “Advanced Params”. Values merge with LiteLLM payloads.
       </div>
-    </section>
+    </div>
   );
 }

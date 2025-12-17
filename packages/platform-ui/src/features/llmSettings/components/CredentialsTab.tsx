@@ -2,7 +2,6 @@ import type { ReactElement } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Play, Pencil, Trash2 } from 'lucide-react';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { IconButton } from '@/components/IconButton';
 import { Badge } from '@/components/Badge';
 import type { CredentialRecord, ProviderOption } from '../types';
@@ -39,18 +38,18 @@ export function CredentialsTab({
   const showProviderNotice = providerCount === 0 && showProviderWarning;
 
   return (
-    <section className="flex h-full flex-col gap-4">
+    <div className="flex h-full flex-col overflow-hidden bg-white" data-testid="llm-credentials-panel">
       {showProviderNotice ? (
-        <div className="rounded-[14px] border border-dashed border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)]/60 px-4 py-3 text-sm text-[var(--agyn-text-subtle)]">
+        <div className="border-b border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-3 text-sm text-[var(--agyn-text-subtle)]">
           No LiteLLM providers detected. Ensure the LiteLLM admin API is reachable and refresh this page.
         </div>
       ) : null}
 
       {showErrorState ? (
-        <Alert variant="destructive">
-          <AlertTitle>Unable to load credentials</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div role="alert" className="border-b border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-4 text-sm">
+          <p className="font-semibold text-[var(--agyn-dark)]">Unable to load credentials</p>
+          <p className="mt-1 text-[var(--agyn-text-subtle)]">{error}</p>
+        </div>
       ) : (
         <Tooltip.Provider delayDuration={tooltipDelay}>
           <div data-testid="llm-credentials-table-container" className="flex-1 overflow-auto">
@@ -216,20 +215,18 @@ export function CredentialsTab({
         </Tooltip.Provider>
       )}
 
-      <div className="text-sm text-[var(--agyn-text-subtle)]">
-        <p>
-          Need help mapping providers? Refer to LiteLLM{' '}
-          <a
-            href="https://docs.litellm.ai/docs/providers"
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-[var(--agyn-blue)] underline-offset-4 hover:underline"
-          >
-            provider documentation
-          </a>
-          .
-        </p>
+      <div className="border-t border-[var(--agyn-border-subtle)] bg-white px-6 py-4 text-sm text-[var(--agyn-text-subtle)]">
+        Need help mapping providers? Refer to LiteLLM{' '}
+        <a
+          href="https://docs.litellm.ai/docs/providers"
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-[var(--agyn-blue)] underline-offset-4 hover:underline"
+        >
+          provider documentation
+        </a>
+        .
       </div>
-    </section>
+    </div>
   );
 }

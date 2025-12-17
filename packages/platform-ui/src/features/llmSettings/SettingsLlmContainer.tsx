@@ -2,15 +2,14 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import axios from 'axios';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  ScreenDialog,
+  ScreenDialogContent,
+  ScreenDialogDescription,
+  ScreenDialogFooter,
+  ScreenDialogHeader,
+  ScreenDialogTitle,
+} from '@/components/Dialog';
+import { Button } from '@/components/Button';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import {
   createCredential,
@@ -540,17 +539,21 @@ export function SettingsLlmContainer(): ReactElement {
         />
       ) : null}
 
-      <AlertDialog open={deleteState !== null} onOpenChange={(open) => !open && setDeleteState(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteState?.type === 'credential' ? 'Credential' : 'Model'}?</AlertDialogTitle>
-            <AlertDialogDescription>
+      <ScreenDialog open={deleteState !== null} onOpenChange={(open) => !open && setDeleteState(null)}>
+        <ScreenDialogContent className="sm:max-w-md">
+          <ScreenDialogHeader>
+            <ScreenDialogTitle>Delete {deleteState?.type === 'credential' ? 'Credential' : 'Model'}?</ScreenDialogTitle>
+            <ScreenDialogDescription>
               This action cannot be undone. References to the {deleteState?.type ?? 'item'} will fail once removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteSubmitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            </ScreenDialogDescription>
+          </ScreenDialogHeader>
+          <ScreenDialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteState(null)} disabled={deleteSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
               disabled={deleteSubmitting}
               onClick={() => {
                 if (!ensureWritable()) return;
@@ -565,10 +568,10 @@ export function SettingsLlmContainer(): ReactElement {
               }}
             >
               {deleteSubmitting ? 'Deleting…' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </ScreenDialogFooter>
+        </ScreenDialogContent>
+      </ScreenDialog>
     </>
   );
 }

@@ -8,12 +8,12 @@ import {
   ScreenDialogHeader,
   ScreenDialogTitle,
 } from '@/components/Dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { Textarea } from '@/components/Textarea';
+import { SelectInput } from '@/components/SelectInput';
+import { SwitchControl } from '@/components/SwitchControl';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/forms/Form';
 import type { CredentialRecord, ModelRecord, ProviderOption } from '../types';
 
 type ModelFormValues = FieldValues & {
@@ -238,18 +238,15 @@ export function ModelFormDialog({
                 <FormItem>
                   <FormLabel>Provider</FormLabel>
                   <FormControl>
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select provider" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {providers.map((provider) => (
-                          <SelectItem key={provider.litellmProvider} value={provider.litellmProvider}>
-                            {provider.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SelectInput
+                      value={field.value ?? ''}
+                      onChange={(event) => field.onChange(event.target.value)}
+                      placeholder="Select provider"
+                      options={providers.map((provider) => ({
+                        value: provider.litellmProvider,
+                        label: provider.label,
+                      }))}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -280,18 +277,15 @@ export function ModelFormDialog({
                 <FormItem>
                   <FormLabel>Credential</FormLabel>
                   <FormControl>
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select credential" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableCredentials.map((credentialOption) => (
-                          <SelectItem key={credentialOption.name} value={credentialOption.name}>
-                            {credentialOption.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SelectInput
+                      value={field.value ?? ''}
+                      onChange={(event) => field.onChange(event.target.value)}
+                      placeholder="Select credential"
+                      options={availableCredentials.map((credentialOption) => ({
+                        value: credentialOption.name,
+                        label: credentialOption.name,
+                      }))}
+                    />
                   </FormControl>
                   <FormDescription>
                     Credentials filtered by provider when available.
@@ -335,7 +329,7 @@ export function ModelFormDialog({
                     <FormDescription>Allow streaming responses when agents use this model.</FormDescription>
                   </div>
                   <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    <SwitchControl checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                 </FormItem>
               )}

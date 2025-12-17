@@ -8,11 +8,11 @@ import {
   ScreenDialogHeader,
   ScreenDialogTitle,
 } from '@/components/Dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { Textarea } from '@/components/Textarea';
+import { SelectInput } from '@/components/SelectInput';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/forms/Form';
 import type { CredentialRecord, ProviderField, ProviderOption } from '../types';
 
 type CredentialFormValues = FieldValues & {
@@ -207,22 +207,16 @@ export function CredentialFormDialog({
                 <FormItem>
                   <FormLabel>Provider</FormLabel>
                   <FormControl>
-                    <Select
+                    <SelectInput
                       value={field.value ?? ''}
-                      onValueChange={(value) => field.onChange(value)}
+                      onChange={(event) => field.onChange(event.target.value)}
                       disabled={providers.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select provider" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {providers.map((provider) => (
-                          <SelectItem key={provider.litellmProvider} value={provider.litellmProvider}>
-                            {provider.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Select provider"
+                      options={providers.map((provider) => ({
+                        value: provider.litellmProvider,
+                        label: provider.label,
+                      }))}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -263,7 +257,7 @@ export function CredentialFormDialog({
                           <FormItem>
                             <FormLabel>{fieldDef.label}</FormLabel>
                             <FormControl>
-                              {renderFieldInput(fieldDef, field.value ?? '', field.onChange, isMasked)}
+                            {renderFieldInput(fieldDef, field.value ?? '', field.onChange, isMasked)}
                             </FormControl>
                             {description ? <FormDescription>{description}</FormDescription> : null}
                             <FormMessage />
@@ -301,18 +295,12 @@ function renderFieldInput(field: ProviderField, value: string, onChange: FieldCh
 
   if (field.type === 'select' && field.options) {
     return (
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select option" />
-        </SelectTrigger>
-        <SelectContent>
-          {field.options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SelectInput
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Select option"
+        options={field.options.map((option) => ({ value: option, label: option }))}
+      />
     );
   }
 

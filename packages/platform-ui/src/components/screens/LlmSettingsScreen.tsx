@@ -1,18 +1,5 @@
-import type { ReactNode } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import {
-  Screen,
-  ScreenActions,
-  ScreenBody,
-  ScreenContent,
-  ScreenDescription,
-  ScreenHeader,
-  ScreenHeaderContent,
-  ScreenTabs,
-  ScreenTitle,
-} from '@/components/ui/screen';
-import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { KeyboardEvent, ReactNode } from 'react';
+import { Button } from '@/components/Button';
 import { CredentialsTab } from '@/features/llmSettings/components/CredentialsTab';
 import { ModelsTab } from '@/features/llmSettings/components/ModelsTab';
 import type { CredentialRecord, ModelRecord, ProviderOption } from '@/features/llmSettings/types';
@@ -71,9 +58,9 @@ export function LlmSettingsScreen({
   onModelTest,
   onModelDelete,
 }: LlmSettingsScreenProps) {
-  const handleTabChange = (value: string) => {
+  const handleTabChange = (value: TabValue) => {
     if (value === activeTab) return;
-    onTabChange?.(value as TabValue);
+    onTabChange?.(value);
   };
 
   const showProviderNotice = showProviderWarning && !adminBanner;
@@ -92,77 +79,113 @@ export function LlmSettingsScreen({
         };
 
   const showPrimaryAction = Boolean(primaryAction.handler);
+  const tabs: { label: string; value: TabValue; id: string; panelId: string }[] = [
+    { label: 'Credentials', value: 'credentials', id: 'llm-settings-tab-credentials', panelId: 'llm-settings-panel-credentials' },
+    { label: 'Models', value: 'models', id: 'llm-settings-tab-models', panelId: 'llm-settings-panel-models' },
+  ];
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, value: TabValue) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
+    const currentIndex = tabs.findIndex((tab) => tab.value === value);
+    if (currentIndex === -1) return;
+    const nextIndex = event.key === 'ArrowRight'
+      ? (currentIndex + 1) % tabs.length
+      : (currentIndex - 1 + tabs.length) % tabs.length;
+    const nextTab = tabs[nextIndex];
+    handleTabChange(nextTab.value);
+    const nextButton = document.getElementById(nextTab.id);
+    nextButton?.focus();
+  };
 
   return (
-    <Screen className="bg-background">
-      <ScreenHeader className="border-b border-border/60 bg-background">
+    <div className="flex h-full flex-col bg-white" data-testid="llm-settings-screen">
+      <div className="border-b border-[var(--agyn-border-subtle)] px-6 py-4" data-testid="llm-settings-header">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <ScreenHeaderContent className="gap-2">
-            <ScreenTitle>LLM Settings</ScreenTitle>
-            <ScreenDescription>
+          <div>
+            <h1 className="text-xl font-semibold text-[var(--agyn-dark)]">LLM Settings</h1>
+            <p className="mt-1 text-sm text-[var(--agyn-text-subtle)]">
               Administer LiteLLM credentials and models used across agents and workflows.
-            </ScreenDescription>
-          </ScreenHeaderContent>
+            </p>
+          </div>
           {showPrimaryAction ? (
-            <ScreenActions>
-              <Button onClick={() => primaryAction.handler?.()} disabled={primaryAction.disabled}>
-                {primaryAction.label}
-              </Button>
-            </ScreenActions>
+            <Button
+              onClick={() => primaryAction.handler?.()}
+              disabled={primaryAction.disabled}
+              size="sm"
+            >
+              {primaryAction.label}
+            </Button>
           ) : null}
         </div>
-      </ScreenHeader>
+      </div>
 
-      <ScreenTabs
-        className="flex h-full flex-col gap-0"
-        value={activeTab}
-        onValueChange={handleTabChange}
-      >
-        <div className="border-b border-border/60 bg-background px-8 pb-4 pt-2">
-          <TabsList className="bg-transparent p-0">
-            <TabsTrigger value="credentials">Credentials</TabsTrigger>
-            <TabsTrigger value="models">Models</TabsTrigger>
-          </TabsList>
+      <div className="border-b border-[var(--agyn-border-subtle)] bg-white px-6 py-3" data-testid="llm-settings-tabs">
+        <div role="tablist" aria-label="LLM settings" className="flex items-center gap-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.value}
+              role="tab"
+              type="button"
+              aria-selected={activeTab === tab.value}
+              id={tab.id}
+              aria-controls={tab.panelId}
+              tabIndex={activeTab === tab.value ? 0 : -1}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === tab.value
+                  ? 'bg-[var(--agyn-blue)]/10 text-[var(--agyn-blue)] shadow-[inset_0_0_0_1px_var(--agyn-blue)/40]'
+                  : 'text-[var(--agyn-text-subtle)] hover:bg-[var(--agyn-bg-light)]'
+              }`}
+              onKeyDown={(event) => handleTabKeyDown(event, tab.value)}
+              onClick={() => handleTabChange(tab.value)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <ScreenBody>
-          {adminBanner ? (
-            <Alert variant="destructive">
-              <AlertTitle>{adminBanner.title}</AlertTitle>
-              <AlertDescription>{adminBanner.description}</AlertDescription>
-            </Alert>
-          ) : null}
+      {adminBanner ? (
+        <div
+          role="alert"
+          className="border-b border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] px-6 py-4"
+        >
+          <p className="font-semibold text-[var(--agyn-dark)]">{adminBanner.title}</p>
+          <div className="mt-1 text-sm text-[var(--agyn-text-subtle)]">{adminBanner.description}</div>
+        </div>
+      ) : null}
 
-          <ScreenContent className="flex-1">
-            <TabsContent value="credentials" className="flex flex-1 flex-col">
-              <CredentialsTab
-                credentials={credentials}
-                providers={providers}
-                loading={loadingCredentials}
-                readOnly={readOnly}
-                showProviderWarning={showProviderNotice}
-                error={credentialsError}
-                onEdit={(credential) => onCredentialEdit?.(credential)}
-                onTest={(credential) => onCredentialTest?.(credential)}
-                onDelete={(credential) => onCredentialDelete?.(credential)}
-              />
-            </TabsContent>
-            <TabsContent value="models" className="flex flex-1 flex-col">
-              <ModelsTab
-                models={models}
-                loading={loadingModels}
-                readOnly={readOnly}
-                canCreateModel={canCreateModel}
-                error={modelsError}
-                onEdit={(model) => onModelEdit?.(model)}
-                onTest={(model) => onModelTest?.(model)}
-                onDelete={(model) => onModelDelete?.(model)}
-              />
-            </TabsContent>
-          </ScreenContent>
-        </ScreenBody>
-      </ScreenTabs>
-    </Screen>
+      <div className="flex-1 overflow-hidden bg-white">
+        {activeTab === 'credentials' ? (
+          <div role="tabpanel" id="llm-settings-panel-credentials" aria-labelledby="llm-settings-tab-credentials" className="h-full">
+            <CredentialsTab
+              credentials={credentials}
+              providers={providers}
+              loading={loadingCredentials}
+              readOnly={readOnly}
+              showProviderWarning={showProviderNotice}
+              error={credentialsError}
+              onEdit={(credential) => onCredentialEdit?.(credential)}
+              onTest={(credential) => onCredentialTest?.(credential)}
+              onDelete={(credential) => onCredentialDelete?.(credential)}
+            />
+          </div>
+        ) : (
+          <div role="tabpanel" id="llm-settings-panel-models" aria-labelledby="llm-settings-tab-models" className="h-full">
+            <ModelsTab
+              models={models}
+              loading={loadingModels}
+              readOnly={readOnly}
+              canCreateModel={canCreateModel}
+              error={modelsError}
+              onEdit={(model) => onModelEdit?.(model)}
+              onTest={(model) => onModelTest?.(model)}
+              onDelete={(model) => onModelDelete?.(model)}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

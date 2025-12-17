@@ -8,11 +8,11 @@ import {
   ScreenDialogHeader,
   ScreenDialogTitle,
 } from '@/components/Dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { Textarea } from '@/components/Textarea';
+import { SelectInput } from '@/components/SelectInput';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/forms/Form';
 
 interface TestCredentialFormValues {
   model: string;
@@ -100,18 +100,13 @@ export function TestCredentialDialog({
                 <FormItem>
                   <FormLabel>Mode</FormLabel>
                   <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange} disabled={healthCheckModesLoading}>
-                      <SelectTrigger disabled={healthCheckModesLoading}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {healthCheckModes.map((modeOption) => (
-                          <SelectItem key={modeOption} value={modeOption}>
-                            {modeOption}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SelectInput
+                      value={field.value}
+                      onChange={(event) => field.onChange(event.target.value)}
+                      disabled={healthCheckModesLoading}
+                      placeholder="Select mode"
+                      options={healthCheckModes.map((modeOption) => ({ value: modeOption, label: modeOption }))}
+                    />
                   </FormControl>
                   <FormDescription>LiteLLM request mode for the test invocation.</FormDescription>
                 </FormItem>
