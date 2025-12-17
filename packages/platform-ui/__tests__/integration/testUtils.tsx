@@ -2,9 +2,7 @@ import React from 'react';
 import { setupServer } from 'msw/node';
 import { http as _http, HttpResponse as _HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TemplatesProvider } from '../../src/lib/graph/templates.provider';
 import type { NodeStatusEvent, TemplateSchema } from '../../src/lib/graph/types';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { createServer, type Server as HttpServer } from 'node:http';
 import { Server as SocketIOServer } from 'socket.io';
 import { graphSocket } from '../../src/lib/graph/socket';
@@ -368,12 +366,5 @@ export const server = setupServer(...handlers);
 
 export function TestProviders({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient();
-  return (
-    <QueryClientProvider client={qc}>
-      {/* Match app root providers; ensure tooltip context exists in tests */}
-      <TooltipProvider delayDuration={0}>
-        <TemplatesProvider>{children}</TemplatesProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }

@@ -7,7 +7,6 @@ import { UserProvider } from './user/UserProvider';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {initConfigViewsRegistry()}
     <BrowserRouter>
       <UserProvider>
         <App />
