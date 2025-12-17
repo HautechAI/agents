@@ -13,7 +13,8 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "test:watch": "vitest",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "storybook:test": "node ./scripts/run-storybook-smoke.mjs"
   },
   "dependencies": {
     "@agyn/shared": "workspace:*",
