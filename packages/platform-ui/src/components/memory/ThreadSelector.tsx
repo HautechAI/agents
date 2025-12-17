@@ -1,6 +1,3 @@
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
 type ThreadSelectorProps = {
   threads: string[];
   value?: string | null;
@@ -14,24 +11,24 @@ export function ThreadSelector({ threads, value, onChange }: ThreadSelectorProps
 
   return (
     <div className="space-y-1">
-      <Label htmlFor="memory-thread-selector">Thread</Label>
-      <Select
-        value={value ?? undefined}
-        onValueChange={(next) => {
-          onChange(next);
-        }}
+      <label htmlFor="memory-thread-selector" className="text-sm font-medium">
+        Thread
+      </label>
+      <select
+        id="memory-thread-selector"
+        className="w-full rounded-md border border-[var(--agyn-border-light)] bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--agyn-blue)]"
+        value={value ?? ''}
+        onChange={(event) => onChange(event.target.value)}
       >
-        <SelectTrigger id="memory-thread-selector" className="w-full">
-          <SelectValue placeholder="Select thread" />
-        </SelectTrigger>
-        <SelectContent>
-          {threads.map((threadId) => (
-            <SelectItem key={threadId} value={threadId}>
-              {threadId}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <option value="" disabled>
+          Select thread
+        </option>
+        {threads.map((threadId) => (
+          <option key={threadId} value={threadId}>
+            {threadId}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

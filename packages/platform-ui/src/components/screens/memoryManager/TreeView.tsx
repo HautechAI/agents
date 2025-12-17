@@ -3,7 +3,6 @@ import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { IconButton } from '@/components/IconButton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   type MemoryTree,
   type MemoryNode,
@@ -199,16 +198,13 @@ export function TreeView({
               ) : (
                 <span className="h-8 w-8 shrink-0" aria-hidden="true" />
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="truncate" aria-label={node.name}>
-                    {node.name}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="start">
-                  {node.name}
-                </TooltipContent>
-              </Tooltip>
+              <span
+                className="truncate"
+                aria-label={node.name}
+                title={node.name}
+              >
+                {node.name}
+              </span>
             </div>
             <div
               className={cn(
@@ -217,47 +213,39 @@ export function TreeView({
                 isSelected && 'opacity-100 pointer-events-auto',
               )}
             >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    tabIndex={-1}
-                    aria-label="Add subdocument"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onAddChild(node.path);
-                    }}
-                    icon={<Plus className="size-4" />}
-                    className={cn(
-                      'rounded-md text-[var(--sidebar-foreground)]/60 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sidebar-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                      isSelected && 'text-[var(--sidebar-accent-foreground)]',
-                    )}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="top">Add subdocument</TooltipContent>
-              </Tooltip>
+              <IconButton
+                variant="ghost"
+                size="sm"
+                tabIndex={-1}
+                aria-label="Add subdocument"
+                title="Add subdocument"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAddChild(node.path);
+                }}
+                icon={<Plus className="size-4" />}
+                className={cn(
+                  'rounded-md text-[var(--sidebar-foreground)]/60 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sidebar-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  isSelected && 'text-[var(--sidebar-accent-foreground)]',
+                )}
+              />
               {node.path !== '/' ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      tabIndex={-1}
-                      aria-label="Delete document"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDelete(node.path);
-                      }}
-                      icon={<Trash2 className="size-4" />}
-                      className={cn(
-                        'rounded-md text-[var(--sidebar-foreground)]/60 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sidebar-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                        isSelected && 'text-[var(--sidebar-accent-foreground)]',
-                      )}
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Delete document</TooltipContent>
-                </Tooltip>
+                <IconButton
+                  variant="ghost"
+                  size="sm"
+                  tabIndex={-1}
+                  aria-label="Delete document"
+                  title="Delete document"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete(node.path);
+                  }}
+                  icon={<Trash2 className="size-4" />}
+                  className={cn(
+                    'rounded-md text-[var(--sidebar-foreground)]/60 hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sidebar-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                    isSelected && 'text-[var(--sidebar-accent-foreground)]',
+                  )}
+                />
               ) : null}
             </div>
           </div>

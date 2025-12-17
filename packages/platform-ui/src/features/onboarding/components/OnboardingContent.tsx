@@ -2,10 +2,8 @@ import { useEffect, useMemo } from 'react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 
-import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/components/ui/utils';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
 
 import type { OnboardingStatusResponse } from '../api';
 import { EMPTY_PROFILE, type ProfileFormValues } from '../lib/profile';
@@ -18,6 +16,10 @@ const STEP_COPY: Record<string, { title: string; description: string }> = {
     description: 'Add your first name, last name, and a contact email so agents know who you are.',
   },
 };
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
 
 export type OnboardingContentProps = {
   status: OnboardingStatusResponse;
@@ -117,7 +119,7 @@ function StepList({
                 <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-500" />
               ) : (
                 <span
-                  className={cn(
+                  className={cx(
                     'mt-0.5 h-5 w-5 rounded-full border border-[var(--agyn-border-light)]',
                     isActive && 'border-[var(--agyn-blue)] bg-[rgba(67,97,238,0.08)]',
                   )}
@@ -144,88 +146,103 @@ function ProfileStepForm({
   onSubmit: (values: ProfileFormValues) => Promise<void>;
   isSubmitting: boolean;
 }) {
-  const form = useForm<ProfileFormValues>({
+  const {
+    handleSubmit,
+    register,
+    formState: { errors },
+    reset,
+  } = useForm<ProfileFormValues>({
     defaultValues: initialValues ?? EMPTY_PROFILE,
   });
 
   useEffect(() => {
-    form.reset(initialValues ?? EMPTY_PROFILE);
-  }, [initialValues, form]);
+    reset(initialValues ?? EMPTY_PROFILE);
+  }, [initialValues, reset]);
+
+  const onSubmitForm = handleSubmit(async (values) => {
+    await onSubmit(values);
+  });
 
   return (
-    <Form {...form}>
-      <form
-        className="space-y-4"
-        onSubmit={form.handleSubmit(async (values) => {
-          await onSubmit(values);
-        })}
-      >
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold">Profile basics</h3>
-          <p className="text-sm text-muted-foreground">
-            We use this information to personalize agent assignments and notifications.
-          </p>
-        </div>
+    <form className="space-y-4" onSubmit={onSubmitForm}>
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold">Profile basics</h3>
+        <p className="text-sm text-muted-foreground">
+          We use this information to personalize agent assignments and notifications.
+        </p>
+      </div>
 
-        <FormField
-          control={form.control}
-          name="firstName"
-          rules={{
+      <div className="space-y-1">
+        <label htmlFor="firstName" className="text-sm font-medium">
+          First name
+        </label>
+        <Input
+          id="firstName"
+          autoComplete="given-name"
+          placeholder="Jane"
+          {...register('firstName', {
             required: 'First name is required',
             validate: (value) => value.trim().length > 0 || 'First name is required',
-          }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>First name</FormLabel>
-              <FormControl>
-                <Input {...field} autoComplete="given-name" placeholder="Jane" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          })}
+          aria-invalid={errors.firstName ? 'true' : undefined}
+          aria-describedby={errors.firstName ? 'firstName-error' : undefined}
         />
+        {errors.firstName && (
+          <p id="firstName-error" role="alert" className="text-xs text-red-500">
+            {errors.firstName.message}
+          </p>
+        )}
+      </div>
 
-        <FormField
-          control={form.control}
-          name="lastName"
-          rules={{
+      <div className="space-y-1">
+        <label htmlFor="lastName" className="text-sm font-medium">
+          Last name
+        </label>
+        <Input
+          id="lastName"
+          autoComplete="family-name"
+          placeholder="Doe"
+          {...register('lastName', {
             required: 'Last name is required',
             validate: (value) => value.trim().length > 0 || 'Last name is required',
-          }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Last name</FormLabel>
-              <FormControl>
-                <Input {...field} autoComplete="family-name" placeholder="Doe" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          })}
+          aria-invalid={errors.lastName ? 'true' : undefined}
+          aria-describedby={errors.lastName ? 'lastName-error' : undefined}
         />
+        {errors.lastName && (
+          <p id="lastName-error" role="alert" className="text-xs text-red-500">
+            {errors.lastName.message}
+          </p>
+        )}
+      </div>
 
-        <FormField
-          control={form.control}
-          name="email"
-          rules={{
+      <div className="space-y-1">
+        <label htmlFor="email" className="text-sm font-medium">
+          Email
+        </label>
+        <Input
+          id="email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          {...register('email', {
             required: 'Email is required',
             validate: (value) => /.+@.+\..+/.test(value.trim()) || 'Enter a valid email',
-          }}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input {...field} type="email" autoComplete="email" placeholder="you@example.com" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          })}
+          aria-invalid={errors.email ? 'true' : undefined}
+          aria-describedby={errors.email ? 'email-error' : undefined}
         />
+        {errors.email && (
+          <p id="email-error" role="alert" className="text-xs text-red-500">
+            {errors.email.message}
+          </p>
+        )}
+      </div>
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save and continue
-        </Button>
-      </form>
-    </Form>
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
+        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save and continue
+      </Button>
+    </form>
   );
 }
 

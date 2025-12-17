@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import NodePropertiesSidebar from '../index';
 import type { NodeConfig, NodePropertiesSidebarProps, NodeState } from '../types';
 import { TOOL_NAME_HINT } from '../toolNameHint';
-import { TooltipProvider } from '@/components/ui/tooltip';
 
 function setup(overrides?: Partial<NodePropertiesSidebarProps>) {
   const { config: configOverride, state: stateOverride, onConfigChange: overrideOnConfigChange, ...rest } = overrides ?? {};
@@ -23,17 +22,15 @@ function setup(overrides?: Partial<NodePropertiesSidebarProps>) {
   } as NodeState;
 
   render(
-    <TooltipProvider delayDuration={0}>
-      <NodePropertiesSidebar
-        config={config}
-        state={state}
-        displayTitle={config.title}
-        onConfigChange={onConfigChange}
-        tools={[]}
-        enabledTools={[]}
-        {...rest}
-      />
-    </TooltipProvider>,
+    <NodePropertiesSidebar
+      config={config}
+      state={state}
+      displayTitle={config.title}
+      onConfigChange={onConfigChange}
+      tools={[]}
+      enabledTools={[]}
+      {...rest}
+    />,
   );
 
   const input = screen.getByPlaceholderText('shell_command');
@@ -47,15 +44,10 @@ describe('NodePropertiesSidebar tool name field', () => {
   });
 
   it('shows the name requirements in a tooltip', async () => {
-    const user = userEvent.setup();
     setup();
 
     const tooltipTrigger = screen.getByLabelText(TOOL_NAME_HINT);
-    await user.hover(tooltipTrigger);
-
-    await waitFor(() => {
-      expect(screen.getAllByText(TOOL_NAME_HINT).length).toBeGreaterThan(0);
-    });
+    expect(tooltipTrigger).toHaveAttribute('title', TOOL_NAME_HINT);
   });
 
   it('emits updates for valid tool names', async () => {

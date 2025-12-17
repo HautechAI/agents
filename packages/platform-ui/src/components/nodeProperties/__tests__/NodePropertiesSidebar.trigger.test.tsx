@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import NodePropertiesSidebar from '../index';
 import type { NodeConfig, NodeState } from '../types';
-import { TooltipProvider } from '@/components/ui/tooltip';
 
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false;
@@ -40,14 +39,12 @@ function renderTriggerSidebar(overrides?: Partial<NodeConfig>) {
     };
 
     return (
-      <TooltipProvider delayDuration={0}>
-        <NodePropertiesSidebar
-          config={currentConfig}
-          state={state}
-          displayTitle={currentConfig.title}
-          onConfigChange={handleConfigChange}
-        />
-      </TooltipProvider>
+      <NodePropertiesSidebar
+        config={currentConfig}
+        state={state}
+        displayTitle={currentConfig.title}
+        onConfigChange={handleConfigChange}
+      />
     );
   }
 

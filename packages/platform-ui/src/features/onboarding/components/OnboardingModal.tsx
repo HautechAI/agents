@@ -7,7 +7,7 @@ import {
   ScreenDialogHeader,
   ScreenDialogTitle,
 } from '@/components/Dialog';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 
 import type { OnboardingStatusResponse } from '../api';
 import { useSaveOnboardingProfile } from '../hooks';

@@ -225,11 +225,14 @@ describe('ContainerTerminalDialog stability', () => {
     });
   });
 
-  it('renders only the header close control', () => {
-    render(<ContainerTerminalDialog container={container} open onClose={() => {}} />);
+  it('renders a single header close control and wires onClose', () => {
+    const onClose = vi.fn();
+    render(<ContainerTerminalDialog container={container} open onClose={onClose} />);
 
-    const closeButtons = document.querySelectorAll('[data-slot="dialog-close"]');
-    expect(closeButtons).toHaveLength(1);
+    const closeButton = screen.getByRole('button', { name: 'Close terminal' });
+    expect(closeButton).toBeInTheDocument();
+    fireEvent.click(closeButton);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the terminal session active when switching tabs', async () => {
