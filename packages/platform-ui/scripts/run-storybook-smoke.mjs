@@ -20,19 +20,19 @@ const BIN_DIRECTORY = path.resolve(
   '../node_modules/.bin',
 );
 
-function bin(name) {
+function ensureBin(name) {
   const extension = process.platform === 'win32' ? '.cmd' : '';
   const candidate = path.join(BIN_DIRECTORY, `${name}${extension}`);
 
   try {
-    accessSync(candidate, fsConstants.F_OK);
+    accessSync(candidate, fsConstants.X_OK);
     return candidate;
   } catch {
-    return `${name}${extension}`;
+    throw new Error(`Unable to locate executable for ${name} at ${candidate}`);
   }
 }
 
-const storybookProcess = spawn(bin('storybook'), ['dev', '--ci', '--host', HOST, '--port', PORT, '--no-open'], {
+const storybookProcess = spawn(ensureBin('storybook'), ['dev', '--ci', '--host', HOST, '--port', PORT, '--no-open'], {
   env,
   stdio: 'inherit',
 });
@@ -86,7 +86,7 @@ async function waitForServer() {
 async function runTests() {
   await new Promise((resolve, reject) => {
     const runner = spawn(
-      bin('test-storybook'),
+      ensureBin('test-storybook'),
       ['--ci', '--maxWorkers=2', '--testTimeout=60000', '--url', URL],
       { env, stdio: 'inherit' },
     );
