@@ -216,5 +216,106 @@ if (!shouldRunDbTests) {
 
       await cleanup(thread.id, run.id, Array.from(new Set([...ids, freshAssistantId])));
     });
+
+    it('promotes outputs from call N into call N+1 inputs', async () => {
+      const { thread, run } = await createThreadAndRun();
+      const createdIds = new Set<string>();
+
+      const [systemId, userOneId] = await createContextItems([
+        { role: ContextItemRole.system, contentText: 'system guardrails' },
+        { role: ContextItemRole.user, contentText: 'question #1' },
+      ]);
+      [systemId, userOneId].forEach((id) => createdIds.add(id));
+
+      const firstEvent = await runEvents.startLLMCall({
+        runId: run.id,
+        threadId: thread.id,
+        contextItemIds: [systemId, userOneId],
+        newContextItemIds: [userOneId],
+      });
+
+      const [assistantOneId, toolOneId] = await createContextItems([
+        { role: ContextItemRole.assistant, contentText: 'answer #1' },
+        { role: ContextItemRole.tool, contentText: 'tool output #1' },
+      ]);
+      [assistantOneId, toolOneId].forEach((id) => createdIds.add(id));
+
+      await runEvents.appendLLMCallContextItems({
+        eventId: firstEvent.id,
+        items: [
+          {
+            contextItemId: assistantOneId,
+            direction: LLMCallContextItemDirection.output,
+            isNew: false,
+            createdAt: new Date(),
+          },
+          {
+            contextItemId: toolOneId,
+            direction: LLMCallContextItemDirection.output,
+            isNew: false,
+            createdAt: new Date(),
+          },
+        ],
+      });
+
+      const [userTwoId] = await createContextItems([{ role: ContextItemRole.user, contentText: 'question #2' }]);
+      createdIds.add(userTwoId);
+
+      const secondEvent = await runEvents.startLLMCall({
+        runId: run.id,
+        threadId: thread.id,
+        contextItemIds: [systemId, userOneId, assistantOneId, toolOneId, userTwoId],
+        newContextItemIds: [assistantOneId, toolOneId, userTwoId],
+      });
+
+      const [assistantTwoId] = await createContextItems([{ role: ContextItemRole.assistant, contentText: 'answer #2' }]);
+      createdIds.add(assistantTwoId);
+
+      await runEvents.appendLLMCallContextItems({
+        eventId: secondEvent.id,
+        items: [
+          {
+            contextItemId: assistantTwoId,
+            direction: LLMCallContextItemDirection.output,
+            isNew: false,
+            createdAt: new Date(),
+          },
+        ],
+      });
+
+      const timeline = await runEvents.listRunEvents({ runId: run.id, limit: 10, order: 'asc' });
+      const llmEvents = timeline.items.filter((item) => item.llmCall);
+      expect(llmEvents).toHaveLength(2);
+      const [firstSummary, secondSummary] = llmEvents;
+
+      const firstRows = firstSummary.llmCall?.contextItemsV2 ?? [];
+      const firstInputs = firstRows.filter((row) => row.direction === 'input');
+      const firstOutputs = firstRows.filter((row) => row.direction === 'output');
+      expect(firstInputs.map((row) => row.contextItemId)).toEqual([systemId, userOneId]);
+      expect(firstOutputs.map((row) => row.contextItemId)).toEqual([assistantOneId, toolOneId]);
+
+      const secondRows = secondSummary.llmCall?.contextItemsV2 ?? [];
+      const secondInputs = secondRows.filter((row) => row.direction === 'input');
+      const secondOutputs = secondRows.filter((row) => row.direction === 'output');
+      expect(secondInputs.map((row) => row.contextItemId)).toEqual([
+        systemId,
+        userOneId,
+        assistantOneId,
+        toolOneId,
+        userTwoId,
+      ]);
+      expect(secondOutputs.map((row) => row.contextItemId)).toEqual([assistantTwoId]);
+
+      expect(secondSummary.llmCall?.contextItemIds).toEqual([
+        systemId,
+        userOneId,
+        assistantOneId,
+        toolOneId,
+        userTwoId,
+      ]);
+      expect(secondSummary.llmCall?.newContextItemIds).toEqual([assistantOneId, toolOneId, userTwoId]);
+
+      await cleanup(thread.id, run.id, Array.from(createdIds));
+    });
   });
 }

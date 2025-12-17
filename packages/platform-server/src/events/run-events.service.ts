@@ -61,6 +61,20 @@ export type SerializedContextItem = {
   createdAt: string;
 };
 
+/**
+ * Serialized view of the ordered context rows that an LLM call consumed or produced.
+ *
+ * Direction semantics:
+ * - `input` rows are the exact items supplied to the provider when the call started.
+ *   They include any assistant or tool outputs from previous turns because the reducers
+ *   promote the prior call's outputs into the next call's input list before invoking
+ *   {@link startLLMCall}. When the reducers pass newly appended ids via
+ *   `newContextItemIds`, the corresponding `input` rows surface with `isNew=true`.
+ * - `output` rows are appended after the provider responds through
+ *   {@link appendLLMCallContextItems}. They capture the assistant reply and any tool
+ *   responses emitted during the same call. These ids are later reused as `input`
+ *   rows for the following call, ensuring call N outputs become call N+1 inputs.
+ */
 export type SerializedLLMCallContextItem = {
   idx: number;
   contextItemId: string;
@@ -1292,7 +1306,7 @@ export class RunEventsService {
         output: Prisma.JsonNull,
         execStatus: ToolExecStatus.success,
         errorMessage: null,
-          raw: Prisma.JsonNull,
+        raw: Prisma.JsonNull,
       },
     });
     return event;
