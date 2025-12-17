@@ -1,6 +1,13 @@
 import { useEffect, useMemo, type ReactElement } from 'react';
 import { useForm, useWatch, type Control, type FieldValues } from 'react-hook-form';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  ScreenDialog,
+  ScreenDialogContent,
+  ScreenDialogDescription,
+  ScreenDialogFooter,
+  ScreenDialogHeader,
+  ScreenDialogTitle,
+} from '@/components/Dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -197,12 +204,14 @@ export function ModelFormDialog({
   const providerPlaceholder = selectedProvider?.defaultModelPlaceholder ?? 'provider/model-name';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{mode === 'create' ? 'Create Model' : `Edit Model — ${model?.id}`}</DialogTitle>
-          <DialogDescription>Define LiteLLM model routing and guardrails for agent usage.</DialogDescription>
-        </DialogHeader>
+    <ScreenDialog open={open} onOpenChange={onOpenChange}>
+      <ScreenDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <ScreenDialogHeader>
+          <ScreenDialogTitle>{mode === 'create' ? 'Create Model' : `Edit Model — ${model?.id}`}</ScreenDialogTitle>
+          <ScreenDialogDescription>
+            Define LiteLLM model routing and guardrails for agent usage.
+          </ScreenDialogDescription>
+        </ScreenDialogHeader>
         <Form {...form}>
           <form id="llm-model-form" onSubmit={handleSubmit} className="grid gap-4">
             <FormField
@@ -350,16 +359,16 @@ export function ModelFormDialog({
             />
           </form>
         </Form>
-        <DialogFooter>
+        <ScreenDialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button type="submit" form="llm-model-form" disabled={submitting}>
             {submitting ? 'Saving…' : mode === 'create' ? 'Create Model' : 'Save Changes'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ScreenDialogFooter>
+      </ScreenDialogContent>
+    </ScreenDialog>
   );
 }
 

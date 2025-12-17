@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
   Screen,
+  ScreenActions,
   ScreenBody,
   ScreenContent,
   ScreenDescription,
@@ -76,25 +78,53 @@ export function LlmSettingsScreen({
 
   const showProviderNotice = showProviderWarning && !adminBanner;
 
+  const primaryAction =
+    activeTab === 'credentials'
+      ? {
+          label: 'Add Credential',
+          disabled: readOnly || providers.length === 0,
+          handler: onCredentialCreate,
+        }
+      : {
+          label: 'Add Model',
+          disabled: readOnly || !canCreateModel,
+          handler: onModelCreate,
+        };
+
+  const showPrimaryAction = Boolean(primaryAction.handler);
+
   return (
     <Screen className="bg-background">
-      <ScreenTabs
-        className="flex h-full flex-col gap-0"
-        value={activeTab}
-        onValueChange={handleTabChange}
-      >
-        <ScreenHeader className="border-b border-border/60 bg-background">
+      <ScreenHeader className="border-b border-border/60 bg-background">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <ScreenHeaderContent className="gap-2">
             <ScreenTitle>LLM Settings</ScreenTitle>
             <ScreenDescription>
               Administer LiteLLM credentials and models used across agents and workflows.
             </ScreenDescription>
           </ScreenHeaderContent>
-          <TabsList className="mt-6 w-fit">
+          {showPrimaryAction ? (
+            <ScreenActions>
+              <Button onClick={() => primaryAction.handler?.()} disabled={primaryAction.disabled}>
+                {primaryAction.label}
+              </Button>
+            </ScreenActions>
+          ) : null}
+        </div>
+      </ScreenHeader>
+
+      <ScreenTabs
+        className="flex h-full flex-col gap-0"
+        value={activeTab}
+        onValueChange={handleTabChange}
+      >
+        <div className="border-b border-border/60 bg-background px-8 pb-4 pt-2">
+          <TabsList className="bg-transparent p-0">
             <TabsTrigger value="credentials">Credentials</TabsTrigger>
             <TabsTrigger value="models">Models</TabsTrigger>
           </TabsList>
-        </ScreenHeader>
+        </div>
+
         <ScreenBody>
           {adminBanner ? (
             <Alert variant="destructive">
@@ -103,8 +133,8 @@ export function LlmSettingsScreen({
             </Alert>
           ) : null}
 
-          <ScreenContent>
-            <TabsContent value="credentials" className="flex-1">
+          <ScreenContent className="flex-1">
+            <TabsContent value="credentials" className="flex flex-1 flex-col">
               <CredentialsTab
                 credentials={credentials}
                 providers={providers}
@@ -112,20 +142,18 @@ export function LlmSettingsScreen({
                 readOnly={readOnly}
                 showProviderWarning={showProviderNotice}
                 error={credentialsError}
-                onCreate={() => onCredentialCreate?.()}
                 onEdit={(credential) => onCredentialEdit?.(credential)}
                 onTest={(credential) => onCredentialTest?.(credential)}
                 onDelete={(credential) => onCredentialDelete?.(credential)}
               />
             </TabsContent>
-            <TabsContent value="models" className="flex-1">
+            <TabsContent value="models" className="flex flex-1 flex-col">
               <ModelsTab
                 models={models}
                 loading={loadingModels}
                 readOnly={readOnly}
                 canCreateModel={canCreateModel}
                 error={modelsError}
-                onCreate={() => onModelCreate?.()}
                 onEdit={(model) => onModelEdit?.(model)}
                 onTest={(model) => onModelTest?.(model)}
                 onDelete={(model) => onModelDelete?.(model)}

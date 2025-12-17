@@ -1,6 +1,13 @@
 import { useEffect, useMemo, type ReactElement } from 'react';
 import { useForm, useWatch, type FieldValues } from 'react-hook-form';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  ScreenDialog,
+  ScreenDialogContent,
+  ScreenDialogDescription,
+  ScreenDialogFooter,
+  ScreenDialogHeader,
+  ScreenDialogTitle,
+} from '@/components/Dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -161,14 +168,14 @@ export function CredentialFormDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{mode === 'create' ? 'Create Credential' : `Edit Credential — ${credential?.name}`}</DialogTitle>
-          <DialogDescription>
+    <ScreenDialog open={open} onOpenChange={onOpenChange}>
+      <ScreenDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <ScreenDialogHeader>
+          <ScreenDialogTitle>{mode === 'create' ? 'Create Credential' : `Edit Credential — ${credential?.name}`}</ScreenDialogTitle>
+          <ScreenDialogDescription>
             Provide LiteLLM credential details. All values are stored securely on the server.
-          </DialogDescription>
-        </DialogHeader>
+          </ScreenDialogDescription>
+        </ScreenDialogHeader>
 
         <Form {...form}>
           <form id="llm-credential-form" onSubmit={handleSubmit} className="grid gap-4">
@@ -271,16 +278,16 @@ export function CredentialFormDialog({
           </form>
         </Form>
 
-        <DialogFooter className="mt-2">
+        <ScreenDialogFooter className="mt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button type="submit" form="llm-credential-form" disabled={submitting}>
             {submitting ? 'Saving…' : mode === 'create' ? 'Create Credential' : 'Save Changes'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ScreenDialogFooter>
+      </ScreenDialogContent>
+    </ScreenDialog>
   );
 }
 

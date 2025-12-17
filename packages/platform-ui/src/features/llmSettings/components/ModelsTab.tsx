@@ -2,7 +2,6 @@ import type { ReactElement } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Play, Pencil, Trash2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { IconButton } from '@/components/IconButton';
 import { Badge } from '@/components/Badge';
@@ -17,33 +16,17 @@ interface ModelsTabProps {
   readOnly: boolean;
   canCreateModel: boolean;
   error?: string | null;
-  onCreate: () => void;
   onEdit: (model: ModelRecord) => void;
   onTest: (model: ModelRecord) => void;
   onDelete: (model: ModelRecord) => void;
 }
 
-export function ModelsTab({ models, loading, readOnly, canCreateModel, error, onCreate, onEdit, onTest, onDelete }: ModelsTabProps): ReactElement {
+export function ModelsTab({ models, loading, readOnly, canCreateModel, error, onEdit, onTest, onDelete }: ModelsTabProps): ReactElement {
   const allowWrites = !readOnly;
-  const allowCreate = allowWrites && canCreateModel;
   const showErrorState = Boolean(error) && models.length === 0 && !loading;
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="max-w-2xl space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--agyn-text-subtle)]">LiteLLM</p>
-          <div>
-            <h2 className="text-2xl font-semibold text-[var(--agyn-dark)]">Models</h2>
-            <p className="text-sm text-[var(--agyn-text-subtle)]">
-              Configure named models backed by LiteLLM credentials. Models are referenced by agents and flows.
-            </p>
-          </div>
-        </div>
-        <Button onClick={onCreate} disabled={!allowCreate}>
-          Add Model
-        </Button>
-      </div>
+    <section className="flex h-full flex-col gap-4">
 
       {!canCreateModel ? (
         <Alert className="rounded-[14px] border border-dashed border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)]/60 text-[var(--agyn-text-subtle)]">
@@ -61,11 +44,8 @@ export function ModelsTab({ models, loading, readOnly, canCreateModel, error, on
         </Alert>
       ) : (
         <Tooltip.Provider delayDuration={tooltipDelay}>
-          <div
-            data-testid="llm-models-table-container"
-            className="overflow-auto rounded-[18px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
-          >
-            <table className="w-full border-collapse text-sm" data-testid="llm-models-table">
+          <div data-testid="llm-models-table-container" className="flex-1 overflow-auto">
+            <table className="w-full table-fixed border-collapse text-sm" data-testid="llm-models-table">
               <colgroup>
                 <col className="w-[26%]" />
                 <col className="w-[22%]" />
@@ -132,7 +112,7 @@ export function ModelsTab({ models, loading, readOnly, canCreateModel, error, on
                     <tr
                       key={model.id}
                       data-testid={`llm-model-row-${model.id}`}
-                      className={`bg-white transition-colors hover:bg-[var(--agyn-bg-light)]/40 border-b border-[var(--agyn-border-subtle)] ${
+                      className={`bg-white border-b border-[var(--agyn-border-subtle)] transition-colors hover:bg-[var(--agyn-bg-light)]/40 ${
                         index === models.length - 1 ? 'last:border-b-0' : ''
                       }`}
                     >

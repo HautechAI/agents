@@ -1,6 +1,13 @@
 import { useEffect, type ReactElement } from 'react';
 import { useForm } from 'react-hook-form';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  ScreenDialog,
+  ScreenDialogContent,
+  ScreenDialogDescription,
+  ScreenDialogFooter,
+  ScreenDialogHeader,
+  ScreenDialogTitle,
+} from '@/components/Dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -64,11 +71,14 @@ export function TestModelDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Test Model — {model.id}</DialogTitle>
-        </DialogHeader>
+    <ScreenDialog open={open} onOpenChange={onOpenChange}>
+      <ScreenDialogContent className="sm:max-w-lg">
+        <ScreenDialogHeader>
+          <ScreenDialogTitle>Test Model — {model.id}</ScreenDialogTitle>
+          <ScreenDialogDescription>
+            Run a LiteLLM health check for this model with optional overrides.
+          </ScreenDialogDescription>
+        </ScreenDialogHeader>
         <Form {...form}>
           <form id="llm-model-test-form" onSubmit={handleSubmit} className="space-y-4">
             <FormField
@@ -136,15 +146,15 @@ export function TestModelDialog({
             />
           </form>
         </Form>
-        <DialogFooter>
+        <ScreenDialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button type="submit" form="llm-model-test-form" disabled={submitting}>
             {submitting ? 'Testing…' : 'Run Test'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ScreenDialogFooter>
+      </ScreenDialogContent>
+    </ScreenDialog>
   );
 }

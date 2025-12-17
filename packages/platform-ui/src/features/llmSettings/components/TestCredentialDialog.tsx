@@ -1,6 +1,13 @@
 import { useEffect, type ReactElement } from 'react';
 import { useForm } from 'react-hook-form';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  ScreenDialog,
+  ScreenDialogContent,
+  ScreenDialogDescription,
+  ScreenDialogFooter,
+  ScreenDialogHeader,
+  ScreenDialogTitle,
+} from '@/components/Dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -61,11 +68,14 @@ export function TestCredentialDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Test Credential — {credentialName}</DialogTitle>
-        </DialogHeader>
+    <ScreenDialog open={open} onOpenChange={onOpenChange}>
+      <ScreenDialogContent className="sm:max-w-lg">
+        <ScreenDialogHeader>
+          <ScreenDialogTitle>Test Credential — {credentialName}</ScreenDialogTitle>
+          <ScreenDialogDescription>
+            Send a LiteLLM health check call using this credential and optional sample input.
+          </ScreenDialogDescription>
+        </ScreenDialogHeader>
         <Form {...form}>
           <form id="llm-credential-test-form" onSubmit={handleSubmit} className="space-y-4">
             <FormField
@@ -124,15 +134,15 @@ export function TestCredentialDialog({
             />
           </form>
         </Form>
-        <DialogFooter>
+        <ScreenDialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button type="submit" form="llm-credential-test-form" disabled={submitting}>
             {submitting ? 'Testing…' : 'Run Test'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ScreenDialogFooter>
+      </ScreenDialogContent>
+    </ScreenDialog>
   );
 }

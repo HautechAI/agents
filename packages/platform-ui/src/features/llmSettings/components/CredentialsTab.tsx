@@ -2,7 +2,6 @@ import type { ReactElement } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Play, Pencil, Trash2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { IconButton } from '@/components/IconButton';
 import { Badge } from '@/components/Badge';
@@ -18,7 +17,6 @@ interface CredentialsTabProps {
   readOnly: boolean;
   showProviderWarning: boolean;
   error?: string | null;
-  onCreate: () => void;
   onEdit: (credential: CredentialRecord) => void;
   onTest: (credential: CredentialRecord) => void;
   onDelete: (credential: CredentialRecord) => void;
@@ -31,7 +29,6 @@ export function CredentialsTab({
   readOnly,
   showProviderWarning,
   error,
-  onCreate,
   onEdit,
   onTest,
   onDelete,
@@ -42,22 +39,7 @@ export function CredentialsTab({
   const showProviderNotice = providerCount === 0 && showProviderWarning;
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="max-w-2xl space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--agyn-text-subtle)]">LiteLLM</p>
-          <div>
-            <h2 className="text-2xl font-semibold text-[var(--agyn-dark)]">Credentials</h2>
-            <p className="text-sm text-[var(--agyn-text-subtle)]">
-              Store provider API keys and configuration securely. Credentials remain server-side and never leave Agyn HQ.
-            </p>
-          </div>
-        </div>
-        <Button onClick={onCreate} disabled={providerCount === 0 || !allowWrites}>
-          Add Credential
-        </Button>
-      </div>
-
+    <section className="flex h-full flex-col gap-4">
       {showProviderNotice ? (
         <div className="rounded-[14px] border border-dashed border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)]/60 px-4 py-3 text-sm text-[var(--agyn-text-subtle)]">
           No LiteLLM providers detected. Ensure the LiteLLM admin API is reachable and refresh this page.
@@ -71,11 +53,8 @@ export function CredentialsTab({
         </Alert>
       ) : (
         <Tooltip.Provider delayDuration={tooltipDelay}>
-          <div
-            data-testid="llm-credentials-table-container"
-            className="overflow-auto rounded-[18px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
-          >
-            <table className="w-full border-collapse text-sm" data-testid="llm-credentials-table">
+          <div data-testid="llm-credentials-table-container" className="flex-1 overflow-auto">
+            <table className="w-full table-fixed border-collapse text-sm" data-testid="llm-credentials-table">
               <colgroup>
                 <col className="w-[32%]" />
                 <col className="w-[24%]" />
@@ -131,7 +110,7 @@ export function CredentialsTab({
                     <tr
                       key={credential.name}
                       data-testid={`llm-credential-row-${credential.name}`}
-                      className={`bg-white transition-colors hover:bg-[var(--agyn-bg-light)]/40 border-b border-[var(--agyn-border-subtle)] ${
+                      className={`bg-white border-b border-[var(--agyn-border-subtle)] transition-colors hover:bg-[var(--agyn-bg-light)]/40 ${
                         index === credentials.length - 1 ? 'last:border-b-0' : ''
                       }`}
                     >

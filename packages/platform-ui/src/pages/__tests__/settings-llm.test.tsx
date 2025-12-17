@@ -329,7 +329,7 @@ describe('Settings/LLM page', () => {
       </TestProviders>,
     );
 
-    await screen.findByRole('heading', { name: 'Credentials' });
+    await screen.findByRole('button', { name: 'Add Credential' });
 
     const addButton = screen.getByRole('button', { name: 'Add Credential' });
     await user.click(addButton);
@@ -614,7 +614,7 @@ describe('Settings/LLM page', () => {
     const modelsTab = await screen.findByRole('tab', { name: 'Models' });
     await user.click(modelsTab);
 
-    const addModelButton = await screen.findByRole('button', { name: 'Add Model', hidden: true });
+    const addModelButton = await screen.findByRole('button', { name: 'Add Model' });
     expect(addModelButton).toBeDisabled();
   });
 
@@ -672,7 +672,7 @@ describe('Settings/LLM page', () => {
 
     const modelsTab = await screen.findByRole('tab', { name: 'Models' });
     await user.click(modelsTab);
-    const addModelButton = await screen.findByRole('button', { name: 'Add Model', hidden: true });
+    const addModelButton = await screen.findByRole('button', { name: 'Add Model' });
     expect(addModelButton).toBeDisabled();
   });
 
@@ -718,7 +718,7 @@ describe('Settings/LLM page', () => {
 
     const modelsTab = await screen.findByRole('tab', { name: 'Models' });
     await user.click(modelsTab);
-    const addModelButton = await screen.findByRole('button', { name: 'Add Model', hidden: true });
+    const addModelButton = await screen.findByRole('button', { name: 'Add Model' });
     expect(addModelButton).toBeDisabled();
   });
 
@@ -759,7 +759,7 @@ describe('Settings/LLM page', () => {
 
     const modelsTab = await screen.findByRole('tab', { name: 'Models' });
     await user.click(modelsTab);
-    const addModelButton = await screen.findByRole('button', { name: 'Add Model', hidden: true });
+    const addModelButton = await screen.findByRole('button', { name: 'Add Model' });
     expect(addModelButton).toBeDisabled();
   });
 });
