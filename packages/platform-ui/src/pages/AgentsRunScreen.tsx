@@ -1655,7 +1655,7 @@ export function AgentsRunScreen() {
         event.type === 'llm_call'
           ? resolveContextRecords(contextSource.ids, lookup, fallbackToolCalls, {
               highlightIds: contextSource.highlightIds,
-              includeAssistant: false,
+              includeAssistant: true,
             })
           : [];
       const outputRecords =
@@ -1670,7 +1670,7 @@ export function AgentsRunScreen() {
           : [];
       const contextRecords =
         event.type === 'llm_call'
-          ? [...inputRecords, ...outputRecords]
+          ? inputRecords
           : [];
       const toolLinks = event.type === 'tool_execution' ? buildToolLinkData(event) : undefined;
       return createUiEvent(event, { context: contextRecords, assistant: assistantRecords, tool: toolLinks });

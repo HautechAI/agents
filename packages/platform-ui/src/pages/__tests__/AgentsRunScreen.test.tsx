@@ -337,7 +337,7 @@ describe('AgentsRunScreen', () => {
     expect(data.childRunId).toBe('metadata-run');
   });
 
-  it('includes assistant outputs in the context list', async () => {
+  it('keeps assistant outputs separate from the input context', async () => {
     const userContext: ContextItem = {
       id: 'ctx-user-1',
       role: 'user',
@@ -444,12 +444,14 @@ describe('AgentsRunScreen', () => {
 
     const [capturedEvent] = capturedProps.events;
     const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
-    expect(context).toHaveLength(2);
-    const [userEntry, assistantEntry] = context;
+    expect(context).toHaveLength(1);
+    const [userEntry] = context;
     expect(userEntry.role).toBe('user');
     expect(userEntry.content).toContain('How are you?');
-    expect(assistantEntry.role).toBe('assistant');
-    expect(assistantEntry.content).toContain('I am fine, thanks!');
+    const assistantOutputs = (capturedEvent.data.assistantContext as Record<string, unknown>[] | undefined) ?? [];
+    expect(assistantOutputs).toHaveLength(1);
+    expect(assistantOutputs[0]?.role).toBe('assistant');
+    expect(assistantOutputs[0]?.content).toContain('I am fine, thanks!');
   });
 
   it('highlights new user context items when IDs are provided', async () => {
@@ -572,6 +574,116 @@ describe('AgentsRunScreen', () => {
     expect(assistantEntry.role).toBe('assistant');
     expect(assistantEntry.content).toContain('Working on it.');
     expect(assistantEntry['__agynIsNew']).toBeUndefined();
+  });
+
+  it('renders assistant and tool inputs together when both are new', async () => {
+    const assistantInput: ContextItem = {
+      id: 'ctx-assistant-input',
+      role: 'assistant',
+      contentText: 'Assistant input message',
+      contentJson: null,
+      metadata: null,
+      sizeBytes: 256,
+      createdAt: '2025-01-01T00:00:00.000Z',
+    };
+
+    const toolInput: ContextItem = {
+      id: 'ctx-tool-input',
+      role: 'tool',
+      contentText: 'Tool input payload',
+      contentJson: null,
+      metadata: null,
+      sizeBytes: 384,
+      createdAt: '2025-01-01T00:00:01.000Z',
+    };
+
+    const event = buildEvent({
+      type: 'llm_call',
+      toolExecution: undefined,
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        contextItemIds: [assistantInput.id, toolInput.id],
+        newContextItemCount: 2,
+        newContextItemIds: [assistantInput.id, toolInput.id],
+        contextItemsV2: [
+          {
+            idx: 0,
+            contextItemId: assistantInput.id,
+            direction: 'input',
+            isNew: true,
+            createdAt: assistantInput.createdAt,
+          },
+          {
+            idx: 1,
+            contextItemId: toolInput.id,
+            direction: 'input',
+            isNew: true,
+            createdAt: toolInput.createdAt,
+          },
+        ],
+        responseText: null,
+        rawResponse: null,
+        toolCalls: [],
+        usage: undefined,
+      },
+      metadata: {},
+    });
+
+    runsHookMocks.summary.mockReturnValue({
+      ...buildSummary(),
+      countsByType: {
+        invocation_message: 0,
+        injection: 0,
+        llm_call: 1,
+        tool_execution: 0,
+        summarization: 0,
+      },
+      countsByStatus: {
+        pending: 0,
+        running: 0,
+        success: 1,
+        error: 0,
+        cancelled: 0,
+      },
+      totalEvents: 1,
+    });
+    runsHookMocks.events.mockReturnValue({ items: [event], nextCursor: null });
+    contextItemsMocks.getMany.mockImplementation(async () => [assistantInput, toolInput]);
+
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/threads/${event.threadId}/runs/${event.runId}`]}>
+          <Routes>
+            <Route path="/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalledWith(expect.arrayContaining([assistantInput.id, toolInput.id])));
+
+    await waitFor(() => expect(runScreenMocks.props).toHaveBeenCalled());
+    const lastCall = runScreenMocks.props.mock.calls.at(-1);
+    const capturedProps = lastCall?.[0] as { events: Array<{ data: Record<string, unknown> }> } | undefined;
+    if (!capturedProps) throw new Error('RunScreen props were not captured.');
+
+    const [capturedEvent] = capturedProps.events;
+    const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
+    expect(context).toHaveLength(2);
+    const assistantEntry = context.find((entry) => entry.id === assistantInput.id);
+    const toolEntry = context.find((entry) => entry.id === toolInput.id);
+    expect(assistantEntry?.role).toBe('assistant');
+    expect(assistantEntry?.content).toContain('Assistant input message');
+    expect(assistantEntry?.['__agynIsNew']).toBe(true);
+    expect(toolEntry?.role).toBe('tool');
+    expect(toolEntry?.content).toContain('Tool input payload');
+    expect(toolEntry?.['__agynIsNew']).toBe(true);
   });
 
   it('still excludes assistant contexts that contain only tool data', async () => {
