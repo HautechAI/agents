@@ -64,6 +64,13 @@ export type ToolSubtype = 'generic' | 'shell' | 'manage' | string;
 export type MessageSubtype = 'source' | 'intermediate' | 'result';
 export type OutputViewMode = 'text' | 'terminal' | 'markdown' | 'json' | 'yaml';
 
+type ToolCall = {
+  callId?: string;
+  name?: string;
+  arguments?: unknown;
+  [key: string]: unknown;
+};
+
 export interface RunEventDetailsProps {
   event: RunEvent;
   runId?: string;
@@ -222,6 +229,9 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
     const totalTokens = asNumber(event.data.tokens?.total);
     const cost = typeof event.data.cost === 'string' ? event.data.cost : '';
     const model = asString(event.data.model);
+    const toolCalls: ToolCall[] = Array.isArray(event.data.toolCalls)
+      ? event.data.toolCalls.filter(isRecord).map((call) => call as ToolCall)
+      : [];
 
     return (
       <div className="space-y-6 h-full flex flex-col">
@@ -309,6 +319,16 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
                 <div className="text-sm text-[var(--agyn-gray)]">No response available</div>
               )}
             </div>
+            {toolCalls.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Invoked tools</h3>
+                <div className="space-y-2">
+                  {toolCalls.map((call, index) => (
+                    <ToolCallPreview key={call.callId ?? index} call={call} />
+                  ))}
+                </div>
+              </div>
+            )}
             {assistantContext.length > 0 && (
               <div className="mt-4 flex flex-col min-h-0 min-w-0" data-testid="assistant-context-panel">
                 <div className="flex items-center gap-2 mb-3 h-8 flex-shrink-0">
@@ -958,6 +978,18 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
         {event.type === 'tool' && renderToolEvent()}
         {event.type === 'summarization' && renderSummarizationEvent()}
       </div>
+    </div>
+  );
+}
+
+function ToolCallPreview({ call }: { call: ToolCall }) {
+  const name = typeof call.name === 'string' ? call.name : 'tool_call';
+  return (
+    <div className="rounded border border-slate-200 bg-slate-50 p-2 text-xs">
+      <div className="font-medium text-slate-700 mb-1">{name}</div>
+      <pre className="overflow-x-auto whitespace-pre-wrap text-[11px] text-slate-700">
+        {JSON.stringify(call.arguments ?? {}, null, 2)}
+      </pre>
     </div>
   );
 }

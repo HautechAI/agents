@@ -280,7 +280,6 @@ type ToolLinkData = {
   childRunId?: string;
 };
 
-type LlmToolCall = NonNullable<RunTimelineEvent['llmCall']>['toolCalls'][number];
 
 function readStringPath(record: Record<string, unknown>, path: readonly string[]): string | undefined {
   let current: unknown = record;
@@ -598,7 +597,7 @@ function extractLlmResponse(event: RunTimelineEvent): string {
   return '';
 }
 
-function toContextRecord(item: ContextItem, fallbackToolCalls?: readonly LlmToolCall[]): Record<string, unknown> {
+function toContextRecord(item: ContextItem): Record<string, unknown> {
   const metadataRecord = normalizeMetadata(item.metadata);
   const metadataAdditionalKwargs = metadataRecord ? coerceRecord(metadataRecord.additional_kwargs) : null;
   const { parsed: parsedContent, record: parsedRecord, text: textContent } = parseContextItemContent(item);
@@ -650,12 +649,7 @@ function toContextRecord(item: ContextItem, fallbackToolCalls?: readonly LlmTool
     result.additional_kwargs = mergedAdditionalKwargs;
   }
 
-  const collectedToolCalls = collectToolCalls(parsedRecord, contentAdditionalKwargs, metadataRecord, metadataAdditionalKwargs);
-  let toolCalls: Record<string, unknown>[] = collectedToolCalls;
-
-  if (toolCalls.length === 0 && result.role === 'assistant' && Array.isArray(fallbackToolCalls) && fallbackToolCalls.length > 0) {
-    toolCalls = toRecordArray(fallbackToolCalls as unknown);
-  }
+  const toolCalls = collectToolCalls(parsedRecord, contentAdditionalKwargs, metadataRecord, metadataAdditionalKwargs);
 
   if (toolCalls.length > 0) {
     result.tool_calls = toolCalls;
@@ -729,7 +723,6 @@ type ResolveContextRecordsOptions = {
 function resolveContextRecords(
   ids: readonly string[],
   lookup: Map<string, ContextItem>,
-  fallbackToolCalls?: readonly LlmToolCall[],
   options?: ResolveContextRecordsOptions,
 ): Record<string, unknown>[] {
   if (!Array.isArray(ids) || ids.length === 0) return [];
@@ -741,7 +734,7 @@ function resolveContextRecords(
     if (!isNonEmptyString(id)) continue;
     const item = lookup.get(id);
     if (!item) continue;
-    const record = toContextRecord(item, fallbackToolCalls);
+    const record = toContextRecord(item);
     const role = typeof record.role === 'string' ? record.role : item.role;
     if (!includeAssistant && role === 'assistant') {
       continue;
@@ -1639,10 +1632,9 @@ export function AgentsRunScreen() {
     void contextItemsVersion;
     return events.map((event) => {
       const contextSource = event.type === 'llm_call' ? buildContextSource(event.llmCall) : EMPTY_CONTEXT_SOURCE;
-      const fallbackToolCalls = event.llmCall?.toolCalls ?? [];
       const inputRecords =
         event.type === 'llm_call'
-          ? resolveContextRecords(contextSource.ids, lookup, fallbackToolCalls, {
+          ? resolveContextRecords(contextSource.ids, lookup, {
               highlightIds: contextSource.highlightIds,
               includeAssistant: true,
             })

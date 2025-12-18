@@ -41,4 +41,33 @@ describe('RunEventDetails – LLM outputs', () => {
     expect(within(assistantPanel).getByText('Persisted assistant output')).toBeInTheDocument();
     expect(screen.getByText('Only show me in the prompt context')).toBeInTheDocument();
   });
+
+  it('shows invoked tool calls for llm events', () => {
+    const event: RunEvent = {
+      id: 'evt-llm-tools',
+      type: 'llm',
+      timestamp: '2024-01-01T00:01:00.000Z',
+      data: {
+        response: 'Done.',
+        model: 'gpt-4o-mini',
+        toolCalls: [
+          {
+            callId: 'tool-1',
+            name: 'shell_command',
+            arguments: { command: 'echo 1' },
+          },
+        ],
+      },
+    };
+
+    render(
+      <MemoryRouter>
+        <RunEventDetails event={event} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Invoked tools')).toBeInTheDocument();
+    expect(screen.getByText('shell_command')).toBeInTheDocument();
+    expect(screen.getByText(/"command": "echo 1"/)).toBeInTheDocument();
+  });
 });

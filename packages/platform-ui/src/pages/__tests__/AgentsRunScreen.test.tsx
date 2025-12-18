@@ -772,6 +772,141 @@ describe('AgentsRunScreen', () => {
     expect(assistantEntry.role).toBe('assistant');
     expect(Array.isArray(assistantEntry.tool_calls) || Array.isArray(assistantEntry.toolCalls)).toBe(true);
   });
+
+  it('only renders tool calls that belong to each assistant context item', async () => {
+    const assistantWithTool: ContextItem = {
+      id: 'ctx-assistant-tool',
+      role: 'assistant',
+      contentText: 'Searching for foo',
+      contentJson: {
+        content: 'Searching for foo',
+        tool_calls: [
+          {
+            callId: 'ctx-tool-call',
+            name: 'search',
+            arguments: { q: 'foo' },
+          },
+        ],
+      },
+      metadata: null,
+      sizeBytes: 200,
+      createdAt: '2024-01-01T00:00:05.000Z',
+    };
+
+    const assistantWithoutTool: ContextItem = {
+      id: 'ctx-assistant-plain',
+      role: 'assistant',
+      contentText: 'Plain response',
+      contentJson: null,
+      metadata: null,
+      sizeBytes: 180,
+      createdAt: '2024-01-01T00:00:06.000Z',
+    };
+
+    const event = buildEvent({
+      type: 'llm_call',
+      toolExecution: undefined,
+      llmCall: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        temperature: null,
+        topP: null,
+        stopReason: null,
+        inputContextItems: buildContextItems(
+          [
+            {
+              contextItemId: assistantWithTool.id,
+              role: 'assistant',
+              createdAt: assistantWithTool.createdAt,
+              isNew: false,
+            },
+            {
+              contextItemId: assistantWithoutTool.id,
+              role: 'assistant',
+              createdAt: assistantWithoutTool.createdAt,
+              isNew: false,
+            },
+          ],
+          'ctx-per-item-tool-calls',
+        ),
+        responseText: 'All set.',
+        rawResponse: null,
+        toolCalls: [
+          {
+            callId: 'llm-output-call',
+            name: 'shell_command',
+            arguments: { command: 'echo 1' },
+          },
+        ],
+        usage: undefined,
+      },
+      metadata: {},
+    });
+
+    runsHookMocks.summary.mockReturnValue({
+      ...buildSummary(),
+      countsByType: {
+        invocation_message: 0,
+        injection: 0,
+        llm_call: 1,
+        tool_execution: 0,
+        summarization: 0,
+      },
+      countsByStatus: {
+        pending: 0,
+        running: 0,
+        success: 1,
+        error: 0,
+        cancelled: 0,
+      },
+      totalEvents: 1,
+    });
+    runsHookMocks.events.mockReturnValue({ items: [event], nextCursor: null });
+    contextItemsMocks.getMany.mockImplementation(async () => [assistantWithTool, assistantWithoutTool]);
+
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/threads/${event.threadId}/runs/${event.runId}`]}>
+          <Routes>
+            <Route path="/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(contextItemsMocks.getMany).toHaveBeenCalledWith(expect.arrayContaining([assistantWithTool.id, assistantWithoutTool.id])),
+    );
+
+    await waitFor(() => expect(runScreenMocks.props).toHaveBeenCalled());
+    const lastCall = runScreenMocks.props.mock.calls.at(-1);
+    const capturedProps = lastCall?.[0] as { events: Array<{ data: Record<string, unknown> }> } | undefined;
+    if (!capturedProps) throw new Error('RunScreen props were not captured.');
+
+    const [capturedEvent] = capturedProps.events;
+    const context = (capturedEvent.data.context as Record<string, unknown>[] | undefined) ?? [];
+    expect(context).toHaveLength(2);
+
+    const extractToolCalls = (record?: Record<string, unknown>): Record<string, unknown>[] => {
+      if (!record) return [];
+      const toolCallsValue = ((record['tool_calls'] ?? record['toolCalls']) ?? []) as unknown;
+      return Array.isArray(toolCallsValue) ? (toolCallsValue as Record<string, unknown>[]) : [];
+    };
+
+    const withToolRecord = context.find((entry) => entry.id === assistantWithTool.id);
+    const withoutToolRecord = context.find((entry) => entry.id === assistantWithoutTool.id);
+    const withToolCalls = extractToolCalls(withToolRecord);
+    const withoutToolCalls = extractToolCalls(withoutToolRecord);
+
+    expect(withToolCalls).toHaveLength(1);
+    expect(withToolCalls[0]).toMatchObject({ name: 'search', arguments: { q: 'foo' } });
+    expect(withoutToolCalls).toHaveLength(0);
+
+    const allToolCallNames = context.flatMap((entry) => extractToolCalls(entry).map((call) => call['name']));
+    expect(allToolCallNames).not.toContain('shell_command');
+  });
 });
 
 describe('extractLlmResponse', () => {
