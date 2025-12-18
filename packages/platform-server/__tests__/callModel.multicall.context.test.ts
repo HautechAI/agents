@@ -4,7 +4,6 @@ import { CallModelLLMReducer } from '../src/llm/reducers/callModel.llm.reducer';
 import { createEventsBusStub, createRunEventsStub } from './helpers/runEvents.stub';
 import { Signal } from '../src/signal';
 import type { LLMContext, LLMState } from '../src/llm/types';
-import { LLMCallContextItemDirection } from '@prisma/client';
 
 describe('CallModelLLMReducer multi-call context propagation', () => {
   it('feeds prior outputs into the next call input list', async () => {
@@ -73,19 +72,7 @@ describe('CallModelLLMReducer multi-call context propagation', () => {
     expect(startLLMCallMock.mock.calls[1]?.[0]?.newContextItemIds).toEqual(['ctx-assistant-1', 'ctx-user-2']);
 
     const appendMock = runEvents.appendLLMCallContextItems as unknown as ViMock;
-    expect(appendMock).toHaveBeenCalledTimes(2);
-    expect(appendMock.mock.calls[0]?.[0]?.items).toEqual([
-      expect.objectContaining({
-        contextItemId: 'ctx-assistant-1',
-        direction: LLMCallContextItemDirection.output,
-      }),
-    ]);
-    expect(appendMock.mock.calls[1]?.[0]?.items).toEqual([
-      expect.objectContaining({
-        contextItemId: 'ctx-assistant-2',
-        direction: LLMCallContextItemDirection.output,
-      }),
-    ]);
+    expect(appendMock).not.toHaveBeenCalled();
 
     expect(createContextItemsMock).toHaveBeenCalledTimes(3);
   });

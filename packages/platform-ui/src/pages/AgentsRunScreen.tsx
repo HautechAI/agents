@@ -243,28 +243,23 @@ function isNonEmptyString(value: unknown): value is string {
 type ContextSource = {
   ids: string[];
   highlightIds: string[];
-  outputIds?: string[];
 };
 
 const EMPTY_CONTEXT_SOURCE: ContextSource = {
   ids: [],
   highlightIds: [],
-  outputIds: [],
 };
 
 function buildContextSource(llmCall?: RunTimelineEvent['llmCall']): ContextSource {
   if (!llmCall) return EMPTY_CONTEXT_SOURCE;
-  const rows = Array.isArray(llmCall.contextItems) ? llmCall.contextItems : [];
+  const rows = Array.isArray(llmCall.inputContextItems) ? llmCall.inputContextItems : [];
   if (rows.length === 0) return EMPTY_CONTEXT_SOURCE;
-  const sorted = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  const inputRows = sorted.filter((row) => row.direction === 'input');
-  const outputRows = sorted.filter((row) => row.direction === 'output');
-  const ids = inputRows.map((row) => row.contextItemId).filter(isNonEmptyString);
-  const outputIds = outputRows.map((row) => row.contextItemId).filter(isNonEmptyString);
-  const highlightIds = inputRows
+  const sorted = [...rows].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const ids = sorted.map((row) => row.contextItemId).filter(isNonEmptyString);
+  const highlightIds = sorted
     .filter((row) => row.isNew && isNonEmptyString(row.contextItemId))
     .map((row) => row.contextItemId);
-  return { ids, highlightIds, outputIds: outputIds.length > 0 ? outputIds : undefined };
+  return { ids, highlightIds };
 }
 
 type LinkTargets = {
@@ -1193,8 +1188,8 @@ export function AgentsRunScreen() {
     const ids = new Set<string>();
     for (const event of allEvents) {
       if (event.type !== 'llm_call') continue;
-      const { ids: inputIds, outputIds } = buildContextSource(event.llmCall);
-      for (const id of [...inputIds, ...(outputIds ?? [])]) {
+      const { ids: inputIds } = buildContextSource(event.llmCall);
+      for (const id of inputIds) {
         if (!isNonEmptyString(id)) continue;
         if (lookup.has(id)) continue;
         ids.add(id);
@@ -1652,22 +1647,12 @@ export function AgentsRunScreen() {
               includeAssistant: true,
             })
           : [];
-      const outputRecords =
-        event.type === 'llm_call'
-          ? resolveContextRecords(contextSource.outputIds ?? [], lookup, fallbackToolCalls, {
-              includeAssistant: true,
-            })
-          : [];
-      const assistantRecords =
-        event.type === 'llm_call'
-          ? outputRecords.filter((record) => (typeof record.role === 'string' ? record.role.toLowerCase() === 'assistant' : false))
-          : [];
       const contextRecords =
         event.type === 'llm_call'
           ? inputRecords
           : [];
       const toolLinks = event.type === 'tool_execution' ? buildToolLinkData(event) : undefined;
-      return createUiEvent(event, { context: contextRecords, assistant: assistantRecords, tool: toolLinks });
+      return createUiEvent(event, { context: contextRecords, assistant: [], tool: toolLinks });
     });
   }, [events, contextItemsVersion]);
 

@@ -288,15 +288,7 @@ describe('CallToolsLLMReducer context items', () => {
     const result = await reducer.invoke(state, ctx);
 
     const appendedIds = await (createContextItemsMock.mock.results[0]?.value as Promise<string[]>);
-    expect(appendMock).toHaveBeenCalledTimes(1);
-    const appendedArgs = appendMock.mock.calls[0][0];
-    expect(appendedArgs.eventId).toBe('evt-last');
-    expect(appendedArgs.items).toHaveLength(appendedIds.length);
-    appendedArgs.items.forEach((item: any, idx: number) => {
-      expect(item.contextItemId).toBe(appendedIds[idx]);
-      expect(item.direction).toBe('output');
-      expect(item.isNew).toBe(false);
-    });
+    expect(appendMock).not.toHaveBeenCalled();
     expect(result.context.messageIds).toHaveLength(3);
     expect(result.context.pendingNewContextItemIds).toEqual(appendedIds);
     expect(result.messages.at(-1)?.text).toBe('alpha-output');
@@ -342,14 +334,7 @@ describe('CallToolsLLMReducer context items', () => {
 
     expect(tool.execute).toHaveBeenCalledTimes(2);
     const appendedIds = await (createContextItemsMock.mock.results[0]?.value as Promise<string[]>);
-    expect(appendMock).toHaveBeenCalledTimes(1);
-    const appendedArgs = appendMock.mock.calls[0][0];
-    expect(appendedArgs.items).toHaveLength(appendedIds.length);
-    appendedArgs.items.forEach((item: any, idx: number) => {
-      expect(item.contextItemId).toBe(appendedIds[idx]);
-      expect(item.direction).toBe('output');
-      expect(item.isNew).toBe(false);
-    });
+    expect(appendMock).not.toHaveBeenCalled();
     expect(result.context.messageIds).toHaveLength(4);
     expect(result.context.pendingNewContextItemIds).toEqual(appendedIds);
     expect(result.messages.slice(-2).map((msg) => msg.text)).toEqual(['alpha-output-1', 'alpha-output-2']);

@@ -4,7 +4,7 @@ import { Inject, Injectable, Logger, Scope } from '@nestjs/common';
 import { McpError } from '../../nodes/mcp/types';
 import { RunEventsService } from '../../events/run-events.service';
 import { EventsBusService } from '../../events/events-bus.service';
-import { ToolExecStatus, Prisma, LLMCallContextItemDirection } from '@prisma/client';
+import { ToolExecStatus, Prisma } from '@prisma/client';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 import type { ResponseFunctionCallOutputItemList } from 'openai/resources/responses/responses.mjs';
 import { contextItemInputFromMessage } from '../services/context-items.utils';
@@ -159,15 +159,6 @@ export class CallToolsLLMReducer extends Reducer<LLMState, LLMContext> {
       if (appended.length > 0) {
         context.messageIds = [...context.messageIds, ...appended];
         this.appendPendingContextItems(context, appended);
-        await this.runEvents.appendLLMCallContextItems({
-          eventId: llmEventId,
-          items: appended.map((id) => ({
-            contextItemId: id,
-            direction: LLMCallContextItemDirection.output,
-            isNew: false,
-            createdAt: new Date(),
-          })),
-        });
       }
     }
 

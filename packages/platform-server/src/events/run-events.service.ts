@@ -38,8 +38,19 @@ const RUN_EVENT_INCLUDE = {
         orderBy: { idx: 'asc' as const },
       },
       contextItems: {
-        select: { id: true, contextItemId: true, idx: true, direction: true, isNew: true, createdAt: true },
+        select: {
+          id: true,
+          contextItemId: true,
+          idx: true,
+          direction: true,
+          isNew: true,
+          createdAt: true,
+          contextItem: { select: { role: true } },
+        },
         orderBy: { idx: 'asc' as const },
+      },
+      toolExecutions: {
+        select: { eventId: true },
       },
     },
   },
@@ -61,27 +72,23 @@ export type SerializedContextItem = {
   createdAt: string;
 };
 
-/**
- * Canonical view of the ordered context rows that an LLM call consumed or produced.
- *
- * Direction semantics:
- * - `input` rows are the exact items supplied to the provider when the call started.
- *   They include any assistant or tool outputs from previous turns because the reducers
- *   promote the prior call's outputs into the next call's input list before invoking
- *   {@link startLLMCall}. When the reducers pass newly appended ids via
- *   `newContextItemIds`, the corresponding `input` rows surface with `isNew=true`.
- * - `output` rows are appended after the provider responds through
- *   {@link appendLLMCallContextItems}. They capture the assistant reply and any tool
- *   responses emitted during the same call. These ids are later reused as `input`
- *   rows for the following call, ensuring call N outputs become call N+1 inputs.
- */
-export type CanonicalLLMCallContextItem = {
+type LLMInputContextRole =
+  | 'system'
+  | 'user'
+  | 'assistant'
+  | 'developer'
+  | 'tool'
+  | 'memory'
+  | 'summary'
+  | 'other';
+
+export type LLMInputContextItem = {
   id: string;
   contextItemId: string;
-  direction: 'input' | 'output';
-  isNew: boolean;
-  index: number;
+  role: LLMInputContextRole;
+  order: number;
   createdAt: string;
+  isNew: boolean;
 };
 
 type ContextItemRow = Prisma.ContextItemGetPayload<{
@@ -95,6 +102,21 @@ type ContextItemRow = Prisma.ContextItemGetPayload<{
     createdAt: true;
   };
 }>;
+
+const CONTEXT_ROLE_MAP: Record<ContextItemRole, LLMInputContextRole> = {
+  [ContextItemRole.system]: 'system',
+  [ContextItemRole.user]: 'user',
+  [ContextItemRole.assistant]: 'assistant',
+  [ContextItemRole.tool]: 'tool',
+  [ContextItemRole.memory]: 'memory',
+  [ContextItemRole.summary]: 'summary',
+  [ContextItemRole.other]: 'other',
+};
+
+function toInputContextRole(role?: ContextItemRole | null): LLMInputContextRole {
+  if (!role) return 'other';
+  return CONTEXT_ROLE_MAP[role] ?? 'other';
+}
 
 const RUN_EVENT_TYPES: ReadonlyArray<RunEventType> = [
   RunEventType.invocation_message,
@@ -134,10 +156,11 @@ export type RunTimelineEvent = {
     temperature: number | null;
     topP: number | null;
     stopReason: string | null;
-    contextItems: CanonicalLLMCallContextItem[];
+    inputContextItems: LLMInputContextItem[];
     responseText: string | null;
     rawResponse: unknown;
     toolCalls: Array<{ callId: string; name: string; arguments: unknown }>;
+    linkedToolExecutionIds?: string[];
     usage?: {
       inputTokens: number | null;
       cachedInputTokens: number | null;
@@ -591,19 +614,18 @@ export class RunEventsService {
       contentText: att.contentText ?? null,
     }));
     const contextItemRows = event.llmCall?.contextItems ?? [];
-    const contextItems = contextItemRows.length > 0
-      ? contextItemRows
-          .slice()
-          .sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0))
-          .map((row, fallbackIdx) => ({
-            id: row.id,
-            contextItemId: row.contextItemId,
-            direction: row.direction,
-            isNew: row.isNew,
-            index: typeof row.idx === 'number' ? row.idx : fallbackIdx,
-            createdAt: row.createdAt.toISOString(),
-          }))
-      : [];
+    const inputContextItems: LLMInputContextItem[] = contextItemRows
+      .filter((row) => row.direction === LLMCallContextItemDirection.input)
+      .sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0))
+      .map((row, order) => ({
+        id: row.id,
+        contextItemId: row.contextItemId,
+        role: toInputContextRole(row.contextItem?.role),
+        order,
+        createdAt: row.createdAt.toISOString(),
+        isNew: Boolean(row.isNew),
+      }));
+    const linkedToolExecutionIds = event.llmCall?.toolExecutions?.map((exec) => exec.eventId) ?? [];
     const llmCall = event.llmCall
       ? {
           provider: event.llmCall.provider ?? null,
@@ -611,7 +633,7 @@ export class RunEventsService {
           temperature: event.llmCall.temperature ?? null,
           topP: event.llmCall.topP ?? null,
           stopReason: event.llmCall.stopReason ?? null,
-          contextItems,
+          inputContextItems,
           responseText: event.llmCall.responseText ?? null,
           rawResponse: this.toPlainJson(event.llmCall.rawResponse ?? null),
           toolCalls: event.llmCall.toolCalls.map((tc) => ({
@@ -619,6 +641,7 @@ export class RunEventsService {
             name: tc.name,
             arguments: this.toPlainJson(tc.arguments),
           })),
+          linkedToolExecutionIds: linkedToolExecutionIds.length > 0 ? linkedToolExecutionIds : undefined,
           usage: this.serializeUsage(event.llmCall),
         }
       : undefined;

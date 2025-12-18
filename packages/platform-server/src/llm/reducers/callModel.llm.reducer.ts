@@ -13,7 +13,7 @@ import { LLMContext, LLMContextState, LLMMessage, LLMState } from '../types';
 import type { LLMCallUsageMetrics, ToolCallRecord } from '../../events/run-events.service';
 import { RunEventsService } from '../../events/run-events.service';
 import { EventsBusService } from '../../events/events-bus.service';
-import { RunEventStatus, Prisma, LLMCallContextItemDirection } from '@prisma/client';
+import { RunEventStatus, Prisma } from '@prisma/client';
 import { toPrismaJsonValue } from '../services/messages.serialization';
 import {
   contextItemInputFromMemory,
@@ -173,18 +173,6 @@ export class CallModelLLMReducer extends Reducer<LLMState, LLMContext> {
       }
 
       this.appendPendingContextItems(nextContext, [assistantContextId]);
-
-      await this.runEvents.appendLLMCallContextItems({
-        eventId: llmEvent.id,
-        items: [
-          {
-            contextItemId: assistantContextId,
-            direction: LLMCallContextItemDirection.output,
-            isNew: false,
-            createdAt: new Date(),
-          },
-        ],
-      });
 
       const contextWithAssistant: LLMContextState = {
         ...nextContext,

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, beforeEach } from 'vitest';
-import { PrismaClient, ContextItemRole, LLMCallContextItemDirection } from '@prisma/client';
+import { PrismaClient, ContextItemRole } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../src/core/services/prisma.service';
 import { RunEventsService } from '../src/events/run-events.service';
@@ -150,9 +150,8 @@ if (!shouldRunDbTests) {
       expect(firstPage.items).toHaveLength(1);
       const summaryEvent = firstPage.items[0]!;
       expect(summaryEvent.llmCall).toBeDefined();
-      const relation = summaryEvent.llmCall?.contextItems ?? [];
+      const relation = summaryEvent.llmCall?.inputContextItems ?? [];
       expect(relation.map((row) => row.contextItemId)).toEqual(callRecord.contextItemIds);
-      expect(relation.every((row) => row.direction === 'input')).toBe(true);
       expect(summaryEvent.llmCall).not.toHaveProperty('prompt');
       expect(summaryEvent.llmCall).not.toHaveProperty('promptPreview');
 
@@ -166,7 +165,7 @@ if (!shouldRunDbTests) {
       await cleanup(thread.id, run.id, Array.from(new Set(callRecord.contextItemIds)));
     });
 
-    it('records new context ids using input rows only', async () => {
+    it('marks only new prompt entries when serializing input context items', async () => {
       const { thread, run } = await createThreadAndRun();
       const ids = await createContextItems([
         { role: ContextItemRole.system, contentText: 'sys prompt' },
@@ -182,36 +181,16 @@ if (!shouldRunDbTests) {
         newContextItemIds: [userId],
       });
 
-      const [freshAssistantId] = await createContextItems([
-        { role: ContextItemRole.assistant, contentText: 'current assistant output' },
-      ]);
-
-      await runEvents.appendLLMCallContextItems({
-        eventId: event.id,
-        items: [
-          {
-            contextItemId: freshAssistantId,
-            direction: LLMCallContextItemDirection.output,
-            isNew: false,
-            createdAt: new Date(),
-          },
-        ],
-      });
-
       const callRecord = await prisma.lLMCall.findUniqueOrThrow({ where: { eventId: event.id } });
       expect(callRecord.newContextItemCount).toBe(1);
 
       const snapshot = await runEvents.getEventSnapshot(event.id);
-      const contextRows = snapshot?.llmCall?.contextItems ?? [];
-      expect(contextRows).toHaveLength(4);
-      const inputRows = contextRows.filter((row) => row.direction === 'input');
-      expect(inputRows.map((row) => row.contextItemId)).toEqual([systemId, userId, assistantId]);
-      expect(inputRows.filter((row) => row.isNew).map((row) => row.contextItemId)).toEqual([userId]);
-      const outputRows = contextRows.filter((row) => row.direction === 'output');
-      expect(outputRows.map((row) => row.contextItemId)).toEqual([freshAssistantId]);
-      expect(outputRows.every((row) => row.isNew === false)).toBe(true);
+      const contextRows = snapshot?.llmCall?.inputContextItems ?? [];
+      expect(contextRows).toHaveLength(3);
+      expect(contextRows.map((row) => row.contextItemId)).toEqual([systemId, userId, assistantId]);
+      expect(contextRows.filter((row) => row.isNew).map((row) => row.contextItemId)).toEqual([userId]);
 
-      await cleanup(thread.id, run.id, Array.from(new Set([...ids, freshAssistantId])));
+      await cleanup(thread.id, run.id, Array.from(new Set(ids)));
     });
 
     it('promotes outputs from call N into call N+1 inputs', async () => {
@@ -237,24 +216,6 @@ if (!shouldRunDbTests) {
       ]);
       [assistantOneId, toolOneId].forEach((id) => createdIds.add(id));
 
-      await runEvents.appendLLMCallContextItems({
-        eventId: firstEvent.id,
-        items: [
-          {
-            contextItemId: assistantOneId,
-            direction: LLMCallContextItemDirection.output,
-            isNew: false,
-            createdAt: new Date(),
-          },
-          {
-            contextItemId: toolOneId,
-            direction: LLMCallContextItemDirection.output,
-            isNew: false,
-            createdAt: new Date(),
-          },
-        ],
-      });
-
       const [userTwoId] = await createContextItems([{ role: ContextItemRole.user, contentText: 'question #2' }]);
       createdIds.add(userTwoId);
 
@@ -268,32 +229,14 @@ if (!shouldRunDbTests) {
       const [assistantTwoId] = await createContextItems([{ role: ContextItemRole.assistant, contentText: 'answer #2' }]);
       createdIds.add(assistantTwoId);
 
-      await runEvents.appendLLMCallContextItems({
-        eventId: secondEvent.id,
-        items: [
-          {
-            contextItemId: assistantTwoId,
-            direction: LLMCallContextItemDirection.output,
-            isNew: false,
-            createdAt: new Date(),
-          },
-        ],
-      });
-
       const timeline = await runEvents.listRunEvents({ runId: run.id, limit: 10, order: 'asc' });
       const llmEvents = timeline.items.filter((item) => item.llmCall);
       expect(llmEvents).toHaveLength(2);
       const [firstSummary, secondSummary] = llmEvents;
 
-      const firstRows = firstSummary.llmCall?.contextItems ?? [];
-      const firstInputs = firstRows.filter((row) => row.direction === 'input');
-      const firstOutputs = firstRows.filter((row) => row.direction === 'output');
+      const firstInputs = firstSummary.llmCall?.inputContextItems ?? [];
+      const secondInputs = secondSummary.llmCall?.inputContextItems ?? [];
       expect(firstInputs.map((row) => row.contextItemId)).toEqual([systemId, userOneId]);
-      expect(firstOutputs.map((row) => row.contextItemId)).toEqual([assistantOneId, toolOneId]);
-
-      const secondRows = secondSummary.llmCall?.contextItems ?? [];
-      const secondInputs = secondRows.filter((row) => row.direction === 'input');
-      const secondOutputs = secondRows.filter((row) => row.direction === 'output');
       expect(secondInputs.map((row) => row.contextItemId)).toEqual([
         systemId,
         userOneId,
@@ -301,7 +244,8 @@ if (!shouldRunDbTests) {
         toolOneId,
         userTwoId,
       ]);
-      expect(secondOutputs.map((row) => row.contextItemId)).toEqual([assistantTwoId]);
+
+      expect(secondInputs.find((row) => row.contextItemId === assistantTwoId)).toBeUndefined();
 
       expect(secondInputs.filter((row) => row.isNew).map((row) => row.contextItemId)).toEqual([
         assistantOneId,

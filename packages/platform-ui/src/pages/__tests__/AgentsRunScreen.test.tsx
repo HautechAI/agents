@@ -184,13 +184,13 @@ function buildSummary(): RunTimelineSummary {
   };
 }
 
-type LlmCallContextItem = NonNullable<RunTimelineEvent['llmCall']>['contextItems'][number];
+type LlmCallContextItem = NonNullable<RunTimelineEvent['llmCall']>['inputContextItems'][number];
 
 type ContextRowInput = {
   contextItemId: string;
-  direction: LlmCallContextItem['direction'];
   isNew?: boolean;
-  index?: number;
+  order?: number;
+  role?: LlmCallContextItem['role'];
   createdAt: string;
 };
 
@@ -198,9 +198,9 @@ function buildContextItems(rows: ContextRowInput[], prefix = 'rel'): LlmCallCont
   return rows.map((row, idx) => ({
     id: `${prefix}-${idx + 1}`,
     contextItemId: row.contextItemId,
-    direction: row.direction,
+    role: row.role ?? 'user',
     isNew: row.isNew ?? false,
-    index: row.index ?? idx,
+    order: row.order ?? idx,
     createdAt: row.createdAt,
   }));
 }
@@ -369,16 +369,6 @@ describe('AgentsRunScreen', () => {
       createdAt: '2024-01-01T00:00:01.000Z',
     };
 
-    const assistantContext: ContextItem = {
-      id: 'ctx-assistant-1',
-      role: 'assistant',
-      contentText: 'I am fine, thanks!',
-      contentJson: null,
-      metadata: null,
-      sizeBytes: 256,
-      createdAt: '2024-01-01T00:00:02.000Z',
-    };
-
     const event = buildEvent({
       type: 'llm_call',
       toolExecution: undefined,
@@ -388,19 +378,13 @@ describe('AgentsRunScreen', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItems: buildContextItems(
+        inputContextItems: buildContextItems(
           [
             {
               contextItemId: userContext.id,
-              direction: 'input',
+              role: 'user',
               isNew: false,
               createdAt: userContext.createdAt,
-            },
-            {
-              contextItemId: assistantContext.id,
-              direction: 'output',
-              isNew: false,
-              createdAt: assistantContext.createdAt,
             },
           ],
           'ctx-llm-separated',
@@ -438,7 +422,7 @@ describe('AgentsRunScreen', () => {
       totalEvents: 1,
     });
     runsHookMocks.events.mockReturnValue({ items: [event], nextCursor: null });
-    contextItemsMocks.getMany.mockImplementation(async () => [assistantContext, userContext]);
+    contextItemsMocks.getMany.mockImplementation(async () => [userContext]);
 
     const queryClient = new QueryClient();
 
@@ -452,9 +436,7 @@ describe('AgentsRunScreen', () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() =>
-      expect(contextItemsMocks.getMany).toHaveBeenCalledWith(expect.arrayContaining([assistantContext.id, userContext.id])),
-    );
+    await waitFor(() => expect(contextItemsMocks.getMany).toHaveBeenCalledWith([userContext.id]));
 
     await waitFor(() => expect(runScreenMocks.props).toHaveBeenCalled());
     const lastCall = runScreenMocks.props.mock.calls.at(-1);
@@ -468,9 +450,8 @@ describe('AgentsRunScreen', () => {
     expect(userEntry.role).toBe('user');
     expect(userEntry.content).toContain('How are you?');
     const assistantOutputs = (capturedEvent.data.assistantContext as Record<string, unknown>[] | undefined) ?? [];
-    expect(assistantOutputs).toHaveLength(1);
-    expect(assistantOutputs[0]?.role).toBe('assistant');
-    expect(assistantOutputs[0]?.content).toContain('I am fine, thanks!');
+    expect(assistantOutputs).toHaveLength(0);
+    expect(capturedEvent.data['response']).toContain('I am fine, thanks!');
   });
 
   it('highlights new user context items when IDs are provided', async () => {
@@ -507,23 +488,17 @@ describe('AgentsRunScreen', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItems: buildContextItems(
+        inputContextItems: buildContextItems(
           [
             {
               contextItemId: userContext.id,
-              direction: 'input',
+              role: 'user',
               isNew: true,
               createdAt: userContext.createdAt,
             },
             {
               contextItemId: assistantContext.id,
-              direction: 'input',
-              isNew: false,
-              createdAt: assistantContext.createdAt,
-            },
-            {
-              contextItemId: assistantContext.id,
-              direction: 'output',
+              role: 'assistant',
               isNew: false,
               createdAt: assistantContext.createdAt,
             },
@@ -622,17 +597,17 @@ describe('AgentsRunScreen', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItems: buildContextItems(
+        inputContextItems: buildContextItems(
           [
             {
               contextItemId: assistantInput.id,
-              direction: 'input',
+              role: 'assistant',
               isNew: true,
               createdAt: assistantInput.createdAt,
             },
             {
               contextItemId: toolInput.id,
-              direction: 'input',
+              role: 'tool',
               isNew: true,
               createdAt: toolInput.createdAt,
             },
@@ -730,17 +705,11 @@ describe('AgentsRunScreen', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItems: buildContextItems(
+        inputContextItems: buildContextItems(
           [
             {
               contextItemId: assistantContext.id,
-              direction: 'input',
-              createdAt: assistantContext.createdAt,
-              isNew: false,
-            },
-            {
-              contextItemId: assistantContext.id,
-              direction: 'output',
+              role: 'assistant',
               createdAt: assistantContext.createdAt,
               isNew: false,
             },
@@ -842,7 +811,7 @@ describe('extractLlmResponse', () => {
         temperature: null,
         topP: null,
         stopReason: null,
-        contextItems: [],
+        inputContextItems: [],
         responseText: null,
         rawResponse: null,
         toolCalls: [],
