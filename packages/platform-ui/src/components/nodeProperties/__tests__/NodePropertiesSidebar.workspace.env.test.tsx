@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import NodePropertiesSidebar from '../index';
 import type { NodeConfig, NodePropertiesSidebarProps, NodeState } from '../types';
-import { TooltipProvider } from '@/components/ui/tooltip';
 
 const pointerProto = Element.prototype as unknown as {
   setPointerCapture?: (pointerId: number) => void;
@@ -60,17 +59,15 @@ function WorkspaceEnvHarness({
   const state: NodeState = { status: 'ready' } as NodeState;
 
   return (
-    <TooltipProvider delayDuration={0}>
-      <NodePropertiesSidebar
-        config={config}
-        state={state}
-        displayTitle={config.title}
-        onConfigChange={handleConfigChange}
-        tools={[]}
-        enabledTools={[]}
-        {...extraProps}
-      />
-    </TooltipProvider>
+    <NodePropertiesSidebar
+      config={config}
+      state={state}
+      displayTitle={config.title}
+      onConfigChange={handleConfigChange}
+      tools={[]}
+      enabledTools={[]}
+      {...extraProps}
+    />
   );
 }
 

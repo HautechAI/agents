@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 import { OnboardingContent } from '@/features/onboarding/components/OnboardingContent';
 import { buildProfilePayload } from '@/features/onboarding/lib/profile';
 import { useOnboardingStatus, useSaveOnboardingProfile } from '@/features/onboarding/hooks';

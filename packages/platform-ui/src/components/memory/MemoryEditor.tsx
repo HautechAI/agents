@@ -6,10 +6,9 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { Textarea } from '@/components/Textarea';
 import { memoryApi } from '@/api/modules/memory';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { joinMemoryPath, memoryPathParent, normalizeMemoryPath } from './path';
@@ -276,7 +275,9 @@ function DocumentEditor({
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="memory-append">Append</Label>
+        <label htmlFor="memory-append" className="text-sm font-medium">
+          Append
+        </label>
         <Textarea
           id="memory-append"
           value={appendText}
@@ -289,13 +290,17 @@ function DocumentEditor({
       </div>
 
       <div className="space-y-2">
-        <Label>Replace</Label>
+        <label htmlFor="memory-replace-old" className="text-sm font-medium">
+          Replace
+        </label>
         <Input
+          id="memory-replace-old"
           value={replaceOld}
           onChange={(e) => setReplaceOld(e.target.value)}
           placeholder="Old text"
         />
         <Input
+          id="memory-replace-new"
           value={replaceNew}
           onChange={(e) => setReplaceNew(e.target.value)}
           placeholder="New text"
@@ -305,7 +310,7 @@ function DocumentEditor({
         </Button>
       </div>
 
-      <Button variant="destructive" onClick={onDelete} disabled={deleteDisabled}>
+      <Button variant="danger" onClick={onDelete} disabled={deleteDisabled}>
         Delete document
       </Button>
     </div>
@@ -361,7 +366,7 @@ function SubdocsEditor({
             Ensure location exists
           </Button>
           <Button
-            variant="destructive"
+            variant="danger"
             onClick={() => deleteMutation.mutate()}
             disabled={deleteMutation.isPending || !canDelete}
           >
@@ -374,7 +379,9 @@ function SubdocsEditor({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="memory-new-dir">Create nested location</Label>
+        <label htmlFor="memory-new-dir" className="text-sm font-medium">
+          Create nested location
+        </label>
         <Input
           id="memory-new-dir"
           value={newDirName}
@@ -387,14 +394,20 @@ function SubdocsEditor({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="memory-new-file">Create document</Label>
+        <label htmlFor="memory-new-file" className="text-sm font-medium">
+          Create document
+        </label>
         <Input
           id="memory-new-file"
           value={newFileName}
           onChange={(e) => setNewFileName(e.target.value)}
           placeholder="Document name"
         />
+        <label htmlFor="memory-new-file-content" className="text-sm font-medium">
+          Document content
+        </label>
         <Textarea
+          id="memory-new-file-content"
           value={newFileContent}
           onChange={(e) => setNewFileContent(e.target.value)}
           placeholder="Initial content"
@@ -437,7 +450,9 @@ function MissingPath({
         </Button>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="memory-missing-file">Create document with content</Label>
+        <label htmlFor="memory-missing-file" className="text-sm font-medium">
+          Create document with content
+        </label>
         <Textarea
           id="memory-missing-file"
           value={newFileContent}

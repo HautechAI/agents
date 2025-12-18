@@ -4,7 +4,6 @@ import { describe, it, expect, vi } from 'vitest';
 
 import NodePropertiesSidebar from '../index';
 import type { NodeConfig, NodeState } from '../types';
-import { TooltipProvider } from '@/components/ui/tooltip';
 
 describe('NodePropertiesSidebar - agent', () => {
   it('renders profile inputs and applies default title fallback', () => {
@@ -27,18 +26,16 @@ describe('NodePropertiesSidebar - agent', () => {
     const state: NodeState = { status: 'ready' };
 
     render(
-      <TooltipProvider delayDuration={0}>
-        <NodePropertiesSidebar
-          config={config}
-          state={state}
-          onConfigChange={onConfigChange}
-          onProvision={vi.fn()}
-          onDeprovision={vi.fn()}
-          canProvision={false}
-          canDeprovision={true}
-          isActionPending={false}
-        />
-      </TooltipProvider>,
+      <NodePropertiesSidebar
+        config={config}
+        state={state}
+        onConfigChange={onConfigChange}
+        onProvision={vi.fn()}
+        onDeprovision={vi.fn()}
+        canProvision={false}
+        canDeprovision={true}
+        isActionPending={false}
+      />,
     );
 
     const expectedPlaceholder = 'Casey Quinn (Lead Planner)';
@@ -75,18 +72,16 @@ describe('NodePropertiesSidebar - agent', () => {
     const state: NodeState = { status: 'not_ready' };
 
     render(
-      <TooltipProvider delayDuration={0}>
-        <NodePropertiesSidebar
-          config={config}
-          state={state}
-          onConfigChange={vi.fn()}
-          onProvision={vi.fn()}
-          onDeprovision={vi.fn()}
-          canProvision={false}
-          canDeprovision={false}
-          isActionPending={false}
-        />
-      </TooltipProvider>,
+      <NodePropertiesSidebar
+        config={config}
+        state={state}
+        onConfigChange={vi.fn()}
+        onProvision={vi.fn()}
+        onDeprovision={vi.fn()}
+        canProvision={false}
+        canDeprovision={false}
+        isActionPending={false}
+      />,
     );
 
     const titleInput = screen.getByPlaceholderText('Casey Quinn (Lead Planner)') as HTMLInputElement;
@@ -105,18 +100,16 @@ describe('NodePropertiesSidebar - agent', () => {
     const state: NodeState = { status: 'not_ready' };
 
     render(
-      <TooltipProvider delayDuration={0}>
-        <NodePropertiesSidebar
-          config={config}
-          state={state}
-          onConfigChange={vi.fn()}
-          onProvision={vi.fn()}
-          onDeprovision={vi.fn()}
-          canProvision={false}
-          canDeprovision={false}
-          isActionPending={false}
-        />
-      </TooltipProvider>,
+      <NodePropertiesSidebar
+        config={config}
+        state={state}
+        onConfigChange={vi.fn()}
+        onProvision={vi.fn()}
+        onDeprovision={vi.fn()}
+        canProvision={false}
+        canDeprovision={false}
+        isActionPending={false}
+      />,
     );
 
     const titleInput = screen.getByPlaceholderText('Nova') as HTMLInputElement;
@@ -135,18 +128,16 @@ describe('NodePropertiesSidebar - agent', () => {
     const state: NodeState = { status: 'not_ready' };
 
     render(
-      <TooltipProvider delayDuration={0}>
-        <NodePropertiesSidebar
-          config={config}
-          state={state}
-          onConfigChange={vi.fn()}
-          onProvision={vi.fn()}
-          onDeprovision={vi.fn()}
-          canProvision={false}
-          canDeprovision={false}
-          isActionPending={false}
-        />
-      </TooltipProvider>,
+      <NodePropertiesSidebar
+        config={config}
+        state={state}
+        onConfigChange={vi.fn()}
+        onProvision={vi.fn()}
+        onDeprovision={vi.fn()}
+        canProvision={false}
+        canDeprovision={false}
+        isActionPending={false}
+      />,
     );
 
     const titleInput = screen.getByPlaceholderText('Navigator') as HTMLInputElement;
@@ -165,18 +156,16 @@ describe('NodePropertiesSidebar - agent', () => {
     const state: NodeState = { status: 'not_ready' };
 
     render(
-      <TooltipProvider delayDuration={0}>
-        <NodePropertiesSidebar
-          config={config}
-          state={state}
-          onConfigChange={vi.fn()}
-          onProvision={vi.fn()}
-          onDeprovision={vi.fn()}
-          canProvision={false}
-          canDeprovision={false}
-          isActionPending={false}
-        />
-      </TooltipProvider>,
+      <NodePropertiesSidebar
+        config={config}
+        state={state}
+        onConfigChange={vi.fn()}
+        onProvision={vi.fn()}
+        onDeprovision={vi.fn()}
+        canProvision={false}
+        canDeprovision={false}
+        isActionPending={false}
+      />,
     );
 
     const titleInput = screen.getByPlaceholderText('Agent') as HTMLInputElement;

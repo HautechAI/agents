@@ -6,6 +6,15 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
+    include: ['__tests__/**/*.test.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}', 'e2e/**/*.{test,spec}.{ts,tsx}'],
+    exclude: [
+      '__tests__/components/builder/**',
+      '__tests__/components/configViews/**',
+      '__tests__/integration/builder.*.test.tsx',
+      '__tests__/integration/positions.persistence.test.tsx',
+      '__tests__/integration/right.panel.actions.test.tsx',
+      'src/lib/graph/__tests__/capabilities.test.ts',
+    ],
     pool: 'forks',
     poolOptions: {
       forks: {

@@ -1,8 +1,4 @@
-import type {
-  MultilineElementTransformer,
-  Transformer,
-  TextFormatTransformer,
-} from '@lexical/markdown';
+import type { MultilineElementTransformer, Transformer, TextFormatTransformer } from '@lexical/markdown';
 import { CODE, TRANSFORMERS } from '@lexical/markdown';
 import { $isCodeNode } from '@lexical/code';
 import { LineBreakNode } from 'lexical';

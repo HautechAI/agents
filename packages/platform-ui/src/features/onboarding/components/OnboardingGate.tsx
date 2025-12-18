@@ -1,7 +1,7 @@
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Outlet } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 
 import { useOnboardingStatus } from '../hooks';
 import { OnboardingModal } from './OnboardingModal';
@@ -64,7 +64,7 @@ function GateMessage({ variant, onRetry }: GateMessageProps) {
         <p className="text-muted-foreground text-sm max-w-md">{content.body}</p>
       </div>
       {variant === 'error' && (
-        <Button onClick={() => void onRetry?.()} variant="default">
+        <Button onClick={() => void onRetry?.()}>
           Retry
         </Button>
       )}

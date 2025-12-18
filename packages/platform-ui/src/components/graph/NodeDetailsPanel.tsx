@@ -1,6 +1,6 @@
 // React import not needed with react-jsx runtime
 import { Badge } from '@/components/Badge';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 import { useNodeStatus, useNodeAction } from '../../lib/graph/hooks';
 
 interface Props { nodeId: string; templateName: string; }

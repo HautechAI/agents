@@ -9,15 +9,13 @@ import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { Input } from '@/components/Input';
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+  ScreenDialog,
+  ScreenDialogContent,
+  ScreenDialogDescription,
+  ScreenDialogFooter,
+  ScreenDialogHeader,
+  ScreenDialogTitle,
+} from '@/components/Dialog';
 
 const REPO_ERROR_MESSAGES: Record<string, string> = {
   invalid_repository: 'Repository must be a GitHub owner/repo URL or shorthand.',
@@ -143,78 +141,84 @@ export function NixRepoInstallSection({ onAdd }: NixRepoInstallSectionProps) {
   const generalErrorMessage = !isRepositoryError ? error : null;
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="link">
-          or add custom
-        </Button>
-      </DialogTrigger>
-      <DialogContent hideCloseButton>
-        <div className="flex items-start justify-between gap-4">
-          <DialogHeader className="flex-1">
-            <DialogTitle>Add custom Nix package</DialogTitle>
-            <DialogDescription>
-              Resolve a Git repository and add its package attribute to this configuration.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogClose asChild>
+    <>
+      <Button type="button" variant="link" onClick={() => handleDialogOpenChange(true)}>
+        or add custom
+      </Button>
+      <ScreenDialog open={open} onOpenChange={handleDialogOpenChange}>
+        <ScreenDialogContent hideCloseButton>
+          <div className="flex items-start justify-between gap-4">
+            <ScreenDialogHeader className="flex-1">
+              <ScreenDialogTitle>Add custom Nix package</ScreenDialogTitle>
+              <ScreenDialogDescription>
+                Resolve a Git repository and add its package attribute to this configuration.
+              </ScreenDialogDescription>
+            </ScreenDialogHeader>
             <IconButton
               type="button"
               variant="ghost"
               size="sm"
               aria-label="Close"
+              title="Close"
               rounded={false}
+              onClick={() => handleDialogOpenChange(false)}
               icon={<X className="h-4 w-4" />}
             />
-          </DialogClose>
-        </div>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <Input
-            id="nix-repo-repository"
-            label={<span>Repository <span className="text-[var(--agyn-status-failed)]">*</span></span>}
-            value={form.repository}
-            onChange={(event) => updateField('repository', event.target.value)}
-            placeholder="owner/repo or github:owner/repo"
-            aria-label="GitHub repository"
-            aria-invalid={isRepositoryError && !form.repository.trim() ? true : undefined}
-            aria-required="true"
-            autoComplete="off"
-            error={repositoryError}
-          />
-          <Input
-            id="nix-repo-ref"
-            label="Branch/Ref (optional)"
-            value={form.ref}
-            onChange={(event) => updateField('ref', event.target.value)}
-            placeholder="main"
-            aria-label="Git ref"
-            autoComplete="off"
-          />
-          <Input
-            id="nix-repo-attr"
-            label="Package Attribute"
-            value={form.attr}
-            onChange={(event) => updateField('attr', event.target.value)}
-            placeholder="default"
-            aria-label="Flake attribute"
-            autoComplete="off"
-          />
-          {generalErrorMessage && (
-            <p className="text-sm text-[var(--agyn-status-failed)]" role="alert">
-              {generalErrorMessage}
-            </p>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="ghost" size="sm" onClick={() => handleDialogOpenChange(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={submitting}>
-              {submitting ? 'Adding…' : 'Add'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </div>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <Input
+              id="nix-repo-repository"
+              label={<span>Repository <span className="text-[var(--agyn-status-failed)]">*</span></span>}
+              value={form.repository}
+              onChange={(event) => updateField('repository', event.target.value)}
+              placeholder="owner/repo or github:owner/repo"
+              aria-label="GitHub repository"
+              aria-invalid={isRepositoryError && !form.repository.trim() ? true : undefined}
+              aria-required="true"
+              autoComplete="off"
+              error={repositoryError}
+            />
+            <Input
+              id="nix-repo-ref"
+              label="Branch/Ref (optional)"
+              value={form.ref}
+              onChange={(event) => updateField('ref', event.target.value)}
+              placeholder="main"
+              aria-label="Git ref"
+              autoComplete="off"
+            />
+            <Input
+              id="nix-repo-attr"
+              label="Package Attribute"
+              value={form.attr}
+              onChange={(event) => updateField('attr', event.target.value)}
+              placeholder="default"
+              aria-label="Flake attribute"
+              autoComplete="off"
+            />
+            {generalErrorMessage && (
+              <p className="text-sm text-[var(--agyn-status-failed)]" role="alert">
+                {generalErrorMessage}
+              </p>
+            )}
+            <ScreenDialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDialogOpenChange(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" disabled={submitting}>
+                {submitting ? 'Adding…' : 'Add'}
+              </Button>
+            </ScreenDialogFooter>
+          </form>
+        </ScreenDialogContent>
+      </ScreenDialog>
+    </>
   );
 }
 

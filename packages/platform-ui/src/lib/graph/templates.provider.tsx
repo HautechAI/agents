@@ -1,39 +1,48 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import { createContext, useCallback, useContext, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import type { TemplateSchema } from '@/api/types/graph';
 import { useTemplates } from './hooks';
-import type { TemplateSchema } from './types';
 
-interface TemplatesContextValue {
+type TemplatesCacheValue = {
   templates: TemplateSchema[];
-  getTemplate: (name: string) => TemplateSchema | undefined;
-  loading: boolean;
   ready: boolean;
   error: unknown;
+  refresh: () => Promise<void>;
+  getTemplate: (name: string | null | undefined) => TemplateSchema | undefined;
+};
+
+const TemplatesCacheContext = createContext<TemplatesCacheValue | null>(null);
+
+export function TemplatesProvider({ children }: { children: ReactNode }) {
+  const { data, status, error, refetch } = useTemplates();
+
+  const refresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
+
+  const value = useMemo<TemplatesCacheValue>(() => {
+    const templates = data ?? [];
+    const getTemplate = (name: string | null | undefined) => {
+      if (!name) return undefined;
+      return templates.find((t) => t.name === name);
+    };
+
+    return {
+      templates,
+      ready: status === 'success',
+      error,
+      refresh,
+      getTemplate,
+    };
+  }, [data, status, error, refresh]);
+
+  return <TemplatesCacheContext.Provider value={value}>{children}</TemplatesCacheContext.Provider>;
 }
 
-const TemplatesContext = createContext<TemplatesContextValue | undefined>(undefined);
-
-export function TemplatesProvider({ children }: { children: React.ReactNode }) {
-  const { data, isLoading, isSuccess, error } = useTemplates();
-  const map = useMemo(() => {
-    const m = new Map<string, TemplateSchema>();
-    for (const t of data || []) m.set(t.name, t);
-    return m;
-  }, [data]);
-  const value: TemplatesContextValue = useMemo(
-    () => ({
-      templates: data || [],
-      getTemplate: (name: string) => map.get(name),
-      loading: !!isLoading,
-      ready: !!isSuccess,
-      error: error ?? null,
-    }),
-    [data, map, isLoading, isSuccess, error],
-  );
-  return <TemplatesContext.Provider value={value}>{children}</TemplatesContext.Provider>;
-}
-
-export function useTemplatesCache(): TemplatesContextValue {
-  const ctx = useContext(TemplatesContext);
-  if (!ctx) throw new Error('useTemplatesCache must be used within TemplatesProvider');
+export function useTemplatesCache(): TemplatesCacheValue {
+  const ctx = useContext(TemplatesCacheContext);
+  if (!ctx) {
+    throw new Error('useTemplatesCache must be used within TemplatesProvider');
+  }
   return ctx;
 }

@@ -1,7 +1,5 @@
 import { Info } from 'lucide-react';
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-
 interface FieldLabelProps {
   label: string;
   hint?: string;
@@ -16,12 +14,9 @@ export function FieldLabel({ label, hint, required }: FieldLabelProps) {
         {required && <span className="text-[var(--agyn-status-failed)]">*</span>}
       </label>
       {hint && (
-        <Tooltip>
-          <TooltipTrigger className="cursor-help" aria-label={hint} title={hint}>
-            <Info className="w-3.5 h-3.5 text-[var(--agyn-gray)]" aria-hidden="true" />
-          </TooltipTrigger>
-          <TooltipContent className="text-xs">{hint}</TooltipContent>
-        </Tooltip>
+        <span className="cursor-help" aria-label={hint} title={hint} role="img">
+          <Info className="w-3.5 h-3.5 text-[var(--agyn-gray)]" aria-hidden="true" />
+        </span>
       )}
     </div>
   );

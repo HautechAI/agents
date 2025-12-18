@@ -8,8 +8,13 @@ import {
 import { X } from 'lucide-react';
 import type { ContainerItem, ContainerTerminalSessionResponse } from '@/api/modules/containers';
 import { useCreateContainerTerminalSession } from '@/api/hooks/containers';
-import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  ScreenDialog,
+  ScreenDialogContent,
+  ScreenDialogDescription,
+  ScreenDialogHeader,
+  ScreenDialogTitle,
+} from '@/components/Dialog';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { Terminal } from '@xterm/xterm';
@@ -33,6 +38,7 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
   const mutation = useCreateContainerTerminalSession();
   const [session, setSession] = useState<ContainerTerminalSessionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'terminal' | 'logs'>('terminal');
   const loading = mutation.status === 'pending';
 
   const mutateAsyncRef = useRef(mutation.mutateAsync);
@@ -59,6 +65,10 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
   }, [open]);
 
   const containerId = container?.containerId;
+
+  useEffect(() => {
+    setActiveTab('terminal');
+  }, [containerId]);
 
   useEffect(() => {
     if (!open || !containerId) {
@@ -116,42 +126,69 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
       : 'Terminal session inactive';
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
-      <DialogContent
-        className="w-full md:w-[50vw] md:max-w-[960px] p-0"
+    <ScreenDialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
+      <ScreenDialogContent
+        className="w-full p-0 md:w-[50vw] md:max-w-[960px]"
         hideCloseButton
         onOpenAutoFocus={(event) => {
           event.preventDefault();
         }}
       >
-        <Tabs defaultValue="terminal" key={container?.containerId ?? 'default'} className="flex min-h-[520px] flex-col gap-0">
-          <DialogHeader className="gap-4 border-b border-[var(--agyn-border-subtle)] px-6 py-4">
+        <div className="flex min-h-[520px] flex-col gap-0">
+          <ScreenDialogHeader className="gap-4 border-b border-[var(--agyn-border-subtle)] px-6 py-4">
             <div className="flex items-center justify-between gap-4">
-              <DialogTitle className="text-lg font-semibold text-[var(--agyn-dark)]">
+              <ScreenDialogTitle className="text-lg font-semibold text-[var(--agyn-dark)]">
                 {displayName}
-              </DialogTitle>
-              <DialogClose asChild>
-                <IconButton
-                  icon={<X className="h-4 w-4" />}
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Close terminal"
-                  data-slot="dialog-close"
-                />
-              </DialogClose>
+              </ScreenDialogTitle>
+              <ScreenDialogDescription className="sr-only">
+                Interactive terminal session controls for the selected container.
+              </ScreenDialogDescription>
+              <IconButton
+                icon={<X className="h-4 w-4" />}
+                variant="ghost"
+                size="sm"
+                aria-label="Close terminal"
+                title="Close terminal"
+                onClick={onClose}
+              />
             </div>
-            <TabsList className="mt-2">
-              <TabsTrigger value="terminal">Terminal</TabsTrigger>
-              <TabsTrigger value="logs">Logs</TabsTrigger>
-            </TabsList>
-          </DialogHeader>
+            <div role="tablist" aria-label="Terminal views" className="mt-2 flex gap-2">
+              {(['terminal', 'logs'] as const).map((tab) => {
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    className={`rounded-md px-3 py-1 text-sm font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--agyn-blue)] ${
+                      isActive
+                        ? 'bg-[var(--agyn-blue)] text-white shadow-sm'
+                        : 'text-[var(--agyn-text-subtle)] hover:text-[var(--agyn-dark)]'
+                    }`}
+                    onClick={() => setActiveTab(tab)}
+                  >
+                    {tab === 'terminal' ? 'Terminal' : 'Logs'}
+                  </button>
+                );
+              })}
+            </div>
+          </ScreenDialogHeader>
 
-          <TabsContent value="terminal" className="flex flex-1 flex-col" forceMount>
+          <section
+            role="tabpanel"
+            aria-label="Terminal"
+            aria-hidden={activeTab !== 'terminal'}
+            hidden={activeTab !== 'terminal'}
+            className="flex flex-1 flex-col"
+          >
             <div className="flex flex-1 flex-col gap-4 px-6 py-4">
               {error && (
                 <div className="flex items-center justify-between rounded-md border border-[var(--agyn-status-failed)]/40 bg-[var(--agyn-status-failed)]/10 px-3 py-2 text-sm text-[var(--agyn-status-failed)]">
                   <span>{error}</span>
-                  <Button variant="ghost" size="sm" onClick={handleRetry}>Retry</Button>
+                  <Button variant="ghost" size="sm" onClick={handleRetry}>
+                    Retry
+                  </Button>
                 </div>
               )}
               <div className="flex-1">
@@ -164,16 +201,22 @@ export function ContainerTerminalDialog({ container, open, onClose }: Props) {
                 )}
               </div>
             </div>
-          </TabsContent>
+          </section>
 
-          <TabsContent value="logs" className="flex flex-1" forceMount>
+          <section
+            role="tabpanel"
+            aria-label="Logs"
+            aria-hidden={activeTab !== 'logs'}
+            hidden={activeTab !== 'logs'}
+            className="flex flex-1"
+          >
             <div className="flex flex-1 items-center justify-center px-6 py-4 text-sm text-[var(--agyn-text-subtle)]">
               Logs view coming soon.
             </div>
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+          </section>
+        </div>
+      </ScreenDialogContent>
+    </ScreenDialog>
   );
 }
 
