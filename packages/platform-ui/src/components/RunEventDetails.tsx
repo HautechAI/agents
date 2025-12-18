@@ -1,5 +1,5 @@
 import { Clock, MessageSquare, Bot, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, ExternalLink } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { useToolOutputStreaming } from '@/hooks/useToolOutputStreaming';
 import { Badge } from './Badge';
@@ -935,7 +935,7 @@ function renderFunctionCalls(
   expandedToolCalls: Set<string>,
   toggleToolCall: (id: string) => void,
   indexPrefix: string,
-): JSX.Element | null {
+): ReactElement | null {
   if (calls.length === 0) return null;
   return (
     <div className="space-y-1">

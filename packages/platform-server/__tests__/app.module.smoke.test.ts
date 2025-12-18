@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../src/bootstrap/app.module';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { PrismaService } from '../src/core/services/prisma.service';
+import { ConfigService } from '../src/core/services/config.service';
 import type { PrismaClient } from '@prisma/client';
 import { ContainerService } from '../src/infra/container/container.service';
 import { ContainerCleanupService } from '../src/infra/container/containerCleanup.job';
@@ -19,11 +20,18 @@ import { createEventsBusStub } from './helpers/eventsBus.stub';
 import { StartupRecoveryService } from '../src/core/services/startupRecovery.service';
 import { LiveGraphRuntime } from '../src/graph-core/liveGraph.manager';
 import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
+import { clearTestConfig, registerTestConfig } from './helpers/config';
 
-process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
-process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'postgres://localhost:5432/test';
+process.env.LLM_PROVIDER = process.env.LLM_PROVIDER || 'litellm';
+process.env.LITELLM_BASE_URL = process.env.LITELLM_BASE_URL || 'http://127.0.0.1:4000';
+process.env.LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || 'sk-test-master';
+process.env.AGENTS_DATABASE_URL = process.env.AGENTS_DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/agents_test';
 
 describe('AppModule bootstrap smoke test', () => {
+  afterEach(() => {
+    clearTestConfig();
+  });
+
   it('initializes Nest application with stubbed infrastructure', async () => {
     const transactionClientStub = {
       $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
@@ -135,8 +143,17 @@ describe('AppModule bootstrap smoke test', () => {
       getNodeInstance: vi.fn(),
       subscribe: vi.fn(() => () => {}),
     } satisfies Partial<LiveGraphRuntime>) as LiveGraphRuntime;
-    const llmProvisionerStub = { getLLM: vi.fn().mockResolvedValue({ call: vi.fn() }) } satisfies Partial<LLMProvisioner>;
+    const llmProvisionerStub = {
+      init: vi.fn().mockResolvedValue(undefined),
+      getLLM: vi.fn().mockResolvedValue({ call: vi.fn() }),
+    } satisfies Partial<LLMProvisioner>;
 
+    const config = registerTestConfig({
+      llmProvider: process.env.LLM_PROVIDER === 'openai' ? 'openai' : 'litellm',
+      litellmBaseUrl: process.env.LITELLM_BASE_URL,
+      litellmMasterKey: process.env.LITELLM_MASTER_KEY,
+      agentsDatabaseUrl: process.env.AGENTS_DATABASE_URL,
+    });
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
@@ -169,6 +186,8 @@ describe('AppModule bootstrap smoke test', () => {
       .useValue(liveRuntimeStub)
       .overrideProvider(LLMProvisioner)
       .useValue(llmProvisionerStub)
+      .overrideProvider(ConfigService)
+      .useValue(config)
       .compile();
 
     const adapter = new FastifyAdapter();
