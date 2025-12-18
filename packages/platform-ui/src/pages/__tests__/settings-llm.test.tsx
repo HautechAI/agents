@@ -675,7 +675,7 @@ describe('Settings/LLM page', () => {
       within(banner).getByRole('link', { name: 'View the server LiteLLM admin setup guide' }),
     ).toHaveAttribute(
       'href',
-      'https://github.com/HautechAI/agents/blob/main/packages/platform-server/README.md#litellm-admin-setup',
+      'https://github.com/agynio/platform/blob/main/packages/platform-server/README.md#litellm-admin-setup',
     );
 
     expect(
@@ -738,7 +738,7 @@ describe('Settings/LLM page', () => {
       within(banner).getByRole('link', { name: 'View the server LiteLLM admin setup guide' }),
     ).toHaveAttribute(
       'href',
-      'https://github.com/HautechAI/agents/blob/main/packages/platform-server/README.md#litellm-admin-setup',
+      'https://github.com/agynio/platform/blob/main/packages/platform-server/README.md#litellm-admin-setup',
     );
 
     const addCredentialButton = await screen.findByRole('button', { name: 'Add Credential' });

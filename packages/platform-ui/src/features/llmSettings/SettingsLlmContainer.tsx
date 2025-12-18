@@ -43,7 +43,7 @@ function toErrorMessage(error: unknown): string {
 
 const CREDENTIALS_QUERY_KEY = ['llm', 'credentials'] as const;
 const MODELS_QUERY_KEY = ['llm', 'models'] as const;
-const LITELLM_SETUP_URL = 'https://github.com/HautechAI/agents/blob/main/packages/platform-server/README.md#litellm-admin-setup';
+const LITELLM_SETUP_URL = 'https://github.com/agynio/platform/blob/main/packages/platform-server/README.md#litellm-admin-setup';
 const LITELLM_SAMPLE_BASE_URL = 'http://127.0.0.1:4000';
 const LITELLM_SAMPLE_MASTER_KEY = 'sk-dev-master-1234';
 
