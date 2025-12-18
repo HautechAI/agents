@@ -20,12 +20,12 @@ jobs:
       matrix:
         include:
           - name: platform-server
-            image: ghcr.io/hautechai/agents-platform-server
+            image: ghcr.io/agynio/platform-server
             dockerfile: packages/platform-server/Dockerfile
             context: .
             cache-scope: platform-server
           - name: platform-ui
-            image: ghcr.io/hautechai/agents-platform-ui
+            image: ghcr.io/agynio/platform-ui
             dockerfile: packages/platform-ui/Dockerfile
             context: .
             cache-scope: platform-ui
