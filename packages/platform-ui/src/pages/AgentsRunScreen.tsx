@@ -255,6 +255,14 @@ function buildContextSource(llmCall?: RunTimelineEvent['llmCall']): ContextSourc
   const rows = Array.isArray(llmCall.inputContextItems) ? llmCall.inputContextItems : [];
   if (rows.length === 0) return EMPTY_CONTEXT_SOURCE;
   const sorted = [...rows].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const highlightCandidates = new Set<string>();
+  for (const row of sorted) {
+    const id = row.contextItemId;
+    if (!isNonEmptyString(id)) continue;
+    if (row.isNew === true) {
+      highlightCandidates.add(id);
+    }
+  }
   const ids: string[] = [];
   const highlightIds: string[] = [];
   const seen = new Set<string>();
@@ -264,7 +272,7 @@ function buildContextSource(llmCall?: RunTimelineEvent['llmCall']): ContextSourc
     if (seen.has(id)) continue;
     seen.add(id);
     ids.push(id);
-    if (row.isNew === true) {
+    if (highlightCandidates.has(id)) {
       highlightIds.push(id);
     }
   }
