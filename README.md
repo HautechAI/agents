@@ -103,7 +103,7 @@ pnpm install
   - Optional: CORS_ORIGINS, VAULT_* (see packages/platform-server/src/core/services/config.service.ts and .env.example)
 - UI: copy packages/platform-ui/.env.example to .env and set:
   - VITE_API_BASE_URL — e.g. http://localhost:3010
-  - Optional: VITE_TRACING_SERVER_URL, VITE_UI_MOCK_SIDEBAR
+  - Optional: VITE_UI_MOCK_SIDEBAR (shows mock templates locally)
 
 3) Start dev supporting services:
 ```bash
@@ -186,8 +186,8 @@ Key environment variables (server) from packages/platform-server/.env.example an
 
 UI variables (packages/platform-ui/.env.example):
 - VITE_API_BASE_URL — Base URL for API (no /api suffix)
-- VITE_TRACING_SERVER_URL — Defaults to ${VITE_API_BASE_URL}/tracing
 - VITE_UI_MOCK_SIDEBAR — true to show mock templates locally
+- Note: the UI derives tracing requests from `VITE_API_BASE_URL`; no separate tracing URL override is consumed at runtime.
 
 ## Services / Processes
 - @agyn/platform-server — NestJS Fastify API + Socket.IO gateway
