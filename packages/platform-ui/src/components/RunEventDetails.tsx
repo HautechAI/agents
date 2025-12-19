@@ -1,5 +1,5 @@
 import { Clock, MessageSquare, Bot, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, ExternalLink } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { useToolOutputStreaming } from '@/hooks/useToolOutputStreaming';
 import { Badge } from './Badge';
@@ -87,6 +87,8 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
   const [contextOlderLoading, setContextOlderLoading] = useState(false);
   const [contextOlderError, setContextOlderError] = useState<string | null>(null);
   const loadMoreResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contextScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollAnchor = useRef<{ previousHeight: number; previousScrollTop: number } | null>(null);
 
   const contextRecordsOrdered = useMemo(() => {
     if (event.type !== 'llm') return [] as Record<string, unknown>[];
@@ -136,6 +138,7 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
       clearTimeout(loadMoreResetTimeout.current);
       loadMoreResetTimeout.current = null;
     }
+    pendingScrollAnchor.current = null;
   }, [event.id]);
 
   useEffect(() => {
@@ -156,6 +159,15 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
       setContextOlderError('Failed to load older context.');
       return;
     }
+    const container = contextScrollRef.current;
+    if (container) {
+      pendingScrollAnchor.current = {
+        previousHeight: container.scrollHeight,
+        previousScrollTop: container.scrollTop,
+      };
+    } else {
+      pendingScrollAnchor.current = null;
+    }
     setContextOlderLoading(true);
     setContextOlderError(null);
     try {
@@ -174,6 +186,7 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
     } catch (error) {
       console.error('Failed to load older context', error);
       setContextOlderError('Failed to load older context.');
+      pendingScrollAnchor.current = null;
       if (loadMoreResetTimeout.current !== null) {
         clearTimeout(loadMoreResetTimeout.current);
       }
@@ -183,6 +196,26 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
       }, 0);
     }
   }, [contextOlderLoading, olderContextEntries.length, contextOlderVisibleCount]);
+
+  useLayoutEffect(() => {
+    const container = contextScrollRef.current;
+    const anchor = pendingScrollAnchor.current;
+    if (!container || !anchor) return;
+    const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb: FrameRequestCallback) => window.setTimeout(cb, 0);
+    const cancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : (handle: number) => window.clearTimeout(handle);
+    const frame = schedule(() => {
+      const newHeight = container.scrollHeight;
+      const delta = newHeight - anchor.previousHeight;
+      if (delta !== 0) {
+        container.scrollTop = anchor.previousScrollTop + delta;
+      }
+      pendingScrollAnchor.current = null;
+    });
+
+    return () => {
+      cancel(frame);
+    };
+  }, [visibleContextRecords]);
 
   const handleRetryLoadMore = useCallback(() => {
     if (contextOlderLoading) return;
@@ -392,7 +425,21 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
               <div className="flex items-center gap-2 mb-3 h-8 flex-shrink-0">
                 <span className="text-sm text-[var(--agyn-gray)]">Context</span>
               </div>
-              <div className="flex-1 overflow-y-auto min-h-0 border border-[var(--agyn-border-subtle)] rounded-[10px] p-4">
+              <div
+                className="flex-1 overflow-y-auto min-h-0 border border-[var(--agyn-border-subtle)] rounded-[10px] p-4"
+                ref={contextScrollRef}
+                data-testid="context-scroll-container"
+              >
+                {showLoadMoreButton && (
+                  <button
+                    type="button"
+                    onClick={handleLoadMoreContext}
+                    disabled={contextOlderLoading}
+                    className="mb-4 w-full text-sm text-[var(--agyn-blue)] hover:text-[var(--agyn-blue)]/80 py-2 border border-[var(--agyn-border-subtle)] rounded-[6px] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {contextOlderLoading ? 'Loading…' : 'Load more'}
+                  </button>
+                )}
                 {showEmptyContext ? (
                   <div className="text-sm text-[var(--agyn-gray)]">No new context for this call.</div>
                 ) : (
@@ -411,16 +458,6 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
                       Retry
                     </button>
                   </div>
-                )}
-                {showLoadMoreButton && (
-                  <button
-                    type="button"
-                    onClick={handleLoadMoreContext}
-                    disabled={contextOlderLoading}
-                    className="mt-4 w-full text-sm text-[var(--agyn-blue)] hover:text-[var(--agyn-blue)]/80 py-2 border border-[var(--agyn-border-subtle)] rounded-[6px] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {contextOlderLoading ? 'Loading…' : 'Load more'}
-                  </button>
                 )}
               </div>
             </div>
@@ -467,8 +504,6 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
     contextArray.map((message, index) => {
       const roleValue = asString(message.role).toLowerCase();
       const role = roleValue || 'user';
-      const isNewContext = message['__agynIsNew'] === true;
-
       const getRoleConfig = () => {
         switch (role) {
           case 'system':
@@ -559,11 +594,6 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
             <span className={`text-xs font-medium ${role === 'tool' ? '' : 'capitalize'}`}>
               {role === 'tool' ? asString(message.name, 'Tool') : role}
             </span>
-            {isNewContext && (
-              <Badge variant="success" size="sm" className="ml-2">
-                New
-              </Badge>
-            )}
             {timestamp && (
               <span className="text-xs text-[var(--agyn-gray)] ml-1">{timestamp}</span>
             )}
