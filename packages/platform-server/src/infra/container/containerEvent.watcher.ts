@@ -65,7 +65,7 @@ export class DockerWorkspaceEventsWatcher implements OnModuleDestroy {
     const since = this.lastEventSeconds ?? Math.floor(Date.now() / 1000);
     const filters: GetEventsOptions['filters'] = {
       type: ['container'] as Array<'container'>,
-      event: ['oom', 'die', 'kill'],
+      event: ['create', 'start', 'stop', 'die', 'kill', 'destroy', 'restart', 'oom', 'health_status'],
       label: ['hautech.ai/role=workspace'],
     };
 

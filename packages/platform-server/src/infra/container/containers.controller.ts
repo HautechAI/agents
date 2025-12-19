@@ -1,8 +1,8 @@
-import { Controller, Get, Inject, Query, Logger } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Inject, Query, Logger } from '@nestjs/common';
 import { PrismaService } from '../../core/services/prisma.service';
 import { Prisma, type PrismaClient, type ContainerStatus } from '@prisma/client';
-import { IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsEnum, IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { sanitizeContainerMounts, type ContainerMount } from './container.mounts';
 
 // Allowed sort columns for containers list
@@ -17,10 +17,28 @@ enum SortDir {
   desc = 'desc',
 }
 
+type ContainerStatusFilter = ContainerStatus | 'all';
+type ContainerHealth = 'healthy' | 'unhealthy' | 'starting';
+
+const isHealth = (value: unknown): value is ContainerHealth =>
+  value === 'healthy' || value === 'unhealthy' || value === 'starting';
+
 export class ListContainersQueryDto {
   @IsOptional()
-  @IsIn(['running', 'stopped', 'terminating', 'failed'])
-  status?: ContainerStatus;
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
+  @IsIn(['running', 'stopped', 'terminating', 'failed', 'all'])
+  status?: ContainerStatusFilter;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === 'boolean') return value;
+    const normalized = String(value).toLowerCase();
+    if (normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'false' || normalized === '0') return false;
+    return undefined;
+  })
+  includeStopped?: boolean;
 
   @IsOptional()
   @IsUUID()
@@ -48,6 +66,10 @@ export class ListContainersQueryDto {
   @Min(1)
   @Max(500)
   limit?: number;
+
+  @IsOptional()
+  @IsISO8601()
+  since?: string;
 }
 
 @Controller('api/containers')
@@ -74,10 +96,15 @@ export class ContainersController {
     role: 'workspace' | 'dind' | string;
     sidecars?: Array<{ containerId: string; role: 'dind'; image: string; status: ContainerStatus; name: string }>;
     mounts?: Array<{ source: string; destination: string }>;
+    autoRemoved: boolean;
+    health: ContainerHealth | null;
+    lastEventAt: string | null;
   }> }> {
     try {
       const {
-        status = 'running' as ContainerStatus,
+        status,
+        includeStopped,
+        since,
         threadId,
         image,
         nodeId,
@@ -87,10 +114,26 @@ export class ContainersController {
       } = query || {};
 
     // Build Prisma where clause with optional filters
-    const where: Prisma.ContainerWhereInput = { status };
+    const where: Prisma.ContainerWhereInput = {};
+    if (status === 'all') {
+      // no status constraint
+    } else if (status) {
+      where.status = status;
+    } else if (includeStopped) {
+      where.status = { in: ['running', 'terminating', 'stopped', 'failed'] };
+    } else {
+      where.status = 'running';
+    }
     if (threadId) where.threadId = threadId;
     if (image) where.image = image;
     if (nodeId) where.nodeId = nodeId;
+    if (since) {
+      const sinceDate = new Date(since);
+      if (Number.isNaN(sinceDate.getTime())) {
+        throw new BadRequestException('Invalid since timestamp');
+      }
+      where.updatedAt = { gte: sinceDate };
+    }
 
     // Translate sortBy to actual DB column (startedAt maps to createdAt)
     let orderBy: Prisma.ContainerOrderByWithRelationInput;
@@ -139,21 +182,37 @@ export class ContainersController {
     });
 
     // Narrow type guard for metadata.labels
-    type MetadataShape = { labels?: Record<string, unknown>; mounts?: unknown };
+    type MetadataShape = {
+      labels?: Record<string, unknown>;
+      mounts?: unknown;
+      autoRemoved?: unknown;
+      health?: unknown;
+      lastEventAt?: unknown;
+    };
     const sanitizeName = (value: unknown): string => {
       if (typeof value !== 'string') throw new Error('Container name missing');
       const trimmed = value.trim();
       if (!trimmed) throw new Error('Container name is empty');
       return trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
     };
-    const toMetadata = (value: unknown): { labels: Record<string, string>; mounts: ContainerMount[] } => {
-      if (!value || typeof value !== 'object') return { labels: {}, mounts: [] };
+    const toMetadata = (value: unknown): {
+      labels: Record<string, string>;
+      mounts: ContainerMount[];
+      autoRemoved: boolean;
+      health?: ContainerHealth;
+      lastEventAt?: string;
+    } => {
+      if (!value || typeof value !== 'object') return { labels: {}, mounts: [], autoRemoved: false };
       const meta = value as MetadataShape;
       const rawLabels = meta.labels && typeof meta.labels === 'object' && meta.labels !== null ? meta.labels : {};
       const labels: Record<string, string> = {};
       for (const [key, val] of Object.entries(rawLabels)) if (typeof val === 'string') labels[key] = val;
       const mounts = sanitizeContainerMounts(meta.mounts);
-      return { labels, mounts };
+      const autoRemoved = typeof meta.autoRemoved === 'boolean' ? meta.autoRemoved : false;
+      const healthCandidate = typeof meta.health === 'string' ? meta.health : undefined;
+      const health = isHealth(healthCandidate) ? healthCandidate : undefined;
+      const lastEventAt = typeof meta.lastEventAt === 'string' ? meta.lastEventAt : undefined;
+      return { labels, mounts, autoRemoved, health, lastEventAt };
     };
     // Exclude DinD from top-level list (only attach as sidecars)
     const filteredRows = rows.filter((row) => {
@@ -226,7 +285,7 @@ export class ContainersController {
       return Number.isFinite(t) ? dt.toISOString() : new Date(0).toISOString();
     };
     const items = filteredRows.map((row) => {
-      const { labels, mounts } = toMetadata(row.metadata);
+      const { labels, mounts, autoRemoved, health, lastEventAt } = toMetadata(row.metadata);
       const role = labels['hautech.ai/role'] ?? 'workspace';
       const name = sanitizeName(row.name);
       return {
@@ -241,6 +300,9 @@ export class ContainersController {
         role,
         sidecars: byParent[row.containerId] || [],
         mounts,
+        autoRemoved,
+        health: health ?? null,
+        lastEventAt: lastEventAt ? toIso(lastEventAt) : null,
       };
     });
 

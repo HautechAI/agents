@@ -167,6 +167,7 @@ describe('ContainerRegistry (Prisma-backed)', () => {
     expect(row!.status).toBe('running');
     expect(row!.killAfterAt).not.toBeNull();
     expect(row!.metadata!.ttlSeconds).toBe(10);
+    expect(typeof row!.metadata!.lastEventAt).toBe('string');
     expect(row!.dockerContainerId).toBe('abc');
     expect(row!.name).toBe('workspace-main');
   });
@@ -217,12 +218,13 @@ describe('ContainerRegistry (Prisma-backed)', () => {
     expect(row!.metadata!.terminationAttempts).toBe(1);
   });
 
-  it('markStopped sets status and deletedAt', async () => {
+  it('markStopped updates status and metadata', async () => {
     await registry.registerStart({ containerId: 'y', nodeId: 'n', threadId: '', image: 'img', name: '/y' });
     await registry.markStopped('y', 'ttl_expired');
     const row = await prisma.container.findUnique({ where: { containerId: 'y' } });
     expect(row!.status).toBe('stopped');
-    expect(row!.deletedAt).toBeInstanceOf(Date);
+    expect(row!.deletedAt).toBeNull();
     expect(row!.terminationReason).toBe('ttl_expired');
+    expect(typeof row!.metadata?.lastEventAt).toBe('string');
   });
 });
