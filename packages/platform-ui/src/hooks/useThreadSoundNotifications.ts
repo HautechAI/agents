@@ -41,7 +41,6 @@ export function useThreadSoundNotifications({ threads, delayMs = DEFAULT_DELAY_M
         finished.pause();
       }
       audioRefs.current = {};
-      setAudioReady(false);
     };
   }, [isBrowser]);
 

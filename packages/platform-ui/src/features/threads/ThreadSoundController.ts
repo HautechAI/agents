@@ -1,10 +1,12 @@
+type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
+
 export type ThreadSoundControllerOptions = {
   delayMs: number;
   playNewMessage: (threadId: string) => void;
   playFinished: (threadId: string) => void;
   isRootThread: (threadId: string) => boolean;
-  schedule?: (callback: () => void, delay: number) => number;
-  cancel?: (handle: number) => void;
+  schedule?: (callback: () => void, delay: number) => TimerHandle;
+  cancel?: (handle: TimerHandle) => void;
 };
 
 export class ThreadSoundController {
@@ -16,11 +18,11 @@ export class ThreadSoundController {
 
   private readonly isRootThread: (threadId: string) => boolean;
 
-  private readonly schedule: (callback: () => void, delay: number) => number;
+  private readonly schedule: (callback: () => void, delay: number) => TimerHandle;
 
-  private readonly cancel: (handle: number) => void;
+  private readonly cancel: (handle: TimerHandle) => void;
 
-  private pendingNewMessage = new Map<string, number>();
+  private pendingNewMessage = new Map<string, TimerHandle>();
 
   constructor(options: ThreadSoundControllerOptions) {
     this.delayMs = options.delayMs;
