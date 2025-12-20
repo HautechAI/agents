@@ -35,14 +35,6 @@ export function ContainersPageContent({
   onDeleteContainer,
   onViewThread,
 }: ContainersPageContentProps) {
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[var(--agyn-bg-light)]">
-        <span className="text-sm text-[var(--agyn-text-subtle)]">Loading containers…</span>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--agyn-bg-light)]">
@@ -66,6 +58,7 @@ export function ContainersPageContent({
       statusFilter={status}
       counts={counts}
       onStatusFilterChange={onStatusChange}
+      isLoading={isLoading}
       onOpenTerminal={onOpenTerminal}
       onDeleteContainer={onDeleteContainer}
       onViewThread={onViewThread}

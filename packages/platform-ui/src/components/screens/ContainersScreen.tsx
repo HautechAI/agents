@@ -38,6 +38,7 @@ interface ContainersScreenProps {
   onDeleteContainer?: (containerId: string) => void;
   onViewThread?: (threadId: string) => void;
   onBack?: () => void;
+  isLoading?: boolean;
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -51,6 +52,7 @@ export default function ContainersScreen({
   onDeleteContainer,
   onViewThread,
   onBack,
+  isLoading = false,
 }: ContainersScreenProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [sidecarsExpanded, setSidecarsExpanded] = useState<Set<string>>(new Set());
@@ -95,6 +97,8 @@ export default function ContainersScreen({
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const paginatedContainers = groupedContainers.slice(startIndex, endIndex);
+
+  const showEmptyState = !isLoading && paginatedContainers.length === 0;
 
   // Get status badge
   const getStatusBadge = (status: ContainerStatus) => {
@@ -236,7 +240,16 @@ export default function ContainersScreen({
 
           {/* Container List */}
           <div className="flex-1 overflow-auto bg-[var(--agyn-bg-light)] p-6">
-            {paginatedContainers.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-3" data-testid="containers-loading">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-28 max-w-[700px] rounded-lg border border-[var(--agyn-border-subtle)] bg-white/60 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : showEmptyState ? (
               <div className="py-12 text-center text-sm text-[var(--agyn-text-subtle)]">
                 No containers found
               </div>

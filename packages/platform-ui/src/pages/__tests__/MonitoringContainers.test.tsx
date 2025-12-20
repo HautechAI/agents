@@ -317,6 +317,40 @@ describe('MonitoringContainers page', () => {
     expect(screen.getByTestId('containers-screen-mock')).toBeInTheDocument();
   });
 
+  it('keeps layout visible while data is loading', () => {
+    useContainersCalls = [];
+    useContainersMock.mockImplementation((status?: string, sortBy?: string, sortDir?: 'asc' | 'desc', threadId?: string) => {
+      useContainersCalls.push({ status, sortBy, sortDir, threadId });
+      if (status === 'running') {
+        const loadingResult = {
+          data: undefined,
+          isLoading: true,
+          isFetching: false,
+          error: null,
+          refetch: vi.fn(),
+        } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
+        return loadingResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
+      }
+
+      const countsResult = {
+        data: { items: [] },
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
+      return countsResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
+    });
+
+    renderPage();
+
+    expect(getContainersScreenMock()).toHaveBeenCalledTimes(1);
+    const props = latestContainersScreenProps as ContainersScreenProps;
+    expect(props.isLoading).toBe(true);
+    expect(props.containers).toEqual([]);
+    expect(screen.getByTestId('containers-screen-mock')).toBeInTheDocument();
+  });
+
   it('opens terminal dialog and requests session creation', async () => {
     mutateSessionMock.mockResolvedValue({
       sessionId: 'session-1',

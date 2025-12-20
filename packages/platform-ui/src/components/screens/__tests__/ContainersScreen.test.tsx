@@ -26,4 +26,21 @@ describe('ContainersScreen', () => {
     expect(screen.getByRole('button', { name: 'Running (0)' })).toBeInTheDocument();
     expect(screen.getByText('No containers found')).toBeInTheDocument();
   });
+
+  it('shows loading skeleton while keeping layout visible', () => {
+    render(
+      <ContainersScreen
+        containers={[]}
+        statusFilter="running"
+        counts={EMPTY_COUNTS}
+        onStatusFilterChange={vi.fn()}
+        isLoading
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Containers' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Running (0)' })).toBeInTheDocument();
+    expect(screen.getByTestId('containers-loading')).toBeInTheDocument();
+    expect(screen.queryByText('No containers found')).not.toBeInTheDocument();
+  });
 });
