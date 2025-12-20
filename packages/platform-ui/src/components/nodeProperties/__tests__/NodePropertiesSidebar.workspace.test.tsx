@@ -6,6 +6,26 @@ import { describe, it, expect, vi } from 'vitest';
 import NodePropertiesSidebar from '../index';
 import type { NodeConfig, NodePropertiesSidebarProps, NodeState } from '../types';
 
+vi.mock('../../Dropdown', () => ({
+  Dropdown: (props: any) => {
+    const options = Array.isArray(props.options) ? props.options : [];
+    return (
+      <select
+        data-testid={props['data-testid'] ?? 'dropdown'}
+        value={props.value ?? ''}
+        onChange={(event) => props.onValueChange?.(event.target.value)}
+        aria-label={props.label ?? props.placeholder ?? 'dropdown'}
+      >
+        {options.map((option: any) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  },
+}));
+
 function WorkspaceSidebarHarness({
   initialConfig,
   stateOverride,
@@ -151,19 +171,38 @@ describe('NodePropertiesSidebar workspace limits', () => {
 });
 
 describe('NodePropertiesSidebar workspace template overrides', () => {
-  it('renders the memory template view with static config values', () => {
-    renderWorkspaceTemplateSidebar('memory', {
+  it('renders the memory template view with scope control and persists changes', async () => {
+    const user = userEvent.setup();
+    const { onConfigChange } = renderWorkspaceTemplateSidebar('memory', {
+      scope: 'global',
       staticConfig: {
         scope: 'perThread',
-        collectionPrefix: 'agents',
-        title: 'Agent Memory',
       },
     } as Partial<NodeConfig>);
 
-    expect(screen.getByText('Memory workspace')).toBeInTheDocument();
-    expect(screen.getByText('perThread')).toBeInTheDocument();
-    expect(screen.getByText('agents')).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('0.5 or 500m')).not.toBeInTheDocument();
+    expect(screen.queryByText('Memory workspace')).not.toBeInTheDocument();
+    expect(screen.queryByText(/static configuration/i)).not.toBeInTheDocument();
+
+    const dropdown = screen.getByTestId('dropdown') as HTMLSelectElement;
+    expect(dropdown.value).toBe('global');
+
+    await user.selectOptions(dropdown, 'perThread');
+
+    expect(onConfigChange).toHaveBeenCalledWith({ scope: 'perThread' });
+    await waitFor(() => {
+      expect(dropdown.value).toBe('perThread');
+    });
+  });
+
+  it('falls back to static config scope when node config omits scope', () => {
+    renderWorkspaceTemplateSidebar('memory', {
+      staticConfig: {
+        scope: 'perThread',
+      },
+    } as Partial<NodeConfig>);
+
+    const dropdown = screen.getByTestId('dropdown') as HTMLSelectElement;
+    expect(dropdown.value).toBe('perThread');
   });
 
   it('renders the memory connector template view with static config values', () => {
