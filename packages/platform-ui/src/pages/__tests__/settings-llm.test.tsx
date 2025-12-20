@@ -93,7 +93,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -143,7 +143,7 @@ describe('Settings/LLM page', () => {
     expect(credentialHeader.className).toContain('top-0');
     const credentialRow = screen.getByTestId('llm-credential-row-openai-prod');
     expect(within(credentialRow).getByText('OpenAI')).toBeInTheDocument();
-    expect(within(credentialRow).getByText('prod')).toBeInTheDocument();
+    expect(within(credentialRow).queryByText('prod')).not.toBeInTheDocument();
 
     const modelsTab = screen.getByRole('tab', { name: 'Models' });
     await user.click(modelsTab);
@@ -174,7 +174,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -321,7 +321,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: [] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -390,12 +390,11 @@ describe('Settings/LLM page', () => {
         const body = (await request.json()) as {
           name: string;
           provider: string;
-          tags?: string[];
           values?: Record<string, string>;
         };
         credentialRecords.push({
           credential_name: body.name,
-          credential_info: { litellm_provider: body.provider, tags: body.tags ?? [] },
+          credential_info: { litellm_provider: body.provider },
           credential_values: { api_key: 'sk****new' },
         });
         return HttpResponse.json({ success: true });
@@ -445,7 +444,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -465,10 +464,10 @@ describe('Settings/LLM page', () => {
       http.get(abs('/api/settings/llm/models'), () => HttpResponse.json({ models: [] })),
       http.get(abs('/api/settings/llm/health-check-modes'), () => HttpResponse.json({ modes: DEFAULT_HEALTH_CHECK_MODES })),
       http.patch(abs('/api/settings/llm/credentials/openai-prod'), async ({ request }) => {
-        const body = (await request.json()) as { tags?: string[]; values?: Record<string, string> };
-        expect(body).toMatchObject({ tags: ['prod', 'beta'] });
-        expect(Object.keys(body.values ?? {})).toHaveLength(0);
-        credentialRecords[0].credential_info.tags = body.tags ?? [];
+        const body = (await request.json()) as { values?: Record<string, string> };
+        expect(body).not.toHaveProperty('tags');
+        expect(body).toMatchObject({ values: { api_key: 'sk-updated-secret' } });
+        credentialRecords[0].credential_values.api_key = 'sk****updated';
         return HttpResponse.json({ success: true });
       }),
     );
@@ -487,15 +486,14 @@ describe('Settings/LLM page', () => {
     await user.click(editButton);
 
     const dialog = await screen.findByRole('dialog', { name: /Edit Credential/i });
-    const tagsInput = within(dialog).getByLabelText('Tags');
-    await user.clear(tagsInput);
-    await user.type(tagsInput, 'prod, beta');
+    const apiKeyInput = within(dialog).getByLabelText('OpenAI API Key');
+    await user.type(apiKeyInput, 'sk-updated-secret');
 
     const saveButton = within(dialog).getByRole('button', { name: 'Save Changes' });
     await user.click(saveButton);
 
     await waitFor(() => expect(notifyMocks.success).toHaveBeenCalledWith('Credential updated'));
-    await screen.findByText('beta');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Edit Credential/i })).not.toBeInTheDocument());
   });
 
   it('deletes a credential via the confirmation dialog', async () => {
@@ -514,7 +512,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -585,12 +583,12 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-default',
-        credential_info: { litellm_provider: 'openai', tags: [] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****openai' },
       },
       {
         credential_name: 'zz-anthropic-legacy',
-        credential_info: { custom_llm_provider: 'anthropic', tags: [] },
+        credential_info: { custom_llm_provider: 'anthropic' },
         credential_values: { api_key: 'sk****anthropic' },
       },
     ];
@@ -709,7 +707,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];

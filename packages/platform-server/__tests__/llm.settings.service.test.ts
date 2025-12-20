@@ -135,7 +135,6 @@ describe.sequential('LLMSettingsService', () => {
           credential_name: 'openai-dev',
           credential_info: {
             litellm_provider: 'openai',
-            tags: ['default'],
           },
           credential_values: {
             api_key: 'sk-test',
@@ -151,7 +150,6 @@ describe.sequential('LLMSettingsService', () => {
     const res = await service.createCredential({
       name: 'openai-dev',
       provider: 'openai',
-      tags: ['default', ''],
       values: { api_key: ' sk-test ', api_base: 'https://api.openai.com/v1' },
     });
     expect(res).toMatchObject({ success: true });
@@ -164,7 +162,7 @@ describe.sequential('LLMSettingsService', () => {
         expect(body).toMatchObject({
           credential_name: 'openai-dev',
           credential_info: {
-            tags: ['primary'],
+            environment: 'primary',
           },
         });
         expect(body).not.toHaveProperty('credential_values');
@@ -174,7 +172,7 @@ describe.sequential('LLMSettingsService', () => {
       .reply(200, { success: true });
 
     const service = new LLMSettingsService(createConfig());
-    const res = await service.updateCredential({ name: 'openai-dev', tags: ['primary'] });
+    const res = await service.updateCredential({ name: 'openai-dev', metadata: { environment: 'primary' } });
     expect(res).toMatchObject({ success: true });
     scope.done();
   });
@@ -336,7 +334,6 @@ describe.sequential('LLMSettingsService', () => {
       service.createCredential({
         name: 'openai-dev',
         provider: 'openai',
-        tags: [],
         values: { api_key: 'sk-test' },
       }),
     ).rejects.toMatchObject({
@@ -365,7 +362,6 @@ describe.sequential('LLMSettingsService', () => {
       service.createCredential({
         name: 'openai-dev',
         provider: 'openai',
-        tags: [],
         values: { api_key: 'sk-test' },
       }),
     ).rejects.toMatchObject({

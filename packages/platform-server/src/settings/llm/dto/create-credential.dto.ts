@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class CreateCredentialDto {
   @IsString()
@@ -8,11 +8,6 @@ export class CreateCredentialDto {
   @IsString()
   @IsNotEmpty()
   provider!: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  tags?: string[];
 
   @IsOptional()
   @IsObject()

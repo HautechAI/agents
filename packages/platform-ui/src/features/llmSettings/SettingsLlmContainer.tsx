@@ -246,7 +246,6 @@ export function SettingsLlmContainer(): ReactElement {
       await createCredential({
         name: payload.name,
         provider: payload.providerKey,
-        tags: payload.tags,
         metadata: payload.metadata,
         values: payload.values,
       });
@@ -263,7 +262,6 @@ export function SettingsLlmContainer(): ReactElement {
     mutationFn: async ({ name, ...payload }: CredentialFormPayload) => {
       await updateCredential(name, {
         provider: payload.providerKey,
-        tags: payload.tags,
         metadata: payload.metadata,
         values: payload.values,
       });

@@ -29,7 +29,6 @@ export type CredentialRecord = {
   name: string;
   providerKey: string;
   providerLabel: string;
-  tags: string[];
   values: Record<string, string>;
   maskedFields: Set<string>;
   metadata: Record<string, unknown>;
@@ -106,10 +105,6 @@ export function mapCredentials(
   if (!Array.isArray(items)) return [];
   return items.map((item) => {
     const info = (item.credential_info ?? {}) as Record<string, unknown>;
-    const tagsRaw = info?.tags;
-    const tags = Array.isArray(tagsRaw)
-      ? tagsRaw.map((t) => (typeof t === 'string' ? t : String(t))).filter((t) => t.length > 0)
-      : [];
     const providerKey = resolveCredentialProvider(info);
     const provider = providers.get(providerKey);
     const providerLabel = provider?.label ?? (providerKey || 'Unknown');
@@ -137,7 +132,6 @@ export function mapCredentials(
       name: item.credential_name,
       providerKey,
       providerLabel,
-      tags,
       values,
       maskedFields,
       metadata,
