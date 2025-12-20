@@ -1,7 +1,7 @@
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 
 import { useOnboardingStatus } from '../hooks';
 

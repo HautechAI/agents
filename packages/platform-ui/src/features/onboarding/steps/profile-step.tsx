@@ -1,5 +1,4 @@
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Input } from '@/components/Input';
 
 import type { OnboardingStepComponentProps } from '../steps.registry';
 import type { ProfileFormValues } from '../lib/profile';
@@ -23,69 +22,42 @@ export function ProfileStep({ value, onChange, errors, showErrors, isSubmitting 
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="onboarding-profile-first-name" className="text-sm font-medium">
-            First name
-          </Label>
-          <Input
-            id="onboarding-profile-first-name"
-            value={value.firstName}
-            onChange={(event) => handleFieldChange('firstName', event.currentTarget.value)}
-            autoComplete="given-name"
-            placeholder="Jane"
-            aria-invalid={firstNameError ? 'true' : undefined}
-            aria-describedby={firstNameError ? 'onboarding-profile-first-name-error' : undefined}
-            disabled={isSubmitting}
-          />
-          {firstNameError ? (
-            <p id="onboarding-profile-first-name-error" role="alert" className="text-xs text-destructive">
-              {firstNameError}
-            </p>
-          ) : null}
-        </div>
+        <Input
+          id="onboarding-profile-first-name"
+          label="First name"
+          value={value.firstName}
+          onChange={(event) => handleFieldChange('firstName', event.currentTarget.value)}
+          autoComplete="given-name"
+          placeholder="Jane"
+          aria-invalid={firstNameError ? 'true' : undefined}
+          error={firstNameError}
+          disabled={isSubmitting}
+        />
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="onboarding-profile-last-name" className="text-sm font-medium">
-            Last name
-          </Label>
-          <Input
-            id="onboarding-profile-last-name"
-            value={value.lastName}
-            onChange={(event) => handleFieldChange('lastName', event.currentTarget.value)}
-            autoComplete="family-name"
-            placeholder="Doe"
-            aria-invalid={lastNameError ? 'true' : undefined}
-            aria-describedby={lastNameError ? 'onboarding-profile-last-name-error' : undefined}
-            disabled={isSubmitting}
-          />
-          {lastNameError ? (
-            <p id="onboarding-profile-last-name-error" role="alert" className="text-xs text-destructive">
-              {lastNameError}
-            </p>
-          ) : null}
-        </div>
+        <Input
+          id="onboarding-profile-last-name"
+          label="Last name"
+          value={value.lastName}
+          onChange={(event) => handleFieldChange('lastName', event.currentTarget.value)}
+          autoComplete="family-name"
+          placeholder="Doe"
+          aria-invalid={lastNameError ? 'true' : undefined}
+          error={lastNameError}
+          disabled={isSubmitting}
+        />
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="onboarding-profile-email" className="text-sm font-medium">
-            Email
-          </Label>
-          <Input
-            id="onboarding-profile-email"
-            type="email"
-            value={value.email}
-            onChange={(event) => handleFieldChange('email', event.currentTarget.value)}
-            autoComplete="email"
-            placeholder="you@example.com"
-            aria-invalid={emailError ? 'true' : undefined}
-            aria-describedby={emailError ? 'onboarding-profile-email-error' : undefined}
-            disabled={isSubmitting}
-          />
-          {emailError ? (
-            <p id="onboarding-profile-email-error" role="alert" className="text-xs text-destructive">
-              {emailError}
-            </p>
-          ) : null}
-        </div>
+        <Input
+          id="onboarding-profile-email"
+          label="Email"
+          type="email"
+          value={value.email}
+          onChange={(event) => handleFieldChange('email', event.currentTarget.value)}
+          autoComplete="email"
+          placeholder="you@example.com"
+          aria-invalid={emailError ? 'true' : undefined}
+          error={emailError}
+          disabled={isSubmitting}
+        />
       </div>
     </div>
   );

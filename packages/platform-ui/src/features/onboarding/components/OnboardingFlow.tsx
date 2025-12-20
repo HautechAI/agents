@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 
 import { useOnboardingStatus, useSaveOnboardingProfile } from '../hooks';
