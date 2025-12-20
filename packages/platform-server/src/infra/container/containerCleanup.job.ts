@@ -14,6 +14,7 @@ export interface SweepSelectiveOptions {
 export class ContainerCleanupService {
   private timer?: NodeJS.Timeout;
   private enabled: boolean;
+  private readonly retentionDays: number;
   private readonly logger = new Logger(ContainerCleanupService.name);
 
   constructor(
@@ -22,6 +23,14 @@ export class ContainerCleanupService {
   ) {
     const env = process.env.CONTAINERS_CLEANUP_ENABLED;
     this.enabled = env == null ? true : String(env).toLowerCase() === 'true';
+    const retentionRaw = process.env.CONTAINERS_RETENTION_DAYS;
+    const parsedRetention = retentionRaw != null ? Number.parseInt(String(retentionRaw), 10) : NaN;
+    const defaultRetention = 14;
+    if (Number.isFinite(parsedRetention)) {
+      this.retentionDays = parsedRetention < 0 ? defaultRetention : parsedRetention;
+    } else {
+      this.retentionDays = defaultRetention;
+    }
   }
 
   start(intervalMs = 5 * 60 * 1000): void {
@@ -50,38 +59,45 @@ export class ContainerCleanupService {
 
   async sweep(now: Date = new Date()): Promise<void> {
     const expired = await this.registry.getExpired(now);
-    if (!expired.length) return;
-    this.logger.log(`ContainerCleanup: found ${expired.length} expired containers`);
+    if (expired.length) {
+      this.logger.log(`ContainerCleanup: found ${expired.length} expired containers`);
 
-    // Controlled concurrency to avoid long sequential sweeps
-    const limit = pLimit(5);
+      // Controlled concurrency to avoid long sequential sweeps
+      const limit = pLimit(5);
 
-    await Promise.allSettled(
-      expired.map((doc) =>
-        limit(async () => {
-          // Use camelCase Prisma field names (containerId)
-          const id = doc.containerId;
-          const claimId = randomUUID();
-          // Only CAS-claim when transitioning from running; terminating should be retried idempotently
-          if (doc.status === 'running') {
-            const ok = await this.registry.claimForTermination(id, claimId);
-            if (!ok) return; // claimed by another worker
-          }
+      await Promise.allSettled(
+        expired.map((doc) =>
+          limit(async () => {
+            // Use camelCase Prisma field names (containerId)
+            const id = doc.containerId;
+            const claimId = randomUUID();
+            // Only CAS-claim when transitioning from running; terminating should be retried idempotently
+            if (doc.status === 'running') {
+              const ok = await this.registry.claimForTermination(id, claimId);
+              if (!ok) return; // claimed by another worker
+            }
 
-          try {
-            await this.cleanDinDSidecars(id, { graceSeconds: 5, removeVolumes: true }).catch((e: unknown) =>
-              this.logger.error('ContainerCleanup: error cleaning DinD sidecars', { id, error: e }),
-            );
-            await this.stopAndRemoveContainer(id, { graceSeconds: 10, force: true });
-            await this.registry.markStopped(id, 'ttl_expired');
-          } catch (e: unknown) {
-            this.logger.error('ContainerCleanup: error stopping/removing', { id, error: e });
-            // Schedule retry with backoff metadata; leave as terminating
-            await this.registry.recordTerminationFailure(id, e instanceof Error ? e.message : String(e));
-          }
-        }),
-      ),
-    );
+            try {
+              await this.cleanDinDSidecars(id, { graceSeconds: 5, removeVolumes: true }).catch((e: unknown) =>
+                this.logger.error('ContainerCleanup: error cleaning DinD sidecars', { id, error: e }),
+              );
+              await this.stopAndRemoveContainer(id, { graceSeconds: 10, force: true });
+              await this.registry.markStopped(id, 'ttl_expired');
+            } catch (e: unknown) {
+              this.logger.error('ContainerCleanup: error stopping/removing', { id, error: e });
+              // Schedule retry with backoff metadata; leave as terminating
+              await this.registry.recordTerminationFailure(id, e instanceof Error ? e.message : String(e));
+            }
+          }),
+        ),
+      );
+    }
+
+    try {
+      await this.purgeHistoricalRecords(now);
+    } catch (error) {
+      this.logger.error('ContainerCleanup: retention purge failed', { error });
+    }
   }
 
   async sweepSelective(threadId: string, opts: SweepSelectiveOptions): Promise<void> {
@@ -174,6 +190,28 @@ export class ContainerCleanupService {
     if (scCleaned > 0) this.logger.log(`ContainerCleanup: removed ${scCleaned} DinD sidecar(s) for ${parentId}`);
     const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
     if (rejected.length) throw new AggregateError(rejected.map((r) => r.reason), 'One or more sidecar cleanup tasks failed');
+  }
+
+  private isRetentionEnabled(): boolean {
+    return Number.isFinite(this.retentionDays) && this.retentionDays > 0;
+  }
+
+  private retentionCutoff(now: Date): Date {
+    const millisPerDay = 24 * 60 * 60 * 1000;
+    return new Date(now.getTime() - this.retentionDays * millisPerDay);
+  }
+
+  private async purgeHistoricalRecords(now: Date): Promise<void> {
+    if (!this.isRetentionEnabled()) return;
+    const cutoff = this.retentionCutoff(now);
+    const removed = await this.registry.deleteHistorical(cutoff);
+    if (removed > 0) {
+      this.logger.log('ContainerCleanup: purged historical containers exceeding retention window', {
+        removed,
+        retentionDays: this.retentionDays,
+        cutoff: cutoff.toISOString(),
+      });
+    }
   }
 
   private async stopAndRemoveContainer(

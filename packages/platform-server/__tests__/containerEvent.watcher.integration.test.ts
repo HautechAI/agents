@@ -13,6 +13,7 @@ type ContainerRow = {
   status: ContainerStatus;
   threadId: string | null;
   terminationReason: string | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type ContainerEventRow = {
@@ -23,6 +24,7 @@ type ContainerEventRow = {
   reason: string | null;
   message: string | null;
   createdAt: Date;
+  health: string | null;
 };
 
 class FakePrismaClient {
@@ -31,17 +33,19 @@ class FakePrismaClient {
   events: ContainerEventRow[] = [];
 
   addContainer(row: ContainerRow) {
-    this.containers.set(row.id, { ...row });
-    this.byDockerId.set(row.containerId, { ...row });
-    if (row.dockerContainerId) this.byDockerId.set(row.dockerContainerId, { ...row });
+    const metadata = row.metadata ?? { lastEventAt: new Date(0).toISOString() };
+    const stored = this.cloneRow({ ...row, metadata });
+    this.containers.set(stored.id, stored);
+    this.byDockerId.set(stored.containerId, this.cloneRow(stored));
+    if (stored.dockerContainerId) this.byDockerId.set(stored.dockerContainerId, this.cloneRow(stored));
   }
 
   getContainer(id: string): ContainerRow | undefined {
     for (const row of this.containers.values()) {
-      if (row.containerId === id || row.dockerContainerId === id) return { ...row };
+      if (row.containerId === id || row.dockerContainerId === id) return this.cloneRow(row);
     }
     const row = this.byDockerId.get(id);
-    return row ? { ...row } : undefined;
+    return row ? this.cloneRow(row) : undefined;
   }
 
   container = {
@@ -92,9 +96,18 @@ class FakePrismaClient {
         row.status = (typeof data.status === 'string' ? data.status : (data.status as { set: ContainerStatus }).set) as ContainerStatus;
       }
       if ('terminationReason' in data) {
-        row.terminationReason = typeof data.terminationReason === 'string'
-          ? data.terminationReason
-          : (data.terminationReason as { set: string | null }).set ?? row.terminationReason;
+        const raw = (data as Record<string, unknown>).terminationReason;
+        let nextReason: string | null | undefined;
+        if (raw === null) {
+          nextReason = null;
+        } else if (typeof raw === 'string') {
+          nextReason = raw;
+        } else if (raw && typeof raw === 'object' && 'set' in raw) {
+          nextReason = (raw as { set: string | null }).set;
+        }
+        if (nextReason !== undefined) {
+          row.terminationReason = nextReason;
+        }
       }
       const nextDocker = (data as Record<string, unknown>).dockerContainerId;
       if (nextDocker === null) row.dockerContainerId = null;
@@ -108,9 +121,13 @@ class FakePrismaClient {
       else if (nextThread && typeof nextThread === 'object' && 'set' in nextThread) {
         row.threadId = (nextThread as { set: string | null }).set ?? row.threadId;
       }
-      this.containers.set(id, { ...row });
-      this.byDockerId.set(row.containerId, { ...row });
-      if (row.dockerContainerId) this.byDockerId.set(row.dockerContainerId, { ...row });
+      const nextMetadata = (data as Record<string, unknown>).metadata;
+      if (nextMetadata && typeof nextMetadata === 'object') {
+        row.metadata = this.cloneMetadata(nextMetadata);
+      }
+      this.containers.set(id, this.cloneRow(row));
+      this.byDockerId.set(row.containerId, this.cloneRow(row));
+      if (row.dockerContainerId) this.byDockerId.set(row.dockerContainerId, this.cloneRow(row));
       return this.pick(row, args.select);
     },
   };
@@ -126,19 +143,38 @@ class FakePrismaClient {
         reason: data.reason ?? null,
         message: data.message ?? null,
         createdAt: data.createdAt ?? new Date(),
+        health: data.health ?? null,
       };
       this.events.push(row);
       return row;
     },
   };
 
+  private cloneRow(row: ContainerRow): ContainerRow {
+    return {
+      ...row,
+      metadata: row.metadata ? this.cloneMetadata(row.metadata) : null,
+    };
+  }
+
+  private cloneMetadata(value: unknown): Record<string, unknown> {
+    if (value && typeof value === 'object') {
+      return JSON.parse(JSON.stringify(value));
+    }
+    return {};
+  }
+
   private pick(row: ContainerRow, select: Record<string, boolean> | undefined): Partial<ContainerRow> {
-    if (!select) return { ...row };
+    if (!select) return this.cloneRow(row);
     const out: Partial<ContainerRow> = {};
     for (const [key, value] of Object.entries(select)) {
       if (!value) continue;
       const k = key as keyof ContainerRow;
-      out[k] = row[k];
+      if (k === 'metadata') {
+        out[k] = row.metadata ? this.cloneMetadata(row.metadata) : null;
+      } else {
+        out[k] = row[k];
+      }
     }
     return out;
   }
@@ -177,7 +213,15 @@ describe('DockerWorkspaceEventsWatcher integration', () => {
 
   beforeEach(() => {
     prisma = new FakePrismaClient();
-    prisma.addContainer({ id: 1, containerId: 'cid-abc', dockerContainerId: 'cid-abc', status: 'running', threadId: null, terminationReason: null });
+    prisma.addContainer({
+      id: 1,
+      containerId: 'cid-abc',
+      dockerContainerId: 'cid-abc',
+      status: 'running',
+      threadId: null,
+      terminationReason: null,
+      metadata: { lastEventAt: new Date(0).toISOString() },
+    });
     stream = new PassThrough();
     processor = new ContainerEventProcessor(new FakePrismaService(prisma));
     const docker = new FakeDocker(stream);
@@ -264,5 +308,50 @@ describe('DockerWorkspaceEventsWatcher integration', () => {
     expect(prisma.events.at(-1)?.reason).toBe('OOMKilled');
     expect(container?.status).toBe('failed');
     expect(container?.terminationReason).toBe('OOMKilled');
+  });
+
+  it('tracks health status updates without changing running state', async () => {
+    writeEvent(stream, {
+      status: 'health_status: healthy',
+      Action: 'health_status',
+      Type: 'container',
+      id: 'cid-abc',
+      time: 400,
+      Actor: { ID: 'cid-abc', Attributes: { health_status: 'healthy' } },
+    });
+    await processor.drain();
+
+    const container = prisma.getContainer('cid-abc');
+    expect(container?.status).toBe('running');
+    expect(container?.terminationReason).toBeNull();
+    expect((container?.metadata as Record<string, unknown> | undefined)?.health).toBe('healthy');
+    expect(prisma.events.at(-1)?.reason).toBe('HealthStatusHealthy');
+  });
+
+  it('marks containers as autoRemoved on destroy event', async () => {
+    writeEvent(stream, {
+      status: 'die',
+      Action: 'die',
+      Type: 'container',
+      id: 'cid-abc',
+      time: 500,
+      Actor: { ID: 'cid-abc', Attributes: { exitCode: '0' } },
+    });
+    await processor.drain();
+
+    writeEvent(stream, {
+      status: 'destroy',
+      Action: 'destroy',
+      Type: 'container',
+      id: 'cid-abc',
+      time: 505,
+      Actor: { ID: 'cid-abc', Attributes: { autoRemove: '1' } },
+    });
+    await processor.drain();
+
+    const container = prisma.getContainer('cid-abc');
+    expect((container?.metadata as Record<string, unknown> | undefined)?.autoRemoved).toBe(true);
+    expect(container?.status).toBe('stopped');
+    expect(prisma.events.at(-1)?.reason).toBe('ContainerDestroyed');
   });
 });

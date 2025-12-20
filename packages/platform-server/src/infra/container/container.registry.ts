@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { sanitizeContainerMounts, type ContainerMount } from './container.mounts';
 
 export type ContainerStatus = 'running' | 'stopped' | 'terminating' | 'failed';
+export type ContainerHealthStatus = 'healthy' | 'unhealthy' | 'starting';
 
 // Strongly typed metadata stored in JSON column
 export interface ContainerMetadata {
@@ -14,7 +15,13 @@ export interface ContainerMetadata {
   terminationAttempts?: number;
   claimId?: string;
   mounts?: ContainerMount[];
+  autoRemoved?: boolean;
+  health?: ContainerHealthStatus;
+  lastEventAt?: string;
 }
+
+const isHealthStatus = (value: unknown): value is ContainerHealthStatus =>
+  value === 'healthy' || value === 'unhealthy' || value === 'starting';
 
 @Injectable()
 export class ContainerRegistry {
@@ -51,6 +58,7 @@ export class ContainerRegistry {
       platform: args.platform,
       ttlSeconds: typeof args.ttlSeconds === 'number' ? args.ttlSeconds : 86400,
       mounts: mounts.length > 0 ? mounts : undefined,
+      lastEventAt: nowIso,
     };
     const sanitizedName = this.sanitizeName(args.name);
     await this.prisma.container.upsert({
@@ -135,9 +143,16 @@ export class ContainerRegistry {
   async markStopped(containerId: string, reason: string): Promise<void> {
     const existing = await this.prisma.container.findUnique({ where: { containerId } });
     if (!existing) return;
+    const meta = this.normalizeMetadata(existing.metadata);
+    meta.lastEventAt = new Date().toISOString();
     await this.prisma.container.update({
       where: { containerId },
-      data: { status: 'stopped', deletedAt: new Date(), terminationReason: reason },
+      data: {
+        status: 'stopped',
+        deletedAt: null,
+        terminationReason: reason,
+        metadata: meta as unknown as Prisma.InputJsonValue,
+      },
     });
   }
 
@@ -167,7 +182,23 @@ export class ContainerRegistry {
     const terminationAttempts = typeof m.terminationAttempts === 'number' ? m.terminationAttempts : undefined;
     const claimId = typeof m.claimId === 'string' ? m.claimId : undefined;
     const mounts = sanitizeContainerMounts(m.mounts);
-    return { labels, platform, ttlSeconds, lastError, retryAfter, terminationAttempts, claimId, mounts: mounts.length ? mounts : undefined };
+    const autoRemoved = typeof m.autoRemoved === 'boolean' ? m.autoRemoved : undefined;
+    const healthCandidate = typeof m.health === 'string' ? m.health : undefined;
+    const health = isHealthStatus(healthCandidate) ? healthCandidate : undefined;
+    const lastEventAt = typeof m.lastEventAt === 'string' ? m.lastEventAt : undefined;
+    return {
+      labels,
+      platform,
+      ttlSeconds,
+      lastError,
+      retryAfter,
+      terminationAttempts,
+      claimId,
+      mounts: mounts.length ? mounts : undefined,
+      autoRemoved,
+      health,
+      lastEventAt,
+    };
   }
 
   async getExpired(now: Date = new Date()) {
@@ -201,6 +232,16 @@ export class ContainerRegistry {
     meta.retryAfter = retryAfterIso;
     meta.terminationAttempts = nextAttempts;
     await this.prisma.container.update({ where: { containerId }, data: { metadata: meta as unknown as Prisma.InputJsonValue } });
+  }
+
+  async deleteHistorical(cutoff: Date): Promise<number> {
+    const res = await this.prisma.container.deleteMany({
+      where: {
+        status: { in: ['stopped', 'failed'] },
+        updatedAt: { lt: cutoff },
+      },
+    });
+    return res.count;
   }
 
   async listByThread(threadId: string): Promise<Array<{ containerId: string; status: ContainerStatus }>> {

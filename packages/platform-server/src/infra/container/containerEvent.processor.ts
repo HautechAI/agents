@@ -1,8 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type PrismaClient, ContainerEventType, type ContainerStatus, Prisma } from '@prisma/client';
+import { type PrismaClient, ContainerEventType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/services/prisma.service';
-import { ContainerReasonContext, ContainerTerminationReason, mapContainerEventReason, statusForEvent } from './containerEvent.reason';
+import { ContainerReasonContext, ContainerEventReason, mapContainerEventReason, statusForEvent } from './containerEvent.reason';
 import { validate as validateUuid } from 'uuid';
+import type { ContainerHealthStatus } from './container.registry';
 
 export interface DockerEventMessage {
   status?: string;
@@ -19,6 +20,24 @@ export interface DockerEventMessage {
 }
 
 const RECENT_OOM_WINDOW_MS = 15_000; // 15 seconds proximity window
+
+const ACTION_TO_EVENT_TYPE: Record<string, ContainerEventType> = {
+  create: 'create',
+  start: 'start',
+  stop: 'stop',
+  die: 'die',
+  kill: 'kill',
+  destroy: 'destroy',
+  restart: 'restart',
+  oom: 'oom',
+  health_status: 'health_status',
+};
+
+type MutableMetadata = Record<string, unknown> & {
+  autoRemoved?: boolean;
+  health?: ContainerHealthStatus | string;
+  lastEventAt?: string;
+};
 
 @Injectable()
 export class ContainerEventProcessor {
@@ -44,9 +63,10 @@ export class ContainerEventProcessor {
   }
 
   private async handle(event: DockerEventMessage): Promise<void> {
-    const action = (event.Action ?? event.status ?? '').toLowerCase();
-    if (action !== 'oom' && action !== 'die' && action !== 'kill') return;
     if (event.Type && event.Type.toLowerCase() !== 'container') return;
+
+    const eventType = this.resolveEventType(event);
+    if (!eventType) return;
 
     const dockerId = event.id ?? event.Id ?? event.Actor?.ID;
     if (!dockerId) {
@@ -57,9 +77,11 @@ export class ContainerEventProcessor {
     const attributes = event.Actor?.Attributes ?? {};
     const exitCode = this.parseExitCode(attributes);
     const signal = this.parseSignal(attributes);
-    const eventType = action as ContainerEventType;
+    const health = eventType === 'health_status' ? this.parseHealthStatus(attributes, event) : undefined;
+    const autoRemoved = eventType === 'destroy' ? this.parseAutoRemoved(attributes) : false;
     const eventTimeMs = this.eventTimestampMs(event);
-    const hadRecentOom = this.hasRecentOom(dockerId, eventTimeMs);
+    const createdAt = new Date(eventTimeMs);
+    const createdAtIso = createdAt.toISOString();
 
     const container = await this.prisma.container.findFirst({
       where: {
@@ -68,7 +90,7 @@ export class ContainerEventProcessor {
           { containerId: dockerId },
         ],
       },
-      select: { id: true, threadId: true, status: true, dockerContainerId: true },
+      select: { id: true, threadId: true, status: true, dockerContainerId: true, metadata: true, terminationReason: true },
     });
 
     if (!container) {
@@ -80,17 +102,22 @@ export class ContainerEventProcessor {
       return;
     }
 
-    const threadId = this.resolveThreadId(container.threadId, attributes);
+    const metadata = this.cloneMetadata(container.metadata) as MutableMetadata;
+    const lastEventAtValue = typeof metadata.lastEventAt === 'string' ? metadata.lastEventAt : undefined;
+    const lastEventAtMs = lastEventAtValue ? Date.parse(lastEventAtValue) : undefined;
+    const isStale = typeof lastEventAtMs === 'number' && Number.isFinite(lastEventAtMs) && eventTimeMs < lastEventAtMs;
+    const hadRecentOom = this.hasRecentOom(dockerId, eventTimeMs);
 
     const reasonContext: ContainerReasonContext = {
       eventType,
       exitCode,
       signal,
       hadRecentOom,
+      health,
     };
-    const reason: ContainerTerminationReason = mapContainerEventReason(reasonContext);
-    const createdAt = new Date(eventTimeMs);
-    const message = this.buildMessage(event, attributes, exitCode, signal);
+    const reason: ContainerEventReason = mapContainerEventReason(reasonContext);
+    const message = this.buildMessage(event, attributes, exitCode, signal, health);
+    const threadId = this.resolveThreadId(container.threadId, attributes);
 
     await this.prisma.containerEvent.create({
       data: {
@@ -101,8 +128,19 @@ export class ContainerEventProcessor {
         reason,
         message,
         createdAt,
+        health: health ?? null,
       },
     });
+
+    if (isStale) {
+      this.logger.debug('ContainerEventProcessor: skipping stale event update', {
+        dockerId: this.shortId(dockerId),
+        eventType,
+        createdAt: createdAtIso,
+        lastEventAt: lastEventAtValue,
+      });
+      return;
+    }
 
     if (eventType === 'oom') {
       this.recordOom(dockerId, eventTimeMs);
@@ -110,16 +148,55 @@ export class ContainerEventProcessor {
       this.lastOomByContainer.delete(dockerId);
     }
 
-    const update = this.buildContainerUpdate(container.status, eventType, reason);
-    const updateData: Prisma.ContainerUncheckedUpdateInput = {
-      ...(update as Prisma.ContainerUncheckedUpdateInput | undefined ?? {}),
-    };
+    const updateData: Prisma.ContainerUncheckedUpdateInput = {};
+    let statusApplied = false;
+
+    const nextStatus = statusForEvent(eventType, reason);
+    if (nextStatus) {
+      const canTransition = !(
+        (nextStatus === 'terminating' && container.status !== 'running' && container.status !== 'terminating')
+        || (nextStatus === 'stopped' && container.status === 'failed' && eventType === 'stop')
+      );
+      if (canTransition) {
+        updateData.status = nextStatus;
+        statusApplied = true;
+      }
+    }
+
+    if (eventType === 'create' || eventType === 'start' || eventType === 'restart') {
+      updateData.terminationReason = null;
+    } else if (
+      eventType === 'kill'
+      || eventType === 'die'
+      || eventType === 'oom'
+      || (eventType === 'stop' && statusApplied)
+    ) {
+      updateData.terminationReason = reason;
+    }
 
     if (!container.dockerContainerId || container.dockerContainerId !== dockerId) {
       updateData.dockerContainerId = dockerId;
     }
     if (threadId && container.threadId !== threadId) {
       updateData.threadId = threadId;
+    }
+
+    let metadataChanged = false;
+    if (metadata.lastEventAt !== createdAtIso) {
+      metadata.lastEventAt = createdAtIso;
+      metadataChanged = true;
+    }
+    if (eventType === 'destroy' && autoRemoved && metadata.autoRemoved !== true) {
+      metadata.autoRemoved = true;
+      metadataChanged = true;
+    }
+    if (eventType === 'health_status' && health && metadata.health !== health) {
+      metadata.health = health;
+      metadataChanged = true;
+    }
+
+    if (metadataChanged) {
+      updateData.metadata = metadata as unknown as Prisma.InputJsonValue;
     }
 
     if (Object.keys(updateData).length > 0) {
@@ -141,29 +218,9 @@ export class ContainerEventProcessor {
       reason,
       exitCode,
       signal,
-      createdAt: createdAt.toISOString(),
+      health,
+      createdAt: createdAtIso,
     });
-  }
-
-  private buildContainerUpdate(
-    currentStatus: ContainerStatus,
-    eventType: ContainerEventType,
-    reason: ContainerTerminationReason,
-  ): Prisma.ContainerUpdateInput | undefined {
-    const status = statusForEvent(eventType, reason);
-    const data: Prisma.ContainerUpdateInput = {
-      terminationReason: reason,
-    };
-
-    if (status) {
-      if (status === 'terminating' && currentStatus !== 'running' && currentStatus !== 'terminating') {
-        // Skip status regression for containers already marked terminal
-      } else {
-        data.status = status;
-      }
-    }
-
-    return data;
   }
 
   private buildMessage(
@@ -171,6 +228,7 @@ export class ContainerEventProcessor {
     attributes: Record<string, string>,
     exitCode: number | null,
     signal?: string,
+    health?: ContainerHealthStatus,
   ): string | null {
     if (attributes.error) return attributes.error;
     if (attributes['error']) return attributes['error'];
@@ -178,6 +236,7 @@ export class ContainerEventProcessor {
     if (event.Action) return event.Action;
     if (typeof exitCode === 'number') return `exitCode=${exitCode}`;
     if (signal) return `signal=${signal}`;
+    if (health) return `health=${health}`;
     return null;
   }
 
@@ -212,6 +271,56 @@ export class ContainerEventProcessor {
       return Math.floor(event.time * 1000);
     }
     return Date.now();
+  }
+
+  private resolveEventType(event: DockerEventMessage): ContainerEventType | null {
+    const action = (event.Action ?? '').toLowerCase();
+    if (action && ACTION_TO_EVENT_TYPE[action]) {
+      return ACTION_TO_EVENT_TYPE[action];
+    }
+    const status = (event.status ?? '').toLowerCase();
+    if (!status) return null;
+    const prefix = status.includes(':') ? status.slice(0, status.indexOf(':')).trim() : status.trim();
+    return ACTION_TO_EVENT_TYPE[prefix] ?? null;
+  }
+
+  private cloneMetadata(meta: unknown): Record<string, unknown> {
+    if (meta && typeof meta === 'object') {
+      try {
+        return JSON.parse(JSON.stringify(meta));
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  private parseHealthStatus(attrs: Record<string, string>, event: DockerEventMessage): ContainerHealthStatus | undefined {
+    const direct = attrs.health_status ?? attrs.Health_status ?? attrs.healthStatus;
+    const normalizedDirect = this.normalizeHealthString(direct);
+    if (normalizedDirect) return normalizedDirect;
+    if (typeof event.status === 'string') {
+      const [, candidate] = event.status.split(':');
+      const normalizedStatus = this.normalizeHealthString(candidate);
+      if (normalizedStatus) return normalizedStatus;
+    }
+    return undefined;
+  }
+
+  private parseAutoRemoved(attrs: Record<string, string>): boolean {
+    const candidate = attrs.autoRemove ?? attrs.AutoRemove ?? attrs.autoremove ?? attrs['auto_remove'];
+    if (typeof candidate !== 'string') return false;
+    const value = candidate.trim().toLowerCase();
+    return value === '1' || value === 'true' || value === 'yes';
+  }
+
+  private normalizeHealthString(value?: string | null): ContainerHealthStatus | undefined {
+    if (!value) return undefined;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'healthy') return 'healthy';
+    if (normalized === 'unhealthy') return 'unhealthy';
+    if (normalized === 'starting') return 'starting';
+    return undefined;
   }
 
   private resolveThreadId(

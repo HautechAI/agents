@@ -1,9 +1,21 @@
+import type { ContainerStatus } from '@/components/screens/ContainersScreen';
 import type { ContainerViewModel } from '@/features/monitoring/containers/types';
 import ContainersScreen from '../screens/ContainersScreen';
+
+type StatusCounts = {
+  running: number;
+  stopped: number;
+  starting: number;
+  stopping: number;
+  all: number;
+};
 
 type ContainersPageContentProps = {
   containers: ContainerViewModel[];
   isLoading: boolean;
+  status: ContainerStatus | 'all';
+  counts: StatusCounts;
+  onStatusChange: (status: ContainerStatus | 'all') => void;
   error: Error | null;
   onRetry?: () => void;
   onOpenTerminal?: (containerId: string) => void;
@@ -14,20 +26,15 @@ type ContainersPageContentProps = {
 export function ContainersPageContent({
   containers,
   isLoading,
+  status,
+  counts,
+  onStatusChange,
   error,
   onRetry,
   onOpenTerminal,
   onDeleteContainer,
   onViewThread,
 }: ContainersPageContentProps) {
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[var(--agyn-bg-light)]">
-        <span className="text-sm text-[var(--agyn-text-subtle)]">Loading containers…</span>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--agyn-bg-light)]">
@@ -45,17 +52,13 @@ export function ContainersPageContent({
     );
   }
 
-  if (containers.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[var(--agyn-bg-light)]">
-        <span className="text-sm text-[var(--agyn-text-subtle)]">No containers found</span>
-      </div>
-    );
-  }
-
   return (
     <ContainersScreen
       containers={containers}
+      statusFilter={status}
+      counts={counts}
+      onStatusFilterChange={onStatusChange}
+      isLoading={isLoading}
       onOpenTerminal={onOpenTerminal}
       onDeleteContainer={onDeleteContainer}
       onViewThread={onViewThread}

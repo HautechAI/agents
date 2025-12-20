@@ -8,21 +8,30 @@ import {
   type ContainerTerminalSessionResponse,
 } from '@/api/modules/containers';
 
-type ContainerStatusFilter = 'running' | 'stopped' | 'terminating' | 'failed' | 'all';
+export type ContainerStatusFilter = 'running' | 'stopped' | 'terminating' | 'failed' | 'all';
+
+export const containersQueryKey = (
+  status: ContainerStatusFilter,
+  sortBy: string,
+  sortDir: 'asc' | 'desc',
+  threadId?: string,
+) => ['containers', { status, sortBy, sortDir, threadId: threadId || null }] as const;
 
 export function useContainers(status: ContainerStatusFilter = 'running', sortBy = 'lastUsedAt', sortDir: 'asc' | 'desc' = 'desc', threadId?: string) {
   const parameters = useMemo(() => {
+    const toApiStatus = (value: ContainerStatusFilter | undefined): ContainerStatusFilter | undefined => {
+      if (!value) return undefined;
+      if (value === 'all') return 'all';
+      return value;
+    };
     return {
-      status: status === 'all' ? undefined : status,
+      status: toApiStatus(status),
       sortBy,
       sortDir,
       threadId: threadId || undefined,
     } as const;
   }, [status, sortBy, sortDir, threadId]);
-  const queryKey = useMemo(
-    () => ['containers', { status, sortBy, sortDir, threadId: threadId || null }],
-    [status, sortBy, sortDir, threadId],
-  );
+  const queryKey = useMemo(() => containersQueryKey(status, sortBy, sortDir, threadId), [status, sortBy, sortDir, threadId]);
   const listQ = useQuery<{ items: ContainerItem[] }, Error>({
     queryKey,
     queryFn: async () => listContainers(parameters),

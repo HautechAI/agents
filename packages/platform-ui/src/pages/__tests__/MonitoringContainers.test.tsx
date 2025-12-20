@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, act, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MonitoringContainers } from '../MonitoringContainers';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ContainerItem } from '@/api/modules/containers';
@@ -9,9 +10,11 @@ import type { Container as ScreenContainer } from '@/components/screens/Containe
 
 type ContainersScreenProps = React.ComponentProps<typeof ContainersScreenComponent>;
 let latestContainersScreenProps: ContainersScreenProps | null = null;
-let lastUseContainersArgs: { status: unknown; sortBy: unknown; sortDir: unknown; threadId: unknown } | null = null;
+let useContainersCalls: Array<{ status: unknown; sortBy: unknown; sortDir: unknown; threadId: unknown }> = [];
 
 const navigateMock = vi.fn();
+
+let queryClient: QueryClient;
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual: any = await importOriginal();
@@ -42,6 +45,10 @@ const terminalOpenMock = vi.fn();
 const terminalDisposeMock = vi.fn();
 const terminalWriteMock = vi.fn();
 const terminalWritelnMock = vi.fn();
+
+const { listContainersMock } = vi.hoisted(() => ({
+  listContainersMock: vi.fn(async () => ({ items: [] })),
+}));
 
 vi.mock('@xterm/xterm', () => {
   class FakeDisposable {
@@ -84,22 +91,39 @@ vi.mock('@xterm/addon-webgl', () => {
   return { WebglAddon: FakeWebglAddon };
 });
 
+vi.mock('@/api/modules/containers', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    listContainers: listContainersMock,
+  };
+});
+
 const useContainersMock = vi.fn();
 const mutateSessionMock = vi.fn();
 const resetSessionMock = vi.fn();
 const createSessionHookMock = vi.fn(() => ({ mutateAsync: mutateSessionMock, status: 'idle', reset: resetSessionMock }));
 
-vi.mock('@/api/hooks/containers', () => ({
-  useContainers: (...args: unknown[]) => useContainersMock(...args),
-  useCreateContainerTerminalSession: (...args: unknown[]) => createSessionHookMock(...args),
-}));
+vi.mock('@/api/hooks/containers', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    useContainers: (...args: unknown[]) => useContainersMock(...args),
+    useCreateContainerTerminalSession: (...args: unknown[]) => createSessionHookMock(...args),
+  };
+});
 
 function renderPage() {
-  return render(<MonitoringContainers />);
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MonitoringContainers />
+    </QueryClientProvider>,
+  );
 }
 
 describe('MonitoringContainers page', () => {
   beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     containersScreenMock = vi.fn((props: ContainersScreenProps) => {
       latestContainersScreenProps = props;
       return <div data-testid="containers-screen-mock" />;
@@ -115,7 +139,8 @@ describe('MonitoringContainers page', () => {
     resetSessionMock.mockReset();
     createSessionHookMock.mockReturnValue({ mutateAsync: mutateSessionMock, status: 'idle', reset: resetSessionMock });
     latestContainersScreenProps = null;
-    lastUseContainersArgs = null;
+    useContainersCalls = [];
+    listContainersMock.mockResolvedValue({ items: [] });
 
     const timestamp = '2024-01-01T00:00:00.000Z';
     const baseData = {
@@ -140,7 +165,26 @@ describe('MonitoringContainers page', () => {
       ],
     } satisfies { items: ContainerItem[] };
 
-    const baseResult = {
+    const allData = {
+      items: [
+        ...baseData.items,
+        {
+          containerId: 'stopped-container',
+          threadId: '11111111-1111-1111-1111-111111111111',
+          image: 'worker:latest',
+          name: 'worker-secondary',
+          status: 'stopped',
+          startedAt: timestamp,
+          lastUsedAt: timestamp,
+          killAfterAt: null,
+          role: 'workspace',
+          sidecars: [],
+          mounts: [],
+        },
+      ],
+    } satisfies { items: ContainerItem[] };
+
+    const runningResult = {
       data: baseData,
       isLoading: false,
       isFetching: false,
@@ -148,9 +192,20 @@ describe('MonitoringContainers page', () => {
       refetch: vi.fn(),
     } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
 
+    const allResult = {
+      data: allData,
+      isLoading: false,
+      isFetching: false,
+      error: null,
+      refetch: vi.fn(),
+    } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
+
     useContainersMock.mockImplementation((status?: string, sortBy?: string, sortDir?: 'asc' | 'desc', threadId?: string) => {
-      lastUseContainersArgs = { status, sortBy, sortDir, threadId };
-      return baseResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
+      useContainersCalls.push({ status, sortBy, sortDir, threadId });
+      if (status === 'all') {
+        return allResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
+      }
+      return runningResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
     });
 
     class FakeWebSocket {
@@ -179,17 +234,22 @@ describe('MonitoringContainers page', () => {
     vi.useRealTimers();
     useContainersMock.mockReset();
     createSessionHookMock.mockReset();
+    listContainersMock.mockReset();
+    queryClient?.clear();
     vi.unstubAllGlobals();
   });
 
   it('maps API data and renders ContainersScreen', () => {
     renderPage();
 
-    expect(lastUseContainersArgs).toEqual({ status: 'all', sortBy: 'lastUsedAt', sortDir: 'desc', threadId: undefined });
+    expect(useContainersMock).toHaveBeenCalledWith('running', 'lastUsedAt', 'desc');
+    expect(useContainersMock).toHaveBeenCalledWith('all', 'lastUsedAt', 'desc');
     expect(getContainersScreenMock()).toHaveBeenCalledTimes(1);
     expect(latestContainersScreenProps).not.toBeNull();
 
     const props = latestContainersScreenProps as ContainersScreenProps;
+    expect(props.statusFilter).toBe('running');
+    expect(props.counts).toMatchObject({ running: 1, stopping: 1, starting: 0, stopped: 1, all: 3 });
     expect(props.containers).toHaveLength(2);
 
     const [workspace, sidecar] = props.containers as ScreenContainer[];
@@ -220,6 +280,75 @@ describe('MonitoringContainers page', () => {
       props.onViewThread?.('11111111-1111-1111-1111-111111111111');
     });
     expect(navigateMock).toHaveBeenCalledWith('/agents/threads/11111111-1111-1111-1111-111111111111');
+  });
+
+  it('switches status filter and refetches data', () => {
+    renderPage();
+    const props = latestContainersScreenProps as ContainersScreenProps;
+    expect(props.statusFilter).toBe('running');
+
+    act(() => {
+      props.onStatusFilterChange?.('stopped');
+    });
+
+    const stoppedCall = useContainersCalls.find((call) => call.status === 'stopped');
+    expect(stoppedCall).toEqual({ status: 'stopped', sortBy: 'lastUsedAt', sortDir: 'desc', threadId: undefined });
+  });
+
+  it('keeps layout visible when active filter yields no containers', () => {
+    useContainersCalls = [];
+    useContainersMock.mockImplementation((status?: string, sortBy?: string, sortDir?: 'asc' | 'desc', threadId?: string) => {
+      useContainersCalls.push({ status, sortBy, sortDir, threadId });
+      const result = {
+        data: { items: [] },
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
+      return result as UseQueryResult<{ items: ContainerItem[] }, Error>;
+    });
+
+    renderPage();
+
+    expect(getContainersScreenMock()).toHaveBeenCalledTimes(1);
+    const props = latestContainersScreenProps as ContainersScreenProps;
+    expect(props.containers).toEqual([]);
+    expect(screen.getByTestId('containers-screen-mock')).toBeInTheDocument();
+  });
+
+  it('keeps layout visible while data is loading', () => {
+    useContainersCalls = [];
+    useContainersMock.mockImplementation((status?: string, sortBy?: string, sortDir?: 'asc' | 'desc', threadId?: string) => {
+      useContainersCalls.push({ status, sortBy, sortDir, threadId });
+      if (status === 'running') {
+        const loadingResult = {
+          data: undefined,
+          isLoading: true,
+          isFetching: false,
+          error: null,
+          refetch: vi.fn(),
+        } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
+        return loadingResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
+      }
+
+      const countsResult = {
+        data: { items: [] },
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
+      return countsResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
+    });
+
+    renderPage();
+
+    expect(getContainersScreenMock()).toHaveBeenCalledTimes(1);
+    const props = latestContainersScreenProps as ContainersScreenProps;
+    expect(props.isLoading).toBe(true);
+    expect(props.containers).toEqual([]);
+    expect(screen.getByTestId('containers-screen-mock')).toBeInTheDocument();
   });
 
   it('opens terminal dialog and requests session creation', async () => {
@@ -253,16 +382,27 @@ describe('MonitoringContainers page', () => {
 
   it('renders error state with retry control when query fails without data', () => {
     const refetchMock = vi.fn();
-    useContainersMock.mockImplementation(() => {
-      lastUseContainersArgs = { status: 'all', sortBy: 'lastUsedAt', sortDir: 'desc', threadId: undefined };
-      const result = {
-        data: undefined,
+    useContainersCalls = [];
+    useContainersMock.mockImplementation((status?: string, sortBy?: string, sortDir?: 'asc' | 'desc', threadId?: string) => {
+      useContainersCalls.push({ status, sortBy, sortDir, threadId });
+      if (status === 'running') {
+        const result = {
+          data: undefined,
+          isLoading: false,
+          isFetching: false,
+          error: new Error('containers failed'),
+          refetch: refetchMock,
+        } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
+        return result as UseQueryResult<{ items: ContainerItem[] }, Error>;
+      }
+      const countsResult = {
+        data: { items: [] },
         isLoading: false,
         isFetching: false,
-        error: new Error('containers failed'),
-        refetch: refetchMock,
+        error: null,
+        refetch: vi.fn(),
       } satisfies Partial<UseQueryResult<{ items: ContainerItem[] }, Error>>;
-      return result as UseQueryResult<{ items: ContainerItem[] }, Error>;
+      return countsResult as UseQueryResult<{ items: ContainerItem[] }, Error>;
     });
 
     renderPage();

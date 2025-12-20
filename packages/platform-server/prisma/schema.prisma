@@ -315,7 +315,7 @@ model LLMCall {
 }
 
 model LLMCallContextItem {
-  id             String                         @id @default(uuid()) @db.Uuid
+  id             String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   llmCallEventId String                         @map("llm_call_event_id") @db.Uuid
   contextItemId  String                         @map("context_item_id") @db.Uuid
   idx            Int
@@ -456,9 +456,15 @@ enum ContainerStatus {
 }
 
 enum ContainerEventType {
-  oom
+  create
+  start
+  stop
   die
   kill
+  destroy
+  restart
+  oom
+  health_status
 }
 
 model Container {
@@ -493,6 +499,7 @@ model ContainerEvent {
   eventType         ContainerEventType
   exitCode          Int?
   signal            String?
+  health            String?
   reason            String?
   message           String?
   createdAt         DateTime            @default(now())
