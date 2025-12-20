@@ -28,8 +28,8 @@ type Row = {
 
 type SortOrder = 'asc' | 'desc';
 type ContainerEventRow = {
-  id: string;
-  containerId: string;
+  id: number;
+  container: { containerId: string };
   eventType: ContainerEventType;
   exitCode: number | null;
   signal: string | null;
@@ -47,8 +47,9 @@ type ContainerWhereInput = {
 };
 type ContainerEventWhereInput = {
   containerId?: string;
+  container?: { containerId?: string };
   createdAt?: Date | { gte?: Date; gt?: Date; lt?: Date };
-  id?: string | { gt?: string; lt?: string };
+  id?: number | { gt?: number; lt?: number };
   AND?: ContainerEventWhereInput[];
   OR?: ContainerEventWhereInput[];
 };
@@ -68,7 +69,17 @@ type ContainerSelect = {
 type FindManyArgs = { where?: ContainerWhereInput; orderBy?: ContainerOrderByInput; select?: ContainerSelect; take?: number };
 type SelectedRow = { containerId: string; threadId: string | null; image: string; name: string; status: Row['status']; createdAt: Date; lastUsedAt: Date; killAfterAt: Date | null; updatedAt: Date };
 type SelectedRowWithMeta = SelectedRow & { metadata?: RowMetadata };
-type ContainerEventSelect = { [K in keyof ContainerEventRow]?: boolean };
+type ContainerEventSelect = {
+  id?: boolean;
+  container?: { select?: { containerId?: boolean } };
+  eventType?: boolean;
+  exitCode?: boolean;
+  signal?: boolean;
+  reason?: boolean;
+  message?: boolean;
+  health?: boolean;
+  createdAt?: boolean;
+};
 type ContainerEventOrderBy = Array<{ createdAt?: SortOrder } | { id?: SortOrder }> | { createdAt?: SortOrder } | { id?: SortOrder };
 type ContainerEventFindManyArgs = {
   where?: ContainerEventWhereInput;
@@ -129,7 +140,11 @@ class InMemoryPrismaClient {
         if (AND && !AND.every((clause) => matches(row, clause))) return false;
         if (OR && !OR.some((clause) => matches(row, clause))) return false;
 
-        if (scalar.containerId && row.containerId !== scalar.containerId) {
+        if (scalar.containerId && row.container.containerId !== scalar.containerId) {
+          return false;
+        }
+
+        if (scalar.container?.containerId && row.container.containerId !== scalar.container.containerId) {
           return false;
         }
 
@@ -147,11 +162,11 @@ class InMemoryPrismaClient {
 
         if (typeof scalar.id !== 'undefined') {
           const value = scalar.id;
-          if (typeof value === 'string') {
+          if (typeof value === 'number') {
             if (row.id !== value) return false;
           } else {
-            if (value.gt && !(row.id > value.gt)) return false;
-            if (value.lt && !(row.id < value.lt)) return false;
+            if (typeof value.gt === 'number' && !(row.id > value.gt)) return false;
+            if (typeof value.lt === 'number' && !(row.id < value.lt)) return false;
           }
         }
 
@@ -178,7 +193,7 @@ class InMemoryPrismaClient {
           if (field === 'createdAt') {
             comparison = a.createdAt.getTime() - b.createdAt.getTime();
           } else if (field === 'id') {
-            comparison = a.id.localeCompare(b.id);
+            comparison = a.id - b.id;
           }
           if (comparison !== 0) {
             return dir === 'asc' ? comparison : -comparison;
@@ -191,10 +206,23 @@ class InMemoryPrismaClient {
       const sliced = items.slice(0, take);
       if (!args.select) return sliced;
       return sliced.map((row) => {
-        const picked: Partial<ContainerEventRow> = {};
-        for (const [key, value] of Object.entries(args.select)) {
-          if (value) {
-            picked[key as keyof ContainerEventRow] = row[key as keyof ContainerEventRow];
+        const picked: Partial<ContainerEventRow> & { container?: { containerId: string } } = {};
+        if (args.select?.id) picked.id = row.id;
+        if (args.select?.eventType) picked.eventType = row.eventType;
+        if (args.select?.exitCode) picked.exitCode = row.exitCode;
+        if (args.select?.signal) picked.signal = row.signal;
+        if (args.select?.reason) picked.reason = row.reason;
+        if (args.select?.message) picked.message = row.message;
+        if (args.select?.health) picked.health = row.health;
+        if (args.select?.createdAt) picked.createdAt = row.createdAt;
+        if (args.select?.container) {
+          const containerSelect = args.select.container.select ?? {};
+          const container: { containerId?: string } = {};
+          if (containerSelect.containerId) {
+            container.containerId = row.container.containerId;
+          }
+          if (Object.keys(container).length > 0) {
+            picked.container = container as { containerId: string };
           }
         }
         return picked;
@@ -455,8 +483,8 @@ describe('ContainersController routes', () => {
     const base = new Date('2024-01-01T00:00:00.000Z');
     prismaSvc.client.containerEvent.rows = [
       {
-        id: 'evt-1',
-        containerId: 'cid-1',
+        id: 1,
+        container: { containerId: 'cid-1' },
         eventType: 'die',
         exitCode: 137,
         signal: null,
@@ -466,8 +494,8 @@ describe('ContainersController routes', () => {
         createdAt: new Date(base.getTime()),
       },
       {
-        id: 'evt-2',
-        containerId: 'cid-1',
+        id: 2,
+        container: { containerId: 'cid-1' },
         eventType: 'stop',
         exitCode: 0,
         signal: null,
@@ -477,8 +505,8 @@ describe('ContainersController routes', () => {
         createdAt: new Date(base.getTime() + 1000),
       },
       {
-        id: 'evt-9',
-        containerId: 'cid-1',
+        id: 9,
+        container: { containerId: 'cid-1' },
         eventType: 'stop',
         exitCode: 0,
         signal: null,
@@ -488,8 +516,8 @@ describe('ContainersController routes', () => {
         createdAt: new Date(base.getTime() + 1000),
       },
       {
-        id: 'evt-3',
-        containerId: 'cid-1',
+        id: 3,
+        container: { containerId: 'cid-1' },
         eventType: 'start',
         exitCode: null,
         signal: null,
@@ -499,8 +527,8 @@ describe('ContainersController routes', () => {
         createdAt: new Date(base.getTime() + 2000),
       },
       {
-        id: 'evt-x',
-        containerId: 'cid-2',
+        id: 42,
+        container: { containerId: 'cid-2' },
         eventType: 'die',
         exitCode: 1,
         signal: null,
@@ -517,10 +545,10 @@ describe('ContainersController routes', () => {
       items: Array<{ id: string; eventType: string; health: string | null; createdAt: string }>;
       page: { order: string; limit: number; nextBefore: string | null; nextAfter: string | null };
     };
-    expect(body.items.map((item) => item.id)).toEqual(['evt-3', 'evt-9']);
+    expect(body.items.map((item) => item.id)).toEqual(['3', '9']);
     expect(body.items[0]).toMatchObject({ eventType: 'start', health: 'healthy' });
     expect(body.page).toMatchObject({ order: 'desc', limit: 2, nextAfter: null });
-    expect(body.page.nextBefore).toMatch(/^2024-01-01T00:00:01\.000Z\|evt-9$/);
+    expect(body.page.nextBefore).toMatch(/^2024-01-01T00:00:01\.000Z\|9$/);
 
     if (!body.page.nextBefore) throw new Error('Expected nextBefore cursor');
     const resNext = await fastify.inject({
@@ -532,15 +560,15 @@ describe('ContainersController routes', () => {
       items: Array<{ id: string }>;
       page: { nextBefore: string | null };
     };
-    expect(nextBody.items.map((item) => item.id)).toEqual(['evt-2', 'evt-1']);
+    expect(nextBody.items.map((item) => item.id)).toEqual(['2', '1']);
     expect(nextBody.page.nextBefore).toBeNull();
   });
 
   it('rejects invalid cursor format for container events', async () => {
     prismaSvc.client.containerEvent.rows = [
       {
-        id: 'evt-invalid-test',
-        containerId: 'cid-1',
+        id: 101,
+        container: { containerId: 'cid-1' },
         eventType: 'start',
         exitCode: null,
         signal: null,

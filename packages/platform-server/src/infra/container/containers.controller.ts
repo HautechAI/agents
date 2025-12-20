@@ -21,8 +21,8 @@ type ContainerStatusFilter = ContainerStatus | 'all';
 type ContainerHealth = 'healthy' | 'unhealthy' | 'starting';
 
 type RawContainerEvent = {
-  id: string;
-  containerId: string;
+  id: number;
+  container: { containerId: string };
   eventType: string;
   exitCode: number | null;
   signal: string | null;
@@ -34,11 +34,11 @@ type RawContainerEvent = {
 
 const EVENT_CURSOR_SEPARATOR = '|';
 
-const encodeEventCursor = ({ createdAt, id }: { createdAt: Date; id: string }): string => {
-  return `${createdAt.toISOString()}${EVENT_CURSOR_SEPARATOR}${id}`;
+const encodeEventCursor = ({ createdAt, id }: { createdAt: Date; id: number | string }): string => {
+  return `${createdAt.toISOString()}${EVENT_CURSOR_SEPARATOR}${String(id)}`;
 };
 
-const decodeEventCursor = (value: string): { createdAt: Date; id: string } => {
+const decodeEventCursor = (value: string): { createdAt: Date; id: number } => {
   if (!value) {
     throw new Error('Empty cursor');
   }
@@ -47,12 +47,16 @@ const decodeEventCursor = (value: string): { createdAt: Date; id: string } => {
     throw new Error('Cursor must include timestamp and id');
   }
   const timestampRaw = value.slice(0, separatorIndex);
-  const id = value.slice(separatorIndex + 1);
+  const idRaw = value.slice(separatorIndex + 1);
   const createdAt = new Date(timestampRaw);
   if (Number.isNaN(createdAt.getTime())) {
     throw new Error('Cursor timestamp is invalid');
   }
-  if (!id.trim()) {
+  if (!idRaw.trim()) {
+    throw new Error('Cursor id is invalid');
+  }
+  const id = Number(idRaw);
+  if (!Number.isInteger(id)) {
     throw new Error('Cursor id is invalid');
   }
   return { createdAt, id };
@@ -407,7 +411,7 @@ export class ContainersController {
       throw new BadRequestException('Invalid since timestamp');
     }
 
-    let cursor: { createdAt: Date; id: string } | null = null;
+    let cursor: { createdAt: Date; id: number } | null = null;
     if (query.cursor) {
       try {
         cursor = decodeEventCursor(query.cursor);
@@ -420,14 +424,15 @@ export class ContainersController {
     const clampedLimit = Math.max(1, Math.min(200, limit));
     const take = clampedLimit + 1;
 
-    const where: Prisma.ContainerEventWhereInput = { containerId };
-    const andFilters: Prisma.ContainerEventWhereInput[] = [];
+    const filters: Prisma.ContainerEventWhereInput[] = [
+      { container: { containerId } },
+    ];
     if (since) {
-      andFilters.push({ createdAt: { gte: since } });
+      filters.push({ createdAt: { gte: since } });
     }
     if (cursor) {
-      const comparator = order === 'asc' ? 'gt' : 'lt';
-      andFilters.push({
+      const comparator: 'gt' | 'lt' = order === 'asc' ? 'gt' : 'lt';
+      filters.push({
         OR: [
           { createdAt: { [comparator]: cursor.createdAt } },
           {
@@ -437,9 +442,9 @@ export class ContainersController {
         ],
       });
     }
-    if (andFilters.length > 0) {
-      where.AND = andFilters;
-    }
+
+    const where: Prisma.ContainerEventWhereInput =
+      filters.length === 1 ? filters[0] : { AND: filters };
 
     const orderBy: Prisma.Enumerable<Prisma.ContainerEventOrderByWithRelationInput> = [
       { createdAt: order },
@@ -452,7 +457,7 @@ export class ContainersController {
       take,
       select: {
         id: true,
-        containerId: true,
+        container: { select: { containerId: true } },
         eventType: true,
         exitCode: true,
         signal: true,
@@ -467,8 +472,8 @@ export class ContainersController {
     const trimmed: RawContainerEvent[] = hasMore ? rows.slice(0, clampedLimit) : rows;
 
     const items = trimmed.map((row) => ({
-      id: row.id,
-      containerId: row.containerId,
+      id: String(row.id),
+      containerId: row.container.containerId,
       eventType: row.eventType,
       exitCode: row.exitCode ?? null,
       signal: row.signal ?? null,
