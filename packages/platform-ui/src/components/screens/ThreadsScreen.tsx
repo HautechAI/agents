@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref, type UIEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref, type UIEvent } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Play,
@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { THREAD_MESSAGE_MAX_LENGTH } from '@/utils/draftStorage';
+import { useThreadSoundNotifications } from '@/hooks/useThreadSoundNotifications';
 
 const UNKNOWN_AGENT_LABEL = '(unknown agent)';
 
@@ -121,6 +122,13 @@ export default function ThreadsScreen({
     if (filterMode === 'closed') return !thread.isOpen;
     return true;
   });
+
+  const notificationThreads = useMemo(
+    () => threads.filter((thread) => !thread.id.startsWith('draft:')),
+    [threads],
+  );
+
+  useThreadSoundNotifications({ threads: notificationThreads });
 
   const resolvedSelectedThread = selectedThread ?? threads.find((thread) => thread.id === selectedThreadId);
   const [draftRecipientQuery, setDraftRecipientQuery] = useState('');
