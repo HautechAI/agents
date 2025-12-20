@@ -5,8 +5,9 @@ import { Input } from '../Input';
 import { Header } from './Header';
 import { FieldLabel } from './FieldLabel';
 import type { NodeConfig, NodePropertiesSidebarProps, NodeState } from './types';
-import type { NodePropertiesViewProps } from './viewTypes';
-import { NODE_VIEW_REGISTRY } from './viewRegistry';
+import type { NodePropertiesViewComponent, NodePropertiesViewProps } from './viewTypes';
+import { NODE_TEMPLATE_KIND_MAP, isNodeTemplateName } from './viewTypes';
+import { NODE_TEMPLATE_VIEW_REGISTRY, NODE_VIEW_REGISTRY } from './viewRegistry';
 import { computeAgentDefaultTitle } from '../../utils/agentDisplay';
 
 function NodePropertiesSidebar(props: NodePropertiesSidebarProps) {
@@ -84,10 +85,27 @@ function NodePropertiesSidebar(props: NodePropertiesSidebarProps) {
   const secretSuggestions = useMemo(() => (Array.isArray(secretKeys) ? secretKeys : []), [secretKeys]);
   const variableSuggestions = useMemo(() => (Array.isArray(variableKeys) ? variableKeys : []), [variableKeys]);
 
+  const templateName = typeof config.template === 'string' ? config.template : undefined;
+
+  const templateViewFor = <K extends NodeConfig['kind']>(kind: K): NodePropertiesViewComponent<K> | undefined => {
+    if (!templateName || !isNodeTemplateName(templateName)) {
+      return undefined;
+    }
+    const expectedKind = NODE_TEMPLATE_KIND_MAP[templateName];
+    if (expectedKind !== kind) {
+      return undefined;
+    }
+    const override = NODE_TEMPLATE_VIEW_REGISTRY[templateName];
+    if (!override) {
+      return undefined;
+    }
+    return override as NodePropertiesViewComponent<K>;
+  };
+
   const viewElement = (() => {
     switch (config.kind) {
       case 'Tool': {
-        const View = NODE_VIEW_REGISTRY.Tool;
+        const View = templateViewFor('Tool') ?? NODE_VIEW_REGISTRY.Tool;
         const toolConfig = config as NodePropertiesViewProps<'Tool'>['config'];
         const toolViewProps: NodePropertiesViewProps<'Tool'> = {
           config: toolConfig,
@@ -107,7 +125,7 @@ function NodePropertiesSidebar(props: NodePropertiesSidebarProps) {
         return <View {...toolViewProps} />;
       }
       case 'Workspace': {
-        const View = NODE_VIEW_REGISTRY.Workspace;
+        const View = templateViewFor('Workspace') ?? NODE_VIEW_REGISTRY.Workspace;
         const workspaceConfig = config as NodePropertiesViewProps<'Workspace'>['config'];
         const workspaceViewProps: NodePropertiesViewProps<'Workspace'> = {
           config: workspaceConfig,
@@ -130,7 +148,7 @@ function NodePropertiesSidebar(props: NodePropertiesSidebarProps) {
         return <View {...workspaceViewProps} />;
       }
       case 'MCP': {
-        const View = NODE_VIEW_REGISTRY.MCP;
+        const View = templateViewFor('MCP') ?? NODE_VIEW_REGISTRY.MCP;
         const mcpConfig = config as NodePropertiesViewProps<'MCP'>['config'];
         const mcpViewProps: NodePropertiesViewProps<'MCP'> = {
           config: mcpConfig,
@@ -154,7 +172,7 @@ function NodePropertiesSidebar(props: NodePropertiesSidebarProps) {
         return <View {...mcpViewProps} />;
       }
       case 'Agent': {
-        const View = NODE_VIEW_REGISTRY.Agent;
+        const View = templateViewFor('Agent') ?? NODE_VIEW_REGISTRY.Agent;
         const agentConfig = config as NodePropertiesViewProps<'Agent'>['config'];
         const agentViewProps: NodePropertiesViewProps<'Agent'> = {
           config: agentConfig,
@@ -170,7 +188,7 @@ function NodePropertiesSidebar(props: NodePropertiesSidebarProps) {
         return <View {...agentViewProps} />;
       }
       case 'Trigger': {
-        const View = NODE_VIEW_REGISTRY.Trigger;
+        const View = templateViewFor('Trigger') ?? NODE_VIEW_REGISTRY.Trigger;
         const triggerConfig = config as NodePropertiesViewProps<'Trigger'>['config'];
         const triggerViewProps: NodePropertiesViewProps<'Trigger'> = {
           config: triggerConfig,

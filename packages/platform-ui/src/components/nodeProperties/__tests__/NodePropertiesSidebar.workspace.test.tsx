@@ -80,6 +80,17 @@ function renderWorkspaceSidebar(overrides?: Partial<NodePropertiesSidebarProps>)
   return { onConfigChange, cpuInput, memoryInput };
 }
 
+function renderWorkspaceTemplateSidebar(template: string, overrides?: Partial<NodeConfig>) {
+  const onConfigChange = vi.fn();
+  render(
+    <WorkspaceSidebarHarness
+      initialConfig={{ template, ...(overrides ?? {}) } as Partial<NodeConfig>}
+      onConfigChange={onConfigChange}
+    />,
+  );
+  return { onConfigChange };
+}
+
 describe('NodePropertiesSidebar workspace limits', () => {
   it('renders persisted workspace limit values', () => {
     const { cpuInput, memoryInput } = renderWorkspaceSidebar({
@@ -136,5 +147,37 @@ describe('NodePropertiesSidebar workspace limits', () => {
       );
       expect(memoryCalls.at(-1)?.[0]).toEqual({ memory_limit: undefined });
     });
+  });
+});
+
+describe('NodePropertiesSidebar workspace template overrides', () => {
+  it('renders the memory template view with static config values', () => {
+    renderWorkspaceTemplateSidebar('memory', {
+      staticConfig: {
+        scope: 'perThread',
+        collectionPrefix: 'agents',
+        title: 'Agent Memory',
+      },
+    } as Partial<NodeConfig>);
+
+    expect(screen.getByText('Memory workspace')).toBeInTheDocument();
+    expect(screen.getByText('perThread')).toBeInTheDocument();
+    expect(screen.getByText('agents')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('0.5 or 500m')).not.toBeInTheDocument();
+  });
+
+  it('renders the memory connector template view with static config values', () => {
+    renderWorkspaceTemplateSidebar('memoryConnector', {
+      staticConfig: {
+        placement: 'after_system',
+        content: 'tree',
+        maxChars: 4096,
+      },
+    } as Partial<NodeConfig>);
+
+    expect(screen.getByText('Memory connector')).toBeInTheDocument();
+    expect(screen.getByText('after_system')).toBeInTheDocument();
+    expect(screen.getByText('tree')).toBeInTheDocument();
+    expect(screen.getByText('4,096')).toBeInTheDocument();
   });
 });

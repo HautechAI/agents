@@ -44,3 +44,22 @@ export type NodePropertiesViewComponent<K extends NodeKind> = (
 export type NodePropertiesViewRegistry = {
   [K in NodeKind]: NodePropertiesViewComponent<K>;
 };
+
+export const NODE_TEMPLATE_KIND_MAP = {
+  memory: 'Workspace',
+  memoryConnector: 'Workspace',
+  shellTool: 'Tool',
+  manageTool: 'Tool',
+  memoryTool: 'Tool',
+  remindMeTool: 'Tool',
+} as const;
+
+export type NodeTemplateName = keyof typeof NODE_TEMPLATE_KIND_MAP;
+
+export type NodePropertiesTemplateViewRegistry = Partial<{
+  [T in NodeTemplateName]: NodePropertiesViewComponent<(typeof NODE_TEMPLATE_KIND_MAP)[T]>;
+}>;
+
+export function isNodeTemplateName(value: string): value is NodeTemplateName {
+  return Object.prototype.hasOwnProperty.call(NODE_TEMPLATE_KIND_MAP, value);
+}
