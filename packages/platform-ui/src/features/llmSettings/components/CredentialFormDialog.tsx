@@ -200,6 +200,7 @@ export function CredentialFormDialog({
                           {...field}
                           placeholder="openai-prod"
                           disabled={mode === 'edit'}
+                          size="sm"
                         />
                       </FormControl>
                       <FormDescription>Unique identifier used when referencing this credential.</FormDescription>
@@ -225,6 +226,7 @@ export function CredentialFormDialog({
                             value: provider.litellmProvider,
                             label: provider.label,
                           }))}
+                          size="sm"
                         />
                       </FormControl>
                       <FormMessage />
@@ -288,7 +290,16 @@ type FieldChangeHandler = (value: string) => void;
 function renderFieldInput(field: ProviderField, value: string, onChange: FieldChangeHandler, isMasked: boolean) {
   const placeholder = isMasked ? '••••••' : field.placeholder ?? undefined;
   if (field.type === 'password') {
-    return <Input type="password" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoComplete="new-password" />;
+    return (
+      <Input
+        type="password"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        autoComplete="new-password"
+        size="sm"
+      />
+    );
   }
 
   if (field.type === 'select' && field.options) {
@@ -298,13 +309,29 @@ function renderFieldInput(field: ProviderField, value: string, onChange: FieldCh
         onValueChange={onChange}
         placeholder="Select option"
         options={field.options.map((option) => ({ value: option, label: option }))}
+        size="sm"
       />
     );
   }
 
   if (field.type === 'textarea') {
-    return <Textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="min-h-[120px]" />;
+    return (
+      <Textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="min-h-[120px]"
+        size="sm"
+      />
+    );
   }
 
-  return <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />;
+  return (
+    <Input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      size="sm"
+    />
+  );
 }
