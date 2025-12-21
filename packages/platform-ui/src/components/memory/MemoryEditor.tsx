@@ -147,8 +147,8 @@ export function MemoryEditor({ nodeId, scope, threadId, path, onPathChange }: Me
   }, [contentLength, docExists, hasSubdocs, statQuery.error, statQuery.isLoading]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="shrink-0 border-b px-4 py-3">
         <h2 className="text-lg font-semibold">Memory editor</h2>
         <div className="mt-1 text-xs text-muted-foreground break-all">{normalizedPath}</div>
         <div className="mt-1 text-xs uppercase text-muted-foreground">{derivedInfo}</div>

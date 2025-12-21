@@ -224,7 +224,7 @@ export function MemoryNodeDetailPage() {
                 className="h-[300px] md:h-full"
               />
             </div>
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
               <MemoryEditor
                 nodeId={nodeId}
                 scope={scope}
