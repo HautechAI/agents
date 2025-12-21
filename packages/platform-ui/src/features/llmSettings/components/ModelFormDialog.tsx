@@ -1,4 +1,5 @@
 import { useEffect, useMemo, type ReactElement } from 'react';
+import { X } from 'lucide-react';
 import { useForm, useWatch, type Control, type FieldValues } from 'react-hook-form';
 import {
   ScreenDialog,
@@ -9,9 +10,10 @@ import {
   ScreenDialogTitle,
 } from '@/components/Dialog';
 import { Button } from '@/components/Button';
+import { IconButton } from '@/components/IconButton';
 import { Input } from '@/components/Input';
 import { Textarea } from '@/components/Textarea';
-import { SelectInput } from '@/components/SelectInput';
+import { Dropdown } from '@/components/Dropdown';
 import { SwitchControl } from '@/components/SwitchControl';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/forms/Form';
 import type { CredentialRecord, ModelRecord, ProviderOption } from '../types';
@@ -202,15 +204,29 @@ export function ModelFormDialog({
 
   return (
     <ScreenDialog open={open} onOpenChange={onOpenChange}>
-      <ScreenDialogContent className="max-h-[90vh] p-0 sm:max-w-2xl">
+      <ScreenDialogContent className="max-h-[90vh] p-0 sm:max-w-2xl" hideCloseButton>
         <div className="flex max-h-[inherit] flex-col">
           <div className="border-b border-[var(--agyn-border-subtle)] px-6 pb-4 pt-6">
-            <ScreenDialogHeader>
-              <ScreenDialogTitle>{mode === 'create' ? 'Create Model' : `Edit Model — ${model?.id}`}</ScreenDialogTitle>
-              <ScreenDialogDescription>
-                Define LiteLLM model routing and guardrails for agent usage.
-              </ScreenDialogDescription>
-            </ScreenDialogHeader>
+            <div className="flex items-start justify-between gap-4">
+              <ScreenDialogHeader className="flex-1 gap-2">
+                <ScreenDialogTitle>
+                  {mode === 'create' ? 'Create Model' : `Edit Model — ${model?.id}`}
+                </ScreenDialogTitle>
+                <ScreenDialogDescription>
+                  Define LiteLLM model routing and guardrails for agent usage.
+                </ScreenDialogDescription>
+              </ScreenDialogHeader>
+              <IconButton
+                icon={<X className="h-4 w-4" />}
+                variant="ghost"
+                size="sm"
+                rounded={false}
+                aria-label="Close dialog"
+                title="Close"
+                className="shrink-0"
+                onClick={() => onOpenChange(false)}
+              />
+            </div>
           </div>
 
           <Form {...form}>
@@ -224,7 +240,7 @@ export function ModelFormDialog({
                     <FormItem>
                       <FormLabel>Model Name</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="assistant-prod" />
+                        <Input {...field} placeholder="assistant-prod" size="sm" />
                       </FormControl>
                       <FormDescription>Unique identifier referenced by agents.</FormDescription>
                       <FormMessage />
@@ -239,7 +255,7 @@ export function ModelFormDialog({
                     <FormItem>
                       <FormLabel>Provider Model Identifier</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder={providerPlaceholder} />
+                        <Input {...field} placeholder={providerPlaceholder} size="sm" />
                       </FormControl>
                       <FormDescription>Exact model slug as recognized by the provider.</FormDescription>
                       <FormMessage />
@@ -255,14 +271,15 @@ export function ModelFormDialog({
                     <FormItem>
                       <FormLabel>Credential</FormLabel>
                       <FormControl>
-                        <SelectInput
-                          value={field.value ?? ''}
-                          onChange={(event) => field.onChange(event.target.value)}
+                        <Dropdown
+                          value={field.value || undefined}
+                          onValueChange={(value) => field.onChange(value)}
                           placeholder="Select credential"
                           options={credentials.map((credentialOption) => ({
                             value: credentialOption.name,
                             label: credentialOption.name,
                           }))}
+                          size="sm"
                         />
                       </FormControl>
                       <FormDescription>
@@ -282,7 +299,7 @@ export function ModelFormDialog({
                     <FormItem>
                       <FormLabel>Mode</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="chat" />
+                        <Input {...field} placeholder="chat" size="sm" />
                       </FormControl>
                       <FormDescription>LiteLLM mode (chat, completion, embedding, etc.).</FormDescription>
                     </FormItem>
@@ -335,12 +352,12 @@ export function ModelFormDialog({
             </div>
           </Form>
 
-          <div className="border-t border-[var(--agyn-border-subtle)] px-6 pb-6 pt-4">
-            <ScreenDialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <div className="border-t border-[var(--agyn-border-subtle)] px-6 pb-6">
+            <ScreenDialogFooter className="mt-6 mb-2 sm:mb-4">
+              <Button variant="ghost" size="md" onClick={() => onOpenChange(false)} disabled={submitting}>
                 Cancel
               </Button>
-              <Button type="submit" form="llm-model-form" disabled={submitting}>
+              <Button type="submit" form="llm-model-form" variant="primary" size="md" disabled={submitting}>
                 {submitting ? 'Saving…' : mode === 'create' ? 'Create Model' : 'Save Changes'}
               </Button>
             </ScreenDialogFooter>
@@ -374,7 +391,7 @@ function NumericField({ label, name, placeholder, control }: NumericFieldProps) 
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input type="number" step="any" {...field} placeholder={placeholder} />
+            <Input type="number" step="any" {...field} placeholder={placeholder} size="sm" />
           </FormControl>
           <FormMessage />
         </FormItem>
