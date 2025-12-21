@@ -414,7 +414,8 @@ describe('AgentsThreads page', () => {
     ).toBeInTheDocument();
   });
 
-  it('disables containers popover when there are no containers', async () => {
+  it('keeps containers popover closed when there are no containers', async () => {
+    const user = userEvent.setup();
     const thread = makeThread();
     registerThreadScenario({ thread, runs: [] });
     registerGraphAgents([]);
@@ -422,7 +423,10 @@ describe('AgentsThreads page', () => {
     renderAt(`/agents/threads/${thread.id}`);
 
     const containersButton = await screen.findByRole('button', { name: /containers$/i });
-    expect(containersButton).toBeDisabled();
+    expect(containersButton).toBeEnabled();
+    expect(containersButton).toHaveAttribute('aria-expanded', 'false');
+    await user.click(containersButton);
+    await waitFor(() => expect(containersButton).toHaveAttribute('aria-expanded', 'false'));
     expect(screen.queryByText('No containers available.')).not.toBeInTheDocument();
   });
 
@@ -449,7 +453,8 @@ describe('AgentsThreads page', () => {
     expect(screen.queryByText('Containers')).not.toBeInTheDocument();
   });
 
-  it('disables reminders popover when there are no reminders', async () => {
+  it('keeps reminders popover closed when there are no reminders', async () => {
+    const user = userEvent.setup();
     const thread = makeThread();
     registerThreadScenario({ thread, runs: [] });
     registerGraphAgents([]);
@@ -457,7 +462,10 @@ describe('AgentsThreads page', () => {
     renderAt(`/agents/threads/${thread.id}`);
 
     const remindersButton = await screen.findByRole('button', { name: /reminders$/i });
-    expect(remindersButton).toBeDisabled();
+    expect(remindersButton).toBeEnabled();
+    expect(remindersButton).toHaveAttribute('aria-expanded', 'false');
+    await user.click(remindersButton);
+    await waitFor(() => expect(remindersButton).toHaveAttribute('aria-expanded', 'false'));
     expect(screen.queryByText('Reminders')).not.toBeInTheDocument();
   });
 

@@ -457,10 +457,9 @@ export default function ThreadsScreen({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-2 rounded-[6px] px-2 py-1 transition-colors hover:bg-[var(--agyn-bg-light)] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-[6px] px-2 py-1 transition-colors hover:bg-[var(--agyn-bg-light)]"
                     aria-haspopup="dialog"
                     aria-expanded={isContainersPopoverOpen}
-                    disabled={!hasContainers}
                   >
                     <Container className="h-4 w-4 text-[var(--agyn-gray)]" />
                     <span className="text-sm text-[var(--agyn-dark)]">{runningContainersCount}</span>
@@ -515,10 +514,9 @@ export default function ThreadsScreen({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-2 rounded-[6px] px-2 py-1 transition-colors hover:bg-[var(--agyn-bg-light)] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-[6px] px-2 py-1 transition-colors hover:bg-[var(--agyn-bg-light)]"
                     aria-haspopup="dialog"
                     aria-expanded={isRemindersPopoverOpen}
-                    disabled={!hasReminders}
                   >
                     <Bell className="h-4 w-4 text-[var(--agyn-gray)]" />
                     <span className="text-sm text-[var(--agyn-dark)]">{reminders.length}</span>
