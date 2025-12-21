@@ -1,16 +1,18 @@
 import { PassThrough } from 'node:stream';
+import { WorkspaceProvider } from '../../src/workspace/providers/workspace.provider';
 import type {
-  WorkspaceProvider,
   WorkspaceProviderCapabilities,
   WorkspaceKey,
   WorkspaceSpec,
   ExecRequest,
+  ExecResult,
   InteractiveExecRequest,
+  InteractiveExecSession,
   DestroyWorkspaceOptions,
 } from '../../src/workspace/providers/workspace.provider';
 import { WorkspaceHandle } from '../../src/workspace/workspace.handle';
 
-export class WorkspaceProviderStub implements WorkspaceProvider {
+export class WorkspaceProviderStub extends WorkspaceProvider {
   public readonly workspaceId: string;
   public readonly execRequests: ExecRequest[] = [];
   public readonly interactiveRequests: InteractiveExecRequest[] = [];
@@ -18,6 +20,7 @@ export class WorkspaceProviderStub implements WorkspaceProvider {
   public readonly ensureCalls: Array<{ key: WorkspaceKey; spec: WorkspaceSpec }> = [];
 
   constructor(private readonly baseEnv: Record<string, string> = {}, workspaceId = 'workspace-stub') {
+    super();
     this.workspaceId = workspaceId;
   }
 
@@ -37,7 +40,7 @@ export class WorkspaceProviderStub implements WorkspaceProvider {
     return { workspaceId: this.workspaceId, created: false };
   }
 
-  async exec(_workspaceId: string, request: ExecRequest) {
+  async exec(_workspaceId: string, request: ExecRequest): Promise<ExecResult> {
     this.execRequests.push(request);
     const envOverrides = Array.isArray(request.env)
       ? request.env.reduce<Record<string, string>>((acc, entry) => {
@@ -53,12 +56,12 @@ export class WorkspaceProviderStub implements WorkspaceProvider {
     return { stdout, stderr: '', exitCode: 0 };
   }
 
-  async openInteractiveExec(_workspaceId: string, request: InteractiveExecRequest) {
+  async openInteractiveExec(_workspaceId: string, request: InteractiveExecRequest): Promise<InteractiveExecSession> {
     this.interactiveRequests.push(request);
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     setImmediate(() => stdout.end());
-    return { execId: 'interactive-stub', stdin, stdout, close: async () => ({ exitCode: 0 }) };
+    return { execId: 'interactive-stub', stdin, stdout, stderr: undefined, close: async () => ({ exitCode: 0 }) };
   }
 
   async resize(_execId: string, _size: { cols: number; rows: number }): Promise<void> {

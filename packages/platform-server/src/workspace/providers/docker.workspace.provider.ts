@@ -27,10 +27,12 @@ const DIND_DEFAULT_MIRROR = 'http://registry-mirror:5000';
 const DIND_HOST = 'tcp://0.0.0.0:2375';
 
 @Injectable()
-export class DockerWorkspaceProvider implements WorkspaceProvider {
+export class DockerWorkspaceProvider extends WorkspaceProvider {
   private readonly logger = new Logger(DockerWorkspaceProvider.name);
 
-  constructor(@Inject(ContainerService) private readonly containers: ContainerService) {}
+  constructor(@Inject(ContainerService) private readonly containers: ContainerService) {
+    super();
+  }
 
   capabilities(): WorkspaceProviderCapabilities {
     return {

@@ -16,7 +16,16 @@ import { ThreadsMetricsService } from '../src/agents/threads.metrics.service';
 import { PrismaService } from '../src/core/services/prisma.service';
 import { ContainerTerminalGateway } from '../src/infra/container/terminal.gateway';
 import { TerminalSessionsService, type TerminalSessionRecord } from '../src/infra/container/terminal.sessions.service';
-import { WORKSPACE_PROVIDER, type WorkspaceProvider } from '../src/workspace/providers/workspace.provider';
+import {
+  WorkspaceProvider,
+  type WorkspaceKey,
+  type WorkspaceSpec,
+  type ExecRequest,
+  type ExecResult,
+  type InteractiveExecRequest,
+  type InteractiveExecSession,
+  type DestroyWorkspaceOptions,
+} from '../src/workspace/providers/workspace.provider';
 
 class LiveGraphRuntimeStub {
   subscribe() {
@@ -56,7 +65,7 @@ class PrismaServiceStub {
   }
 }
 
-class WorkspaceProviderStub implements WorkspaceProvider {
+class WorkspaceProviderStub extends WorkspaceProvider {
   capabilities() {
     return {
       persistentVolume: true,
@@ -68,24 +77,18 @@ class WorkspaceProviderStub implements WorkspaceProvider {
     } as const;
   }
 
-  async ensureWorkspace(_key?: unknown, _spec?: unknown) {
+  async ensureWorkspace(_key: WorkspaceKey, _spec: WorkspaceSpec): Promise<{ workspaceId: string; created: boolean }> {
     return { workspaceId: 'stub-workspace', created: false };
   }
 
-  async exec(_workspaceId: string, _request: unknown): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  async exec(_workspaceId: string, _request: ExecRequest): Promise<ExecResult> {
     return { stdout: '', stderr: '', exitCode: 0 };
   }
 
   async openInteractiveExec(
     _workspaceId: string,
-    _request: unknown,
-  ): Promise<{
-    execId: string;
-    stdin: PassThrough;
-    stdout: PassThrough;
-    stderr: PassThrough;
-    close: () => Promise<{ exitCode: number }>;
-  }> {
+    _request: InteractiveExecRequest,
+  ): Promise<InteractiveExecSession> {
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     const stderr = new PassThrough();
@@ -106,7 +109,7 @@ class WorkspaceProviderStub implements WorkspaceProvider {
     return;
   }
 
-  async destroyWorkspace(_workspaceId: string): Promise<void> {
+  async destroyWorkspace(_workspaceId: string, _options?: DestroyWorkspaceOptions): Promise<void> {
     return;
   }
 
@@ -280,7 +283,7 @@ describe('Socket gateway real server handshakes', () => {
         { provide: PrismaService, useClass: PrismaServiceStub },
         ContainerTerminalGateway,
         { provide: TerminalSessionsService, useClass: TerminalSessionsServiceStub },
-        { provide: WORKSPACE_PROVIDER, useClass: WorkspaceProviderStub },
+        { provide: WorkspaceProvider, useClass: WorkspaceProviderStub },
         EventsBusService,
         RunEventsService,
       ],

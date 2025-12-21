@@ -80,15 +80,19 @@ export type DestroyWorkspaceOptions = {
   removePersistentVolume?: boolean;
 };
 
-export interface WorkspaceProvider {
-  capabilities(): WorkspaceProviderCapabilities;
-  ensureWorkspace(key: WorkspaceKey, spec: WorkspaceSpec): Promise<{ workspaceId: string; created: boolean }>;
-  exec(workspaceId: string, request: ExecRequest): Promise<ExecResult>;
-  openInteractiveExec(workspaceId: string, request: InteractiveExecRequest): Promise<InteractiveExecSession>;
+/**
+ * Base abstraction for workspace providers.
+ * Acts as the Nest injection token so alternative implementations or routers
+ * can extend this class without changing consumers.
+ */
+export abstract class WorkspaceProvider {
+  abstract capabilities(): WorkspaceProviderCapabilities;
+  abstract ensureWorkspace(key: WorkspaceKey, spec: WorkspaceSpec): Promise<{ workspaceId: string; created: boolean }>;
+  abstract exec(workspaceId: string, request: ExecRequest): Promise<ExecResult>;
+  abstract openInteractiveExec(workspaceId: string, request: InteractiveExecRequest): Promise<InteractiveExecSession>;
+  abstract destroyWorkspace(workspaceId: string, options?: DestroyWorkspaceOptions): Promise<void>;
+
   resize?(execId: string, size: { cols: number; rows: number }): Promise<void>;
   putArchive?(workspaceId: string, data: Buffer | NodeJS.ReadableStream, options?: { path?: string }): Promise<void>;
   touchWorkspace?(workspaceId: string): Promise<void>;
-  destroyWorkspace(workspaceId: string, options?: DestroyWorkspaceOptions): Promise<void>;
 }
-
-export const WORKSPACE_PROVIDER = Symbol('WorkspaceProvider');

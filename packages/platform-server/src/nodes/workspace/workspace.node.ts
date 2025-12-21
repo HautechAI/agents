@@ -6,11 +6,7 @@ import { ConfigService } from '../../core/services/config.service';
 import { NcpsKeyService } from '../../infra/ncps/ncpsKey.service';
 import { EnvService, type EnvItem } from '../../env/env.service';
 import { WorkspaceHandle } from '../../workspace/workspace.handle';
-import {
-  WORKSPACE_PROVIDER,
-  type WorkspaceProvider,
-  type WorkspaceSpec,
-} from '../../workspace/providers/workspace.provider';
+import { WorkspaceProvider, type WorkspaceSpec } from '../../workspace/providers/workspace.provider';
 import { SUPPORTED_PLATFORMS, type Platform } from '../../core/constants';
 
 // Static configuration schema for ContainerProviderEntity
@@ -85,7 +81,7 @@ const DEFAULT_DOCKER_MIRROR = 'http://registry-mirror:5000';
 @Injectable({ scope: Scope.TRANSIENT })
 export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
   constructor(
-    @Inject(WORKSPACE_PROVIDER) private readonly workspaceProvider: WorkspaceProvider,
+    @Inject(WorkspaceProvider) private readonly workspaceProvider: WorkspaceProvider,
     @Inject(ConfigService) protected configService: ConfigService,
     @Inject(NcpsKeyService) protected ncpsKeyService: NcpsKeyService,
     @Inject(EnvService) protected envService: EnvService,

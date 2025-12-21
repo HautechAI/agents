@@ -8,7 +8,16 @@ import WebSocket from 'ws';
 import { ContainerTerminalController } from '../../src/infra/container/containerTerminal.controller';
 import { ContainerTerminalGateway } from '../../src/infra/container/terminal.gateway';
 import { TerminalSessionsService } from '../../src/infra/container/terminal.sessions.service';
-import { WORKSPACE_PROVIDER, type WorkspaceProvider } from '../../src/workspace/providers/workspace.provider';
+import {
+  WorkspaceProvider,
+  type WorkspaceKey,
+  type WorkspaceSpec,
+  type ExecRequest,
+  type ExecResult,
+  type InteractiveExecRequest,
+  type InteractiveExecSession,
+  type DestroyWorkspaceOptions,
+} from '../../src/workspace/providers/workspace.provider';
 import { waitFor, waitForWsClose } from '../helpers/ws';
 
 type TerminalMessage = {
@@ -19,7 +28,7 @@ type TerminalMessage = {
 };
 
 @Injectable()
-class TestWorkspaceProvider implements WorkspaceProvider {
+class TestWorkspaceProvider extends WorkspaceProvider {
   public stdin?: PassThrough;
   public stdout?: PassThrough;
   public closeCalls = 0;
@@ -36,15 +45,15 @@ class TestWorkspaceProvider implements WorkspaceProvider {
     } as const;
   }
 
-  async ensureWorkspace(_key: unknown, _spec: unknown) {
+  async ensureWorkspace(_key: WorkspaceKey, _spec: WorkspaceSpec): Promise<{ workspaceId: string; created: boolean }> {
     return { workspaceId: 'test-workspace', created: true };
   }
 
-  async exec(_workspaceId: string, _request: unknown) {
+  async exec(_workspaceId: string, _request: ExecRequest): Promise<ExecResult> {
     return { stdout: '/bin/bash\n', stderr: '', exitCode: 0 };
   }
 
-  async openInteractiveExec(_workspaceId: string, _request: unknown) {
+  async openInteractiveExec(_workspaceId: string, _request: InteractiveExecRequest): Promise<InteractiveExecSession> {
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     this.stdin = stdin;
@@ -83,7 +92,7 @@ class TestWorkspaceProvider implements WorkspaceProvider {
     this.resizes.push({ execId, ...size });
   }
 
-  async destroyWorkspace(): Promise<void> {
+  async destroyWorkspace(_workspaceId: string, _options?: DestroyWorkspaceOptions): Promise<void> {
     return;
   }
 
@@ -103,7 +112,7 @@ describe('ContainerTerminalGateway E2E', () => {
       providers: [
         ContainerTerminalGateway,
         TerminalSessionsService,
-        { provide: WORKSPACE_PROVIDER, useClass: TestWorkspaceProvider },
+        { provide: WorkspaceProvider, useClass: TestWorkspaceProvider },
       ],
     }).compile();
 
@@ -121,7 +130,7 @@ describe('ContainerTerminalGateway E2E', () => {
     }
     baseUrl = `http://127.0.0.1:${addressInfo.port}`;
 
-    workspaceProvider = app.get(WORKSPACE_PROVIDER) as unknown as TestWorkspaceProvider;
+    workspaceProvider = app.get(WorkspaceProvider) as TestWorkspaceProvider;
   });
 
   afterAll(async () => {

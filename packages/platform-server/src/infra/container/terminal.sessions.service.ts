@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { WORKSPACE_PROVIDER, type WorkspaceProvider } from '../../workspace/providers/workspace.provider';
+import { WorkspaceProvider } from '../../workspace/providers/workspace.provider';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_MAX_DURATION_MS = 30 * 60 * 1000; // 30 minutes
@@ -37,7 +37,7 @@ export class TerminalSessionsService implements OnModuleDestroy {
   private readonly cleanupTimer: NodeJS.Timeout;
   private readonly logger = new Logger(TerminalSessionsService.name);
 
-  constructor(@Inject(WORKSPACE_PROVIDER) private readonly workspaceProvider: WorkspaceProvider) {
+  constructor(@Inject(WorkspaceProvider) private readonly workspaceProvider: WorkspaceProvider) {
     this.cleanupTimer = setInterval(() => {
       try {
         this.prune();

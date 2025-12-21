@@ -30,7 +30,7 @@ import { EnvService } from '../env/env.service';
 import { GraphCoreModule } from '../graph-core/graph-core.module';
 import { TemplateRegistry } from '../graph-core/templateRegistry';
 import { registerDefaultTemplates } from '../templates';
-import { WORKSPACE_PROVIDER, type WorkspaceProvider } from '../workspace/providers/workspace.provider';
+import { WorkspaceProvider } from '../workspace/providers/workspace.provider';
 
 @Injectable()
 class NodesTemplateRegistrar implements OnModuleInit {
@@ -73,7 +73,7 @@ class NodesTemplateRegistrar implements OnModuleInit {
         ncpsKeyService: NcpsKeyService,
         envService: EnvService,
       ) => new WorkspaceNode(workspaceProvider, configService, ncpsKeyService, envService),
-      inject: [WORKSPACE_PROVIDER, ConfigService, NcpsKeyService, EnvService],
+      inject: [WorkspaceProvider, ConfigService, NcpsKeyService, EnvService],
     },
   ],
   exports: [

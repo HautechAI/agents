@@ -21,7 +21,7 @@ import { RunSignalsRegistry } from '../src/agents/run-signals.service';
 import { EventsBusService } from '../src/events/events-bus.service';
 import { createEventsBusStub } from './helpers/eventsBus.stub';
 import { ReferenceResolverService } from '../src/utils/reference-resolver.service';
-import { WORKSPACE_PROVIDER } from '../src/workspace/providers/workspace.provider';
+import { WorkspaceProvider } from '../src/workspace/providers/workspace.provider';
 import { WorkspaceProviderStub } from './helpers/workspace-provider.stub';
 
 class StubContainerService extends ContainerService {
@@ -144,7 +144,7 @@ describe('Boot respects MCP enabledTools from persisted state', () => {
         { provide: LLMProvisioner, useClass: StubLLMProvisioner },
         { provide: NcpsKeyService, useValue: { getKeysForInjection: () => [] } },
         { provide: ContainerRegistry, useValue: { updateLastUsed: async () => {}, registerStart: async () => {}, markStopped: async () => {} } },
-        { provide: WORKSPACE_PROVIDER, useClass: WorkspaceProviderStub },
+        { provide: WorkspaceProvider, useClass: WorkspaceProviderStub },
         { provide: GraphSocketGateway, useValue: { emitNodeState: (_id: string, _state: Record<string, unknown>) => {} } },
         NodeStateService,
         TemplateRegistry,

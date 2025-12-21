@@ -5,7 +5,7 @@ import type { Duplex } from 'stream';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 import { z } from 'zod';
 import { TerminalSessionsService, type TerminalSessionRecord } from './terminal.sessions.service';
-import { WORKSPACE_PROVIDER, type WorkspaceProvider } from '../../workspace/providers/workspace.provider';
+import { WorkspaceProvider } from '../../workspace/providers/workspace.provider';
 import { WorkspaceHandle } from '../../workspace/workspace.handle';
 
 const QuerySchema = z
@@ -139,7 +139,7 @@ export class ContainerTerminalGateway {
   private readonly logger = new Logger(ContainerTerminalGateway.name);
   constructor(
     @Inject(TerminalSessionsService) private readonly sessions: TerminalSessionsService,
-    @Inject(WORKSPACE_PROVIDER) private readonly workspaceProvider: WorkspaceProvider,
+    @Inject(WorkspaceProvider) private readonly workspaceProvider: WorkspaceProvider,
   ) {}
 
   private wss: WebSocketServer | null = null;

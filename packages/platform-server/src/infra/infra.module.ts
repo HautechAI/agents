@@ -20,7 +20,7 @@ import { ContainerTerminalGateway } from './container/terminal.gateway';
 import { ContainerTerminalController } from './container/containerTerminal.controller';
 import { ContainerEventProcessor } from './container/containerEvent.processor';
 import { DockerWorkspaceEventsWatcher } from './container/containerEvent.watcher';
-import { WORKSPACE_PROVIDER } from '../workspace/providers/workspace.provider';
+import { WorkspaceProvider } from '../workspace/providers/workspace.provider';
 import { DockerWorkspaceProvider } from '../workspace/providers/docker.workspace.provider';
 
 @Module({
@@ -64,7 +64,7 @@ import { DockerWorkspaceProvider } from '../workspace/providers/docker.workspace
       inject: [ContainerRegistry],
     },
     {
-      provide: WORKSPACE_PROVIDER,
+      provide: WorkspaceProvider,
       useFactory: (containerService: ContainerService) => new DockerWorkspaceProvider(containerService),
       inject: [ContainerService],
     },
@@ -113,7 +113,7 @@ import { DockerWorkspaceProvider } from '../workspace/providers/docker.workspace
     PRService,
     ContainerRegistry,
     ArchiveService,
-    WORKSPACE_PROVIDER,
+    WorkspaceProvider,
   ],
 })
 export class InfraModule {}
