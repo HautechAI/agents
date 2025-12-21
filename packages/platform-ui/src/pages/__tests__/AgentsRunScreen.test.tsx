@@ -332,6 +332,42 @@ describe('AgentsRunScreen', () => {
     });
   });
 
+  it('does not infer shell subtype from tool names containing "command" alone', async () => {
+    const event = buildEvent({
+      toolExecution: {
+        toolName: 'run_command',
+        toolCallId: 'call-generic',
+        execStatus: 'success',
+        input: '{}',
+        output: '{}',
+        errorMessage: null,
+        raw: null,
+      },
+    });
+
+    runsHookMocks.summary.mockReturnValue(buildSummary());
+    runsHookMocks.events.mockReturnValue({ items: [event], nextCursor: null });
+
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/threads/${event.threadId}/runs/${event.runId}`]}>
+          <Routes>
+            <Route path="/threads/:threadId/runs/:runId" element={<AgentsRunScreen />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      const latest = latestRunScreenProps<{ events: Array<{ data: { toolSubtype?: string } }> }>();
+      expect(latest).toBeDefined();
+      expect(latest?.events).toHaveLength(1);
+      expect(latest?.events[0].data.toolSubtype).toBe('generic');
+    });
+  });
+
   it('infers manage subtype when tool input includes worker and command fields', async () => {
     const event = buildEvent({
       toolExecution: {

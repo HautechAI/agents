@@ -210,7 +210,7 @@ function inferToolSubtype(toolName: string | undefined, input: unknown): 'shell'
   if (normalized.includes('manage') || normalized.includes('delegate') || normalized.includes('call_agent')) {
     return 'manage';
   }
-  if (normalized.includes('shell') || normalized.includes('command') || normalized.includes('exec')) {
+  if (normalized.includes('shell') || normalized.includes('exec')) {
     return 'shell';
   }
   if (typeof input === 'object' && input !== null) {
