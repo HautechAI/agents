@@ -93,7 +93,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -143,7 +143,7 @@ describe('Settings/LLM page', () => {
     expect(credentialHeader.className).toContain('top-0');
     const credentialRow = screen.getByTestId('llm-credential-row-openai-prod');
     expect(within(credentialRow).getByText('OpenAI')).toBeInTheDocument();
-    expect(within(credentialRow).getByText('prod')).toBeInTheDocument();
+    expect(within(credentialRow).queryByText('prod')).not.toBeInTheDocument();
 
     const modelsTab = screen.getByRole('tab', { name: 'Models' });
     await user.click(modelsTab);
@@ -174,7 +174,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -321,7 +321,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: [] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -390,12 +390,11 @@ describe('Settings/LLM page', () => {
         const body = (await request.json()) as {
           name: string;
           provider: string;
-          tags?: string[];
           values?: Record<string, string>;
         };
         credentialRecords.push({
           credential_name: body.name,
-          credential_info: { litellm_provider: body.provider, tags: body.tags ?? [] },
+          credential_info: { litellm_provider: body.provider },
           credential_values: { api_key: 'sk****new' },
         });
         return HttpResponse.json({ success: true });
@@ -445,7 +444,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -465,10 +464,10 @@ describe('Settings/LLM page', () => {
       http.get(abs('/api/settings/llm/models'), () => HttpResponse.json({ models: [] })),
       http.get(abs('/api/settings/llm/health-check-modes'), () => HttpResponse.json({ modes: DEFAULT_HEALTH_CHECK_MODES })),
       http.patch(abs('/api/settings/llm/credentials/openai-prod'), async ({ request }) => {
-        const body = (await request.json()) as { tags?: string[]; values?: Record<string, string> };
-        expect(body).toMatchObject({ tags: ['prod', 'beta'] });
-        expect(Object.keys(body.values ?? {})).toHaveLength(0);
-        credentialRecords[0].credential_info.tags = body.tags ?? [];
+        const body = (await request.json()) as { values?: Record<string, string> };
+        expect(body).not.toHaveProperty('tags');
+        expect(body).toMatchObject({ values: { api_key: 'sk-updated-secret' } });
+        credentialRecords[0].credential_values.api_key = 'sk****updated';
         return HttpResponse.json({ success: true });
       }),
     );
@@ -487,15 +486,14 @@ describe('Settings/LLM page', () => {
     await user.click(editButton);
 
     const dialog = await screen.findByRole('dialog', { name: /Edit Credential/i });
-    const tagsInput = within(dialog).getByLabelText('Tags');
-    await user.clear(tagsInput);
-    await user.type(tagsInput, 'prod, beta');
+    const apiKeyInput = within(dialog).getByLabelText('OpenAI API Key');
+    await user.type(apiKeyInput, 'sk-updated-secret');
 
     const saveButton = within(dialog).getByRole('button', { name: 'Save Changes' });
     await user.click(saveButton);
 
     await waitFor(() => expect(notifyMocks.success).toHaveBeenCalledWith('Credential updated'));
-    await screen.findByText('beta');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Edit Credential/i })).not.toBeInTheDocument());
   });
 
   it('deletes a credential via the confirmation dialog', async () => {
@@ -514,7 +512,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];
@@ -560,6 +558,139 @@ describe('Settings/LLM page', () => {
     await waitFor(() => expect(screen.queryByTestId('llm-credential-row-openai-prod')).not.toBeInTheDocument());
   });
 
+  it('derives model provider metadata from the selected credential', async () => {
+    const providers = [
+      {
+        provider: 'OpenAI',
+        provider_display_name: 'OpenAI',
+        litellm_provider: 'openai',
+        credential_fields: [
+          { key: 'api_key', label: 'OpenAI API Key', field_type: 'password', required: true, placeholder: null, tooltip: null, options: null, default_value: null },
+        ],
+        default_model_placeholder: 'gpt-4o-mini',
+      },
+      {
+        provider: 'Anthropic',
+        provider_display_name: 'Anthropic',
+        litellm_provider: 'anthropic',
+        credential_fields: [
+          { key: 'api_key', label: 'Anthropic API Key', field_type: 'password', required: true, placeholder: null, tooltip: null, options: null, default_value: null },
+        ],
+        default_model_placeholder: 'claude-3-opus',
+      },
+    ];
+
+    const credentialRecords = [
+      {
+        credential_name: 'openai-default',
+        credential_info: { litellm_provider: 'openai' },
+        credential_values: { api_key: 'sk****openai' },
+      },
+      {
+        credential_name: 'zz-anthropic-legacy',
+        credential_info: { custom_llm_provider: 'anthropic' },
+        credential_values: { api_key: 'sk****anthropic' },
+      },
+    ];
+
+    const modelRecords: unknown[] = [];
+
+    server.use(
+      http.get(abs('/api/settings/llm/admin-status'), () =>
+        HttpResponse.json({
+          configured: true,
+          baseUrl: 'http://127.0.0.1:4000',
+          hasMasterKey: true,
+          provider: 'litellm',
+          adminReachable: true,
+        }),
+      ),
+      http.get(abs('/api/settings/llm/providers'), () => HttpResponse.json(providers)),
+      http.get(abs('/api/settings/llm/credentials'), () => HttpResponse.json(credentialRecords)),
+      http.get(abs('/api/settings/llm/models'), () => HttpResponse.json({ models: modelRecords })),
+      http.get(abs('/api/settings/llm/health-check-modes'), () => HttpResponse.json({ modes: DEFAULT_HEALTH_CHECK_MODES })),
+      http.post(abs('/api/settings/llm/models'), async ({ request }) => {
+        const body = (await request.json()) as {
+          name: string;
+          provider: string;
+          model: string;
+          credentialName: string;
+          mode?: string;
+        };
+        expect(body).toMatchObject({
+          name: 'anthropic-support',
+          provider: 'anthropic',
+          model: 'claude-3-opus',
+          credentialName: 'zz-anthropic-legacy',
+        });
+        modelRecords.push({
+          model_name: body.name,
+          litellm_params: {
+            model: body.model,
+            custom_llm_provider: body.provider,
+            litellm_credential_name: body.credentialName,
+          },
+          model_info: { id: body.name, mode: body.mode ?? 'chat' },
+        });
+        return HttpResponse.json({
+          model_name: body.name,
+          litellm_params: {
+            model: body.model,
+            custom_llm_provider: body.provider,
+            litellm_credential_name: body.credentialName,
+          },
+          model_info: { id: body.name, mode: body.mode ?? 'chat' },
+        });
+      }),
+    );
+
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    render(
+      <TestProviders>
+        <SettingsLlm />
+      </TestProviders>,
+    );
+
+    await screen.findByText('openai-default');
+
+    const modelsTab = screen.getByRole('tab', { name: 'Models' });
+    await user.click(modelsTab);
+
+    const addModelButton = await screen.findByRole('button', { name: 'Add Model' });
+    await user.click(addModelButton);
+
+    const dialog = await screen.findByRole('dialog', { name: /Create Model/i });
+    expect(within(dialog).queryByLabelText('Provider')).toBeNull();
+
+    const modelInput = within(dialog).getByLabelText('Provider Model Identifier') as HTMLInputElement;
+    expect(modelInput.getAttribute('placeholder')).toBe('gpt-4o-mini');
+
+    const credentialSelect = within(dialog).getByLabelText('Credential') as HTMLSelectElement;
+    await user.selectOptions(credentialSelect, 'zz-anthropic-legacy');
+
+    await waitFor(() => expect(modelInput.getAttribute('placeholder')).toBe('claude-3-opus'));
+    expect(
+      within(dialog).getByText('Provider derived from credential: Anthropic.'),
+    ).toBeInTheDocument();
+
+    const nameInput = within(dialog).getByLabelText('Model Name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'anthropic-support');
+    await user.clear(modelInput);
+    await user.type(modelInput, 'claude-3-opus');
+
+    const submitButton = within(dialog).getByRole('button', { name: 'Create Model' });
+    await user.click(submitButton);
+
+    await waitFor(() => expect(notifyMocks.success).toHaveBeenCalledWith('Model created'));
+
+    await screen.findByTestId('llm-model-row-anthropic-support');
+    const createdRow = screen.getByTestId('llm-model-row-anthropic-support');
+    expect(within(createdRow).getByText('Anthropic')).toBeInTheDocument();
+    expect(within(createdRow).getByText('zz-anthropic-legacy')).toBeInTheDocument();
+  });
+
   it('uses backend-provided health check modes in dialogs', async () => {
     const providers = [
       {
@@ -576,7 +707,7 @@ describe('Settings/LLM page', () => {
     const credentialRecords = [
       {
         credential_name: 'openai-prod',
-        credential_info: { litellm_provider: 'openai', tags: ['prod'] },
+        credential_info: { litellm_provider: 'openai' },
         credential_values: { api_key: 'sk****prod' },
       },
     ];

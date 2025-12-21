@@ -135,7 +135,6 @@ describe.sequential('LLMSettingsService', () => {
           credential_name: 'openai-dev',
           credential_info: {
             litellm_provider: 'openai',
-            tags: ['default'],
           },
           credential_values: {
             api_key: 'sk-test',
@@ -151,7 +150,6 @@ describe.sequential('LLMSettingsService', () => {
     const res = await service.createCredential({
       name: 'openai-dev',
       provider: 'openai',
-      tags: ['default', ''],
       values: { api_key: ' sk-test ', api_base: 'https://api.openai.com/v1' },
     });
     expect(res).toMatchObject({ success: true });
@@ -164,7 +162,7 @@ describe.sequential('LLMSettingsService', () => {
         expect(body).toMatchObject({
           credential_name: 'openai-dev',
           credential_info: {
-            tags: ['primary'],
+            environment: 'primary',
           },
         });
         expect(body).not.toHaveProperty('credential_values');
@@ -174,7 +172,7 @@ describe.sequential('LLMSettingsService', () => {
       .reply(200, { success: true });
 
     const service = new LLMSettingsService(createConfig());
-    const res = await service.updateCredential({ name: 'openai-dev', tags: ['primary'] });
+    const res = await service.updateCredential({ name: 'openai-dev', metadata: { environment: 'primary' } });
     expect(res).toMatchObject({ success: true });
     scope.done();
   });
@@ -204,6 +202,36 @@ describe.sequential('LLMSettingsService', () => {
 
     const service = new LLMSettingsService(createConfig());
     const res = await service.testCredential({ name: 'openai-dev', model: 'gpt-4o' });
+    expect(res).toMatchObject({ success: true });
+    detailScope.done();
+    testScope.done();
+  });
+
+  it('tests credential using legacy provider metadata fallback', async () => {
+    const detailScope = nock(BASE_URL)
+      .get('/credentials/by_name/legacy-openai')
+      .reply(200, {
+        credential_name: 'legacy-openai',
+        credential_info: { custom_llm_provider: 'openai' },
+        credential_values: { api_key: 'sk***' },
+      });
+
+    const testScope = nock(BASE_URL)
+      .post('/health/test_connection', (body) => {
+        expect(body).toMatchObject({
+          mode: 'chat',
+          litellm_params: {
+            model: 'gpt-4o-mini',
+            custom_llm_provider: 'openai',
+            litellm_credential_name: 'legacy-openai',
+          },
+        });
+        return true;
+      })
+      .reply(200, { success: true });
+
+    const service = new LLMSettingsService(createConfig());
+    const res = await service.testCredential({ name: 'legacy-openai', model: 'gpt-4o-mini' });
     expect(res).toMatchObject({ success: true });
     detailScope.done();
     testScope.done();
@@ -306,7 +334,6 @@ describe.sequential('LLMSettingsService', () => {
       service.createCredential({
         name: 'openai-dev',
         provider: 'openai',
-        tags: [],
         values: { api_key: 'sk-test' },
       }),
     ).rejects.toMatchObject({
@@ -335,7 +362,6 @@ describe.sequential('LLMSettingsService', () => {
       service.createCredential({
         name: 'openai-dev',
         provider: 'openai',
-        tags: [],
         values: { api_key: 'sk-test' },
       }),
     ).rejects.toMatchObject({

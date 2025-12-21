@@ -29,7 +29,6 @@ export type CredentialRecord = {
   name: string;
   providerKey: string;
   providerLabel: string;
-  tags: string[];
   values: Record<string, string>;
   maskedFields: Set<string>;
   metadata: Record<string, unknown>;
@@ -60,6 +59,19 @@ const FIELD_TYPE_MAP: Record<string, ProviderFieldType> = {
   select: 'select',
   upload: 'textarea',
 };
+
+function resolveCredentialProvider(info?: Record<string, unknown>): string {
+  if (!info) return '';
+  const litellm = info['litellm_provider'];
+  if (typeof litellm === 'string' && litellm.trim().length > 0) {
+    return litellm.trim();
+  }
+  const legacy = info['custom_llm_provider'];
+  if (typeof legacy === 'string' && legacy.trim().length > 0) {
+    return legacy.trim();
+  }
+  return '';
+}
 
 export function mapProviders(items: LiteLLMProviderInfo[] | undefined): ProviderOption[] {
   if (!Array.isArray(items)) return [];
@@ -93,11 +105,7 @@ export function mapCredentials(
   if (!Array.isArray(items)) return [];
   return items.map((item) => {
     const info = (item.credential_info ?? {}) as Record<string, unknown>;
-    const tagsRaw = info?.tags;
-    const tags = Array.isArray(tagsRaw)
-      ? tagsRaw.map((t) => (typeof t === 'string' ? t : String(t))).filter((t) => t.length > 0)
-      : [];
-    const providerKey = typeof info?.litellm_provider === 'string' ? (info.litellm_provider as string) : '';
+    const providerKey = resolveCredentialProvider(info);
     const provider = providers.get(providerKey);
     const providerLabel = provider?.label ?? (providerKey || 'Unknown');
 
@@ -116,7 +124,7 @@ export function mapCredentials(
 
     const metadata: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(info)) {
-      if (key === 'litellm_provider' || key === 'tags') continue;
+      if (key === 'litellm_provider' || key === 'custom_llm_provider' || key === 'tags') continue;
       metadata[key] = value;
     }
 
@@ -124,7 +132,6 @@ export function mapCredentials(
       name: item.credential_name,
       providerKey,
       providerLabel,
-      tags,
       values,
       maskedFields,
       metadata,

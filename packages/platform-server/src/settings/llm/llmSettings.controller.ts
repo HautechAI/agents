@@ -39,7 +39,6 @@ export class LLMSettingsController {
     return this.llmSettings.createCredential({
       name: dto.name,
       provider: dto.provider,
-      tags: dto.tags,
       metadata: dto.metadata,
       values: dto.values,
     });
@@ -50,7 +49,6 @@ export class LLMSettingsController {
     return this.llmSettings.updateCredential({
       name,
       provider: dto.provider,
-      tags: dto.tags,
       metadata: dto.metadata,
       values: dto.values,
     });

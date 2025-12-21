@@ -15,7 +15,6 @@ type LiteLLMAdminErrorCode = 'litellm_admin_request_failed' | 'litellm_admin_una
 type CreateCredentialInput = {
   name: string;
   provider: string;
-  tags?: string[];
   metadata?: Record<string, unknown>;
   values?: Record<string, unknown>;
 };
@@ -23,7 +22,6 @@ type CreateCredentialInput = {
 type UpdateCredentialInput = {
   name: string;
   provider?: string;
-  tags?: string[];
   metadata?: Record<string, unknown>;
   values?: Record<string, unknown>;
 };
@@ -131,18 +129,6 @@ function sanitizeRecord(input?: Record<string, unknown>): Record<string, unknown
   return Object.keys(out).length ? out : {};
 }
 
-function sanitizeTags(tags?: string[]): string[] | undefined {
-  if (!Array.isArray(tags)) return undefined;
-  const cleaned = Array.from(
-    new Set(
-      tags
-        .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
-        .filter((tag) => tag.length > 0),
-    ),
-  );
-  return cleaned.length ? cleaned : undefined;
-}
-
 function ensureNoSecretKeys(params?: Record<string, unknown>): void {
   if (!params) return;
   for (const key of Object.keys(params)) {
@@ -160,6 +146,19 @@ function redactBaseUrl(value?: string): string | undefined {
   } catch {
     return value;
   }
+}
+
+function extractCredentialProvider(info?: Record<string, unknown>): string | undefined {
+  if (!info) return undefined;
+  const litellm = info['litellm_provider'];
+  if (typeof litellm === 'string' && litellm.trim().length > 0) {
+    return litellm.trim();
+  }
+  const legacy = info['custom_llm_provider'];
+  if (typeof legacy === 'string' && legacy.trim().length > 0) {
+    return legacy.trim();
+  }
+  return undefined;
 }
 
 @Injectable()
@@ -184,8 +183,6 @@ export class LLMSettingsService {
       litellm_provider: input.provider,
       ...(input.metadata || {}),
     };
-    const tags = sanitizeTags(input.tags);
-    if (tags) info.tags = tags;
     const payload = {
       credential_name: input.name,
       credential_info: info,
@@ -198,8 +195,6 @@ export class LLMSettingsService {
     const info: Record<string, unknown> = {};
     if (input.provider) info.litellm_provider = input.provider;
     if (input.metadata) Object.assign(info, input.metadata);
-    const tags = sanitizeTags(input.tags);
-    if (tags) info.tags = tags;
     const sanitizedValues = sanitizeRecord(input.values);
     const payload = {
       credential_name: input.name,
@@ -235,9 +230,7 @@ export class LLMSettingsService {
       throw new BadRequestException('model is required to test credential');
     }
     const detail = await this.getCredentialDetail(input.name);
-    const provider = typeof (detail?.credential_info as Record<string, unknown> | undefined)?.litellm_provider === 'string'
-      ? ((detail.credential_info as Record<string, unknown>).litellm_provider as string)
-      : undefined;
+    const provider = extractCredentialProvider(detail?.credential_info as Record<string, unknown> | undefined);
     if (!provider) {
       throw new BadRequestException('credential is missing provider metadata');
     }

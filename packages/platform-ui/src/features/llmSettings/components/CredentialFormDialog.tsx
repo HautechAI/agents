@@ -18,14 +18,12 @@ import type { CredentialRecord, ProviderField, ProviderOption } from '../types';
 type CredentialFormValues = FieldValues & {
   name: string;
   providerKey: string;
-  tags: string;
   values: Record<string, string>;
 };
 
 export interface CredentialFormPayload {
   name: string;
   providerKey: string;
-  tags: string[];
   values: Record<string, string>;
   metadata: Record<string, unknown>;
 }
@@ -46,13 +44,11 @@ function buildDefaultValues(
   credential?: CredentialRecord,
 ): CredentialFormValues {
   if (mode === 'edit' && credential) {
-    const tags = credential.tags.join(', ');
     const providerKey = credential.providerKey;
     const values: Record<string, string> = { ...credential.values };
     return {
       name: credential.name,
       providerKey,
-      tags,
       values,
     } satisfies CredentialFormValues;
   }
@@ -69,7 +65,6 @@ function buildDefaultValues(
   return {
     name: '',
     providerKey,
-    tags: '',
     values,
   } satisfies CredentialFormValues;
 }
@@ -153,15 +148,9 @@ export function CredentialFormDialog({
       return;
     }
 
-    const tags = data.tags
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter((tag) => tag.length > 0);
-
     await onSubmit({
       name: data.name.trim(),
       providerKey: data.providerKey,
-      tags,
       values: sanitizeValues(data.values ?? {}),
       metadata: credential?.metadata ?? {},
     });
@@ -169,117 +158,110 @@ export function CredentialFormDialog({
 
   return (
     <ScreenDialog open={open} onOpenChange={onOpenChange}>
-      <ScreenDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <ScreenDialogHeader>
-          <ScreenDialogTitle>{mode === 'create' ? 'Create Credential' : `Edit Credential — ${credential?.name}`}</ScreenDialogTitle>
-          <ScreenDialogDescription>
-            Provide LiteLLM credential details. All values are stored securely on the server.
-          </ScreenDialogDescription>
-        </ScreenDialogHeader>
+      <ScreenDialogContent className="max-h-[90vh] p-0 sm:max-w-2xl">
+        <div className="flex max-h-[inherit] flex-col">
+          <div className="border-b border-[var(--agyn-border-subtle)] px-6 pb-4 pt-6">
+            <ScreenDialogHeader>
+              <ScreenDialogTitle>{mode === 'create' ? 'Create Credential' : `Edit Credential — ${credential?.name}`}</ScreenDialogTitle>
+              <ScreenDialogDescription>
+                Provide LiteLLM credential details. All values are stored securely on the server.
+              </ScreenDialogDescription>
+            </ScreenDialogHeader>
+          </div>
 
-        <Form {...form}>
-          <form id="llm-credential-form" onSubmit={handleSubmit} className="grid gap-4">
-            <FormField
-              control={form.control}
-              name="name"
-              rules={{ required: 'Name is required' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Credential Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="openai-prod"
-                      disabled={mode === 'edit'}
-                    />
-                  </FormControl>
-                  <FormDescription>Unique identifier used when referencing this credential.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <Form {...form}>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <form id="llm-credential-form" onSubmit={handleSubmit} className="grid gap-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  rules={{ required: 'Name is required' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Credential Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="openai-prod"
+                          disabled={mode === 'edit'}
+                        />
+                      </FormControl>
+                      <FormDescription>Unique identifier used when referencing this credential.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="providerKey"
-              rules={{ required: 'Provider selection is required' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Provider</FormLabel>
-                  <FormControl>
-                    <SelectInput
-                      value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value)}
-                      disabled={providers.length === 0}
-                      placeholder="Select provider"
-                      options={providers.map((provider) => ({
-                        value: provider.litellmProvider,
-                        label: provider.label,
-                      }))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="providerKey"
+                  rules={{ required: 'Provider selection is required' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Provider</FormLabel>
+                      <FormControl>
+                        <SelectInput
+                          value={field.value ?? ''}
+                          onChange={(event) => field.onChange(event.target.value)}
+                          disabled={providers.length === 0}
+                          placeholder="Select provider"
+                          options={providers.map((provider) => ({
+                            value: provider.litellmProvider,
+                            label: provider.label,
+                          }))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="tags"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tags</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="prod, team-alpha" />
-                  </FormControl>
-                  <FormDescription>Optional comma-separated tags for organizing credentials.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                {selectedProvider && selectedProvider.fields.length > 0 && (
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground">Provider Fields</h3>
+                    <div className="grid gap-4">
+                      {selectedProvider.fields.map((fieldDef) => {
+                        const fieldName = `values.${fieldDef.key}` as const;
+                        const isMasked = maskedFields.has(fieldDef.key);
+                        const isRequired = fieldDef.required && (mode === 'create' || !isMasked);
+                        const description = getFieldDescription(fieldDef, isMasked);
+                        return (
+                          <FormField
+                            key={fieldDef.key}
+                            control={form.control}
+                            name={fieldName}
+                            rules={isRequired ? { required: 'Required field' } : undefined}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{fieldDef.label}</FormLabel>
+                                <FormControl>
+                                  {renderFieldInput(fieldDef, field.value ?? '', field.onChange, isMasked)}
+                                </FormControl>
+                                {description ? <FormDescription>{description}</FormDescription> : null}
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </form>
+            </div>
+          </Form>
 
-            {selectedProvider && selectedProvider.fields.length > 0 && (
-              <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">Provider Fields</h3>
-                <div className="grid gap-4">
-                  {selectedProvider.fields.map((fieldDef) => {
-                    const fieldName = `values.${fieldDef.key}` as const;
-                    const isMasked = maskedFields.has(fieldDef.key);
-                    const isRequired = fieldDef.required && (mode === 'create' || !isMasked);
-                    const description = getFieldDescription(fieldDef, isMasked);
-                    return (
-                      <FormField
-                        key={fieldDef.key}
-                        control={form.control}
-                        name={fieldName}
-                        rules={isRequired ? { required: 'Required field' } : undefined}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{fieldDef.label}</FormLabel>
-                            <FormControl>
-                            {renderFieldInput(fieldDef, field.value ?? '', field.onChange, isMasked)}
-                            </FormControl>
-                            {description ? <FormDescription>{description}</FormDescription> : null}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-          </form>
-        </Form>
-
-        <ScreenDialogFooter className="mt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button type="submit" form="llm-credential-form" disabled={submitting}>
-            {submitting ? 'Saving…' : mode === 'create' ? 'Create Credential' : 'Save Changes'}
-          </Button>
-        </ScreenDialogFooter>
+          <div className="border-t border-[var(--agyn-border-subtle)] px-6 pb-6 pt-4">
+            <ScreenDialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" form="llm-credential-form" disabled={submitting}>
+                {submitting ? 'Saving…' : mode === 'create' ? 'Create Credential' : 'Save Changes'}
+              </Button>
+            </ScreenDialogFooter>
+          </div>
+        </div>
       </ScreenDialogContent>
     </ScreenDialog>
   );

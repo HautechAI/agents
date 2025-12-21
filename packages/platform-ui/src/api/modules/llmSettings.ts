@@ -90,7 +90,6 @@ export async function listCredentials(): Promise<LiteLLMCredential[]> {
 export async function createCredential(body: {
   name: string;
   provider: string;
-  tags?: string[];
   metadata?: Record<string, unknown>;
   values?: Record<string, unknown>;
 }): Promise<LiteLLMGenericResponse> {
@@ -99,7 +98,6 @@ export async function createCredential(body: {
 
 export async function updateCredential(name: string, body: {
   provider?: string;
-  tags?: string[];
   metadata?: Record<string, unknown>;
   values?: Record<string, unknown>;
 }): Promise<LiteLLMGenericResponse> {

@@ -57,7 +57,6 @@ export function CredentialsTab({
               <colgroup>
                 <col className="w-[32%]" />
                 <col className="w-[24%]" />
-                <col />
                 <col className="w-[140px]" />
               </colgroup>
               <thead
@@ -79,12 +78,6 @@ export function CredentialsTab({
                   </th>
                   <th
                     scope="col"
-                    className="bg-white px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide"
-                  >
-                    Tags
-                  </th>
-                  <th
-                    scope="col"
                     className="bg-white px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide"
                   >
                     Actions
@@ -94,13 +87,13 @@ export function CredentialsTab({
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-6 text-center text-[var(--agyn-text-subtle)]">
+                    <td colSpan={3} className="px-6 py-6 text-center text-[var(--agyn-text-subtle)]">
                       Loading credentials…
                     </td>
                   </tr>
                 ) : credentials.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-10 text-center text-[var(--agyn-text-subtle)]">
+                    <td colSpan={3} className="px-6 py-10 text-center text-[var(--agyn-text-subtle)]">
                       No credentials configured yet.
                     </td>
                   </tr>
@@ -130,19 +123,6 @@ export function CredentialsTab({
                           </Badge>
                         ) : (
                           <span className="text-[var(--agyn-text-subtle)]">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 align-top">
-                        {credential.tags.length === 0 ? (
-                          <span className="text-[var(--agyn-text-subtle)]">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            {credential.tags.map((tag) => (
-                              <Badge key={tag} variant="outline" size="sm" className="text-[11px] uppercase tracking-tight">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3">

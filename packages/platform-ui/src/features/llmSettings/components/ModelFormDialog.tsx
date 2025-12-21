@@ -18,7 +18,6 @@ import type { CredentialRecord, ModelRecord, ProviderOption } from '../types';
 
 type ModelFormValues = FieldValues & {
   name: string;
-  providerKey: string;
   model: string;
   credentialName: string;
   mode: string;
@@ -69,13 +68,11 @@ function toInputString(value: number | undefined): string {
 
 function buildDefaultValues(
   mode: 'create' | 'edit',
-  providers: ProviderOption[],
   model?: ModelRecord,
 ): ModelFormValues {
   if (mode === 'edit' && model) {
     return {
       name: model.id,
-      providerKey: model.providerKey,
       model: model.model,
       credentialName: model.credentialName,
       mode: model.mode ?? 'chat',
@@ -91,10 +88,8 @@ function buildDefaultValues(
     } satisfies ModelFormValues;
   }
 
-  const firstProvider = providers[0];
   return {
     name: '',
-    providerKey: firstProvider?.litellmProvider ?? '',
     model: '',
     credentialName: '',
     mode: 'chat',
@@ -137,41 +132,43 @@ export function ModelFormDialog({
   onSubmit,
 }: ModelFormDialogProps): ReactElement {
   const providerMap = useMemo(() => new Map(providers.map((p) => [p.litellmProvider, p])), [providers]);
-  const form = useForm<ModelFormValues>({ defaultValues: buildDefaultValues(mode, providers, model) });
+  const form = useForm<ModelFormValues>({ defaultValues: buildDefaultValues(mode, model) });
 
   useEffect(() => {
-    form.reset(buildDefaultValues(mode, providers, model));
-  }, [mode, providers, model, form]);
+    form.reset(buildDefaultValues(mode, model));
+  }, [mode, model, form]);
 
-  const providerKey = useWatch({ control: form.control, name: 'providerKey' });
+  const credentialName = useWatch({ control: form.control, name: 'credentialName' });
+  const selectedCredential = useMemo(
+    () => credentials.find((credential) => credential.name === credentialName),
+    [credentials, credentialName],
+  );
+  const providerKey = selectedCredential?.providerKey ?? (mode === 'edit' ? model?.providerKey ?? '' : '');
   const selectedProvider = providerKey ? providerMap.get(providerKey) : undefined;
-
-  const availableCredentials = useMemo(() => {
-    if (!providerKey) return credentials;
-    const filtered = credentials.filter((credential) => credential.providerKey === providerKey);
-    return filtered.length > 0 ? filtered : credentials;
-  }, [credentials, providerKey]);
 
   useEffect(() => {
     const current = form.getValues('credentialName');
     if (!current) {
-      const fallback = availableCredentials[0]?.name ?? '';
+      const fallback = credentials[0]?.name ?? '';
       if (fallback) form.setValue('credentialName', fallback, { shouldDirty: false });
       return;
     }
-    if (!availableCredentials.some((credential) => credential.name === current)) {
-      const fallback = availableCredentials[0]?.name ?? '';
+    if (!credentials.some((credential) => credential.name === current)) {
+      const fallback = credentials[0]?.name ?? '';
       form.setValue('credentialName', fallback, { shouldDirty: false });
     }
-  }, [availableCredentials, form]);
+  }, [credentials, form]);
 
   const handleSubmit = form.handleSubmit(async (values) => {
-    if (!values.providerKey) {
-      form.setError('providerKey', { message: 'Select provider' });
-      return;
-    }
     if (!values.credentialName) {
       form.setError('credentialName', { message: 'Select credential' });
+      return;
+    }
+
+    const credential = credentials.find((item) => item.name === values.credentialName);
+    const credentialProviderKey = credential?.providerKey ?? '';
+    if (!credentialProviderKey) {
+      form.setError('credentialName', { message: 'Selected credential is missing provider metadata' });
       return;
     }
 
@@ -179,7 +176,7 @@ export function ModelFormDialog({
       const params = parseParams(values.paramsJson);
       await onSubmit({
         name: values.name.trim(),
-        providerKey: values.providerKey,
+        providerKey: credentialProviderKey,
         model: values.model.trim(),
         credentialName: values.credentialName,
         mode: values.mode?.trim() || undefined,
@@ -205,162 +202,150 @@ export function ModelFormDialog({
 
   return (
     <ScreenDialog open={open} onOpenChange={onOpenChange}>
-      <ScreenDialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <ScreenDialogHeader>
-          <ScreenDialogTitle>{mode === 'create' ? 'Create Model' : `Edit Model — ${model?.id}`}</ScreenDialogTitle>
-          <ScreenDialogDescription>
-            Define LiteLLM model routing and guardrails for agent usage.
-          </ScreenDialogDescription>
-        </ScreenDialogHeader>
-        <Form {...form}>
-          <form id="llm-model-form" onSubmit={handleSubmit} className="grid gap-4">
-            <FormField
-              control={form.control}
-              name="name"
-              rules={{ required: 'Name is required' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Model Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="assistant-prod" />
-                  </FormControl>
-                  <FormDescription>Unique identifier referenced by agents.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <ScreenDialogContent className="max-h-[90vh] p-0 sm:max-w-2xl">
+        <div className="flex max-h-[inherit] flex-col">
+          <div className="border-b border-[var(--agyn-border-subtle)] px-6 pb-4 pt-6">
+            <ScreenDialogHeader>
+              <ScreenDialogTitle>{mode === 'create' ? 'Create Model' : `Edit Model — ${model?.id}`}</ScreenDialogTitle>
+              <ScreenDialogDescription>
+                Define LiteLLM model routing and guardrails for agent usage.
+              </ScreenDialogDescription>
+            </ScreenDialogHeader>
+          </div>
 
-            <FormField
-              control={form.control}
-              name="providerKey"
-              rules={{ required: 'Provider is required' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Provider</FormLabel>
-                  <FormControl>
-                    <SelectInput
-                      value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value)}
-                      placeholder="Select provider"
-                      options={providers.map((provider) => ({
-                        value: provider.litellmProvider,
-                        label: provider.label,
-                      }))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <Form {...form}>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <form id="llm-model-form" onSubmit={handleSubmit} className="grid gap-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  rules={{ required: 'Name is required' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="assistant-prod" />
+                      </FormControl>
+                      <FormDescription>Unique identifier referenced by agents.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="model"
+                  rules={{ required: 'Model identifier is required' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Provider Model Identifier</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder={providerPlaceholder} />
+                      </FormControl>
+                      <FormDescription>Exact model slug as recognized by the provider.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="model"
-              rules={{ required: 'Model identifier is required' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Provider Model Identifier</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder={providerPlaceholder} />
-                  </FormControl>
-                  <FormDescription>Exact model slug as recognized by the provider.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="credentialName"
+                  rules={{ required: 'Credential is required' }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Credential</FormLabel>
+                      <FormControl>
+                        <SelectInput
+                          value={field.value ?? ''}
+                          onChange={(event) => field.onChange(event.target.value)}
+                          placeholder="Select credential"
+                          options={credentials.map((credentialOption) => ({
+                            value: credentialOption.name,
+                            label: credentialOption.name,
+                          }))}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {selectedProvider
+                          ? `Provider derived from credential: ${selectedProvider.label}.`
+                          : 'Select a credential to derive provider.'}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="credentialName"
-              rules={{ required: 'Credential is required' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Credential</FormLabel>
-                  <FormControl>
-                    <SelectInput
-                      value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value)}
-                      placeholder="Select credential"
-                      options={availableCredentials.map((credentialOption) => ({
-                        value: credentialOption.name,
-                        label: credentialOption.name,
-                      }))}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Credentials filtered by provider when available.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="mode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Mode</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="chat" />
+                      </FormControl>
+                      <FormDescription>LiteLLM mode (chat, completion, embedding, etc.).</FormDescription>
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="mode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Mode</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="chat" />
-                  </FormControl>
-                  <FormDescription>LiteLLM mode (chat, completion, embedding, etc.).</FormDescription>
-                </FormItem>
-              )}
-            />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <NumericField label="Temperature" name="temperature" control={form.control} placeholder="0.7" />
+                  <NumericField label="Top P" name="topP" control={form.control} placeholder="0.95" />
+                  <NumericField label="Frequency Penalty" name="frequencyPenalty" control={form.control} placeholder="0" />
+                  <NumericField label="Presence Penalty" name="presencePenalty" control={form.control} placeholder="0" />
+                  <NumericField label="Max Tokens" name="maxTokens" control={form.control} placeholder="4096" />
+                  <NumericField label="Requests per Minute" name="rpm" control={form.control} placeholder="600" />
+                  <NumericField label="Tokens per Minute" name="tpm" control={form.control} placeholder="90000" />
+                </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <NumericField label="Temperature" name="temperature" control={form.control} placeholder="0.7" />
-              <NumericField label="Top P" name="topP" control={form.control} placeholder="0.95" />
-              <NumericField label="Frequency Penalty" name="frequencyPenalty" control={form.control} placeholder="0" />
-              <NumericField label="Presence Penalty" name="presencePenalty" control={form.control} placeholder="0" />
-              <NumericField label="Max Tokens" name="maxTokens" control={form.control} placeholder="4096" />
-              <NumericField label="Requests per Minute" name="rpm" control={form.control} placeholder="600" />
-              <NumericField label="Tokens per Minute" name="tpm" control={form.control} placeholder="90000" />
+                <FormField
+                  control={form.control}
+                  name="stream"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-md border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Enable streaming</FormLabel>
+                        <FormDescription>Allow streaming responses when agents use this model.</FormDescription>
+                      </div>
+                      <FormControl>
+                        <SwitchControl checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="paramsJson"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Advanced Params (JSON)</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} placeholder='{ "timeout": 30 }' className="min-h-[160px] font-mono text-sm" />
+                      </FormControl>
+                      <FormDescription>
+                        Additional LiteLLM parameters encoded as JSON. Leave empty for defaults.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </form>
             </div>
+          </Form>
 
-            <FormField
-              control={form.control}
-              name="stream"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-md border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Enable streaming</FormLabel>
-                    <FormDescription>Allow streaming responses when agents use this model.</FormDescription>
-                  </div>
-                  <FormControl>
-                    <SwitchControl checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="paramsJson"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Advanced Params (JSON)</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} placeholder='{ "timeout": 30 }' className="min-h-[160px] font-mono text-sm" />
-                  </FormControl>
-                  <FormDescription>
-                    Additional LiteLLM parameters encoded as JSON. Leave empty for defaults.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </form>
-        </Form>
-        <ScreenDialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button type="submit" form="llm-model-form" disabled={submitting}>
-            {submitting ? 'Saving…' : mode === 'create' ? 'Create Model' : 'Save Changes'}
-          </Button>
-        </ScreenDialogFooter>
+          <div className="border-t border-[var(--agyn-border-subtle)] px-6 pb-6 pt-4">
+            <ScreenDialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" form="llm-model-form" disabled={submitting}>
+                {submitting ? 'Saving…' : mode === 'create' ? 'Create Model' : 'Save Changes'}
+              </Button>
+            </ScreenDialogFooter>
+          </div>
+        </div>
       </ScreenDialogContent>
     </ScreenDialog>
   );
