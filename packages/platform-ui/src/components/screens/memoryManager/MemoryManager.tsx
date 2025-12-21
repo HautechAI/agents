@@ -363,7 +363,7 @@ export function MemoryManager({
               </div>
             </div>
             <div className="relative flex-1 min-h-0">
-              <div className="h-full overflow-auto px-6 py-5">
+              <div className="h-full overflow-auto px-6 py-5" data-testid="memory-editor-scroll-container">
                 {editorMessage ? (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
                     {editorMessage}

@@ -42,6 +42,7 @@ function App() {
                 <Route path="/agents/threads/:threadId/runs/:runId/timeline" element={<AgentsRunScreen />} />
                 <Route path="/agents/reminders" element={<AgentsReminders />} />
                 <Route path="/agents/memory" element={<AgentsMemoryManager />} />
+                <Route path="/memory/*" element={<Navigate to="/agents/memory" replace />} />
 
                 {/* Tracing */}
                 <Route path="/tracing/traces" element={<TracingTraces />} />

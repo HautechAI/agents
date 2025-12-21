@@ -161,15 +161,11 @@ export const LongDocument: Story = {
 
     const textarea = (await canvas.findByRole('textbox', { name: 'Document content' })) as HTMLTextAreaElement;
     const heading = canvas.getByRole('heading', { name: 'Document content' });
+    const scrollContainer = (await canvas.findByTestId('memory-editor-scroll-container')) as HTMLDivElement;
 
     await waitFor(() => {
       expect(textarea.value.length).toBeGreaterThan(0);
     });
-
-    const scrollContainer = textarea.closest<HTMLDivElement>('div.h-full.overflow-auto');
-    if (!scrollContainer) {
-      throw new Error('Memory editor scroll container not found');
-    }
 
     const filler = document.createElement('div');
     filler.dataset.testid = 'overflow-filler';
