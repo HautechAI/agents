@@ -29,6 +29,7 @@ const createManageNodeStub = (
       if (value === (agent as unknown as ManageToolNode['getWorkers'][number])) return workerName;
       throw new Error('unexpected agent');
     }),
+    getAgentPromptContext: vi.fn().mockReturnValue({ agents: [] }),
     registerInvocation: vi.fn().mockResolvedValue(undefined),
     awaitChildResponse: vi.fn().mockResolvedValue('child response text'),
     getMode: vi.fn().mockReturnValue('sync'),
@@ -70,6 +71,48 @@ const createToolInstance = (
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+});
+
+describe('ManageFunctionTool description templating', () => {
+  it('renders agent prompt context when template is provided', () => {
+    const persistence = {} as unknown as AgentsPersistenceService;
+    const workerInvoke = vi.fn();
+    const manageNode = createManageNodeStub('Worker Alpha', { invoke: workerInvoke }, {
+      config: { prompt: 'Agents:\n{{#agents}}- {{name}} ({{role}}) -> {{prompt}}\n{{/agents}}' },
+      getAgentPromptContext: vi.fn().mockReturnValue({
+        agents: [
+          { name: 'Alpha', role: 'pilot', prompt: 'Alpha prompt' },
+          { name: 'Beta', role: '', prompt: 'Beta prompt' },
+        ],
+      }),
+    });
+
+    const { tool } = createToolInstance(persistence, manageNode);
+
+    expect(tool.description).toContain('- Alpha (pilot) -> Alpha prompt');
+    expect(tool.description).toContain('- Beta () -> Beta prompt');
+  });
+
+  it('omits agent section when context is empty', () => {
+    const persistence = {} as unknown as AgentsPersistenceService;
+    const manageNode = createManageNodeStub('Worker Alpha', { invoke: vi.fn() }, {
+      config: { prompt: 'Agents:{{#agents}} {{name}}{{/agents}} done' },
+      getAgentPromptContext: vi.fn().mockReturnValue({ agents: [] }),
+    });
+
+    const { tool } = createToolInstance(persistence, manageNode);
+    expect(tool.description).toBe('Agents: done');
+  });
+
+  it('falls back to static description when prompt is absent', () => {
+    const persistence = {} as unknown as AgentsPersistenceService;
+    const manageNode = createManageNodeStub('Worker Alpha', { invoke: vi.fn() }, {
+      config: { description: 'Static description' },
+    });
+
+    const { tool } = createToolInstance(persistence, manageNode);
+    expect(tool.description).toBe('Static description');
+  });
 });
 
 describe('ManageFunctionTool.execute', () => {

@@ -35,7 +35,7 @@ import { normalizeError } from '../../utils/error-response';
 import { BaseToolNode } from '../tools/baseToolNode';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
 
-const DEFAULT_SYSTEM_PROMPT = 'You are a helpful AI assistant.';
+export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful AI assistant.';
 const DEFAULT_SUMMARIZATION_PROMPT =
   'You update a running summary of a conversation. Keep key facts, goals, decisions, constraints, names, deadlines, and follow-ups. Be concise; use compact sentences; omit chit-chat. Structure summary with 3 high level sections: initial task, plan (if any), context (progress, findings, observations).';
 const DEFAULT_RESTRICTION_MESSAGE =
@@ -156,6 +156,35 @@ type RegisteredTool = {
   source: ToolSource;
 };
 
+const extractToolPrompt = (tool: unknown): { name: string; prompt: string } => {
+  if (!tool || typeof tool !== 'object') {
+    return { name: '', prompt: '' };
+  }
+  const definitionCandidate = (tool as { definition?: unknown }).definition;
+  if (typeof definitionCandidate !== 'function') {
+    return { name: '', prompt: '' };
+  }
+
+  let definition: unknown;
+  try {
+    definition = definitionCandidate.call(tool);
+  } catch {
+    return { name: '', prompt: '' };
+  }
+
+  if (!definition || typeof definition !== 'object') {
+    return { name: '', prompt: '' };
+  }
+
+  const nameValue = (definition as { name?: unknown }).name;
+  const descriptionValue = (definition as { description?: unknown }).description;
+
+  return {
+    name: typeof nameValue === 'string' ? nameValue : '',
+    prompt: typeof descriptionValue === 'string' ? descriptionValue : '',
+  };
+};
+
 // Consolidated Agent class (merges previous BaseAgent + Agent into single AgentNode)
 import { Inject, Injectable, OnModuleInit, Scope } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -163,6 +192,7 @@ import type { TemplatePortConfig } from '../../graph/ports.types';
 import type { RuntimeContext } from '../../graph/runtimeContext';
 import Node from '../base/Node';
 import { MemoryConnectorNode } from '../memoryConnector/memoryConnector.node';
+import { renderMustache } from '../../prompt/mustache.template';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
@@ -410,11 +440,19 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
     return this.memoryConnector ? this.memoryConnector.getPlacement() : 'none';
   }
 
-  private buildEffectiveConfig(model: string): EffectiveAgentConfig {
+  private buildEffectiveConfig(model: string, tools: FunctionTool[]): EffectiveAgentConfig {
+    const systemTemplate = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    const toolContext: Array<{ name: string; prompt: string }> = [];
+    for (const tool of tools as ReadonlyArray<unknown>) {
+      toolContext.push(extractToolPrompt(tool));
+    }
+    const renderedPrompt: unknown = renderMustache(systemTemplate, { tools: toolContext });
+    const systemPrompt = typeof renderedPrompt === 'string' ? renderedPrompt : String(renderedPrompt ?? '');
+
     return {
       model,
       prompts: {
-        system: this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+        system: systemPrompt,
         summarization: DEFAULT_SUMMARIZATION_PROMPT,
       },
       summarization: {
@@ -583,12 +621,11 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
 
       const configModel = this.config.model ?? 'gpt-5';
       const persistedModel = await persistence.ensureThreadModel(thread, configModel);
-      const effective = this.buildEffectiveConfig(persistedModel ?? configModel);
+      const activeTools = this.getActiveTools();
+      const effective = this.buildEffectiveConfig(persistedModel ?? configModel, activeTools);
       effectiveBehavior = effective.behavior;
 
       this.buffer.setDebounceMs(effective.behavior.debounceMs);
-
-      const activeTools = this.getActiveTools();
 
       terminateSignal = new Signal();
       this.getRunSignals().register(ensuredRunId, terminateSignal);
