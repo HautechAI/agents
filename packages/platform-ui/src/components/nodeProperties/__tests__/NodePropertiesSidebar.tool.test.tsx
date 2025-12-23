@@ -123,7 +123,7 @@ describe('NodePropertiesSidebar - manage tool', () => {
     latestReferenceProps.current = null;
   });
 
-  it('updates manage tool mode and timeout', () => {
+  it('renders prompt preview and updates manage tool config', () => {
     const onConfigChange = vi.fn();
 
     const config: NodeConfig = {
@@ -132,6 +132,7 @@ describe('NodePropertiesSidebar - manage tool', () => {
       template: 'manageTool',
       mode: 'sync',
       timeoutMs: 1500,
+      prompt: 'Hello {{#agents}}{{name}} ({{role}}){{/agents}}',
     } satisfies NodeConfig;
     const state: NodeState = { status: 'ready' };
 
@@ -145,8 +146,39 @@ describe('NodePropertiesSidebar - manage tool', () => {
         canProvision={false}
         canDeprovision={true}
         isActionPending={false}
+        nodeId="manage-1"
+        graphNodes={[
+          {
+            id: 'agent-1',
+            template: 'agent-template',
+            kind: 'Agent',
+            title: 'Agent One',
+            x: 0,
+            y: 0,
+            status: 'not_ready',
+            config: { name: 'Alice', role: 'R&D Lead', systemPrompt: '' },
+            ports: { inputs: [], outputs: [] },
+          },
+        ] as any}
+        graphEdges={[
+          {
+            id: 'manage-1-agent__agent-1-$',
+            source: 'manage-1',
+            target: 'agent-1',
+            sourceHandle: 'agent',
+            targetHandle: '$',
+          },
+        ] as any}
       />,
     );
+
+    expect(screen.getByText('Hello Alice (R&D Lead)')).toBeInTheDocument();
+
+    const promptTextarea = screen.getByPlaceholderText('Coordinate managed agents and assign roles...') as HTMLTextAreaElement;
+    expect(promptTextarea.value).toBe('Hello {{#agents}}{{name}} ({{role}}){{/agents}}');
+
+    fireEvent.change(promptTextarea, { target: { value: 'Team summary: {{#agents}}{{name}}{{/agents}}' } });
+    expect(latestUpdate(onConfigChange, 'prompt')).toBe('Team summary: {{#agents}}{{name}}{{/agents}}');
 
     const dropdown = screen.getByTestId('dropdown') as HTMLSelectElement;
     fireEvent.change(dropdown, { target: { value: 'async' } });
