@@ -415,6 +415,7 @@ export class RunEventsService {
   private readonly chunkPersistenceWarnings = new Set<string>();
   private readonly terminalPersistenceWarnings = new Set<string>();
   private readonly snapshotWarnings = new Set<string>();
+  private readonly toolOutputSanitizationNotices = new Set<string>();
   private readonly logger = new Logger(RunEventsService.name);
 
   constructor(
@@ -465,6 +466,102 @@ export class RunEventsService {
         error: error instanceof Error ? error.message : String(error),
       },
     );
+  }
+
+  private sanitizeToolOutputText(
+    value: string | null | undefined,
+    context: { runId: string; eventId: string; field: string; source?: ToolOutputSource | null },
+  ): string | null {
+    if (value === undefined || value === null) return value ?? null;
+
+    let current = value;
+    let transcodedEncoding: 'utf16le' | 'utf16be' | null = null;
+
+    const transcoded = this.maybeTranscodeUtf16Bom(value, context);
+    if (transcoded) {
+      current = transcoded.text;
+      transcodedEncoding = transcoded.encoding;
+    }
+
+    let strippedNullCount = 0;
+    if (current.includes('\u0000')) {
+      strippedNullCount = current.split('\u0000').length - 1;
+      current = current.replace(/\u0000/g, '');
+    }
+
+    if (transcodedEncoding || strippedNullCount > 0) {
+      this.logToolOutputSanitization(
+        context,
+        {
+          transcodedEncoding,
+          strippedNullCount,
+          originalLength: value.length,
+          sanitizedLength: current.length,
+        },
+      );
+    }
+
+    return current;
+  }
+
+  private maybeTranscodeUtf16Bom(
+    value: string,
+    context: { runId: string; eventId: string; field: string },
+  ): { text: string; encoding: 'utf16le' | 'utf16be' } | null {
+    if (value.length < 2) return null;
+
+    const first = value.charCodeAt(0);
+    const second = value.charCodeAt(1);
+    let encoding: 'utf16le' | 'utf16be' | null = null;
+
+    if (first === 0xff && second === 0xfe) {
+      encoding = 'utf16le';
+    } else if (first === 0xfe && second === 0xff) {
+      encoding = 'utf16be';
+    } else {
+      return null;
+    }
+
+    try {
+      const buffer = Buffer.from(value, 'binary');
+      if (buffer.length <= 2) {
+        return { text: '', encoding };
+      }
+      const body = buffer.subarray(2);
+      const decoder = new TextDecoder(encoding === 'utf16le' ? 'utf-16le' : 'utf-16be');
+      let decoded = decoder.decode(body);
+      if (decoded.charCodeAt(0) === 0xfeff) {
+        decoded = decoded.slice(1);
+      }
+      return { text: decoded, encoding };
+    } catch (error) {
+      this.logger.debug('Failed to transcode UTF-16 tool output; preserving original text', {
+        runId: context.runId,
+        eventId: context.eventId,
+        field: context.field,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  private logToolOutputSanitization(
+    context: { runId: string; eventId: string; field: string; source?: ToolOutputSource | null },
+    details: { transcodedEncoding: 'utf16le' | 'utf16be' | null; strippedNullCount: number; originalLength: number; sanitizedLength: number },
+  ): void {
+    const key = `${context.runId}:${context.eventId}:${context.field}`;
+    if (this.toolOutputSanitizationNotices.has(key)) return;
+    this.toolOutputSanitizationNotices.add(key);
+    this.logger.debug('Sanitized tool output for Postgres compatibility', {
+      runId: context.runId,
+      eventId: context.eventId,
+      field: context.field,
+      source: context.source ?? null,
+      transcodedEncoding: details.transcodedEncoding,
+      strippedNullCount: details.strippedNullCount,
+      originalLength: details.originalLength,
+      sanitizedLength: details.sanitizedLength,
+    });
   }
 
   private truncate(text: string | null | undefined): string | null {
@@ -874,6 +971,12 @@ export class RunEventsService {
   async appendToolOutputChunk(args: ToolOutputChunkArgs): Promise<ToolOutputChunkPayload> {
     const tx = args.tx ?? this.prisma;
     const ts = args.ts ?? new Date();
+    const sanitizedData = this.sanitizeToolOutputText(args.data, {
+      runId: args.runId,
+      eventId: args.eventId,
+      field: 'chunk.data',
+      source: args.source,
+    }) ?? '';
     const basePayload: ToolOutputChunkPayload = {
       runId: args.runId,
       threadId: args.threadId,
@@ -882,7 +985,7 @@ export class RunEventsService {
       seqStream: args.seqStream,
       source: args.source,
       ts: ts.toISOString(),
-      data: args.data,
+      data: sanitizedData,
     };
 
     try {
@@ -892,7 +995,7 @@ export class RunEventsService {
           seqGlobal: args.seqGlobal,
           seqStream: args.seqStream,
           source: args.source,
-          data: args.data,
+          data: sanitizedData,
           ts,
           bytes: Math.max(0, Math.trunc(args.bytes)),
         },
@@ -919,13 +1022,18 @@ export class RunEventsService {
   async finalizeToolOutputTerminal(args: ToolOutputTerminalArgs): Promise<ToolOutputTerminalPayload> {
     const tx = args.tx ?? this.prisma;
     const ts = args.ts ?? new Date();
+    const sanitizedMessage = this.sanitizeToolOutputText(args.message ?? null, {
+      runId: args.runId,
+      eventId: args.eventId,
+      field: 'terminal.message',
+    });
     const sanitized = {
       bytesStdout: Math.max(0, Math.trunc(args.bytesStdout)),
       bytesStderr: Math.max(0, Math.trunc(args.bytesStderr)),
       totalChunks: Math.max(0, Math.trunc(args.totalChunks)),
       droppedChunks: Math.max(0, Math.trunc(args.droppedChunks)),
       savedPath: args.savedPath ?? null,
-      message: args.message ?? null,
+      message: sanitizedMessage,
     };
 
     const basePayload: ToolOutputTerminalPayload = {
