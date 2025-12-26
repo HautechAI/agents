@@ -1,14 +1,19 @@
 import { type ReactNode } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, Loader2, Trash2 } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 interface QueuedMessageProps {
   content: ReactNode;
   className?: string;
+  onCancel?: () => void;
+  isCancelling?: boolean;
 }
 
 export function QueuedMessage({
   content,
   className = '',
+  onCancel,
+  isCancelling = false,
 }: QueuedMessageProps) {
   return (
     <div className={`flex justify-start mb-4 ${className}`}>
@@ -22,13 +27,24 @@ export function QueuedMessage({
         </div>
 
         {/* Message Content */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--agyn-gray)]">
-              User
-            </span>
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-[var(--agyn-gray)]">User</span>
+            {onCancel ? (
+              <IconButton
+                icon={
+                  isCancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />
+                }
+                size="xs"
+                variant="danger"
+                aria-label="Cancel queued message"
+                title="Cancel queued message"
+                disabled={isCancelling}
+                onClick={onCancel}
+              />
+            ) : null}
           </div>
-          <div className="text-[var(--agyn-gray)]">
+          <div className="text-[var(--agyn-gray)] break-words">
             {content}
           </div>
         </div>

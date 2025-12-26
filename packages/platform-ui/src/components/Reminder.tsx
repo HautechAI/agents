@@ -1,11 +1,14 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Loader2, Trash2 } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 interface ReminderProps {
   content: ReactNode;
   scheduledTime: string;
   date?: string;
   className?: string;
+  onCancel?: () => void;
+  isCancelling?: boolean;
 }
 
 function getCountdown(targetDate: Date): string {
@@ -28,6 +31,8 @@ export function Reminder({
   scheduledTime,
   date,
   className = '',
+  onCancel,
+  isCancelling = false,
 }: ReminderProps) {
   const [countdown, setCountdown] = useState<string>('');
   
@@ -60,8 +65,8 @@ export function Reminder({
         </div>
 
         {/* Message Content */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex items-center gap-1.5">
             <span className="text-xs" style={{ color: '#F59E0B' }}>
               User
             </span>
@@ -73,8 +78,21 @@ export function Reminder({
                 ({countdown})
               </span>
             )}
+            {onCancel ? (
+              <IconButton
+                icon={
+                  isCancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />
+                }
+                size="xs"
+                variant="danger"
+                aria-label="Cancel reminder"
+                title="Cancel reminder"
+                onClick={onCancel}
+                disabled={isCancelling}
+              />
+            ) : null}
           </div>
-          <div style={{ color: '#F59E0B' }}>
+          <div style={{ color: '#F59E0B' }} className="break-words">
             {content}
           </div>
         </div>
