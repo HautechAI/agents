@@ -1,3 +1,5 @@
+import { useCallback, useMemo } from 'react';
+
 import { Input } from '../Input';
 import { MarkdownInput } from '../MarkdownInput';
 import { Dropdown } from '../Dropdown';
@@ -8,6 +10,15 @@ import { FieldLabel } from './FieldLabel';
 import { QUEUE_PROCESS_BUFFER_OPTIONS, QUEUE_WHEN_BUSY_OPTIONS } from './constants';
 import type { AgentQueueConfig, AgentSummarizationConfig } from './types';
 import { toNumberOrUndefined } from './utils';
+import type { GraphNodeConfig, GraphPersistedEdge } from '@/features/graph/types';
+import { useTemplatesCache } from '@/lib/graph/templates.provider';
+import { renderMustacheTemplate } from '@/lib/mustache';
+import { getCanonicalToolName } from './toolCanonicalNames';
+
+type AgentToolContext = {
+  name: string;
+  prompt: string;
+};
 
 interface AgentSectionProps {
   name: string;
@@ -19,6 +30,9 @@ interface AgentSectionProps {
   restrictionMaxInjections?: number;
   queueConfig: AgentQueueConfig;
   summarization: AgentSummarizationConfig;
+  nodeId?: string;
+  graphNodes?: GraphNodeConfig[];
+  graphEdges?: GraphPersistedEdge[];
   onNameChange: (value: string) => void;
   onNameBlur: () => void;
   onRoleChange: (value: string) => void;
@@ -40,6 +54,9 @@ export function AgentSection({
   restrictionMaxInjections,
   queueConfig,
   summarization,
+  nodeId,
+  graphNodes,
+  graphEdges,
   name,
   role,
   onNameChange,
@@ -60,6 +77,71 @@ export function AgentSection({
   const summarizationKeepValue = summarization.keepTokens !== undefined ? String(summarization.keepTokens) : '';
   const summarizationMaxValue = summarization.maxTokens !== undefined ? String(summarization.maxTokens) : '';
   const summarizationPromptValue = summarization.prompt ?? '';
+  const { getTemplate } = useTemplatesCache();
+
+  const toolsContext = useMemo<AgentToolContext[]>(() => {
+    const currentNodeId = typeof nodeId === 'string' && nodeId.length > 0 ? nodeId : null;
+    if (!currentNodeId) {
+      return [];
+    }
+
+    const nodesList = Array.isArray(graphNodes) ? graphNodes : [];
+    const edgesList = Array.isArray(graphEdges) ? graphEdges : [];
+    if (nodesList.length === 0 || edgesList.length === 0) {
+      return [];
+    }
+
+    const nodesById = new Map(nodesList.map((node) => [node.id, node] as const));
+    const seenTargets = new Set<string>();
+    const context: AgentToolContext[] = [];
+
+    for (const edge of edgesList) {
+      if (!edge) continue;
+      const sourceId = typeof edge.source === 'string' ? edge.source : '';
+      if (sourceId !== currentNodeId) continue;
+      const handle = typeof edge.sourceHandle === 'string' ? edge.sourceHandle : '';
+      if (handle !== 'tools') continue;
+
+      const targetId = typeof edge.target === 'string' ? edge.target : '';
+      if (!targetId || seenTargets.has(targetId)) continue;
+
+      const targetNode = nodesById.get(targetId);
+      if (!targetNode || targetNode.kind !== 'Tool') continue;
+
+      seenTargets.add(targetId);
+      const targetConfig = (targetNode.config ?? {}) as Record<string, unknown>;
+      const configName = typeof targetConfig.name === 'string' ? targetConfig.name.trim() : '';
+      const template = getTemplate(targetNode.template ?? null);
+      const canonicalName = getCanonicalToolName(targetNode.template);
+      const fallbackName = canonicalName.length > 0
+        ? canonicalName
+        : typeof template?.title === 'string' && template.title.trim().length > 0
+          ? template.title.trim()
+          : targetNode.title;
+      const nameValue = configName.length > 0 ? configName : fallbackName;
+
+      const configPrompt = typeof targetConfig.description === 'string' ? targetConfig.description.trim() : '';
+      const templatePrompt = typeof template?.description === 'string' ? template.description.trim() : '';
+      const promptValue = configPrompt.length > 0 ? configPrompt : templatePrompt;
+
+      context.push({
+        name: nameValue,
+        prompt: promptValue,
+      });
+    }
+
+    return context;
+  }, [graphEdges, graphNodes, nodeId, getTemplate]);
+
+  const renderSystemPromptPreview = useCallback(
+    (template: string) => {
+      if (!template || template.trim().length === 0) {
+        return '';
+      }
+      return renderMustacheTemplate(template, { tools: toolsContext });
+    },
+    [toolsContext],
+  );
 
   return (
     <>
@@ -113,6 +195,8 @@ export function AgentSection({
               value={systemPrompt}
               onChange={(event) => onSystemPromptChange(event.target.value)}
               size="sm"
+              helperText="Preview tab renders with connected tools context."
+              previewTransform={renderSystemPromptPreview}
             />
           </div>
         </div>
