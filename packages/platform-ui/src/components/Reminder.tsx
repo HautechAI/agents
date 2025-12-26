@@ -86,6 +86,7 @@ export function Reminder({
                 size="sm"
                 variant="danger"
                 aria-label="Cancel reminder"
+                title="Cancel reminder"
                 onClick={onCancel}
                 disabled={isCancelling}
               />

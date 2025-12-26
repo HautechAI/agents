@@ -1598,6 +1598,10 @@ export function AgentsThreads() {
   const handleCancelQueuedMessage = useCallback(
     (queuedMessageId: string) => {
       if (!selectedThreadId || isDraftSelected) return;
+      const confirmCancel = typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? window.confirm('Cancel this queued message?')
+        : true;
+      if (!confirmCancel) return;
       cancelQueuedMessagesMutation.mutate({ threadId: selectedThreadId, queuedMessageId });
     },
     [selectedThreadId, isDraftSelected, cancelQueuedMessagesMutation],
@@ -1606,6 +1610,10 @@ export function AgentsThreads() {
   const handleCancelReminder = useCallback(
     (reminderId: string) => {
       if (!selectedThreadId || isDraftSelected) return;
+      const confirmCancel = typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? window.confirm('Cancel this reminder?')
+        : true;
+      if (!confirmCancel) return;
       cancelReminderMutation.mutate({ threadId: selectedThreadId, reminderId });
     },
     [selectedThreadId, isDraftSelected, cancelReminderMutation],

@@ -195,7 +195,7 @@ describe('AgentsThreadsController DELETE /api/agents/threads/:threadId/queued-me
     expect(result).toEqual({ clearedCount: 0 });
   });
 
-  it('returns zero when runtime throws', async () => {
+  it('throws when runtime throws', async () => {
     const clearQueuedMessages = vi.fn(() => {
       throw new Error('boom');
     });
@@ -215,9 +215,7 @@ describe('AgentsThreadsController DELETE /api/agents/threads/:threadId/queued-me
       ],
     });
 
-    const result = await controller.clearQueuedMessages('thread-1');
-
-    expect(result).toEqual({ clearedCount: 0 });
+    await expect(controller.clearQueuedMessages('thread-1')).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
   it('throws when thread is missing', async () => {

@@ -486,7 +486,7 @@ export class AgentsThreadsController {
         stack,
         AgentsThreadsController.name,
       );
-      return { clearedCount: 0 } as const;
+      throw new InternalServerErrorException({ error: 'clear_failed' });
     }
   }
 

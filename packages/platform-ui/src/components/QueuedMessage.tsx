@@ -38,6 +38,7 @@ export function QueuedMessage({
                 size="sm"
                 variant="danger"
                 aria-label="Cancel queued message"
+                title="Cancel queued message"
                 disabled={isCancelling}
                 onClick={onCancel}
               />
