@@ -102,6 +102,15 @@ export function AgentSection({
     const seenTargets = new Set<string>();
     const context: AgentToolContext[] = [];
 
+    const readConfigString = (config: Record<string, unknown>, key: string): string | undefined => {
+      const raw = config[key];
+      if (typeof raw !== 'string') {
+        return undefined;
+      }
+      const trimmed = raw.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    };
+
     for (const edge of edgesList) {
       if (!edge) continue;
       const sourceId = typeof edge.source === 'string' ? edge.source : '';
@@ -117,34 +126,29 @@ export function AgentSection({
 
       seenTargets.add(targetId);
       const targetConfig = (targetNode.config ?? {}) as Record<string, unknown>;
-      const configName = typeof targetConfig.name === 'string' ? targetConfig.name.trim() : '';
+      const configName = readConfigString(targetConfig, 'name');
       const template = getTemplate(targetNode.template ?? null);
-      const canonicalName = getCanonicalToolName(targetNode.template);
-      const nodeTitle = typeof targetNode.title === 'string' ? targetNode.title.trim() : '';
-      const fallbackName = canonicalName.length > 0
-        ? canonicalName
-        : typeof template?.title === 'string' && template.title.trim().length > 0
-          ? template.title.trim()
-          : nodeTitle;
-      const nameValue = configName.length > 0 ? configName : fallbackName;
-
-      const configTitle = typeof targetConfig.title === 'string' ? targetConfig.title.trim() : '';
+      const canonicalName = getCanonicalToolName(targetNode.template).trim();
       const templateTitle = typeof template?.title === 'string' ? template.title.trim() : '';
-      const fallbackTitle = templateTitle.length > 0 ? templateTitle : nodeTitle.length > 0 ? nodeTitle : nameValue;
-      const titleValue = configTitle.length > 0 ? configTitle : fallbackTitle;
-
-      const configDescription = typeof targetConfig.description === 'string' ? targetConfig.description.trim() : '';
       const templateDescription = typeof template?.description === 'string' ? template.description.trim() : '';
-      const descriptionValue = configDescription.length > 0 ? configDescription : templateDescription;
+      const nodeTitle = typeof targetNode.title === 'string' ? targetNode.title.trim() : '';
 
-      const configPrompt = typeof targetConfig.prompt === 'string' ? targetConfig.prompt.trim() : '';
-      const promptValue = configPrompt.length > 0 ? configPrompt : (descriptionValue.length > 0 ? descriptionValue : nameValue);
+      const fallbackName = canonicalName.length > 0 ? canonicalName : templateTitle || nodeTitle;
+      const name = configName ?? (fallbackName.length > 0 ? fallbackName : 'tool');
+      const configTitle = readConfigString(targetConfig, 'title');
+      const title = configTitle ?? (templateTitle.length > 0 ? templateTitle : name);
+
+      const configDescription = readConfigString(targetConfig, 'description');
+      const description = configDescription ?? templateDescription ?? '';
+
+      const configPrompt = readConfigString(targetConfig, 'prompt');
+      const prompt = configPrompt ?? (description.length > 0 ? description : title);
 
       context.push({
-        name: nameValue,
-        title: titleValue,
-        description: descriptionValue,
-        prompt: promptValue,
+        name,
+        title,
+        description,
+        prompt,
       });
     }
 
