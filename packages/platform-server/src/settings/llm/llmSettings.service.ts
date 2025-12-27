@@ -1,4 +1,5 @@
-import { Injectable, Logger, BadRequestException, HttpException, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ConflictException, HttpException, Inject } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ConfigService } from '../../core/services/config.service';
 import {
   LiteLLMCredentialDetail,
@@ -129,6 +130,8 @@ function sanitizeRecord(input?: Record<string, unknown>): Record<string, unknown
   return Object.keys(out).length ? out : {};
 }
 
+const RESERVED_MODEL_INFO_KEYS = new Set(['id', 'mode', 'rpm', 'tpm']);
+
 function ensureNoSecretKeys(params?: Record<string, unknown>): void {
   if (!params) return;
   for (const key of Object.keys(params)) {
@@ -257,10 +260,12 @@ export class LLMSettingsService {
 
   async createModel(input: CreateModelInput): Promise<LiteLLMModelRecord> {
     ensureNoSecretKeys(input.params);
+    const name = input.name.trim();
+    await this.assertModelNameAvailable(name);
     const litellmParams = this.buildModelParams(input);
     const modelInfo = this.buildModelInfo(input);
     const payload = {
-      model_name: input.name,
+      model_name: name,
       litellm_params: litellmParams,
       model_info: modelInfo,
     };
@@ -269,15 +274,27 @@ export class LLMSettingsService {
 
   async updateModel(input: UpdateModelInput): Promise<LiteLLMModelRecord> {
     ensureNoSecretKeys(input.params);
-    const current = await this.findModel(input.id);
+    const models = await this.listModels();
+    const current = this.findModelInList(models, input.id);
     if (!current) {
       throw new BadRequestException(`model ${input.id} not found`);
     }
+    const currentName = typeof current.model_name === 'string' ? current.model_name.trim() : '';
+    const fallbackName = input.id.trim();
+    let nextName = currentName || fallbackName;
+    if (input.name !== undefined) {
+      const requestedName = input.name.trim();
+      const currentNormalized = this.normalizeModelName(nextName);
+      const requestedNormalized = this.normalizeModelName(requestedName);
+      if (requestedNormalized !== currentNormalized) {
+        await this.assertModelNameAvailable(requestedName, { models, skip: current });
+      }
+      nextName = requestedName;
+    }
     const nextParams = this.mergeModelParams(current.litellm_params, input);
     const nextInfo = this.mergeModelInfo(current.model_info, input);
-    const name = input.name ?? current.model_name ?? input.id;
     const payload = {
-      model_name: name,
+      model_name: nextName,
       litellm_params: nextParams,
       model_info: nextInfo,
     };
@@ -396,11 +413,29 @@ export class LLMSettingsService {
     return params;
   }
 
+  private sanitizeModelMetadata(metadata?: Record<string, unknown>): Record<string, unknown> {
+    if (!metadata) return {};
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(metadata)) {
+      if (value === undefined) continue;
+      if (RESERVED_MODEL_INFO_KEYS.has(key)) continue;
+      sanitized[key] = value;
+    }
+    return sanitized;
+  }
+
+  private generateModelId(): string {
+    return `model_${randomUUID()}`;
+  }
+
   private buildModelInfo(input: CreateModelInput): Record<string, unknown> {
     const info: Record<string, unknown> = {
-      id: input.name,
-      ...(input.metadata || {}),
+      id: this.generateModelId(),
     };
+    const metadata = this.sanitizeModelMetadata(input.metadata);
+    if (Object.keys(metadata).length > 0) {
+      Object.assign(info, metadata);
+    }
     info.mode = input.mode ?? 'chat';
     if (input.rpm !== undefined) info.rpm = input.rpm;
     if (input.tpm !== undefined) info.tpm = input.tpm;
@@ -429,17 +464,84 @@ export class LLMSettingsService {
 
   private mergeModelInfo(existing: Record<string, unknown>, input: UpdateModelInput): Record<string, unknown> {
     const next = { ...(existing || {}) };
-    if (input.name) next.id = input.name;
+    if (input.metadata) {
+      const metadata = this.sanitizeModelMetadata(input.metadata);
+      if (Object.keys(metadata).length > 0) {
+        Object.assign(next, metadata);
+      }
+    }
     if (input.mode) next.mode = input.mode;
-    if (input.metadata) Object.assign(next, input.metadata);
     if (input.rpm !== undefined) next.rpm = input.rpm;
     if (input.tpm !== undefined) next.tpm = input.tpm;
     return next;
   }
 
+  private collectModelIdentifiers(model: LiteLLMModelRecord): string[] {
+    const identifiers: string[] = [];
+    const push = (raw: unknown) => {
+      if (typeof raw !== 'string') return;
+      const trimmed = raw.trim();
+      if (!trimmed.length) return;
+      identifiers.push(trimmed);
+    };
+    push(model.model_name);
+    push(model.model_id);
+    if (model.model_info && typeof model.model_info === 'object') {
+      push((model.model_info as Record<string, unknown>).id);
+    }
+    return identifiers;
+  }
+
+  private isSameModel(a: LiteLLMModelRecord, b: LiteLLMModelRecord): boolean {
+    const idsA = this.collectModelIdentifiers(a);
+    if (!idsA.length) return false;
+    const idsB = this.collectModelIdentifiers(b);
+    if (!idsB.length) return false;
+    return idsA.some((id) => idsB.includes(id));
+  }
+
+  private normalizeModelName(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  private findModelInList(models: LiteLLMModelRecord[], id: string): LiteLLMModelRecord | undefined {
+    const target = id.trim();
+    if (!target.length) return undefined;
+    return models.find((model) => this.collectModelIdentifiers(model).includes(target));
+  }
+
+  private async assertModelNameAvailable(
+    name: string,
+    options?: { models?: LiteLLMModelRecord[]; skip?: LiteLLMModelRecord },
+  ): Promise<void> {
+    const normalized = this.normalizeModelName(name);
+    if (!normalized.length) {
+      throw new BadRequestException('model name cannot be empty');
+    }
+    const models = options?.models ?? (await this.listModels());
+    for (const model of models) {
+      if (options?.skip && this.isSameModel(model, options.skip)) {
+        continue;
+      }
+      if (typeof model.model_name !== 'string') {
+        continue;
+      }
+      const candidate = this.normalizeModelName(model.model_name);
+      if (!candidate.length) {
+        continue;
+      }
+      if (candidate === normalized) {
+        throw new ConflictException({
+          error: 'model_name_conflict',
+          message: `Model "${name}" already exists. Choose a different name.`,
+        });
+      }
+    }
+  }
+
   private async findModel(id: string): Promise<LiteLLMModelRecord | undefined> {
     const models = await this.listModels();
-    return models.find((item) => item.model_name === id || item.model_info?.id === id);
+    return this.findModelInList(models, id);
   }
 
   private async findModelsReferencingCredential(name: string): Promise<string[]> {
