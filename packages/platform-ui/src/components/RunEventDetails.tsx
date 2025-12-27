@@ -32,6 +32,19 @@ const safeJsonParse = (value: string): unknown => {
 const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: number } => {
   const visited = new WeakSet<object>();
 
+  const combine = (
+    base: { tokens?: number; score?: number },
+    addition: { tokens?: number; score?: number },
+  ): { tokens?: number; score?: number } => {
+    if (base.tokens === undefined && addition.tokens !== undefined) {
+      base.tokens = addition.tokens;
+    }
+    if (base.score === undefined && addition.score !== undefined) {
+      base.score = addition.score;
+    }
+    return base;
+  };
+
   const walk = (current: unknown): { tokens?: number; score?: number } => {
     if (current === null || current === undefined) {
       return {};
@@ -58,13 +71,14 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
     }
 
     if (Array.isArray(current)) {
+      const aggregated: { tokens?: number; score?: number } = {};
       for (const item of current) {
-        const metrics = walk(item);
-        if (metrics.tokens !== undefined || metrics.score !== undefined) {
-          return metrics;
+        combine(aggregated, walk(item));
+        if (aggregated.tokens !== undefined && aggregated.score !== undefined) {
+          break;
         }
       }
-      return {};
+      return aggregated;
     }
 
     const record = current as Record<string, unknown>;
@@ -73,36 +87,69 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
     }
     visited.add(record);
 
-    const directTokens =
-      asNumber(record.tokens) ??
-      asNumber(record.reasoningTokens) ??
-      asNumber(record.reasoning_tokens) ??
-      asNumber(record.token_count) ??
-      asNumber(record.totalTokens) ??
-      asNumber(record.total) ??
-      asNumber(record.value) ??
-      asNumber(record.count);
+    const result: { tokens?: number; score?: number } = {};
 
-    const directScore =
-      asNumber(record.score) ??
-      asNumber(record.reasoningScore) ??
-      asNumber(record.confidence);
+    const tokenKeys: Array<keyof typeof record> = [
+      'tokens',
+      'reasoningTokens',
+      'reasoning_tokens',
+      'token_count',
+      'totalTokens',
+      'total',
+      'value',
+      'count',
+    ];
 
-    if (directTokens !== undefined || directScore !== undefined) {
-      return { tokens: directTokens, score: directScore };
+    const directTokenCandidates: Array<unknown> = tokenKeys.map((key) => record[key]);
+
+    for (const candidate of directTokenCandidates) {
+      const numeric = asNumber(candidate);
+      if (numeric !== undefined) {
+        result.tokens = numeric;
+        break;
+      }
     }
 
-    const nestedKeys: Array<keyof typeof record> = ['usage', 'metrics', 'data', 'details', 'reasoning', 'stats'];
+    const scoreKeys: Array<keyof typeof record> = ['score', 'reasoningScore', 'confidence'];
+
+    const directScoreCandidates: Array<unknown> = scoreKeys.map((key) => record[key]);
+
+    for (const candidate of directScoreCandidates) {
+      const numeric = asNumber(candidate);
+      if (numeric !== undefined) {
+        result.score = numeric;
+        break;
+      }
+    }
+
+    if (result.tokens !== undefined && result.score !== undefined) {
+      return result;
+    }
+
+    const nestedKeys: Array<keyof typeof record> = ['reasoning', 'metrics', 'usage', 'data', 'details', 'stats'];
     for (const key of nestedKeys) {
       if (key in record) {
-        const metrics = walk(record[key]);
-        if (metrics.tokens !== undefined || metrics.score !== undefined) {
-          return metrics;
+        combine(result, walk(record[key]));
+        if (result.tokens !== undefined && result.score !== undefined) {
+          break;
         }
       }
     }
 
-    return {};
+    if (result.tokens === undefined || result.score === undefined) {
+      const skippedKeys = new Set<keyof typeof record>([...tokenKeys, ...scoreKeys, ...nestedKeys]);
+      for (const [key, value] of Object.entries(record) as Array<[keyof typeof record, unknown]>) {
+        if (skippedKeys.has(key)) {
+          continue;
+        }
+        combine(result, walk(value));
+        if (result.tokens !== undefined && result.score !== undefined) {
+          break;
+        }
+      }
+    }
+
+    return result;
   };
 
   return walk(value);
