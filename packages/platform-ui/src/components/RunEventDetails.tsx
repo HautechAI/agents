@@ -29,6 +29,85 @@ const safeJsonParse = (value: string): unknown => {
   }
 };
 
+const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: number } => {
+  const visited = new WeakSet<object>();
+
+  const walk = (current: unknown): { tokens?: number; score?: number } => {
+    if (current === null || current === undefined) {
+      return {};
+    }
+
+    if (typeof current === 'number') {
+      return { tokens: current };
+    }
+
+    if (typeof current === 'string') {
+      const numeric = Number(current);
+      if (!Number.isNaN(numeric)) {
+        return { tokens: numeric };
+      }
+      const parsed = safeJsonParse(current);
+      if (parsed !== current) {
+        return walk(parsed);
+      }
+      return {};
+    }
+
+    if (typeof current !== 'object') {
+      return {};
+    }
+
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        const metrics = walk(item);
+        if (metrics.tokens !== undefined || metrics.score !== undefined) {
+          return metrics;
+        }
+      }
+      return {};
+    }
+
+    const record = current as Record<string, unknown>;
+    if (visited.has(record)) {
+      return {};
+    }
+    visited.add(record);
+
+    const directTokens =
+      asNumber(record.tokens) ??
+      asNumber(record.reasoningTokens) ??
+      asNumber(record.reasoning_tokens) ??
+      asNumber(record.token_count) ??
+      asNumber(record.totalTokens) ??
+      asNumber(record.total) ??
+      asNumber(record.value) ??
+      asNumber(record.count);
+
+    const directScore =
+      asNumber(record.score) ??
+      asNumber(record.reasoningScore) ??
+      asNumber(record.confidence);
+
+    if (directTokens !== undefined || directScore !== undefined) {
+      return { tokens: directTokens, score: directScore };
+    }
+
+    const nestedKeys: Array<keyof typeof record> = ['usage', 'metrics', 'data', 'details', 'reasoning', 'stats'];
+    for (const key of nestedKeys) {
+      if (key in record) {
+        const metrics = walk(record[key]);
+        if (metrics.tokens !== undefined || metrics.score !== undefined) {
+          return metrics;
+        }
+      }
+    }
+
+    return {};
+  };
+
+  return walk(value);
+};
+
 const CONTEXT_PAGINATION_PAGE_SIZE = 20;
 
 export interface RunEventData extends Record<string, unknown> {
@@ -361,7 +440,7 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
     const assistantContext = asRecordArray(event.data.assistantContext);
     const response = asString(event.data.response);
     const totalTokens = asNumber(event.data.tokens?.total);
-    const reasoningTokens = asNumber(event.data.tokens?.reasoning);
+    const reasoningTokens = extractReasoningMetrics(event.data.tokens?.reasoning).tokens;
     const cost = typeof event.data.cost === 'string' ? event.data.cost : '';
     const model = asString(event.data.model);
     const toolCalls = Array.isArray(event.data.toolCalls)
@@ -466,6 +545,16 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
 
           {/* Output */}
           <div className="flex flex-col min-h-0 min-w-0">
+            {reasoningTokens !== undefined && (
+              <div className="flex-shrink-0 mb-4">
+                <div className="flex items-center gap-2 mb-3 h-8">
+                  <span className="text-sm text-[var(--agyn-gray)]">Reasoning</span>
+                </div>
+                <div className="text-[var(--agyn-dark)] text-sm font-mono">
+                  {reasoningTokens.toLocaleString()} tokens
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 mb-3 h-8 flex-shrink-0">
               <span className="text-sm text-[var(--agyn-gray)]">Output</span>
               <IconButton icon={<Copy className="w-3 h-3" />} size="sm" variant="ghost" />
@@ -479,20 +568,11 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
                 <div className="text-sm text-[var(--agyn-gray)]">No response available</div>
               )}
             </div>
-            {reasoningTokens !== undefined && (
-              <div className="mt-4">
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Reasoning</h3>
-                <div className="border border-[var(--agyn-border-subtle)] rounded-[10px] p-4 bg-[var(--agyn-bg-light)]">
-                  <div className="flex items-center justify-between text-sm text-[var(--agyn-dark)]">
-                    <span>Tokens</span>
-                    <span className="font-medium">{reasoningTokens.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            )}
             {toolCalls.length > 0 && (
               <div className="mt-4">
-                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Invoked tools</h3>
+                <div className="flex items-center gap-2 mb-3 h-8 flex-shrink-0">
+                  <span className="text-sm text-[var(--agyn-gray)]">Invoked tools</span>
+                </div>
                 {renderFunctionCalls(toolCalls, expandedToolCalls, toggleToolCall, `llm-${event.id}`)}
               </div>
             )}
@@ -567,9 +647,32 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
       };
 
       const timestamp = formatTimestamp(message.timestamp);
-      const reasoning = isRecord(message.reasoning) ? message.reasoning : undefined;
-      const reasoningTokens = asNumber(reasoning?.tokens);
-      const reasoningScore = asNumber(reasoning?.score);
+      const additionalKwargs = isRecord(message.additional_kwargs) ? message.additional_kwargs : undefined;
+      const tokensRecord = isRecord(message.tokens) ? message.tokens : undefined;
+
+      const reasoningCandidates: unknown[] = [
+        message.reasoning,
+        additionalKwargs?.reasoning,
+        tokensRecord?.reasoning,
+        tokensRecord?.reasoningTokens,
+        message.reasoningTokens,
+      ];
+
+      let reasoningTokens: number | undefined;
+      let reasoningScore: number | undefined;
+      for (const candidate of reasoningCandidates) {
+        if (candidate === undefined) continue;
+        const metrics = extractReasoningMetrics(candidate);
+        if (reasoningTokens === undefined && metrics.tokens !== undefined) {
+          reasoningTokens = metrics.tokens;
+        }
+        if (reasoningScore === undefined && metrics.score !== undefined) {
+          reasoningScore = metrics.score;
+        }
+        if (reasoningTokens !== undefined && reasoningScore !== undefined) {
+          break;
+        }
+      }
 
       const getReasoningVariant = () => {
         if (reasoningTokens !== undefined) {
@@ -579,8 +682,6 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
         }
         return 'neutral';
       };
-
-      const additionalKwargs = isRecord(message.additional_kwargs) ? message.additional_kwargs : undefined;
       const toolCallsRaw = message.tool_calls || message.toolCalls || additionalKwargs?.tool_calls;
       const toolCalls = Array.isArray(toolCallsRaw) ? toolCallsRaw.filter(isRecord) : [];
       const hasToolCalls = toolCalls.length > 0;

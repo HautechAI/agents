@@ -23,6 +23,7 @@ describe('RunEventDetails – LLM outputs', () => {
             id: 'ctx-output',
             role: 'assistant',
             content: 'Persisted assistant output',
+            reasoning: 40,
           },
         ],
         response: 'Latest assistant response',
@@ -39,6 +40,7 @@ describe('RunEventDetails – LLM outputs', () => {
     expect(screen.getByText('Assistant responses for this call')).toBeInTheDocument();
     const assistantPanel = screen.getByTestId('assistant-context-panel');
     expect(within(assistantPanel).getByText('Persisted assistant output')).toBeInTheDocument();
+    expect(within(assistantPanel).getByText('40 tokens')).toBeInTheDocument();
     expect(screen.getByText('No new context for this call.')).toBeInTheDocument();
 
     const loadMoreButton = screen.getByRole('button', { name: 'Load more' });
@@ -81,7 +83,7 @@ describe('RunEventDetails – LLM outputs', () => {
     expect(screen.getByText(/"echo 1"/)).toBeInTheDocument();
   });
 
-  it('renders a reasoning block when reasoning tokens are provided', () => {
+  it('renders a reasoning block above the output when reasoning tokens are provided', () => {
     const event: RunEvent = {
       id: 'evt-llm-reasoning',
       type: 'llm',
@@ -101,12 +103,11 @@ describe('RunEventDetails – LLM outputs', () => {
       </MemoryRouter>,
     );
 
-    const reasoningHeading = screen.getByText('Reasoning');
-    expect(reasoningHeading).toBeInTheDocument();
-    const reasoningSection = reasoningHeading.closest('div');
-    expect(reasoningSection).not.toBeNull();
-    const withinContainer = within(reasoningSection as HTMLElement);
-    expect(withinContainer.getByText('Tokens')).toBeInTheDocument();
-    expect(withinContainer.getByText('250')).toBeInTheDocument();
+    const reasoningLabel = screen.getByText('Reasoning');
+    const outputLabel = screen.getByText('Output');
+    expect(reasoningLabel).toBeInTheDocument();
+    expect(reasoningLabel.tagName).toBe('SPAN');
+    expect(reasoningLabel.compareDocumentPosition(outputLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('250 tokens')).toBeInTheDocument();
   });
 });
