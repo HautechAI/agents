@@ -341,7 +341,7 @@ describe.sequential('LLMSettingsService', () => {
     ).rejects.toThrow('model parameters must not include credential secrets');
   });
 
-  it('creates model with generated identifier and sanitized metadata', async () => {
+  it('creates model without injecting reserved model_info fields', async () => {
     const listScope = nock(BASE_URL)
       .get('/model/info')
       .reply(200, { data: [] });
@@ -354,15 +354,13 @@ describe.sequential('LLMSettingsService', () => {
           model_name: 'anthropic/support',
         });
         const info = (payload.model_info ?? {}) as Record<string, unknown>;
-        const id = typeof info.id === 'string' ? info.id : '';
-        expect(id).not.toBe('anthropic/support');
-        expect(id).toMatch(/^model_[0-9a-f-]{36}$/);
-        expect(info.mode).toBe('completion');
+        expect(info).toEqual({ department: 'support' });
         expect(info.department).toBe('support');
         return {
           model_name: payload.model_name,
+          model_info: { ...info },
           litellm_params: payload.litellm_params,
-          model_info: payload.model_info,
+          model_id: 'generated-id-123',
         };
       });
 
@@ -376,9 +374,8 @@ describe.sequential('LLMSettingsService', () => {
       metadata: { id: 'should-ignore', mode: 'ignored', department: 'support' },
     });
 
-    const responseId = typeof res.model_info?.id === 'string' ? (res.model_info.id as string) : '';
-    expect(responseId).toMatch(/^model_[0-9a-f-]{36}$/);
-    expect(res.model_info?.mode).toBe('completion');
+    expect(res.model_info).toEqual({ department: 'support' });
+    expect(res.model_id).toBe('generated-id-123');
     listScope.done();
     createScope.done();
   });
@@ -442,6 +439,102 @@ describe.sequential('LLMSettingsService', () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     listScope.done();
+  });
+
+  it('updates model when referenced by LiteLLM model_id', async () => {
+    const listScope = nock(BASE_URL)
+      .get('/model/info')
+      .reply(200, {
+        data: [
+          {
+            model_name: 'anthropic/support',
+            model_id: 'model-uuid-1',
+            litellm_params: {
+              model: 'claude-3',
+              custom_llm_provider: 'anthropic',
+              litellm_credential_name: 'anthropic-dev',
+            },
+            model_info: { description: 'original' },
+          },
+        ],
+      });
+
+    const updateScope = nock(BASE_URL)
+      .post('/model/update', (body) => {
+        expect(body).toMatchObject({
+          model_name: 'anthropic/support',
+          litellm_params: {
+            model: 'claude-3',
+            custom_llm_provider: 'anthropic',
+            litellm_credential_name: 'anthropic-dev',
+          },
+          model_info: {
+            description: 'updated',
+          },
+        });
+        expect(body.model_info).not.toHaveProperty('id');
+        expect(body.model_info).not.toHaveProperty('mode');
+        return true;
+      })
+      .reply(200, {
+        model_name: 'anthropic/support',
+        model_id: 'model-uuid-1',
+        model_info: { description: 'updated' },
+        litellm_params: {
+          model: 'claude-3',
+          custom_llm_provider: 'anthropic',
+          litellm_credential_name: 'anthropic-dev',
+        },
+      });
+
+    const service = new LLMSettingsService(createConfig());
+    const result = await service.updateModel({
+      id: 'model-uuid-1',
+      metadata: { description: 'updated', id: 'ignore-me' },
+    });
+    expect(result.model_info).toMatchObject({ description: 'updated' });
+    expect(result.model_name).toBe('anthropic/support');
+    listScope.done();
+    updateScope.done();
+  });
+
+  it('tests model when referenced by LiteLLM model_id', async () => {
+    const listScope = nock(BASE_URL)
+      .get('/model/info')
+      .reply(200, {
+        data: [
+          {
+            model_name: 'anthropic/support',
+            model_id: 'model-uuid-1',
+            litellm_params: {
+              model: 'claude-3',
+              custom_llm_provider: 'anthropic',
+              litellm_credential_name: 'anthropic-dev',
+            },
+            model_info: {},
+          },
+        ],
+      });
+
+    const testScope = nock(BASE_URL)
+      .post('/health/test_connection', (body) => {
+        expect(body).toMatchObject({
+          mode: 'chat',
+          litellm_params: {
+            model: 'claude-3',
+            custom_llm_provider: 'anthropic',
+            litellm_credential_name: 'anthropic-dev',
+          },
+        });
+        return true;
+      })
+      .reply(200, { status: 'ok' });
+
+    const service = new LLMSettingsService(createConfig());
+    const response = await service.testModel({ id: 'model-uuid-1' });
+    expect(response).toMatchObject({ status: 'ok' });
+    listScope.done();
+    testScope.done();
   });
 
   it('throws when LiteLLM configuration is missing', async () => {

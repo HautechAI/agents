@@ -1,5 +1,4 @@
 import { Injectable, Logger, BadRequestException, ConflictException, HttpException, Inject } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import { ConfigService } from '../../core/services/config.service';
 import {
   LiteLLMCredentialDetail,
@@ -267,7 +266,7 @@ export class LLMSettingsService {
     const payload = {
       model_name: name,
       litellm_params: litellmParams,
-      model_info: modelInfo,
+      model_info: modelInfo ?? {},
     };
     return this.request<LiteLLMModelRecord>('POST', '/model/new', payload, { classifyWrite: true });
   }
@@ -424,22 +423,15 @@ export class LLMSettingsService {
     return sanitized;
   }
 
-  private generateModelId(): string {
-    return `model_${randomUUID()}`;
-  }
-
-  private buildModelInfo(input: CreateModelInput): Record<string, unknown> {
-    const info: Record<string, unknown> = {
-      id: this.generateModelId(),
-    };
+  private buildModelInfo(input: CreateModelInput): Record<string, unknown> | undefined {
+    const info: Record<string, unknown> = {};
     const metadata = this.sanitizeModelMetadata(input.metadata);
     if (Object.keys(metadata).length > 0) {
       Object.assign(info, metadata);
     }
-    info.mode = input.mode ?? 'chat';
     if (input.rpm !== undefined) info.rpm = input.rpm;
     if (input.tpm !== undefined) info.tpm = input.tpm;
-    return info;
+    return Object.keys(info).length > 0 ? info : undefined;
   }
 
   private mergeModelParams(existing: Record<string, unknown>, input: UpdateModelInput): Record<string, unknown> {
