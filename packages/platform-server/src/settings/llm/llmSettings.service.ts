@@ -150,6 +150,12 @@ function redactBaseUrl(value?: string): string | undefined {
   }
 }
 
+function extractModelInfoId(info?: Record<string, unknown>): string | undefined {
+  if (!info) return undefined;
+  const candidate = info['id'];
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : undefined;
+}
+
 function extractCredentialProvider(info?: Record<string, unknown>): string | undefined {
   if (!info) return undefined;
   const litellm = info['litellm_provider'];
@@ -252,9 +258,16 @@ export class LLMSettingsService {
   }
 
   async listModels(): Promise<LiteLLMModelRecord[]> {
-    const body = await this.request<unknown>('GET', '/model/info');
-    const models = extractLiteLLMArray(body, ['data', 'models']);
-    return models.filter((item): item is LiteLLMModelRecord => isModelRecord(item));
+    try {
+      const body = await this.request<unknown>('GET', '/model/info');
+      const models = extractLiteLLMArray(body, ['data', 'models']);
+      return models.filter((item): item is LiteLLMModelRecord => isModelRecord(item));
+    } catch (err) {
+      if (err instanceof LiteLLMAdminError && isModelListUninitialized(err.responseBody)) {
+        return [];
+      }
+      throw err;
+    }
   }
 
   async createModel(input: CreateModelInput): Promise<LiteLLMModelRecord> {
@@ -268,7 +281,9 @@ export class LLMSettingsService {
       litellm_params: litellmParams,
       model_info: modelInfo ?? {},
     };
-    return this.request<LiteLLMModelRecord>('POST', '/model/new', payload, { classifyWrite: true });
+    const created = await this.request<LiteLLMModelRecord>('POST', '/model/new', payload, { classifyWrite: true });
+    await this.maybeLogModelSync(created);
+    return created;
   }
 
   async updateModel(input: UpdateModelInput): Promise<LiteLLMModelRecord> {
@@ -432,6 +447,56 @@ export class LLMSettingsService {
     if (input.rpm !== undefined) info.rpm = input.rpm;
     if (input.tpm !== undefined) info.tpm = input.tpm;
     return Object.keys(info).length > 0 ? info : undefined;
+  }
+
+  private async maybeLogModelSync(created: LiteLLMModelRecord): Promise<void> {
+    if (!this.isModelSyncDebugEnabled()) return;
+    const baseUrl = redactBaseUrl(this.config.litellmBaseUrl) ?? this.config.litellmBaseUrl;
+    try {
+      const models = await this.listModels();
+      const match = models.some((model) => this.isSameModel(model, created));
+      const snapshot = this.buildModelSnapshot(created);
+      const catalog = models.map((model) => this.buildModelSnapshot(model));
+      const message = match
+        ? 'LiteLLM model sync check: created model present in /model/info'
+        : 'LiteLLM model sync check: created model missing from /model/info';
+      const payload = {
+        baseUrl,
+        created: snapshot,
+        match,
+        models: catalog,
+      };
+      if (match) {
+        this.logger.log(message, payload);
+      } else {
+        this.logger.warn(message, payload);
+      }
+    } catch (err) {
+      this.logger.warn('LiteLLM model sync check failed', {
+        baseUrl,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private isModelSyncDebugEnabled(): boolean {
+    const flag = process.env.LITELLM_DEBUG_MODEL_SYNC;
+    if (!flag) return false;
+    const normalized = flag.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes';
+  }
+
+  private buildModelSnapshot(model: LiteLLMModelRecord): {
+    model_name: string;
+    model_id?: string;
+    model_info_id?: string;
+  } {
+    const infoId = extractModelInfoId(model.model_info);
+    return {
+      model_name: model.model_name,
+      model_id: typeof model.model_id === 'string' && model.model_id.trim().length > 0 ? model.model_id : undefined,
+      model_info_id: infoId,
+    };
   }
 
   private mergeModelParams(existing: Record<string, unknown>, input: UpdateModelInput): Record<string, unknown> {
@@ -677,6 +742,15 @@ function isModelRecord(value: unknown): value is LiteLLMModelRecord {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return typeof v.model_name === 'string' && typeof v.litellm_params === 'object';
+}
+
+function isModelListUninitialized(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const detail = (payload as Record<string, unknown>).detail;
+  if (!detail || typeof detail !== 'object') return false;
+  const error = (detail as Record<string, unknown>).error;
+  if (typeof error !== 'string') return false;
+  return error.includes('LLM Model List not loaded');
 }
 
 function extractLiteLLMArray(payload: unknown, keys: string[]): unknown[] {

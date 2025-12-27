@@ -1,5 +1,5 @@
 import nock from 'nock';
-import { beforeEach, afterEach, describe, expect, it } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import { LLMSettingsService } from '../src/settings/llm/llmSettings.service';
@@ -344,10 +344,12 @@ describe.sequential('LLMSettingsService', () => {
   it('creates model without injecting reserved model_info fields', async () => {
     const listScope = nock(BASE_URL)
       .get('/model/info')
+      .matchHeader('authorization', 'Bearer sk-master')
       .reply(200, { data: [] });
 
     const createScope = nock(BASE_URL)
       .post('/model/new')
+      .matchHeader('authorization', 'Bearer sk-master')
       .reply(200, (_uri, body: unknown) => {
         const payload = typeof body === 'string' ? JSON.parse(body) : (body as Record<string, unknown>);
         expect(payload).toMatchObject({
@@ -378,6 +380,71 @@ describe.sequential('LLMSettingsService', () => {
     expect(res.model_id).toBe('generated-id-123');
     listScope.done();
     createScope.done();
+  });
+
+  it('logs LiteLLM sync diagnostics when enabled', async () => {
+    process.env.LITELLM_DEBUG_MODEL_SYNC = '1';
+
+    const preflightList = nock(BASE_URL)
+      .get('/model/info')
+      .matchHeader('authorization', 'Bearer sk-master')
+      .reply(200, { data: [] });
+
+    const createScope = nock(BASE_URL)
+      .post('/model/new')
+      .matchHeader('authorization', 'Bearer sk-master')
+      .reply(200, (_uri, body: unknown) => {
+        const payload = typeof body === 'string' ? JSON.parse(body) : (body as Record<string, unknown>);
+        expect(payload.model_name).toBe('anthropic/support');
+        return {
+          model_name: payload.model_name,
+          model_id: 'generated-id-123',
+          model_info: { department: 'support' },
+          litellm_params: payload.litellm_params,
+        };
+      });
+
+    const postCreateList = nock(BASE_URL)
+      .get('/model/info')
+      .matchHeader('authorization', 'Bearer sk-master')
+      .reply(200, {
+        data: [
+          {
+            model_name: 'anthropic/support',
+            model_id: 'generated-id-123',
+            litellm_params: { model: 'claude-3' },
+            model_info: { id: 'generated-id-123' },
+          },
+        ],
+      });
+
+    const service = new LLMSettingsService(createConfig());
+    const logSpy = vi.spyOn(service['logger'], 'log');
+    const warnSpy = vi.spyOn(service['logger'], 'warn');
+
+    await service.createModel({
+      name: 'anthropic/support',
+      provider: 'anthropic',
+      model: 'claude-3',
+      credentialName: 'anthropic-dev',
+    });
+
+    expect(logSpy).toHaveBeenCalledWith(
+      'LiteLLM model sync check: created model present in /model/info',
+      expect.objectContaining({
+        baseUrl: 'http://litellm.test',
+        match: true,
+        created: expect.objectContaining({ model_name: 'anthropic/support' }),
+      }),
+    );
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    preflightList.done();
+    createScope.done();
+    postCreateList.done();
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    delete process.env.LITELLM_DEBUG_MODEL_SYNC;
   });
 
   it('rejects duplicate model names with conflict', async () => {
