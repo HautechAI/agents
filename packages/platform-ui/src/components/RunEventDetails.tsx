@@ -770,10 +770,9 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
           requireReasoningContext: true,
           initialHasReasoningContext: candidate.initialReasoning ?? false,
         });
-        if (reasoningTokens === undefined && metrics.tokens !== undefined) {
-          reasoningTokens = metrics.tokens;
-        }
-        if (reasoningTokens !== undefined) {
+        const tokens = metrics.tokens;
+        if (tokens !== undefined && tokens > 0) {
+          reasoningTokens = tokens;
           break;
         }
       }
@@ -835,7 +834,7 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
                 {renderAssistantContent()}
                 {reasoningTokens !== undefined && (
                   <div
-                    className="flex items-center gap-2 text-sm text-[var(--agyn-dark)]"
+                    className="pl-5 flex items-center gap-2 text-sm text-[var(--agyn-dark)]"
                     data-testid="assistant-context-reasoning"
                   >
                     <Brain className="w-3.5 h-3.5 text-[var(--agyn-purple)]" />

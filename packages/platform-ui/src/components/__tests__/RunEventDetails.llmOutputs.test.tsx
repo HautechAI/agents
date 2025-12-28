@@ -153,6 +153,8 @@ describe('RunEventDetails – LLM outputs', () => {
     const reasoningRow = within(panel).getByTestId('assistant-context-reasoning');
     expect(reasoningRow).toHaveTextContent('Reasoning tokens: 64');
 
+    expect(reasoningRow).toHaveClass('pl-5');
+
     const toolCallButton = within(panel).getByRole('button', { name: /summarize/i });
     const relation = reasoningRow.compareDocumentPosition(toolCallButton);
     expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -174,6 +176,37 @@ describe('RunEventDetails – LLM outputs', () => {
               output_tokens: 120,
               total_tokens: 200,
             },
+          },
+        ],
+        response: 'Latest assistant response',
+        model: 'gpt-4o',
+      },
+    };
+
+    render(
+      <MemoryRouter>
+        <RunEventDetails event={event} />
+      </MemoryRouter>,
+    );
+
+    const panel = screen.getByTestId('assistant-context-panel');
+    expect(within(panel).queryByTestId('assistant-context-reasoning')).not.toBeInTheDocument();
+    expect(within(panel).queryByText(/Reasoning tokens:/)).not.toBeInTheDocument();
+  });
+
+  it('omits reasoning tokens row when reasoning tokens are zero', () => {
+    const event: RunEvent = {
+      id: 'evt-llm-context-zero-reasoning',
+      type: 'llm',
+      timestamp: '2024-01-01T00:01:20.000Z',
+      data: {
+        context: [],
+        assistantContext: [
+          {
+            id: 'ctx-assistant-zero-reasoning',
+            role: 'assistant',
+            content: 'Assistant output zero reasoning',
+            reasoning: { tokens: 0 },
           },
         ],
         response: 'Latest assistant response',
