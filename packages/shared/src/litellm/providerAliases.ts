@@ -30,7 +30,7 @@ export function normalizeLiteLLMProvider(provider?: string | null): string | und
   if (alias) {
     return alias;
   }
-  return trimmed;
+  return key;
 }
 
 export function resolveLiteLLMProviderOrThrow(provider?: string | null): string {
@@ -40,4 +40,3 @@ export function resolveLiteLLMProviderOrThrow(provider?: string | null): string 
   }
   return normalized;
 }
-

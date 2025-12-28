@@ -79,7 +79,28 @@ function resolveCredentialProvider(info?: Record<string, unknown>): string {
 export function mapProviders(items: LiteLLMProviderInfo[] | undefined): ProviderOption[] {
   if (!Array.isArray(items)) return [];
   return items.map((item) => {
-    const litellmProvider = normalizeLiteLLMProvider(item.litellm_provider) ?? item.litellm_provider;
+    const rawProvider = typeof item.provider === 'string' ? item.provider : '';
+    const rawProviderTrimmed = rawProvider.trim();
+    const normalizedProvider = normalizeLiteLLMProvider(rawProviderTrimmed);
+    const fallbackProviderId = rawProviderTrimmed.length > 0 ? rawProviderTrimmed.toLowerCase() : '';
+
+    const rawLitellmProvider = typeof item.litellm_provider === 'string' ? item.litellm_provider : '';
+    const rawLitellmTrimmed = rawLitellmProvider.trim();
+    const normalizedLitellmProvider = normalizeLiteLLMProvider(rawLitellmTrimmed);
+    const fallbackLitellmProvider = rawLitellmTrimmed.length > 0 ? rawLitellmTrimmed.toLowerCase() : '';
+
+    const canonicalProviderId =
+      normalizedProvider ||
+      fallbackProviderId ||
+      normalizedLitellmProvider ||
+      fallbackLitellmProvider ||
+      rawProviderTrimmed ||
+      'unknown';
+    const litellmProvider = normalizedLitellmProvider || fallbackLitellmProvider || canonicalProviderId;
+    const labelBase =
+      typeof item.provider_display_name === 'string' && item.provider_display_name.trim().length > 0
+        ? item.provider_display_name.trim()
+        : rawProviderTrimmed || canonicalProviderId;
     const fields: ProviderField[] = Array.isArray(item.credential_fields)
       ? item.credential_fields.map((field) => ({
           key: field.key,
@@ -93,8 +114,8 @@ export function mapProviders(items: LiteLLMProviderInfo[] | undefined): Provider
         }))
       : [];
     return {
-      id: item.provider,
-      label: item.provider_display_name ?? item.provider,
+      id: canonicalProviderId,
+      label: labelBase,
       litellmProvider,
       fields,
       defaultModelPlaceholder: item.default_model_placeholder ?? null,

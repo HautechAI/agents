@@ -17,9 +17,13 @@ describe('normalizeLiteLLMProvider', () => {
     expect(normalizeLiteLLMProvider(' azure ')).toBe('azure');
   });
 
+  it('lowercases canonical providers without explicit aliases', () => {
+    expect(normalizeLiteLLMProvider('Azure')).toBe('azure');
+    expect(normalizeLiteLLMProvider('Anthropic')).toBe('anthropic');
+  });
+
   it('returns undefined for empty values', () => {
     expect(normalizeLiteLLMProvider('')).toBeUndefined();
     expect(normalizeLiteLLMProvider(undefined)).toBeUndefined();
   });
 });
-
