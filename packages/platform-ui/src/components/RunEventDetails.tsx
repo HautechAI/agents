@@ -28,8 +28,20 @@ const safeJsonParse = (value: string): unknown => {
   }
 };
 
-const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: number } => {
+type ReasoningMetricsOptions = {
+  requireReasoningContext?: boolean;
+  initialHasReasoningContext?: boolean;
+};
+
+const extractReasoningMetrics = (
+  value: unknown,
+  options?: ReasoningMetricsOptions,
+): { tokens?: number; score?: number } => {
+  const requireReasoningContext = options?.requireReasoningContext ?? false;
   const visited = new WeakSet<object>();
+
+  const keyIndicatesReasoning = (key: unknown): boolean =>
+    typeof key === 'string' && key.toLowerCase().includes('reason');
 
   const combine = (
     base: { tokens?: number; score?: number },
@@ -44,23 +56,32 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
     return base;
   };
 
-  const walk = (current: unknown): { tokens?: number; score?: number } => {
+  const walk = (
+    current: unknown,
+    context: { hasReasoningContext: boolean },
+  ): { tokens?: number; score?: number } => {
     if (current === null || current === undefined) {
       return {};
     }
 
     if (typeof current === 'number') {
+      if (requireReasoningContext && !context.hasReasoningContext) {
+        return {};
+      }
       return { tokens: current };
     }
 
     if (typeof current === 'string') {
       const numeric = Number(current);
       if (!Number.isNaN(numeric)) {
+        if (requireReasoningContext && !context.hasReasoningContext) {
+          return {};
+        }
         return { tokens: numeric };
       }
       const parsed = safeJsonParse(current);
       if (parsed !== current) {
-        return walk(parsed);
+        return walk(parsed, context);
       }
       return {};
     }
@@ -72,7 +93,7 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
     if (Array.isArray(current)) {
       const aggregated: { tokens?: number; score?: number } = {};
       for (const item of current) {
-        combine(aggregated, walk(item));
+        combine(aggregated, walk(item, context));
         if (aggregated.tokens !== undefined && aggregated.score !== undefined) {
           break;
         }
@@ -99,14 +120,17 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
       'count',
     ];
 
-    const directTokenCandidates: Array<unknown> = tokenKeys.map((key) => record[key]);
-
-    for (const candidate of directTokenCandidates) {
+    for (const key of tokenKeys) {
+      if (!(key in record)) continue;
+      const candidate = record[key];
       const numeric = asNumber(candidate);
-      if (numeric !== undefined) {
-        result.tokens = numeric;
-        break;
+      if (numeric === undefined) continue;
+      const keyIsReasoning = keyIndicatesReasoning(key);
+      if (requireReasoningContext && !(context.hasReasoningContext || keyIsReasoning)) {
+        continue;
       }
+      result.tokens = numeric;
+      break;
     }
 
     const scoreKeys: Array<keyof typeof record> = ['score', 'reasoningScore', 'confidence'];
@@ -128,7 +152,11 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
     const nestedKeys: Array<keyof typeof record> = ['reasoning', 'metrics', 'usage', 'data', 'details', 'stats'];
     for (const key of nestedKeys) {
       if (key in record) {
-        combine(result, walk(record[key]));
+        const keyIsReasoning = keyIndicatesReasoning(key);
+        const nextContext = {
+          hasReasoningContext: context.hasReasoningContext || keyIsReasoning,
+        };
+        combine(result, walk(record[key], nextContext));
         if (result.tokens !== undefined && result.score !== undefined) {
           break;
         }
@@ -141,7 +169,11 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
         if (skippedKeys.has(key)) {
           continue;
         }
-        combine(result, walk(value));
+        const keyIsReasoning = keyIndicatesReasoning(key);
+        const nextContext = {
+          hasReasoningContext: context.hasReasoningContext || keyIsReasoning,
+        };
+        combine(result, walk(value, nextContext));
         if (result.tokens !== undefined && result.score !== undefined) {
           break;
         }
@@ -151,7 +183,7 @@ const extractReasoningMetrics = (value: unknown): { tokens?: number; score?: num
     return result;
   };
 
-  return walk(value);
+  return walk(value, { hasReasoningContext: options?.initialHasReasoningContext ?? false });
 };
 
 const CONTEXT_PAGINATION_PAGE_SIZE = 20;
@@ -701,38 +733,43 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
       const additionalUsage = isRecord(additionalKwargs?.usage) ? (additionalKwargs?.usage as Record<string, unknown>) : undefined;
       const contentUsage = isRecord(contentJson?.usage) ? (contentJson.usage as Record<string, unknown>) : undefined;
       const metadataUsage = isRecord(metadataRecord?.usage) ? (metadataRecord.usage as Record<string, unknown>) : undefined;
-      const usageDetailsCandidates: unknown[] = [
-        contentUsage?.['output_tokens_details'],
-        contentUsage?.['outputTokensDetails'],
-        usageRecord?.['output_tokens_details'],
-        usageRecord?.['outputTokensDetails'],
-        metadataUsage?.['output_tokens_details'],
-        metadataUsage?.['outputTokensDetails'],
-        additionalUsage?.['output_tokens_details'],
-        additionalUsage?.['outputTokensDetails'],
+      type ReasoningCandidate = { value: unknown; initialReasoning?: boolean };
+
+      const usageDetailsCandidates: ReasoningCandidate[] = [
+        { value: contentUsage?.['output_tokens_details'], initialReasoning: true },
+        { value: contentUsage?.['outputTokensDetails'], initialReasoning: true },
+        { value: usageRecord?.['output_tokens_details'], initialReasoning: true },
+        { value: usageRecord?.['outputTokensDetails'], initialReasoning: true },
+        { value: metadataUsage?.['output_tokens_details'], initialReasoning: true },
+        { value: metadataUsage?.['outputTokensDetails'], initialReasoning: true },
+        { value: additionalUsage?.['output_tokens_details'], initialReasoning: true },
+        { value: additionalUsage?.['outputTokensDetails'], initialReasoning: true },
       ];
 
-      const reasoningCandidates: unknown[] = [
-        message.reasoning,
-        additionalKwargs?.reasoning,
-        tokensRecord?.reasoning,
-        tokensRecord?.reasoningTokens,
-        message.reasoningTokens,
+      const reasoningCandidates: ReasoningCandidate[] = [
+        { value: message.reasoning, initialReasoning: true },
+        { value: additionalKwargs?.reasoning, initialReasoning: true },
+        { value: tokensRecord?.reasoning, initialReasoning: true },
+        { value: tokensRecord?.reasoningTokens, initialReasoning: true },
+        { value: message.reasoningTokens, initialReasoning: true },
         ...usageDetailsCandidates,
-        usageRecord,
-        additionalUsage,
-        contentUsage,
-        metadataUsage,
-        contentJson?.reasoning,
-        metadataRecord?.reasoning,
-        contentJson,
-        metadataRecord,
+        { value: usageRecord },
+        { value: additionalUsage },
+        { value: contentUsage },
+        { value: metadataUsage },
+        { value: contentJson?.reasoning, initialReasoning: true },
+        { value: metadataRecord?.reasoning, initialReasoning: true },
+        { value: contentJson },
+        { value: metadataRecord },
       ];
 
       let reasoningTokens: number | undefined;
       for (const candidate of reasoningCandidates) {
-        if (candidate === undefined) continue;
-        const metrics = extractReasoningMetrics(candidate);
+        if (candidate.value === undefined) continue;
+        const metrics = extractReasoningMetrics(candidate.value, {
+          requireReasoningContext: true,
+          initialHasReasoningContext: candidate.initialReasoning ?? false,
+        });
         if (reasoningTokens === undefined && metrics.tokens !== undefined) {
           reasoningTokens = metrics.tokens;
         }

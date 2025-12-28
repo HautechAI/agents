@@ -158,6 +158,40 @@ describe('RunEventDetails – LLM outputs', () => {
     expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('omits reasoning tokens row when only generic usage totals exist', () => {
+    const event: RunEvent = {
+      id: 'evt-llm-context-no-reasoning',
+      type: 'llm',
+      timestamp: '2024-01-01T00:01:10.000Z',
+      data: {
+        context: [],
+        assistantContext: [
+          {
+            id: 'ctx-assistant-no-reasoning',
+            role: 'assistant',
+            content: 'Assistant output without reasoning',
+            usage: {
+              output_tokens: 120,
+              total_tokens: 200,
+            },
+          },
+        ],
+        response: 'Latest assistant response',
+        model: 'gpt-4o',
+      },
+    };
+
+    render(
+      <MemoryRouter>
+        <RunEventDetails event={event} />
+      </MemoryRouter>,
+    );
+
+    const panel = screen.getByTestId('assistant-context-panel');
+    expect(within(panel).queryByTestId('assistant-context-reasoning')).not.toBeInTheDocument();
+    expect(within(panel).queryByText(/Reasoning tokens:/)).not.toBeInTheDocument();
+  });
+
   it('shows invoked tool calls for llm events using the shared function-call UI', () => {
     const event: RunEvent = {
       id: 'evt-llm-tools',
