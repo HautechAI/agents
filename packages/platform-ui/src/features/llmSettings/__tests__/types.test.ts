@@ -54,4 +54,50 @@ describe('LLM settings provider normalization', () => {
     expect(model.providerKey).toBe('azure');
     expect(model.providerLabel).toBe('Azure OpenAI');
   });
+
+  it('captures canonical LiteLLM identifiers for models', () => {
+    const providers = mapProviders(providerPayload);
+    const providerMap = createProviderOptionMap(providers);
+
+    const modelsPayload: LiteLLMModel[] = [
+      {
+        model_name: 'assistant-prod',
+        model_id: 'litellm-model-001',
+        litellm_params: {
+          model: 'gpt-4o-mini',
+          litellm_provider: 'azure_openai',
+          litellm_credential_name: 'azure-credential',
+        },
+        model_info: { id: 'model-info-001', mode: 'chat' },
+      },
+    ];
+
+    const [model] = mapModels(modelsPayload, providerMap);
+    expect(model.id).toBe('assistant-prod');
+    expect(model.identifier).toBe('litellm-model-001');
+    expect(model.litellmId).toBe('litellm-model-001');
+    expect(model.modelInfoId).toBe('model-info-001');
+  });
+
+  it('falls back to model_info identifiers when LiteLLM id is missing', () => {
+    const providers = mapProviders(providerPayload);
+    const providerMap = createProviderOptionMap(providers);
+
+    const modelsPayload: LiteLLMModel[] = [
+      {
+        model_name: 'assistant-stage',
+        litellm_params: {
+          model: 'gpt-4o-mini',
+          litellm_provider: 'azure_openai',
+          litellm_credential_name: 'azure-credential',
+        },
+        model_info: { id: 'model-info-002', mode: 'chat' },
+      },
+    ];
+
+    const [model] = mapModels(modelsPayload, providerMap);
+    expect(model.identifier).toBe('model-info-002');
+    expect(model.litellmId).toBeUndefined();
+    expect(model.modelInfoId).toBe('model-info-002');
+  });
 });

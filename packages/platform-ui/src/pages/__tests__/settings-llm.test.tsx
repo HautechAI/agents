@@ -973,4 +973,247 @@ describe('Settings/LLM page', () => {
     expect(addModelButton).toBeDisabled();
   });
 
+  it('deletes a model using the LiteLLM identifier and refreshes the list', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const deleteSpy = vi.fn();
+    let modelsCallCount = 0;
+
+    server.use(
+      http.get(abs('/api/settings/llm/admin-status'), () =>
+        HttpResponse.json({
+          configured: true,
+          baseUrl: 'http://127.0.0.1:4000',
+          hasMasterKey: true,
+          provider: 'litellm',
+          adminReachable: true,
+        }),
+      ),
+      http.get(abs('/api/settings/llm/providers'), () =>
+        HttpResponse.json([
+          {
+            provider: 'OpenAI',
+            provider_display_name: 'OpenAI',
+            litellm_provider: 'openai',
+            credential_fields: [],
+            default_model_placeholder: null,
+          },
+        ]),
+      ),
+      http.get(abs('/api/settings/llm/credentials'), () =>
+        HttpResponse.json([
+          {
+            credential_name: 'openai-prod',
+            credential_info: { litellm_provider: 'openai' },
+            credential_values: { api_key: 'sk****prod' },
+          },
+        ]),
+      ),
+      http.get(abs('/api/settings/llm/models'), () => {
+        modelsCallCount += 1;
+        if (modelsCallCount === 1) {
+          return HttpResponse.json({
+            models: [
+              {
+                model_name: 'assistant-prod',
+                model_id: 'litellm-model-123',
+                litellm_params: {
+                  model: 'gpt-4o-mini',
+                  litellm_provider: 'openai',
+                  litellm_credential_name: 'openai-prod',
+                },
+                model_info: { id: 'model-info-123', mode: 'chat' },
+              },
+            ],
+          });
+        }
+        return HttpResponse.json({ models: [] });
+      }),
+      http.get(abs('/api/settings/llm/health-check-modes'), () =>
+        HttpResponse.json({ modes: DEFAULT_HEALTH_CHECK_MODES }),
+      ),
+      http.delete(abs('/api/settings/llm/models/litellm-model-123'), () => {
+        deleteSpy();
+        return HttpResponse.json({ success: true });
+      }),
+    );
+
+    render(
+      <TestProviders>
+        <SettingsLlm />
+      </TestProviders>,
+    );
+
+    await screen.findByText('openai-prod');
+    const modelsTab = screen.getByRole('tab', { name: 'Models' });
+    await user.click(modelsTab);
+    await screen.findByText('assistant-prod');
+
+    await user.click(screen.getByLabelText('Delete model assistant-prod'));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId('llm-model-row-assistant-prod')).not.toBeInTheDocument());
+    expect(notifyMocks.success).toHaveBeenCalledWith('Model deleted');
+  });
+
+  it('surfaces LiteLLM test responses in the model test dialog', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const testSpy = vi.fn();
+
+    server.use(
+      http.get(abs('/api/settings/llm/admin-status'), () =>
+        HttpResponse.json({
+          configured: true,
+          baseUrl: 'http://127.0.0.1:4000',
+          hasMasterKey: true,
+          provider: 'litellm',
+          adminReachable: true,
+        }),
+      ),
+      http.get(abs('/api/settings/llm/providers'), () =>
+        HttpResponse.json([
+          {
+            provider: 'OpenAI',
+            provider_display_name: 'OpenAI',
+            litellm_provider: 'openai',
+            credential_fields: [],
+            default_model_placeholder: null,
+          },
+        ]),
+      ),
+      http.get(abs('/api/settings/llm/credentials'), () =>
+        HttpResponse.json([
+          {
+            credential_name: 'openai-prod',
+            credential_info: { litellm_provider: 'openai' },
+            credential_values: { api_key: 'sk****prod' },
+          },
+        ]),
+      ),
+      http.get(abs('/api/settings/llm/models'), () =>
+        HttpResponse.json({
+          models: [
+            {
+              model_name: 'assistant-prod',
+              model_id: 'litellm-model-123',
+              litellm_params: {
+                model: 'gpt-4o-mini',
+                litellm_provider: 'openai',
+                litellm_credential_name: 'openai-prod',
+              },
+              model_info: { id: 'model-info-123', mode: 'chat' },
+            },
+          ],
+        }),
+      ),
+      http.get(abs('/api/settings/llm/health-check-modes'), () =>
+        HttpResponse.json({ modes: DEFAULT_HEALTH_CHECK_MODES }),
+      ),
+      http.post(abs('/api/settings/llm/models/litellm-model-123/test'), async ({ request }) => {
+        testSpy(await request.json());
+        return HttpResponse.json({ success: true, status: 'ok', detail: 'connected' });
+      }),
+    );
+
+    render(
+      <TestProviders>
+        <SettingsLlm />
+      </TestProviders>,
+    );
+
+    await screen.findByText('openai-prod');
+    const modelsTab = screen.getByRole('tab', { name: 'Models' });
+    await user.click(modelsTab);
+    await screen.findByText('assistant-prod');
+
+    await user.click(screen.getByLabelText('Test model assistant-prod'));
+    await screen.findByRole('heading', { name: 'Test Model — assistant-prod' });
+
+    await user.click(screen.getByRole('button', { name: 'Run Test' }));
+
+    await waitFor(() => expect(testSpy).toHaveBeenCalledTimes(1));
+    await screen.findByText('Test succeeded');
+    expect(screen.getByText(/"status": "ok"/)).toBeInTheDocument();
+    expect(notifyMocks.success).toHaveBeenCalledWith('Model test succeeded');
+  });
+
+  it('shows LiteLLM error payloads in the model test dialog on failure', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    server.use(
+      http.get(abs('/api/settings/llm/admin-status'), () =>
+        HttpResponse.json({
+          configured: true,
+          baseUrl: 'http://127.0.0.1:4000',
+          hasMasterKey: true,
+          provider: 'litellm',
+          adminReachable: true,
+        }),
+      ),
+      http.get(abs('/api/settings/llm/providers'), () =>
+        HttpResponse.json([
+          {
+            provider: 'OpenAI',
+            provider_display_name: 'OpenAI',
+            litellm_provider: 'openai',
+            credential_fields: [],
+            default_model_placeholder: null,
+          },
+        ]),
+      ),
+      http.get(abs('/api/settings/llm/credentials'), () =>
+        HttpResponse.json([
+          {
+            credential_name: 'openai-prod',
+            credential_info: { litellm_provider: 'openai' },
+            credential_values: { api_key: 'sk****prod' },
+          },
+        ]),
+      ),
+      http.get(abs('/api/settings/llm/models'), () =>
+        HttpResponse.json({
+          models: [
+            {
+              model_name: 'assistant-prod',
+              model_id: 'litellm-model-123',
+              litellm_params: {
+                model: 'gpt-4o-mini',
+                litellm_provider: 'openai',
+                litellm_credential_name: 'openai-prod',
+              },
+              model_info: { id: 'model-info-123', mode: 'chat' },
+            },
+          ],
+        }),
+      ),
+      http.get(abs('/api/settings/llm/health-check-modes'), () =>
+        HttpResponse.json({ modes: DEFAULT_HEALTH_CHECK_MODES }),
+      ),
+      http.post(abs('/api/settings/llm/models/litellm-model-123/test'), () =>
+        HttpResponse.json({ error: 'litellm_failure', message: 'bad request' }, { status: 400 }),
+      ),
+    );
+
+    render(
+      <TestProviders>
+        <SettingsLlm />
+      </TestProviders>,
+    );
+
+    await screen.findByText('openai-prod');
+    const modelsTab = screen.getByRole('tab', { name: 'Models' });
+    await user.click(modelsTab);
+    await screen.findByText('assistant-prod');
+
+    await user.click(screen.getByLabelText('Test model assistant-prod'));
+    await screen.findByRole('heading', { name: 'Test Model — assistant-prod' });
+
+    await user.click(screen.getByRole('button', { name: 'Run Test' }));
+
+    await screen.findByText('Test failed');
+    expect(screen.getByText('bad request')).toBeInTheDocument();
+    expect(screen.getByText(/"error": "litellm_failure"/)).toBeInTheDocument();
+    expect(notifyMocks.error).toHaveBeenCalledWith('bad request');
+  });
+
 });

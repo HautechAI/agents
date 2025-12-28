@@ -36,6 +36,9 @@ export type CredentialRecord = {
 
 export type ModelRecord = {
   id: string;
+  identifier: string;
+  litellmId?: string;
+  modelInfoId?: string;
   providerKey: string;
   providerLabel: string;
   model: string;
@@ -229,6 +232,13 @@ export function mapModels(
     const paramsRaw = (item.litellm_params ?? {}) as Record<string, unknown>;
     const modelInfo = (item.model_info ?? {}) as Record<string, unknown>;
 
+    const rawModelName = typeof item.model_name === 'string' ? item.model_name : '';
+    const modelName = rawModelName.trim();
+    const rawLitellmId = typeof item.model_id === 'string' ? item.model_id : '';
+    const litellmId = rawLitellmId.trim();
+    const rawModelInfoId = typeof modelInfo.id === 'string' ? (modelInfo.id as string) : '';
+    const modelInfoId = rawModelInfoId.trim();
+
     const providerKeySource =
       typeof paramsRaw.custom_llm_provider === 'string'
         ? (paramsRaw.custom_llm_provider as string)
@@ -260,8 +270,14 @@ export function mapModels(
       metadata[key] = value;
     }
 
+    const identifier = litellmId || modelInfoId || (modelName.length > 0 ? modelName : '');
+    const displayId = modelName || identifier || 'Unnamed model';
+
     return {
-      id: item.model_name,
+      id: displayId,
+      identifier,
+      litellmId: litellmId || undefined,
+      modelInfoId: modelInfoId || undefined,
       providerKey,
       providerLabel,
       model,

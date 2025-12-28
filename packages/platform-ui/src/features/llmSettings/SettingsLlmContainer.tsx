@@ -23,6 +23,7 @@ import {
   deleteModel,
   testModel,
   type LiteLLMAdminErrorPayload,
+  type LiteLLMHealthResponse,
 } from '@/api/modules/llmSettings';
 import {
   useProviderOptions,
@@ -70,6 +71,27 @@ function describeAdminIssue(error: unknown): string | undefined {
     }
   }
   return error ? toErrorMessage(error) : undefined;
+}
+
+type TestModelError = {
+  message: string;
+  payload?: unknown;
+};
+
+type TestModelState = {
+  model: ModelRecord;
+  result?: LiteLLMHealthResponse;
+  error?: TestModelError;
+};
+
+function resolveModelIdentifier(model: ModelRecord): string {
+  const candidate = model.identifier?.trim();
+  if (candidate) return candidate;
+  const litellmId = model.litellmId?.trim();
+  if (litellmId) return litellmId;
+  const modelInfoId = model.modelInfoId?.trim();
+  if (modelInfoId) return modelInfoId;
+  return model.id;
 }
 
 export function SettingsLlmContainer(): ReactElement {
@@ -225,7 +247,7 @@ export function SettingsLlmContainer(): ReactElement {
   const [credentialDialog, setCredentialDialog] = useState<{ mode: 'create' | 'edit'; credential?: CredentialRecord } | null>(null);
   const [testCredentialState, setTestCredentialState] = useState<CredentialRecord | null>(null);
   const [modelDialog, setModelDialog] = useState<{ mode: 'create' | 'edit'; model?: ModelRecord } | null>(null);
-  const [testModelState, setTestModelState] = useState<ModelRecord | null>(null);
+  const [testModelState, setTestModelState] = useState<TestModelState | null>(null);
   const [deleteState, setDeleteState] = useState<{ type: 'credential' | 'model'; item: CredentialRecord | ModelRecord } | null>(null);
 
   useEffect(() => {
@@ -364,19 +386,29 @@ export function SettingsLlmContainer(): ReactElement {
   });
 
   const testModelMutation = useMutation({
-    mutationFn: async ({ id, mode, overrideModel, input, credentialName }: { id: string; mode?: string; overrideModel?: string; input?: string; credentialName?: string }) => {
-      await testModel(id, {
+    mutationFn: async ({ id, mode, overrideModel, input, credentialName }: { id: string; mode?: string; overrideModel?: string; input?: string; credentialName?: string }) =>
+      testModel(id, {
         mode,
         overrideModel: overrideModel?.trim() ? overrideModel : undefined,
         input,
         credentialName: credentialName?.trim() ? credentialName : undefined,
-      });
+      }),
+    onMutate: () => {
+      setTestModelState((prev) => (prev ? { model: prev.model } : prev));
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
       notifySuccess('Model test succeeded');
-      setTestModelState(null);
+      setTestModelState((prev) => (prev ? { model: prev.model, result: response } : prev));
     },
-    onError: (error) => notifyError(toErrorMessage(error)),
+    onError: (error) => {
+      const payload = axios.isAxiosError(error) ? error.response?.data : undefined;
+      const payloadObject = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
+      const payloadMessage = payloadObject && typeof payloadObject.message === 'string' ? payloadObject.message.trim() : '';
+      const payloadError = payloadObject && typeof payloadObject.error === 'string' ? payloadObject.error.trim() : '';
+      const message = payloadMessage || payloadError || toErrorMessage(error);
+      notifyError(message);
+      setTestModelState((prev) => (prev ? { model: prev.model, error: { message, payload } } : prev));
+    },
   });
 
   const credentialSubmitting = Boolean(
@@ -446,7 +478,7 @@ export function SettingsLlmContainer(): ReactElement {
         }}
         onModelTest={(model) => {
           if (!ensureWritable()) return;
-          setTestModelState(model);
+          setTestModelState({ model });
         }}
         onModelDelete={(model) => {
           if (!ensureWritable()) return;
@@ -509,7 +541,7 @@ export function SettingsLlmContainer(): ReactElement {
         onSubmit={async (payload) => {
           if (!ensureWritable()) return;
           if (modelDialog?.mode === 'edit' && modelDialog.model) {
-            await updateModelMutation.mutateAsync({ id: modelDialog.model.id, payload });
+            await updateModelMutation.mutateAsync({ id: resolveModelIdentifier(modelDialog.model), payload });
           } else {
             await createModelMutation.mutateAsync(payload);
           }
@@ -519,7 +551,9 @@ export function SettingsLlmContainer(): ReactElement {
       {testModelState ? (
         <TestModelDialog
           open={testModelState !== null}
-          model={testModelState}
+          model={testModelState.model}
+          result={testModelState.result}
+          error={testModelState.error}
           healthCheckModes={healthCheckModes}
           healthCheckModesLoading={healthCheckModesLoading}
           submitting={testModelMutation.isPending}
@@ -528,13 +562,17 @@ export function SettingsLlmContainer(): ReactElement {
           }}
           onSubmit={async (values) => {
             if (!ensureWritable()) return;
-            await testModelMutation.mutateAsync({
-              id: testModelState.id,
-              mode: values.mode,
-              overrideModel: values.overrideModel,
-              input: values.input,
-              credentialName: values.credentialName,
-            });
+            try {
+              await testModelMutation.mutateAsync({
+                id: resolveModelIdentifier(testModelState.model),
+                mode: values.mode,
+                overrideModel: values.overrideModel,
+                input: values.input,
+                credentialName: values.credentialName,
+              });
+            } catch {
+              /* handled via onError */
+            }
           }}
         />
       ) : null}
@@ -578,7 +616,7 @@ export function SettingsLlmContainer(): ReactElement {
                   void deleteCredentialMutation.mutateAsync(credential.name);
                 } else {
                   const model = deleteState.item as ModelRecord;
-                  void deleteModelMutation.mutateAsync(model.id);
+                  void deleteModelMutation.mutateAsync(resolveModelIdentifier(model));
                 }
               }}
             >
