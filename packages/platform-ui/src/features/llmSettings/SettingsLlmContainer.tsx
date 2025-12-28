@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import axios from 'axios';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
@@ -93,6 +93,10 @@ function resolveModelIdentifier(model: ModelRecord): string {
   const modelInfoId = model.modelInfoId?.trim();
   if (modelInfoId) return modelInfoId;
   return model.id;
+}
+
+function snapshotFingerprint(snapshot: ModelFormSnapshot | null): string | null {
+  return snapshot ? JSON.stringify(snapshot) : null;
 }
 
 export function SettingsLlmContainer(): ReactElement {
@@ -259,10 +263,7 @@ export function SettingsLlmContainer(): ReactElement {
   const [testResultDialog, setTestResultDialog] = useState<TestResultDialogState | null>(null);
   const [deleteState, setDeleteState] = useState<{ type: 'credential' | 'model'; item: CredentialRecord | ModelRecord } | null>(null);
 
-  const computeSnapshotFingerprint = (snapshot: ModelFormSnapshot | null): string | null =>
-    snapshot ? JSON.stringify(snapshot) : null;
-
-  const modelFormFingerprint = useMemo(() => computeSnapshotFingerprint(modelFormSnapshot), [modelFormSnapshot]);
+  const modelFormFingerprint = useMemo(() => snapshotFingerprint(modelFormSnapshot), [modelFormSnapshot]);
 
   useEffect(() => {
     if (!adminDisabled) return;
@@ -281,6 +282,20 @@ export function SettingsLlmContainer(): ReactElement {
     setModelFormSnapshot(null);
     setModelFormTestState({ status: 'idle' });
   }, [modelDialog]);
+
+  const handleModelFormValuesChange = useCallback((snapshot: ModelFormSnapshot) => {
+    const nextFingerprint = snapshotFingerprint(snapshot);
+    setModelFormSnapshot((prev) => {
+      if (snapshotFingerprint(prev) === nextFingerprint) return prev;
+      return snapshot;
+    });
+    setModelFormTestState((prev) => {
+      if (prev.status === 'pending' || prev.fingerprint === nextFingerprint) {
+        return prev;
+      }
+      return { status: 'idle' };
+    });
+  }, []);
 
   const ensureWritable = () => {
     if (!adminDisabled) return true;
@@ -454,13 +469,13 @@ export function SettingsLlmContainer(): ReactElement {
         input: '',
       }),
     onMutate: ({ snapshot }) => {
-      const fingerprint = computeSnapshotFingerprint(snapshot);
+      const fingerprint = snapshotFingerprint(snapshot);
       setModelFormTestState({ status: 'pending', fingerprint: fingerprint ?? undefined });
       setTestResultDialog(null);
     },
     onSuccess: (response, { snapshot }) => {
       notifySuccess('Model test succeeded');
-      const fingerprint = computeSnapshotFingerprint(snapshot);
+      const fingerprint = snapshotFingerprint(snapshot);
       setModelFormTestState({ status: 'success', fingerprint: fingerprint ?? undefined, result: response });
       const subject = snapshot.name.trim() || snapshot.model || 'New Model';
       setTestResultDialog({
@@ -476,7 +491,7 @@ export function SettingsLlmContainer(): ReactElement {
       const payloadError = payloadObject && typeof payloadObject.error === 'string' ? payloadObject.error.trim() : '';
       const message = payloadMessage || payloadError || toErrorMessage(error);
       notifyError(message);
-      const fingerprint = computeSnapshotFingerprint(snapshot);
+      const fingerprint = snapshotFingerprint(snapshot);
       setModelFormTestState({ status: 'error', fingerprint: fingerprint ?? undefined, error: { message, payload } });
       const subject = snapshot.name.trim() || snapshot.model || 'New Model';
       setTestResultDialog({
@@ -622,16 +637,7 @@ export function SettingsLlmContainer(): ReactElement {
             await createModelMutation.mutateAsync(payload);
           }
         }}
-        onValuesChange={(snapshot) => {
-          setModelFormSnapshot(snapshot);
-          const fingerprint = computeSnapshotFingerprint(snapshot);
-          setModelFormTestState((prev) => {
-            if (prev.fingerprint === fingerprint) {
-              return prev;
-            }
-            return { status: 'idle' };
-          });
-        }}
+        onValuesChange={handleModelFormValuesChange}
         onTest={
           modelDialog?.mode === 'create'
             ? async ({ snapshot, payload }) => {
