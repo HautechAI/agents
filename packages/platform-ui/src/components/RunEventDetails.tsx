@@ -1,8 +1,7 @@
-import { Clock, MessageSquare, Bot, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, ExternalLink } from 'lucide-react';
+import { Clock, MessageSquare, Bot, Brain, Wrench, FileText, Terminal, Users, ChevronDown, ChevronRight, Copy, User, Settings, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { useToolOutputStreaming } from '@/hooks/useToolOutputStreaming';
-import { Badge } from './Badge';
 import { IconButton } from './IconButton';
 import { JsonViewer } from './JsonViewer';
 import { MarkdownContent } from './MarkdownContent';
@@ -731,29 +730,16 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
       ];
 
       let reasoningTokens: number | undefined;
-      let reasoningScore: number | undefined;
       for (const candidate of reasoningCandidates) {
         if (candidate === undefined) continue;
         const metrics = extractReasoningMetrics(candidate);
         if (reasoningTokens === undefined && metrics.tokens !== undefined) {
           reasoningTokens = metrics.tokens;
         }
-        if (reasoningScore === undefined && metrics.score !== undefined) {
-          reasoningScore = metrics.score;
-        }
-        if (reasoningTokens !== undefined && reasoningScore !== undefined) {
+        if (reasoningTokens !== undefined) {
           break;
         }
       }
-
-      const getReasoningVariant = () => {
-        if (reasoningTokens !== undefined) {
-          if (reasoningTokens < 50) return 'secondary';
-          if (reasoningTokens < 150) return 'default';
-          return 'error';
-        }
-        return 'neutral';
-      };
       const toolCallsRaw = message.tool_calls || message.toolCalls || additionalKwargs?.tool_calls;
       const toolCalls = Array.isArray(toolCallsRaw) ? toolCallsRaw.filter(isRecord) : [];
       const hasToolCalls = toolCalls.length > 0;
@@ -793,17 +779,6 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
                 />
               </div>
             )}
-            {(reasoningTokens !== undefined || reasoningScore !== undefined) && (
-              <Badge variant={getReasoningVariant()} className="ml-auto">
-                <span className="text-xs">
-                  {reasoningTokens !== undefined ? (
-                    <span>{reasoningTokens.toLocaleString()} tokens</span>
-                  ) : (
-                    <span>Score: {reasoningScore}</span>
-                  )}
-                </span>
-              </Badge>
-            )}
           </div>
           <div className="ml-5 space-y-3">
             {(role === 'system' || role === 'user') && (
@@ -821,6 +796,17 @@ export function RunEventDetails({ event, runId }: RunEventDetailsProps) {
             {role === 'assistant' && (
               <div className="space-y-3">
                 {renderAssistantContent()}
+                {reasoningTokens !== undefined && (
+                  <div
+                    className="flex items-center gap-2 text-sm text-[var(--agyn-dark)]"
+                    data-testid="assistant-context-reasoning"
+                  >
+                    <Brain className="w-3.5 h-3.5 text-[var(--agyn-purple)]" />
+                    <span className="font-medium">
+                      Reasoning tokens: {reasoningTokens.toLocaleString()}
+                    </span>
+                  </div>
+                )}
                 {hasToolCalls &&
                   renderFunctionCalls(toolCalls, expandedToolCalls, toggleToolCall, `context-${index}`)}
               </div>

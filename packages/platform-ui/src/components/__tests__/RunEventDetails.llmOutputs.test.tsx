@@ -45,7 +45,7 @@ describe('RunEventDetails – LLM outputs', () => {
     expect(screen.getByText('Assistant responses for this call')).toBeInTheDocument();
     const assistantPanel = screen.getByTestId('assistant-context-panel');
     expect(within(assistantPanel).getByText('Persisted assistant output')).toBeInTheDocument();
-    expect(within(assistantPanel).getByText('88 tokens')).toBeInTheDocument();
+    expect(within(assistantPanel).getByText('Reasoning tokens: 88')).toBeInTheDocument();
     expect(screen.getByText('No new context for this call.')).toBeInTheDocument();
 
     const loadMoreButton = screen.getByRole('button', { name: 'Load more' });
@@ -111,7 +111,51 @@ describe('RunEventDetails – LLM outputs', () => {
 
     const panel = screen.getByTestId('assistant-context-panel');
     expect(within(panel).getByText('Assistant reasoning-rich context')).toBeInTheDocument();
-    expect(within(panel).getByText('42 tokens')).toBeInTheDocument();
+    expect(within(panel).getByText('Reasoning tokens: 42')).toBeInTheDocument();
+
+    const reasoningRow = within(panel).getByTestId('assistant-context-reasoning');
+    expect(reasoningRow).toBeInTheDocument();
+  });
+
+  it('renders reasoning tokens row before assistant context tool calls', () => {
+    const event: RunEvent = {
+      id: 'evt-llm-context-ordering',
+      type: 'llm',
+      timestamp: '2024-01-01T00:00:40.000Z',
+      data: {
+        context: [],
+        assistantContext: [
+          {
+            id: 'ctx-assistant-order',
+            role: 'assistant',
+            content: 'Assistant output with tools',
+            reasoning: { tokens: 64 },
+            tool_calls: [
+              {
+                name: 'summarize',
+                arguments: { topic: 'ordering' },
+              },
+            ],
+          },
+        ],
+        response: 'Latest assistant response',
+        model: 'gpt-4o',
+      },
+    };
+
+    render(
+      <MemoryRouter>
+        <RunEventDetails event={event} />
+      </MemoryRouter>,
+    );
+
+    const panel = screen.getByTestId('assistant-context-panel');
+    const reasoningRow = within(panel).getByTestId('assistant-context-reasoning');
+    expect(reasoningRow).toHaveTextContent('Reasoning tokens: 64');
+
+    const toolCallButton = within(panel).getByRole('button', { name: /summarize/i });
+    const relation = reasoningRow.compareDocumentPosition(toolCallButton);
+    expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('shows invoked tool calls for llm events using the shared function-call UI', () => {
