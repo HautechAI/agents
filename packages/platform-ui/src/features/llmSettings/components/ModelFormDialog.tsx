@@ -16,7 +16,9 @@ import { Textarea } from '@/components/Textarea';
 import { Dropdown } from '@/components/Dropdown';
 import { SwitchControl } from '@/components/SwitchControl';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/forms/Form';
+import type { LiteLLMHealthResponse } from '@/api/modules/llmSettings';
 import { createProviderOptionMap, type CredentialRecord, type ModelRecord, type ProviderOption } from '../types';
+import { TestModelResultView, type TestModelErrorState } from './TestModelResultView';
 
 type ModelFormValues = FieldValues & {
   name: string;
@@ -83,6 +85,14 @@ interface ModelFormDialogProps {
   testRequired?: boolean;
   canSubmit?: boolean;
   testStatus?: 'idle' | 'pending' | 'success' | 'error';
+  testResultView?: {
+    visible: boolean;
+    subjectLabel: string;
+    result?: LiteLLMHealthResponse;
+    error?: TestModelErrorState;
+    onBack: () => void;
+    onClose: () => void;
+  };
 }
 
 function toInputString(value: number | undefined): string {
@@ -178,6 +188,7 @@ export function ModelFormDialog({
   testRequired = false,
   canSubmit = true,
   testStatus = 'idle',
+  testResultView,
 }: ModelFormDialogProps): ReactElement {
   const providerMap = useMemo(() => createProviderOptionMap(providers), [providers]);
   const form = useForm<ModelFormValues>({ defaultValues: buildDefaultValues(mode, model) });
@@ -276,20 +287,45 @@ export function ModelFormDialog({
   };
 
   const providerPlaceholder = selectedProvider?.defaultModelPlaceholder ?? 'provider/model-name';
+  const showResultView = Boolean(testResultView?.visible && (testStatus === 'success' || testStatus === 'error'));
+  const successResult = testStatus === 'success';
+  const dialogTitle = showResultView
+    ? testResultView?.subjectLabel ?? 'Test Result'
+    : mode === 'create'
+      ? 'Create Model'
+      : `Edit Model — ${model?.id}`;
+  const dialogDescription = showResultView
+    ? successResult
+      ? 'LiteLLM connection succeeded.'
+      : 'LiteLLM reported an error during testing.'
+    : 'Define LiteLLM model routing and guardrails for agent usage.';
+
+  const handleDialogClose = () => {
+    if (showResultView && testResultView) {
+      testResultView.onClose();
+      return;
+    }
+    onOpenChange(false);
+  };
 
   return (
-    <ScreenDialog open={open} onOpenChange={onOpenChange}>
+    <ScreenDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          handleDialogClose();
+        } else {
+          onOpenChange(next);
+        }
+      }}
+    >
       <ScreenDialogContent className="max-h-[90vh] p-0 sm:max-w-2xl" hideCloseButton>
         <div className="flex max-h-[inherit] flex-col">
           <div className="border-b border-[var(--agyn-border-subtle)] px-6 pb-4 pt-6">
             <div className="flex items-start justify-between gap-4">
               <ScreenDialogHeader className="flex-1 gap-2">
-                <ScreenDialogTitle>
-                  {mode === 'create' ? 'Create Model' : `Edit Model — ${model?.id}`}
-                </ScreenDialogTitle>
-                <ScreenDialogDescription>
-                  Define LiteLLM model routing and guardrails for agent usage.
-                </ScreenDialogDescription>
+                <ScreenDialogTitle>{dialogTitle}</ScreenDialogTitle>
+                <ScreenDialogDescription>{dialogDescription}</ScreenDialogDescription>
               </ScreenDialogHeader>
               <IconButton
                 icon={<X className="h-4 w-4" />}
@@ -299,179 +335,198 @@ export function ModelFormDialog({
                 aria-label="Close dialog"
                 title="Close"
                 className="shrink-0"
-                onClick={() => onOpenChange(false)}
+                onClick={handleDialogClose}
               />
             </div>
           </div>
 
-          <Form {...form}>
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <form id="llm-model-form" onSubmit={handleSubmit} className="grid gap-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  rules={{ required: 'Name is required' }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Model Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="assistant-prod" size="sm" />
-                      </FormControl>
-                      <FormDescription>Unique identifier referenced by agents.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="model"
-                  rules={{ required: 'Model identifier is required' }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Provider Model Identifier</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder={providerPlaceholder} size="sm" />
-                      </FormControl>
-                      <FormDescription>Exact model slug as recognized by the provider.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="credentialName"
-                  rules={{ required: 'Credential is required' }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Credential</FormLabel>
-                      <FormControl>
-                        <Dropdown
-                          value={field.value || undefined}
-                          onValueChange={(value) => field.onChange(value)}
-                          placeholder="Select credential"
-                          options={credentials.map((credentialOption) => ({
-                            value: credentialOption.name,
-                            label: credentialOption.name,
-                          }))}
-                          size="sm"
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {selectedProvider
-                          ? `Provider derived from credential: ${selectedProvider.label}.`
-                          : 'Select a credential to derive provider.'}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="mode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Mode</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="chat" size="sm" />
-                      </FormControl>
-                      <FormDescription>LiteLLM mode (chat, completion, embedding, etc.).</FormDescription>
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <NumericField label="Temperature" name="temperature" control={form.control} placeholder="0.7" />
-                  <NumericField label="Top P" name="topP" control={form.control} placeholder="0.95" />
-                  <NumericField label="Frequency Penalty" name="frequencyPenalty" control={form.control} placeholder="0" />
-                  <NumericField label="Presence Penalty" name="presencePenalty" control={form.control} placeholder="0" />
-                  <NumericField label="Max Tokens" name="maxTokens" control={form.control} placeholder="4096" />
-                  <NumericField label="Requests per Minute" name="rpm" control={form.control} placeholder="600" />
-                  <NumericField label="Tokens per Minute" name="tpm" control={form.control} placeholder="90000" />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="stream"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-md border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel>Enable streaming</FormLabel>
-                        <FormDescription>Allow streaming responses when agents use this model.</FormDescription>
-                      </div>
-                      <FormControl>
-                        <SwitchControl checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="paramsJson"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Advanced Params (JSON)</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} placeholder='{ "timeout": 30 }' className="min-h-[160px] font-mono text-sm" />
-                      </FormControl>
-                      <FormDescription>
-                        Additional LiteLLM parameters encoded as JSON. Leave empty for defaults.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </form>
+          {showResultView ? (
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <TestModelResultView result={testResultView?.result} error={testResultView?.error} />
             </div>
-          </Form>
+          ) : (
+            <Form {...form}>
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <form id="llm-model-form" onSubmit={handleSubmit} className="grid gap-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    rules={{ required: 'Name is required' }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Model Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="assistant-prod" size="sm" />
+                        </FormControl>
+                        <FormDescription>Unique identifier referenced by agents.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="model"
+                    rules={{ required: 'Model identifier is required' }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Provider Model Identifier</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder={providerPlaceholder} size="sm" />
+                        </FormControl>
+                        <FormDescription>Exact model slug as recognized by the provider.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="credentialName"
+                    rules={{ required: 'Credential is required' }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Credential</FormLabel>
+                        <FormControl>
+                          <Dropdown
+                            value={field.value || undefined}
+                            onValueChange={(value) => field.onChange(value)}
+                            placeholder="Select credential"
+                            options={credentials.map((credentialOption) => ({
+                              value: credentialOption.name,
+                              label: credentialOption.name,
+                            }))}
+                            size="sm"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {selectedProvider
+                            ? `Provider derived from credential: ${selectedProvider.label}.`
+                            : 'Select a credential to derive provider.'}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="mode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Mode</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="chat" size="sm" />
+                        </FormControl>
+                        <FormDescription>LiteLLM mode (chat, completion, embedding, etc.).</FormDescription>
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <NumericField label="Temperature" name="temperature" control={form.control} placeholder="0.7" />
+                    <NumericField label="Top P" name="topP" control={form.control} placeholder="0.95" />
+                    <NumericField label="Frequency Penalty" name="frequencyPenalty" control={form.control} placeholder="0" />
+                    <NumericField label="Presence Penalty" name="presencePenalty" control={form.control} placeholder="0" />
+                    <NumericField label="Max Tokens" name="maxTokens" control={form.control} placeholder="4096" />
+                    <NumericField label="Requests per Minute" name="rpm" control={form.control} placeholder="600" />
+                    <NumericField label="Tokens per Minute" name="tpm" control={form.control} placeholder="90000" />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="stream"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-md border p-3">
+                        <div className="space-y-0.5">
+                          <FormLabel>Enable streaming</FormLabel>
+                          <FormDescription>Allow streaming responses when agents use this model.</FormDescription>
+                        </div>
+                        <FormControl>
+                          <SwitchControl checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="paramsJson"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Advanced Params (JSON)</FormLabel>
+                        <FormControl>
+                          <Textarea {...field} placeholder='{ "timeout": 30 }' className="min-h-[160px] font-mono text-sm" />
+                        </FormControl>
+                        <FormDescription>
+                          Additional LiteLLM parameters encoded as JSON. Leave empty for defaults.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </form>
+              </div>
+            </Form>
+          )}
 
           <div className="border-t border-[var(--agyn-border-subtle)] px-6 pb-6">
-            <ScreenDialogFooter className="mt-6 mb-2 sm:mb-4">
-              <Button variant="ghost" size="md" onClick={() => onOpenChange(false)} disabled={submitting}>
-                Cancel
-              </Button>
-              {onTest ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="md"
-                  onClick={handleTest}
-                  disabled={submitting || testPending}
-                >
-                  {testPending ? 'Testing…' : 'Test Model'}
+            {showResultView && testResultView ? (
+              <ScreenDialogFooter className="mt-6 mb-2 sm:mb-4">
+                <Button variant="ghost" size="md" onClick={() => testResultView.onBack()}>
+                  Back to form
                 </Button>
-              ) : null}
-              <Button
-                type="submit"
-                form="llm-model-form"
-                variant="primary"
-                size="md"
-                disabled={submitting || (mode === 'create' && testRequired && !canSubmit)}
-              >
-                {submitting ? 'Saving…' : mode === 'create' ? 'Create Model' : 'Save Changes'}
-              </Button>
-            </ScreenDialogFooter>
-            {mode === 'create' && testRequired ? (
-              <p
-                className={`mt-1 text-xs ${
-                  testStatus === 'success'
-                    ? 'text-[var(--agyn-status-finished)]'
-                    : testStatus === 'error'
-                      ? 'text-[var(--agyn-status-failed)]'
-                      : 'text-[var(--agyn-text-subtle)]'
-                }`}
-              >
-                {testStatus === 'success'
-                  ? 'Test passed for current values.'
-                  : testStatus === 'error'
-                    ? 'Test failed. Update the configuration and try again.'
-                    : testStatus === 'pending'
-                      ? 'Testing current configuration…'
-                      : 'Run a test to enable creation.'}
-              </p>
-            ) : null}
+                <Button variant="primary" size="md" onClick={() => testResultView.onClose()}>
+                  Close
+                </Button>
+              </ScreenDialogFooter>
+            ) : (
+              <>
+                <ScreenDialogFooter className="mt-6 mb-2 sm:mb-4">
+                  <Button variant="ghost" size="md" onClick={handleDialogClose} disabled={submitting}>
+                    Cancel
+                  </Button>
+                  {onTest ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="md"
+                      onClick={handleTest}
+                      disabled={submitting || testPending}
+                    >
+                      {testPending ? 'Testing…' : 'Test Model'}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    form="llm-model-form"
+                    variant="primary"
+                    size="md"
+                    disabled={submitting || (mode === 'create' && testRequired && !canSubmit)}
+                  >
+                    {submitting ? 'Saving…' : mode === 'create' ? 'Create Model' : 'Save Changes'}
+                  </Button>
+                </ScreenDialogFooter>
+                {mode === 'create' && testRequired ? (
+                  <p
+                    className={`mt-1 text-xs ${
+                      testStatus === 'success'
+                        ? 'text-[var(--agyn-status-finished)]'
+                        : testStatus === 'error'
+                          ? 'text-[var(--agyn-status-failed)]'
+                          : 'text-[var(--agyn-text-subtle)]'
+                    }`}
+                  >
+                    {testStatus === 'success'
+                      ? 'Test passed for current values.'
+                      : testStatus === 'error'
+                        ? 'Test failed. Update the configuration and try again.'
+                        : testStatus === 'pending'
+                          ? 'Testing current configuration…'
+                          : 'Run a test to enable creation.'}
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </ScreenDialogContent>

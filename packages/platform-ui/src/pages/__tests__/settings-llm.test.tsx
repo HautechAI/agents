@@ -687,17 +687,20 @@ describe('Settings/LLM page', () => {
     await user.clear(modelInput);
     await user.type(modelInput, 'claude-3-opus');
 
-    const submitButton = within(dialog).getByRole('button', { name: 'Create Model' });
-    expect(submitButton).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Create Model' })).toBeDisabled();
 
     const testButton = within(dialog).getByRole('button', { name: 'Test Model' });
     await user.click(testButton);
 
     const resultDialog = await screen.findByRole('dialog', { name: 'Test Result — anthropic-support' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(within(resultDialog).getByText('Test succeeded')).toBeInTheDocument();
     expect(within(resultDialog).getByText(/"status": "ok"/)).toBeInTheDocument();
-    await user.click(within(resultDialog).getByRole('button', { name: 'Close' }));
+    const backToFormButton = within(resultDialog).getByRole('button', { name: 'Back to form' });
+    await user.click(backToFormButton);
 
+    const formDialog = await screen.findByRole('dialog', { name: /Create Model/i });
+    const submitButton = within(formDialog).getByRole('button', { name: 'Create Model' });
     await waitFor(() => expect(submitButton).toBeEnabled());
 
     await user.click(submitButton);
@@ -776,18 +779,23 @@ describe('Settings/LLM page', () => {
     await user.clear(modelInput);
     await user.type(modelInput, 'gpt-4o-mini');
 
-    const submitButton = within(dialog).getByRole('button', { name: 'Create Model' });
-    expect(submitButton).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Create Model' })).toBeDisabled();
 
     const testButton = within(dialog).getByRole('button', { name: 'Test Model' });
     await user.click(testButton);
 
     const resultDialog = await screen.findByRole('dialog', { name: 'Test Result — openai-live' });
-    await user.click(within(resultDialog).getByRole('button', { name: 'Close' }));
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    const backToFormButton = within(resultDialog).getByRole('button', { name: 'Back to form' });
+    await user.click(backToFormButton);
+
+    const formDialog = await screen.findByRole('dialog', { name: /Create Model/i });
+    const submitButton = within(formDialog).getByRole('button', { name: 'Create Model' });
+    const modelInputAfterResult = within(formDialog).getByLabelText('Provider Model Identifier');
 
     await waitFor(() => expect(submitButton).toBeEnabled());
 
-    await user.type(modelInput, '-latest');
+    await user.type(modelInputAfterResult, '-latest');
     expect(submitButton).toBeDisabled();
   });
 
@@ -1231,6 +1239,7 @@ describe('Settings/LLM page', () => {
 
     await waitFor(() => expect(testSpy).toHaveBeenCalledTimes(1));
     const resultDialog = await screen.findByRole('dialog', { name: 'Test Result — assistant-prod' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(within(resultDialog).getByText('Test succeeded')).toBeInTheDocument();
     expect(within(resultDialog).getByText(/"status": "ok"/)).toBeInTheDocument();
     const backButton = within(resultDialog).getByRole('button', { name: 'Back to test' });
@@ -1314,6 +1323,7 @@ describe('Settings/LLM page', () => {
     await user.click(screen.getByRole('button', { name: 'Run Test' }));
 
     const resultDialog = await screen.findByRole('dialog', { name: 'Test Result — assistant-prod' });
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(within(resultDialog).getByText('Test failed')).toBeInTheDocument();
     expect(within(resultDialog).getByText('bad request')).toBeInTheDocument();
     expect(within(resultDialog).getByText(/"error": "litellm_failure"/)).toBeInTheDocument();

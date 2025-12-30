@@ -37,7 +37,7 @@ import { CredentialFormDialog, type CredentialFormPayload } from './components/C
 import { TestCredentialDialog } from './components/TestCredentialDialog';
 import { ModelFormDialog, type ModelFormPayload, type ModelFormSnapshot } from './components/ModelFormDialog';
 import { TestModelDialog } from './components/TestModelDialog';
-import { TestModelResultDialog, type TestModelErrorState } from './components/TestModelResultDialog';
+import type { TestModelErrorState } from './components/TestModelResultView';
 import { LlmSettingsScreen, type LlmSettingsTab } from '@/components/screens/LlmSettingsScreen';
 
 function toErrorMessage(error: unknown): string {
@@ -78,9 +78,12 @@ type TestModelState = {
   model: ModelRecord;
 };
 
-type TestResultDialogState = {
-  source: 'existing-model' | 'model-draft';
+type ModelFormResultViewState = {
   subjectLabel: string;
+};
+
+type TestModelResultViewState = {
+  status: 'success' | 'error';
   result?: LiteLLMHealthResponse;
   error?: TestModelErrorState;
 };
@@ -259,8 +262,9 @@ export function SettingsLlmContainer(): ReactElement {
     result?: LiteLLMHealthResponse;
     error?: TestModelErrorState;
   }>({ status: 'idle' });
+  const [modelFormResultView, setModelFormResultView] = useState<ModelFormResultViewState | null>(null);
   const [testModelState, setTestModelState] = useState<TestModelState | null>(null);
-  const [testResultDialog, setTestResultDialog] = useState<TestResultDialogState | null>(null);
+  const [testModelResultView, setTestModelResultView] = useState<TestModelResultViewState | null>(null);
   const [deleteState, setDeleteState] = useState<{ type: 'credential' | 'model'; item: CredentialRecord | ModelRecord } | null>(null);
 
   const modelFormFingerprint = useMemo(() => snapshotFingerprint(modelFormSnapshot), [modelFormSnapshot]);
@@ -272,8 +276,9 @@ export function SettingsLlmContainer(): ReactElement {
     setModelDialog(null);
     setModelFormSnapshot(null);
     setModelFormTestState({ status: 'idle' });
+    setModelFormResultView(null);
     setTestModelState(null);
-    setTestResultDialog(null);
+    setTestModelResultView(null);
     setDeleteState(null);
   }, [adminDisabled]);
 
@@ -281,21 +286,28 @@ export function SettingsLlmContainer(): ReactElement {
     if (modelDialog) return;
     setModelFormSnapshot(null);
     setModelFormTestState({ status: 'idle' });
+    setModelFormResultView(null);
   }, [modelDialog]);
 
-  const handleModelFormValuesChange = useCallback((snapshot: ModelFormSnapshot) => {
-    const nextFingerprint = snapshotFingerprint(snapshot);
-    setModelFormSnapshot((prev) => {
-      if (snapshotFingerprint(prev) === nextFingerprint) return prev;
-      return snapshot;
-    });
-    setModelFormTestState((prev) => {
-      if (prev.status === 'pending' || prev.fingerprint === nextFingerprint) {
-        return prev;
+  const handleModelFormValuesChange = useCallback(
+    (snapshot: ModelFormSnapshot) => {
+      const nextFingerprint = snapshotFingerprint(snapshot);
+      if (nextFingerprint !== modelFormFingerprint) {
+        setModelFormResultView(null);
       }
-      return { status: 'idle' };
-    });
-  }, []);
+      setModelFormSnapshot((prev) => {
+        if (snapshotFingerprint(prev) === nextFingerprint) return prev;
+        return snapshot;
+      });
+      setModelFormTestState((prev) => {
+        if (prev.status === 'pending' || prev.fingerprint === nextFingerprint) {
+          return prev;
+        }
+        return { status: 'idle' };
+      });
+    },
+    [modelFormFingerprint],
+  );
 
   const ensureWritable = () => {
     if (!adminDisabled) return true;
@@ -432,15 +444,13 @@ export function SettingsLlmContainer(): ReactElement {
         credentialName: credentialName?.trim() ? credentialName : undefined,
       }),
     onMutate: () => {
-      setTestResultDialog(null);
+      setTestModelResultView(null);
     },
     onSuccess: (response) => {
       notifySuccess('Model test succeeded');
       if (!testModelState) return;
-      const subject = testModelState?.model ? `Test Result — ${testModelState.model.id}` : 'Model test result';
-      setTestResultDialog({
-        source: 'existing-model',
-        subjectLabel: subject,
+      setTestModelResultView({
+        status: 'success',
         result: response,
       });
     },
@@ -452,10 +462,8 @@ export function SettingsLlmContainer(): ReactElement {
       const message = payloadMessage || payloadError || toErrorMessage(error);
       notifyError(message);
       if (!testModelState) return;
-      const subject = testModelState?.model ? `Test Result — ${testModelState.model.id}` : 'Model test result';
-      setTestResultDialog({
-        source: 'existing-model',
-        subjectLabel: subject,
+      setTestModelResultView({
+        status: 'error',
         error: { message, payload },
       });
     },
@@ -471,18 +479,14 @@ export function SettingsLlmContainer(): ReactElement {
     onMutate: ({ snapshot }) => {
       const fingerprint = snapshotFingerprint(snapshot);
       setModelFormTestState({ status: 'pending', fingerprint: fingerprint ?? undefined });
-      setTestResultDialog(null);
+      setModelFormResultView(null);
     },
     onSuccess: (response, { snapshot }) => {
       notifySuccess('Model test succeeded');
       const fingerprint = snapshotFingerprint(snapshot);
       setModelFormTestState({ status: 'success', fingerprint: fingerprint ?? undefined, result: response });
       const subject = snapshot.name.trim() || snapshot.model || 'New Model';
-      setTestResultDialog({
-        source: 'model-draft',
-        subjectLabel: `Test Result — ${subject}`,
-        result: response,
-      });
+      setModelFormResultView({ subjectLabel: `Test Result — ${subject}` });
     },
     onError: (error, { snapshot }) => {
       const payload = axios.isAxiosError(error) ? error.response?.data : undefined;
@@ -494,11 +498,7 @@ export function SettingsLlmContainer(): ReactElement {
       const fingerprint = snapshotFingerprint(snapshot);
       setModelFormTestState({ status: 'error', fingerprint: fingerprint ?? undefined, error: { message, payload } });
       const subject = snapshot.name.trim() || snapshot.model || 'New Model';
-      setTestResultDialog({
-        source: 'model-draft',
-        subjectLabel: `Test Result — ${subject}`,
-        error: { message, payload },
-      });
+      setModelFormResultView({ subjectLabel: `Test Result — ${subject}` });
     },
   });
 
@@ -517,6 +517,34 @@ export function SettingsLlmContainer(): ReactElement {
 
   const providerDefaultForCredential = testCredentialState
     ? providerMap.get(testCredentialState.providerKey)?.defaultModelPlaceholder ?? undefined
+    : undefined;
+
+  const modelFormResultViewProps = modelDialog?.mode === 'create'
+    ? {
+        visible: Boolean(modelFormResultView),
+        subjectLabel: modelFormResultView?.subjectLabel ?? '',
+        result: modelFormTestState.result,
+        error: modelFormTestState.error,
+        onBack: () => setModelFormResultView(null),
+        onClose: () => {
+          setModelFormResultView(null);
+          setModelDialog(null);
+        },
+      }
+    : undefined;
+
+  const testModelResultViewProps = testModelState
+    ? {
+        visible: Boolean(testModelResultView),
+        status: testModelResultView?.status,
+        result: testModelResultView?.result,
+        error: testModelResultView?.error,
+        onBack: testModelResultView ? () => setTestModelResultView(null) : undefined,
+        onClose: () => {
+          setTestModelResultView(null);
+          setTestModelState(null);
+        },
+      }
     : undefined;
 
   return (
@@ -561,14 +589,17 @@ export function SettingsLlmContainer(): ReactElement {
             notifyError('Create a credential before adding a model.');
             return;
           }
+          setModelFormResultView(null);
           setModelDialog({ mode: 'create' });
         }}
         onModelEdit={(model) => {
           if (!ensureWritable()) return;
+          setModelFormResultView(null);
           setModelDialog({ mode: 'edit', model });
         }}
         onModelTest={(model) => {
           if (!ensureWritable()) return;
+          setTestModelResultView(null);
           setTestModelState({ model });
         }}
         onModelDelete={(model) => {
@@ -658,6 +689,7 @@ export function SettingsLlmContainer(): ReactElement {
             : true
         }
         testStatus={modelDialog?.mode === 'create' ? modelFormTestState.status : 'idle'}
+        testResultView={modelFormResultViewProps}
       />
 
       {testModelState ? (
@@ -668,7 +700,10 @@ export function SettingsLlmContainer(): ReactElement {
           healthCheckModesLoading={healthCheckModesLoading}
           submitting={testModelMutation.isPending}
           onOpenChange={(open) => {
-            if (!open) setTestModelState(null);
+            if (!open) {
+              setTestModelResultView(null);
+              setTestModelState(null);
+            }
           }}
           onSubmit={async (values) => {
             if (!ensureWritable()) return;
@@ -684,31 +719,7 @@ export function SettingsLlmContainer(): ReactElement {
               /* handled via onError */
             }
           }}
-        />
-      ) : null}
-
-      {testResultDialog ? (
-        <TestModelResultDialog
-          open={testResultDialog !== null}
-          subjectLabel={testResultDialog.subjectLabel}
-          result={testResultDialog.result}
-          error={testResultDialog.error}
-          onBack={
-            testResultDialog.source === 'existing-model'
-              ? () => {
-                  setTestResultDialog(null);
-                }
-              : undefined
-          }
-          onClose={() => {
-            if (!testResultDialog) return;
-            if (testResultDialog.source === 'existing-model') {
-              setTestResultDialog(null);
-              setTestModelState(null);
-            } else {
-              setTestResultDialog(null);
-            }
-          }}
+          resultView={testModelResultViewProps}
         />
       ) : null}
 
