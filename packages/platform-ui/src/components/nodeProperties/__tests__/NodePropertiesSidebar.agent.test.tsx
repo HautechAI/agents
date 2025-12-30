@@ -296,17 +296,111 @@ describe('NodePropertiesSidebar - agent', () => {
     const promptTextarea = screen.getByPlaceholderText('You are a helpful assistant...') as HTMLTextAreaElement;
     expect(promptTextarea.value).toBe('Available tools:\n{{#tools}}{{title}} - {{prompt}} :: {{description}}\n{{/tools}}');
 
-    const agentPromptTextarea = screen.getByPlaceholderText('Summarize this agent for coordinating tools...') as HTMLTextAreaElement;
-    expect(agentPromptTextarea.value).toBe('');
-    fireEvent.change(agentPromptTextarea, { target: { value: 'Coordinate incidents' } });
-    expect(onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'Coordinate incidents' }));
-
     const fullscreenButton = screen.getByTitle('Open fullscreen markdown editor');
     await user.click(fullscreenButton);
 
     await screen.findByText('Edit your content with live markdown preview');
     expect(document.body).toHaveTextContent(/Call Agent - Escalate immediately :: Escalate immediately/);
     expect(document.body).toHaveTextContent(/Shell Tool - Execute shell commands :: Execute shell commands/);
+
+    const cancelButton = screen.getByRole('button', { name: /cancel/i });
+    await user.click(cancelButton);
+  });
+
+  it('renders manage tool prompts using worker agent system prompts', async () => {
+    const user = userEvent.setup();
+
+    templateStore.set('manageTool', {
+      name: 'manageTool',
+      title: 'Manage Tool',
+      kind: 'Tool',
+      description: 'Coordinate managed agents',
+      sourcePorts: {},
+      targetPorts: {},
+      staticConfigSchema: {},
+    } as TemplateSchema);
+
+    const config: NodeConfig = {
+      kind: 'Agent',
+      title: 'Manager Agent',
+      template: 'agent',
+      name: 'Manager',
+      model: 'gpt-4',
+      systemPrompt: 'Context: {{#tools}}{{prompt}}{{/tools}}',
+    } as NodeConfig;
+    const state: NodeState = { status: 'ready' };
+
+    render(
+      <NodePropertiesSidebar
+        config={config}
+        state={state}
+        onConfigChange={vi.fn()}
+        onProvision={vi.fn()}
+        onDeprovision={vi.fn()}
+        canProvision={false}
+        canDeprovision={true}
+        isActionPending={false}
+        nodeId="agent-1"
+        graphNodes={[
+          {
+            id: 'agent-1',
+            template: 'agent',
+            kind: 'Agent',
+            title: 'Manager Agent',
+            x: 0,
+            y: 0,
+            status: 'ready',
+            config,
+            ports: { inputs: [], outputs: [] },
+          },
+          {
+            id: 'manage-1',
+            template: 'manageTool',
+            kind: 'Tool',
+            title: 'Manage Tool',
+            x: 100,
+            y: 0,
+            status: 'ready',
+            config: { prompt: 'Workers: {{#agents}}{{name}} => {{prompt}};{{/agents}}' },
+            ports: { inputs: [], outputs: [] },
+          },
+          {
+            id: 'worker-1',
+            template: 'agent',
+            kind: 'Agent',
+            title: 'Worker Agent',
+            x: 200,
+            y: 0,
+            status: 'ready',
+            config: { name: 'Worker', systemPrompt: 'Worker summary' },
+            ports: { inputs: [], outputs: [] },
+          },
+        ] as any}
+        graphEdges={[
+          {
+            id: 'edge-agent-manage',
+            source: 'agent-1',
+            target: 'manage-1',
+            sourceHandle: 'tools',
+            targetHandle: '$',
+          },
+          {
+            id: 'edge-manage-worker',
+            source: 'manage-1',
+            target: 'worker-1',
+            sourceHandle: 'agent',
+            targetHandle: '$',
+          },
+        ] as any}
+      />,
+    );
+
+    const fullscreenButton = screen.getByTitle('Open fullscreen markdown editor');
+    await user.click(fullscreenButton);
+
+    expect(
+      await screen.findByText((content) => content.includes('Workers: Worker => Worker summary;')),
+    ).toBeInTheDocument();
 
     const cancelButton = screen.getByRole('button', { name: /cancel/i });
     await user.click(cancelButton);

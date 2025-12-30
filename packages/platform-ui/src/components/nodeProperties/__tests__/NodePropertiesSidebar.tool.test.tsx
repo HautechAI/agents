@@ -5,8 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NodePropertiesSidebar from '../index';
 import type { NodeConfig, NodeState } from '../types';
+import type { TemplateSchema } from '@/api/types/graph';
 
 const latestReferenceProps: { current: any } = { current: null };
+const templateStore = new Map<string, TemplateSchema>();
 
 const latestUpdate = (mockFn: ReturnType<typeof vi.fn>, key: string) => {
   const calls = mockFn.mock.calls;
@@ -53,9 +55,27 @@ vi.mock('../../Dropdown', () => ({
   },
 }));
 
+vi.mock('@/lib/graph/templates.provider', async () => {
+  const actual = await vi.importActual<any>('@/lib/graph/templates.provider');
+  return {
+    ...actual,
+    useTemplatesCache: () => ({
+      templates: Array.from(templateStore.values()),
+      ready: true,
+      error: null,
+      refresh: vi.fn(),
+      getTemplate: (name: string | null | undefined) => {
+        if (!name) return undefined;
+        return templateStore.get(name) ?? undefined;
+      },
+    }),
+  };
+});
+
 describe('NodePropertiesSidebar - shell tool', () => {
   beforeEach(() => {
     latestReferenceProps.current = null;
+    templateStore.clear();
   });
 
   it('renders shell tool controls and propagates config updates', async () => {
@@ -127,6 +147,7 @@ describe('NodePropertiesSidebar - shell tool', () => {
 describe('NodePropertiesSidebar - manage tool', () => {
   beforeEach(() => {
     latestReferenceProps.current = null;
+    templateStore.clear();
   });
 
   it('renders prompt preview in fullscreen editor and updates manage tool config', async () => {
@@ -155,6 +176,17 @@ describe('NodePropertiesSidebar - manage tool', () => {
         isActionPending={false}
         nodeId="manage-1"
         graphNodes={[
+          {
+            id: 'manage-1',
+            template: 'manageTool',
+            kind: 'Tool',
+            title: 'Manage Tool',
+            x: 100,
+            y: 0,
+            status: 'ready',
+            config,
+            ports: { inputs: [], outputs: [] },
+          },
           {
             id: 'agent-1',
             template: 'agent-template',
@@ -190,7 +222,7 @@ describe('NodePropertiesSidebar - manage tool', () => {
     const fullscreenButton = screen.getByTitle('Open fullscreen markdown editor');
     await user.click(fullscreenButton);
 
-    expect(await screen.findByText('Hello Alice (R&D Lead)')).toBeInTheDocument();
+    expect(await screen.findByText((content) => content.includes('Hello Alice (R&D Lead)'))).toBeInTheDocument();
 
     const cancelButton = screen.getByRole('button', { name: /cancel/i });
     await user.click(cancelButton);
@@ -208,6 +240,7 @@ describe('NodePropertiesSidebar - manage tool', () => {
 describe('NodePropertiesSidebar - call agent tool', () => {
   beforeEach(() => {
     latestReferenceProps.current = null;
+    templateStore.clear();
   });
 
   it('updates description and response mode', () => {

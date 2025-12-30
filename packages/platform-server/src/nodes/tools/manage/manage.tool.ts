@@ -8,7 +8,6 @@ import { AgentsPersistenceService } from '../../../agents/agents.persistence.ser
 import type { ErrorResponse } from '../../../utils/error-response';
 import { normalizeError } from '../../../utils/error-response';
 import { CallAgentLinkingService } from '../../../agents/call-agent-linking.service';
-import { renderMustache } from '../../../prompt/mustache.template';
 
 export const ManageInvocationSchema = z
   .object({
@@ -57,13 +56,7 @@ export class ManageFunctionTool extends FunctionTool<typeof ManageInvocationSche
     return ManageInvocationSchema;
   }
   get description() {
-    const template = this.node.config?.prompt;
-    if (typeof template === 'string' && template.trim().length > 0) {
-      const context = this.node.getAgentPromptContext();
-      return renderMustache(template, context);
-    }
-    const description = this.node.config?.description;
-    return typeof description === 'string' && description.length > 0 ? description : 'Manage tool';
+    return this.node.getFallbackDescription();
   }
 
   private getPersistence(): AgentsPersistenceService {

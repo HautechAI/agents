@@ -10,6 +10,9 @@ import { LLMProvisioner } from '../src/llm/provisioners/llm.provisioner';
 import { FunctionTool } from '@agyn/llm';
 import { BaseToolNode } from '../src/nodes/tools/baseToolNode';
 import type { TemplatePortConfig } from '../src/graph/ports.types';
+import { ManageToolNode } from '../src/nodes/tools/manage/manage.node';
+import type { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
+import type { CallAgentLinkingService } from '../src/agents/call-agent-linking.service';
 
 const EmptySchema = z.object({});
 
@@ -147,6 +150,88 @@ describe('AgentNode system prompt templating', () => {
     );
 
     expect(effective.prompts.system).toBe('Manager Tool :: Config prompt :: Config description');
+
+    internals.toolsByName.clear();
+    await moduleRef.close();
+  });
+
+  it('resolves manage tool prompts using worker system prompts', async () => {
+    const { moduleRef, agent: manager } = await createAgentHarness();
+    const worker = await moduleRef.resolve(AgentNode);
+    worker.init({ nodeId: 'worker-agent' });
+    await worker.setConfig({ name: 'Worker', systemPrompt: 'Worker summary' });
+
+    const manageNode = new ManageToolNode({} as AgentsPersistenceService, {} as CallAgentLinkingService);
+    manageNode.init({ nodeId: 'manage-node' });
+    await manageNode.setConfig({ prompt: 'Workers: {{#agents}}{{name}} => {{prompt}};{{/agents}}' });
+    manageNode.addWorker(worker);
+
+    const manageTool = manageNode.getTool();
+
+    const internals = manager as unknown as {
+      toolsByName: Map<
+        string,
+        {
+          tool: FunctionTool;
+          source: { sourceType: 'node'; nodeRef: BaseToolNode<unknown>; className?: string; nodeId?: string };
+        }
+      >;
+    };
+    internals.toolsByName.clear();
+    internals.toolsByName.set(manageTool.name, {
+      tool: manageTool,
+      source: { sourceType: 'node', nodeRef: manageNode, className: 'ManageToolNode' },
+    });
+
+    await manager.setConfig({ name: 'Manager', systemPrompt: 'Context: {{#tools}}{{prompt}}{{/tools}}' });
+
+    const effective = (manager as unknown as {
+      buildEffectiveConfig: (model: string, tools: FunctionTool[]) => { prompts: { system: string } };
+    }).buildEffectiveConfig('gpt-test', [manageTool]);
+
+    expect(effective.prompts.system).toBe('Context: Workers: Worker => Worker summary;');
+
+    internals.toolsByName.clear();
+    await moduleRef.close();
+  });
+
+  it('avoids recursive loops when manage references the parent agent', async () => {
+    const { moduleRef, agent: manager } = await createAgentHarness();
+    await manager.setConfig({ name: 'Manager', systemPrompt: 'Manager instructions: {{#tools}}{{prompt}}{{/tools}}' });
+
+    const worker = await moduleRef.resolve(AgentNode);
+    worker.init({ nodeId: 'worker-agent' });
+    await worker.setConfig({ name: 'Worker', systemPrompt: 'Worker summary' });
+
+    const manageNode = new ManageToolNode({} as AgentsPersistenceService, {} as CallAgentLinkingService);
+    manageNode.init({ nodeId: 'manage-node' });
+    await manageNode.setConfig({ prompt: '{{#agents}}{{name}} => {{prompt}};{{/agents}}' });
+    manageNode.addWorker(worker);
+    manageNode.addWorker(manager);
+
+    const manageTool = manageNode.getTool();
+
+    const internals = manager as unknown as {
+      toolsByName: Map<
+        string,
+        {
+          tool: FunctionTool;
+          source: { sourceType: 'node'; nodeRef: BaseToolNode<unknown>; className?: string; nodeId?: string };
+        }
+      >;
+    };
+    internals.toolsByName.clear();
+    internals.toolsByName.set(manageTool.name, {
+      tool: manageTool,
+      source: { sourceType: 'node', nodeRef: manageNode, className: 'ManageToolNode' },
+    });
+
+    const effective = (manager as unknown as {
+      buildEffectiveConfig: (model: string, tools: FunctionTool[]) => { prompts: { system: string } };
+    }).buildEffectiveConfig('gpt-test', [manageTool]);
+
+    expect(effective.prompts.system).toContain('Worker => Worker summary;');
+    expect(effective.prompts.system).toContain('Manager => Manager instructions: {{#tools}}{{prompt}}{{/tools}};');
 
     internals.toolsByName.clear();
     await moduleRef.close();

@@ -19,7 +19,6 @@ function AgentNodeConfigContent({ config, onConfigChange, nodeId, graphNodes, gr
   const agentModelValue = typeof configRecord.model === 'string' ? (configRecord.model as string) : '';
   const agentSystemPromptValue =
     typeof configRecord.systemPrompt === 'string' ? (configRecord.systemPrompt as string) : '';
-  const agentPromptValue = typeof configRecord.prompt === 'string' ? (configRecord.prompt as string) : '';
   const agentRestrictOutput = configRecord.restrictOutput === true;
   const agentRestrictionMessageValue =
     typeof configRecord.restrictionMessage === 'string'
@@ -125,13 +124,6 @@ function AgentNodeConfigContent({ config, onConfigChange, nodeId, graphNodes, gr
     [onConfigChange],
   );
 
-  const handleAgentPromptChange = useCallback(
-    (value: string) => {
-      onConfigChange?.({ prompt: value });
-    },
-    [onConfigChange],
-  );
-
   const handleAgentRestrictOutputChange = useCallback(
     (checked: boolean) => {
       onConfigChange?.({ restrictOutput: checked });
@@ -174,7 +166,6 @@ function AgentNodeConfigContent({ config, onConfigChange, nodeId, graphNodes, gr
       role={agentRoleInput}
       model={agentModelValue}
       systemPrompt={agentSystemPromptValue}
-      prompt={agentPromptValue}
       restrictOutput={agentRestrictOutput}
       restrictionMessage={agentRestrictionMessageValue}
       restrictionMaxInjections={agentRestrictionMaxInjectionsValue}
@@ -189,7 +180,6 @@ function AgentNodeConfigContent({ config, onConfigChange, nodeId, graphNodes, gr
       onRoleBlur={handleAgentRoleBlur}
       onModelChange={handleAgentModelChange}
       onSystemPromptChange={handleAgentSystemPromptChange}
-      onPromptChange={handleAgentPromptChange}
       onRestrictOutputChange={handleAgentRestrictOutputChange}
       onRestrictionMessageChange={handleAgentRestrictionMessageChange}
       onRestrictionMaxInjectionsChange={handleAgentRestrictionMaxInjectionsChange}

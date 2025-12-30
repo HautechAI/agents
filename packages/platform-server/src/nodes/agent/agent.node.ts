@@ -34,6 +34,7 @@ import { ThreadTransportService } from '../../messaging/threadTransport.service'
 import { normalizeError } from '../../utils/error-response';
 
 import { BaseToolNode } from '../tools/baseToolNode';
+import { ManageToolNode } from '../tools/manage/manage.node';
 import { BufferMessage, MessagesBuffer, ProcessBuffer } from './messagesBuffer';
 
 export const DEFAULT_SYSTEM_PROMPT = 'You are a helpful AI assistant.';
@@ -67,12 +68,6 @@ export const AgentStaticConfigSchema = z
       .default(DEFAULT_SYSTEM_PROMPT)
       .describe('System prompt injected at the start of each conversation turn.')
       .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 6 } }),
-    prompt: z
-      .string()
-      .max(8192)
-      .optional()
-      .describe('Optional prompt metadata shared with managing tools.')
-      .meta({ 'ui:widget': 'textarea', 'ui:options': { rows: 4 } }),
     // Agent-side message buffer handling (exposed for Agent static config)
     debounceMs: z.number().int().min(0).default(0).describe('Debounce window (ms) for agent-side message buffer.'),
     whenBusy: z
@@ -313,11 +308,6 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
     if (typeof sanitized.role === 'string' && sanitized.role.length === 0) {
       delete sanitized.role;
     }
-    if (typeof sanitized.prompt === 'string') {
-      const trimmedPrompt = sanitized.prompt.trim();
-      sanitized.prompt = trimmedPrompt.length > 0 ? trimmedPrompt : undefined;
-      if (!sanitized.prompt) delete sanitized.prompt;
-    }
     await super.setConfig(sanitized);
   }
 
@@ -441,7 +431,10 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
     return trimmed.length > 0 ? trimmed : undefined;
   }
 
-  private buildToolMustacheContext(tools: FunctionTool[]): Array<{ name: string; title: string; description: string; prompt: string }> {
+  private buildToolMustacheContext(
+    tools: FunctionTool[],
+    state: AgentPromptResolutionState,
+  ): Array<{ name: string; title: string; description: string; prompt: string }> {
     return tools.map((tool) => {
       const entry = this.toolsByName.get(tool.name);
       const nodeRef = entry?.source.sourceType === 'node' ? entry.source.nodeRef : undefined;
@@ -451,12 +444,79 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
       const configDescription = this.readConfigString(configRecord, 'description');
       const configPrompt = this.readConfigString(configRecord, 'prompt');
 
-      const description = configDescription ?? tool.description ?? '';
-      const prompt = configPrompt ?? description;
-      const title = configTitle ?? templateMeta?.title ?? tool.name;
+      const description = this.pickFirstNonEmpty(configDescription, tool.description);
+      const prompt = this.resolveToolPrompt(tool, entry, state, {
+        configPrompt,
+        fallbackDescription: description,
+      });
+      const title = this.pickFirstNonEmpty(configTitle, templateMeta?.title, tool.name);
 
       return { name: tool.name, title, description, prompt };
     });
+  }
+
+  private resolveToolPrompt(
+    tool: FunctionTool,
+    entry: RegisteredTool | undefined,
+    state: AgentPromptResolutionState,
+    context: { configPrompt?: string; fallbackDescription: string },
+  ): string {
+    const nodeRef = entry?.source.sourceType === 'node' ? entry.source.nodeRef : undefined;
+    const fallback = this.pickFirstNonEmpty(
+      context.configPrompt,
+      context.fallbackDescription,
+      tool.description,
+    );
+
+    if (!nodeRef) {
+      return fallback;
+    }
+
+    const cached = state.cache.tools.get(nodeRef);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (state.stack.tools.has(nodeRef)) {
+      const cycleFallback = nodeRef instanceof ManageToolNode ? nodeRef.getFallbackDescription() : fallback;
+      const resolved = this.pickFirstNonEmpty(cycleFallback, fallback);
+      state.cache.tools.set(nodeRef, resolved);
+      return resolved;
+    }
+
+    const trackInStack = !(nodeRef instanceof ManageToolNode);
+    if (trackInStack) {
+      state.stack.tools.add(nodeRef);
+    }
+    let resolved: string | undefined;
+    try {
+      if (nodeRef instanceof ManageToolNode) {
+        resolved = nodeRef.resolvePrompt(state);
+      } else {
+        resolved = context.configPrompt ?? context.fallbackDescription;
+      }
+    } catch {
+      resolved = undefined;
+    } finally {
+      if (trackInStack) {
+        state.stack.tools.delete(nodeRef);
+      }
+    }
+
+    const normalized = this.pickFirstNonEmpty(resolved, fallback);
+    state.cache.tools.set(nodeRef, normalized);
+    return normalized;
+  }
+
+  private pickFirstNonEmpty(...values: Array<string | undefined>): string {
+    for (const value of values) {
+      if (typeof value !== 'string') continue;
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+    return '';
   }
 
   private async injectBufferedMessages(
@@ -485,10 +545,36 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
     return this.memoryConnector ? this.memoryConnector.getPlacement() : 'none';
   }
 
+  public resolveEffectiveSystemPrompt(
+    state?: AgentPromptResolutionState,
+    toolsOverride?: FunctionTool[],
+  ): string {
+    const resolution = state ?? createAgentPromptResolutionState();
+    const cached = resolution.cache.agents.get(this);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (resolution.stack.agents.has(this)) {
+      const fallback = this.pickFirstNonEmpty(this.config.systemPrompt, DEFAULT_SYSTEM_PROMPT);
+      resolution.cache.agents.set(this, fallback);
+      return fallback;
+    }
+
+    resolution.stack.agents.add(this);
+    const template = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    const tools = toolsOverride ?? this.getActiveTools();
+    const toolContext = this.buildToolMustacheContext(tools, resolution);
+    const rendered = renderMustache(template, { tools: toolContext });
+    const systemPrompt = this.pickFirstNonEmpty(rendered, template, DEFAULT_SYSTEM_PROMPT);
+    resolution.stack.agents.delete(this);
+    resolution.cache.agents.set(this, systemPrompt);
+    return systemPrompt;
+  }
+
   private buildEffectiveConfig(model: string, tools: FunctionTool[]): EffectiveAgentConfig {
-    const systemTemplate = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
-    const toolContext = this.buildToolMustacheContext(tools);
-    const systemPrompt = renderMustache(systemTemplate, { tools: toolContext });
+    const resolution = createAgentPromptResolutionState();
+    const systemPrompt = this.resolveEffectiveSystemPrompt(resolution, tools);
 
     return {
       model,
@@ -867,4 +953,28 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
   }
 
   // Static introspection removed per hotfix; rely on TemplateRegistry meta.
+}
+
+export type AgentPromptResolutionState = {
+  cache: {
+    agents: Map<AgentNode, string>;
+    tools: Map<BaseToolNode<unknown>, string>;
+  };
+  stack: {
+    agents: Set<AgentNode>;
+    tools: Set<BaseToolNode<unknown>>;
+  };
+};
+
+export function createAgentPromptResolutionState(): AgentPromptResolutionState {
+  return {
+    cache: {
+      agents: new Map<AgentNode, string>(),
+      tools: new Map<BaseToolNode<unknown>, string>(),
+    },
+    stack: {
+      agents: new Set<AgentNode>(),
+      tools: new Set<BaseToolNode<unknown>>(),
+    },
+  };
 }
