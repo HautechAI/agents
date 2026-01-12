@@ -49,7 +49,7 @@ export const RunEventStatusValues: ReadonlyArray<RunEventStatus> = ['pending', '
 const isRunEventType = (value: string): value is RunEventType => (RunEventTypeValues as ReadonlyArray<string>).includes(value);
 const isRunEventStatus = (value: string): value is RunEventStatus => (RunEventStatusValues as ReadonlyArray<string>).includes(value);
 
-const THREAD_MESSAGE_MAX_LENGTH = 8000;
+const THREAD_MESSAGE_MAX_LENGTH = 100000;
 
 export class ListRunMessagesQueryDto {
   @IsIn(RunMessageTypeValues)

@@ -168,8 +168,12 @@ function containerDisplayName(container: ContainerItem): string {
   return container.name;
 }
 
+const MAX_MESSAGE_LENGTH_LABEL = THREAD_MESSAGE_MAX_LENGTH.toLocaleString();
+const MESSAGE_LENGTH_LIMIT_PROMPT = `Please enter a message up to ${MAX_MESSAGE_LENGTH_LABEL} characters.`;
+const MESSAGE_LENGTH_LIMIT_NOTIFICATION = `Messages are limited to ${MAX_MESSAGE_LENGTH_LABEL} characters.`;
+
 const sendMessageErrorMap: Record<string, string> = {
-  bad_message_payload: 'Please enter a message up to 8000 characters.',
+  bad_message_payload: MESSAGE_LENGTH_LIMIT_PROMPT,
   thread_not_found: 'Thread not found. It may have been removed.',
   thread_closed: 'This thread is resolved. Reopen it to send messages.',
   agent_unavailable: 'Agent is not currently available for this thread.',
@@ -178,7 +182,7 @@ const sendMessageErrorMap: Record<string, string> = {
 };
 
 const createThreadErrorMap: Record<string, string> = {
-  bad_message_payload: 'Please enter a message up to 8000 characters.',
+  bad_message_payload: MESSAGE_LENGTH_LIMIT_PROMPT,
   agent_unavailable: 'Agent is not currently available for new threads.',
   agent_unready: 'Agent is starting up. Try again shortly.',
   create_failed: 'Failed to create the thread. Please retry.',
@@ -604,10 +608,9 @@ export function AgentsThreads() {
         lastPersistedTextRef.current = '';
         return;
       }
-      const limited = value.slice(0, THREAD_MESSAGE_MAX_LENGTH);
-      if (limited === lastPersistedTextRef.current) return;
-      writeDraft(threadId, limited, userEmail);
-      lastPersistedTextRef.current = limited;
+      if (value === lastPersistedTextRef.current) return;
+      writeDraft(threadId, value, userEmail);
+      lastPersistedTextRef.current = value;
     },
     [userEmail],
   );
@@ -2017,7 +2020,7 @@ export function AgentsThreads() {
           return;
         }
         if (trimmed.length > THREAD_MESSAGE_MAX_LENGTH) {
-          notifyError('Messages are limited to 8000 characters.');
+          notifyError(MESSAGE_LENGTH_LIMIT_NOTIFICATION);
           return;
         }
         createThread({ draftId: draft.id, agentNodeId, text: trimmed });
@@ -2031,7 +2034,7 @@ export function AgentsThreads() {
         return;
       }
       if (trimmed.length > THREAD_MESSAGE_MAX_LENGTH) {
-        notifyError('Messages are limited to 8000 characters.');
+        notifyError(MESSAGE_LENGTH_LIMIT_NOTIFICATION);
         return;
       }
       cancelDraftSave();

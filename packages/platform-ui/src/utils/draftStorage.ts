@@ -1,6 +1,6 @@
 const STORAGE_PREFIX = 'ui.draft.threads';
 const STORAGE_VERSION = 1;
-export const THREAD_MESSAGE_MAX_LENGTH = 8000;
+export const THREAD_MESSAGE_MAX_LENGTH = 100000;
 
 type DraftRecord = {
   version: number;
@@ -36,7 +36,7 @@ export function readDraft(threadId: string, userEmail?: string | null): { text: 
     if (!parsed || typeof parsed !== 'object') return null;
     if (parsed.version !== STORAGE_VERSION) return null;
     if (typeof parsed.text !== 'string') return null;
-    const text = parsed.text.slice(0, THREAD_MESSAGE_MAX_LENGTH);
+    const text = parsed.text;
     return {
       text,
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date(0).toISOString(),
@@ -56,10 +56,9 @@ export function writeDraft(threadId: string, text: string, userEmail?: string | 
     clearDraft(threadId, userEmail);
     return;
   }
-  const limited = text.slice(0, THREAD_MESSAGE_MAX_LENGTH);
   const payload: DraftRecord = {
     version: STORAGE_VERSION,
-    text: limited,
+    text,
     updatedAt: new Date().toISOString(),
     userEmail: typeof userEmail === 'string' && userEmail.trim().length > 0 ? userEmail : null,
   };
