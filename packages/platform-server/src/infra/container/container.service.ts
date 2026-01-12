@@ -13,6 +13,8 @@ import { ContainerRegistry } from './container.registry';
 import { mapInspectMounts } from './container.mounts';
 import { createUtf8Collector, demuxDockerMultiplex } from './containerStream.util';
 
+const INTERACTIVE_EXEC_CLOSE_CAPTURE_LIMIT = 256 * 1024; // 256 KiB of characters (~512 KiB memory)
+
 const DEFAULT_IMAGE = 'mcr.microsoft.com/vscode/devcontainers/base';
 
 export type ContainerOpts = {
@@ -376,8 +378,8 @@ export class ContainerService {
 
     const stdoutStream = new PassThrough();
     const stderrStream = new PassThrough();
-    const stdoutCollector = createUtf8Collector();
-    const stderrCollector = createUtf8Collector();
+    const stdoutCollector = createUtf8Collector(INTERACTIVE_EXEC_CLOSE_CAPTURE_LIMIT);
+    const stderrCollector = createUtf8Collector(INTERACTIVE_EXEC_CLOSE_CAPTURE_LIMIT);
     const append = (collector: ReturnType<typeof createUtf8Collector>, chunk: Buffer | string) => {
       collector.append(chunk);
     };
@@ -435,6 +437,9 @@ export class ContainerService {
       hijackStream.pipe(stdoutStream);
     }
 
+    const execDetails = await exec.inspect();
+    const execId = execDetails.ID ?? 'unknown';
+
     const close = async (): Promise<{ exitCode: number; stdout: string; stderr: string }> => {
       try {
         hijackStream.end();
@@ -447,16 +452,22 @@ export class ContainerService {
       const exitCode = details.ExitCode ?? -1;
       const stdout = stdoutCollector.getText();
       const stderrText = demux ? stderrCollector.getText() : '';
+      if (stdoutCollector.isTruncated() || stderrCollector.isTruncated()) {
+        this.warn('Interactive exec close output truncated', {
+          container: inspectData.Id.substring(0, 12),
+          execId,
+          limit: INTERACTIVE_EXEC_CLOSE_CAPTURE_LIMIT,
+        });
+      }
       return { exitCode, stdout, stderr: stderrText };
     };
 
-    const execDetails = await exec.inspect();
     return {
       stdin: hijackStream,
       stdout: stdoutStream,
       stderr: demux ? stderrStream : undefined,
       close,
-      execId: execDetails.ID,
+      execId,
     };
   }
 
