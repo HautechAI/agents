@@ -13,6 +13,7 @@ import type { TemplatePortConfig } from '../src/graph/ports.types';
 import { ManageToolNode } from '../src/nodes/tools/manage/manage.node';
 import type { AgentsPersistenceService } from '../src/agents/agents.persistence.service';
 import type { CallAgentLinkingService } from '../src/agents/call-agent-linking.service';
+import type { TemplateRegistry } from '../src/graph-core/templateRegistry';
 
 const EmptySchema = z.object({});
 
@@ -152,6 +153,84 @@ describe('AgentNode system prompt templating', () => {
     expect(effective.prompts.system).toBe('Manager Tool :: Config prompt :: Config description');
 
     internals.toolsByName.clear();
+    await moduleRef.close();
+  });
+
+  it('uses configured description when prompt is absent', async () => {
+    const { moduleRef, agent } = await createAgentHarness();
+    const tool = new StaticFunctionTool({ name: 'alpha', description: '' });
+    const stubNode = new StubToolNode({ title: 'Alpha Tool', description: 'Config description' });
+
+    const internals = agent as unknown as {
+      toolsByName: Map<
+        string,
+        {
+          tool: FunctionTool;
+          source: { sourceType: 'node'; nodeRef: BaseToolNode<unknown>; className?: string; nodeId?: string };
+        }
+      >;
+    };
+    internals.toolsByName.clear();
+    internals.toolsByName.set(tool.name, {
+      tool,
+      source: { sourceType: 'node', nodeRef: stubNode, className: 'StubToolNode' },
+    });
+
+    await agent.setConfig({ systemPrompt: '{{#tools}}{{prompt}}{{/tools}}' });
+
+    const effective = (agent as unknown as {
+      buildEffectiveConfig: (model: string, tools: FunctionTool[]) => { prompts: { system: string } };
+    }).buildEffectiveConfig('gpt-test', [tool]);
+
+    expect(effective.prompts.system).toBe('Config description');
+
+    internals.toolsByName.clear();
+    await moduleRef.close();
+  });
+
+  it('uses template description when config prompt and description are absent', async () => {
+    const { moduleRef, agent } = await createAgentHarness();
+    const tool = new StaticFunctionTool({ name: 'beta', description: '' });
+    const stubNode = new StubToolNode({ title: 'Beta Tool' });
+
+    const registryMock = {
+      findTemplateByCtor: vi.fn().mockReturnValue('stub-template'),
+      getMeta: vi.fn().mockImplementation((template: string) =>
+        template === 'stub-template'
+          ? { title: 'Stub Template', kind: 'tool', description: 'Template description' }
+          : undefined,
+      ),
+    } as unknown as TemplateRegistry;
+
+    const agentWithRegistry = agent as unknown as { getTemplateRegistry: () => TemplateRegistry | null };
+    const originalGetRegistry = agentWithRegistry.getTemplateRegistry;
+    agentWithRegistry.getTemplateRegistry = vi.fn(() => registryMock);
+
+    const internals = agent as unknown as {
+      toolsByName: Map<
+        string,
+        {
+          tool: FunctionTool;
+          source: { sourceType: 'node'; nodeRef: BaseToolNode<unknown>; className?: string; nodeId?: string };
+        }
+      >;
+    };
+    internals.toolsByName.clear();
+    internals.toolsByName.set(tool.name, {
+      tool,
+      source: { sourceType: 'node', nodeRef: stubNode, className: 'StubToolNode' },
+    });
+
+    await agent.setConfig({ systemPrompt: '{{#tools}}{{prompt}}{{/tools}}' });
+
+    const effective = (agent as unknown as {
+      buildEffectiveConfig: (model: string, tools: FunctionTool[]) => { prompts: { system: string } };
+    }).buildEffectiveConfig('gpt-test', [tool]);
+
+    expect(effective.prompts.system).toBe('Template description');
+
+    internals.toolsByName.clear();
+    agentWithRegistry.getTemplateRegistry = originalGetRegistry;
     await moduleRef.close();
   });
 

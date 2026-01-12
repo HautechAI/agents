@@ -9,6 +9,7 @@ import Node from '../nodes/base/Node';
 export interface TemplateMeta {
   title: string;
   kind: TemplateKind;
+  description?: string;
 }
 
 export type TemplateCtor = Constructor<Node>;

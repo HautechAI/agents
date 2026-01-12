@@ -443,11 +443,17 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
       const configTitle = this.readConfigString(configRecord, 'title');
       const configDescription = this.readConfigString(configRecord, 'description');
       const configPrompt = this.readConfigString(configRecord, 'prompt');
+      const templateDescription = typeof templateMeta?.description === 'string' ? templateMeta.description.trim() : undefined;
 
-      const description = this.pickFirstNonEmpty(configDescription, tool.description);
-      const prompt = this.resolveToolPrompt(tool, entry, state, {
+      const description = this.pickFirstNonEmpty(configDescription, templateDescription, tool.description);
+      const fallbackPrompt = this.pickFirstNonEmpty(
         configPrompt,
-        fallbackDescription: description,
+        configDescription,
+        templateDescription,
+        tool.description,
+      );
+      const prompt = this.resolveToolPrompt(tool, entry, state, {
+        fallbackPrompt,
       });
       const title = this.pickFirstNonEmpty(configTitle, templateMeta?.title, tool.name);
 
@@ -459,14 +465,10 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
     tool: FunctionTool,
     entry: RegisteredTool | undefined,
     state: AgentPromptResolutionState,
-    context: { configPrompt?: string; fallbackDescription: string },
+    context: { fallbackPrompt: string },
   ): string {
     const nodeRef = entry?.source.sourceType === 'node' ? entry.source.nodeRef : undefined;
-    const fallback = this.pickFirstNonEmpty(
-      context.configPrompt,
-      context.fallbackDescription,
-      tool.description,
-    );
+    const fallback = this.pickFirstNonEmpty(context.fallbackPrompt, tool.description);
 
     if (!nodeRef) {
       return fallback;
@@ -477,8 +479,9 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
       return cached;
     }
 
+    const cycleFallback = nodeRef instanceof ManageToolNode ? nodeRef.getFallbackDescription() : fallback;
+
     if (state.stack.tools.has(nodeRef)) {
-      const cycleFallback = nodeRef instanceof ManageToolNode ? nodeRef.getFallbackDescription() : fallback;
       const resolved = this.pickFirstNonEmpty(cycleFallback, fallback);
       state.cache.tools.set(nodeRef, resolved);
       return resolved;
@@ -490,11 +493,7 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
     }
     let resolved: string | undefined;
     try {
-      if (nodeRef instanceof ManageToolNode) {
-        resolved = nodeRef.resolvePrompt(state);
-      } else {
-        resolved = context.configPrompt ?? context.fallbackDescription;
-      }
+      resolved = nodeRef instanceof ManageToolNode ? nodeRef.resolvePrompt(state) : fallback;
     } catch {
       resolved = undefined;
     } finally {
@@ -503,7 +502,7 @@ export class AgentNode extends Node<AgentStaticConfig> implements OnModuleInit {
       }
     }
 
-    const normalized = this.pickFirstNonEmpty(resolved, fallback);
+    const normalized = this.pickFirstNonEmpty(resolved, cycleFallback, fallback);
     state.cache.tools.set(nodeRef, normalized);
     return normalized;
   }
