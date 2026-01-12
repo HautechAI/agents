@@ -486,7 +486,7 @@ export class ContainerService {
     const inspectData = await container.inspect();
     if (!inspectData) throw new Error(`Container '${containerId}' not found`);
 
-    const follow = options.follow ?? true;
+    const followFlag = options.follow !== false;
     const stdout = options.stdout ?? true;
     const stderr = options.stderr ?? true;
     const tail = typeof options.tail === 'number' ? options.tail : undefined;
@@ -494,19 +494,38 @@ export class ContainerService {
     const timestamps = options.timestamps ?? false;
 
     const rawStream = await new Promise<NodeJS.ReadableStream | Buffer>((resolve, reject) => {
+      if (followFlag) {
+        container.logs(
+          {
+            follow: true,
+            stdout,
+            stderr,
+            tail,
+            since,
+            timestamps,
+          },
+          (err: Error | null, stream?: NodeJS.ReadableStream) => {
+            if (err) return reject(err);
+            if (!stream) return reject(new Error('No log stream returned'));
+            resolve(stream);
+          },
+        );
+        return;
+      }
+
       container.logs(
         {
-          follow,
+          follow: false,
           stdout,
           stderr,
           tail,
           since,
           timestamps,
         },
-        (err, stream) => {
+        (err: Error | null, stream?: Buffer) => {
           if (err) return reject(err);
           if (!stream) return reject(new Error('No log stream returned'));
-          resolve(stream as NodeJS.ReadableStream | Buffer);
+          resolve(stream);
         },
       );
     });
