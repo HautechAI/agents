@@ -16,7 +16,7 @@ type LegacyInteractiveExecSession = {
   stdin: NodeJS.WritableStream;
   stdout: NodeJS.ReadableStream;
   stderr?: NodeJS.ReadableStream;
-  close: () => Promise<{ exitCode: number }>;
+  close: () => Promise<WorkspaceExecResult>;
 };
 
 type LegacyInteractiveExecRequest = {

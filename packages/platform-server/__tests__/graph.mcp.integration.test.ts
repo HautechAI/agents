@@ -109,7 +109,7 @@ class StubWorkspaceProvider extends WorkspaceProvider {
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     setImmediate(() => stdout.end());
-    return { stdin, stdout, stderr: undefined, close: async () => ({ exitCode: 0 }) };
+    return { stdin, stdout, stderr: undefined, close: async () => ({ exitCode: 0, stdout: '', stderr: '' }) };
   }
 
   async openTerminalSession(
@@ -127,7 +127,7 @@ class StubWorkspaceProvider extends WorkspaceProvider {
       stdout,
       stderr: undefined,
       resize: async () => undefined,
-      close: async () => ({ exitCode: 0 }),
+      close: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
     };
   }
 

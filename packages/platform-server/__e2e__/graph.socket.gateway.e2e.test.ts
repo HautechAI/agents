@@ -106,7 +106,7 @@ class WorkspaceProviderStub extends WorkspaceProvider {
       stdin,
       stdout,
       stderr,
-      close: async () => ({ exitCode: 0 }),
+      close: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
     };
   }
 
@@ -128,7 +128,7 @@ class WorkspaceProviderStub extends WorkspaceProvider {
       stdout,
       stderr,
       resize: async () => undefined,
-      close: async () => ({ exitCode: 0 }),
+      close: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
     };
   }
 

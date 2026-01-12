@@ -340,7 +340,7 @@ export class ContainerService {
     stdin: NodeJS.WritableStream;
     stdout: NodeJS.ReadableStream;
     stderr?: NodeJS.ReadableStream;
-    close: () => Promise<{ exitCode: number }>;
+    close: () => Promise<{ exitCode: number; stdout: string; stderr: string }>;
     execId: string;
   }> {
     const container = this.docker.getContainer(containerId);
@@ -376,6 +376,26 @@ export class ContainerService {
 
     const stdoutStream = new PassThrough();
     const stderrStream = new PassThrough();
+    const stdoutCollector = createUtf8Collector();
+    const stderrCollector = createUtf8Collector();
+    const append = (collector: ReturnType<typeof createUtf8Collector>, chunk: Buffer | string) => {
+      collector.append(chunk);
+    };
+    const flushCollectors = () => {
+      try {
+        stdoutCollector.flush();
+      } catch {
+        // ignore flush errors
+      }
+      try {
+        stderrCollector.flush();
+      } catch {
+        // ignore flush errors
+      }
+    };
+    stdoutStream.on('data', (chunk: Buffer | string) => append(stdoutCollector, chunk));
+    stdoutStream.on('end', flushCollectors);
+    stdoutStream.on('close', flushCollectors);
 
     // Hijacked stream is duplex (readable+writeable)
     const hijackStream: NodeJS.ReadWriteStream = (await new Promise<NodeJS.ReadWriteStream>((resolve, reject) => {
@@ -401,11 +421,21 @@ export class ContainerService {
         stdout.pipe(stdoutStream);
         stderr.pipe(stderrStream);
       }
+      stderrStream.on('data', (chunk: Buffer | string) => append(stderrCollector, chunk));
+      const flushStderr = () => {
+        try {
+          stderrCollector.flush();
+        } catch {
+          // ignore flush errors
+        }
+      };
+      stderrStream.on('end', flushStderr);
+      stderrStream.on('close', flushStderr);
     } else {
       hijackStream.pipe(stdoutStream);
     }
 
-    const close = async (): Promise<{ exitCode: number }> => {
+    const close = async (): Promise<{ exitCode: number; stdout: string; stderr: string }> => {
       try {
         hijackStream.end();
       } catch {
@@ -413,7 +443,11 @@ export class ContainerService {
       }
       // Wait a short grace period; then inspect
       const details = await exec.inspect();
-      return { exitCode: details.ExitCode ?? -1 };
+      flushCollectors();
+      const exitCode = details.ExitCode ?? -1;
+      const stdout = stdoutCollector.getText();
+      const stderrText = demux ? stderrCollector.getText() : '';
+      return { exitCode, stdout, stderr: stderrText };
     };
 
     const execDetails = await exec.inspect();

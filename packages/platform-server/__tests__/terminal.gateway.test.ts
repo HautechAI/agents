@@ -148,7 +148,7 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
       stdinBuffer += chunk.toString();
     });
     const stdout = new PassThrough();
-    const closeExec = vi.fn().mockResolvedValue({ exitCode: 0 });
+    const closeExec = vi.fn().mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
 
     const providerMocks = {
       openInteractiveExec: vi.fn().mockResolvedValue({
@@ -255,7 +255,7 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
       openInteractiveExec: vi.fn().mockImplementation(() => {
         const stdin = new PassThrough();
         const stdout = new PassThrough();
-        const closeExec = vi.fn().mockResolvedValue({ exitCode: 0 });
+        const closeExec = vi.fn().mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
         return {
           stdin,
           stdout,
@@ -342,7 +342,7 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
 
     const stdin = new PassThrough();
     const stdout = new PassThrough();
-    const closeExec = vi.fn().mockResolvedValue({ exitCode: 0 });
+    const closeExec = vi.fn().mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
     const providerMocks = {
       openInteractiveExec: vi.fn().mockResolvedValue({
         stdin,
@@ -440,7 +440,7 @@ describe('ContainerTerminalGateway (custom websocket server)', () => {
 
       const stdin = new PassThrough();
       const stdout = new PassThrough();
-      const closeExec = vi.fn().mockResolvedValue({ exitCode: 0 });
+      const closeExec = vi.fn().mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
 
       const providerMocks = {
         openInteractiveExec: vi.fn().mockResolvedValue({

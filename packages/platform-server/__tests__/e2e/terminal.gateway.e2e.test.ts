@@ -96,7 +96,7 @@ class TestWorkspaceProvider extends WorkspaceProvider {
     const close = async () => {
       this.closeCalls += 1;
       setImmediate(() => stdout.end());
-      return { exitCode: 0 };
+      return { exitCode: 0, stdout: '', stderr: '' };
     };
 
     const execId = 'exec-test';

@@ -106,12 +106,12 @@ function createInProcessMock() {
     });
 
     const close = async () => {
-      if (closed) return { exitCode: 0 };
+      if (closed) return { exitCode: 0, stdout: '', stderr: '' };
       closed = true;
       stdin.end();
       stdout.end();
       stderr.end();
-      return { exitCode: 0 };
+      return { exitCode: 0, stdout: '', stderr: '' };
     };
 
     return { stdin, stdout, stderr, close };
