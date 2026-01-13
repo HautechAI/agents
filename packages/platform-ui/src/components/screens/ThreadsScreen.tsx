@@ -36,6 +36,7 @@ import { THREAD_MESSAGE_MAX_LENGTH } from '@/utils/draftStorage';
 import { useThreadSoundNotifications } from '@/hooks/useThreadSoundNotifications';
 
 const UNKNOWN_AGENT_LABEL = '(unknown agent)';
+const MESSAGE_LENGTH_LIMIT_LABEL = THREAD_MESSAGE_MAX_LENGTH.toLocaleString();
 
 interface ThreadsScreenProps {
   threads: Thread[];
@@ -255,26 +256,34 @@ export default function ThreadsScreen({
     );
   };
 
-  const renderComposer = (sendDisabled: boolean) => (
-    <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] p-4">
-      <MarkdownComposer
-        value={inputValue}
-        onChange={(next) => onInputValueChange?.(next)}
-        placeholder="Type a message..."
-        minLines={1}
-        maxLines={8}
-        onSend={() => {
-          if (!onSendMessage) return;
-          onSendMessage(inputValue, { threadId: selectedThreadId ?? null });
-        }}
-        sendDisabled={sendDisabled}
-        isSending={isSendMessagePending}
-        textareaProps={{
-          maxLength: THREAD_MESSAGE_MAX_LENGTH,
-        }}
-      />
-    </div>
-  );
+  const renderComposer = ({ baseDisabled, trimmedLength }: { baseDisabled: boolean; trimmedLength: number }) => {
+    const lengthExceeded = trimmedLength > THREAD_MESSAGE_MAX_LENGTH;
+    const sendDisabled = baseDisabled || lengthExceeded;
+    const trimmedLabel = trimmedLength.toLocaleString();
+
+    return (
+      <div className="border-t border-[var(--agyn-border-subtle)] bg-[var(--agyn-bg-light)] p-4">
+        <MarkdownComposer
+          value={inputValue}
+          onChange={(next) => onInputValueChange?.(next)}
+          placeholder="Type a message..."
+          minLines={1}
+          maxLines={8}
+          onSend={() => {
+            if (!onSendMessage) return;
+            onSendMessage(inputValue, { threadId: selectedThreadId ?? null });
+          }}
+          sendDisabled={sendDisabled}
+          isSending={isSendMessagePending}
+        />
+        {lengthExceeded ? (
+          <div className="mt-2 text-xs text-[var(--agyn-red)]">
+            Message exceeds the {MESSAGE_LENGTH_LIMIT_LABEL} character limit (current: {trimmedLabel} characters).
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderDetailContent = () => {
     if (detailError) {
@@ -287,12 +296,11 @@ export default function ThreadsScreen({
 
     if (draftMode) {
       const trimmedInputValue = inputValue.trim();
+      const trimmedLength = trimmedInputValue.length;
       const hasRecipient = Boolean(draftRecipientId);
-      const hasMessage = trimmedInputValue.length > 0;
-      const withinLengthLimit = inputValue.length <= THREAD_MESSAGE_MAX_LENGTH;
-      const baseDisabled = !onSendMessage || !selectedThreadId || isSendMessagePending;
-      const draftSendDisabled =
-        baseDisabled || !hasRecipient || !hasMessage || !withinLengthLimit;
+      const hasMessage = trimmedLength > 0;
+      const draftBaseDisabled =
+        !onSendMessage || !selectedThreadId || isSendMessagePending || !hasRecipient || !hasMessage;
 
       return (
         <>
@@ -321,7 +329,7 @@ export default function ThreadsScreen({
           <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-[var(--agyn-gray)]">
             Start your new conversation with the agent
           </div>
-          {renderComposer(draftSendDisabled)}
+          {renderComposer({ baseDisabled: draftBaseDisabled, trimmedLength })}
         </>
       );
     }
@@ -364,6 +372,7 @@ export default function ThreadsScreen({
       return trimmed && trimmed.length > 0 ? trimmed : UNKNOWN_AGENT_LABEL;
     })();
     const agentDisplayRole = resolvedSelectedThread.agentRole?.trim();
+    const conversationTrimmedLength = inputValue.trim().length;
 
     return (
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -584,7 +593,10 @@ export default function ThreadsScreen({
           />
         </div>
 
-        {renderComposer(!onSendMessage || !selectedThreadId || isSendMessagePending)}
+        {renderComposer({
+          baseDisabled: !onSendMessage || !selectedThreadId || isSendMessagePending,
+          trimmedLength: conversationTrimmedLength,
+        })}
         {isLoading ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm">
             <Loader2 className="mr-2 h-4 w-4 animate-spin text-[var(--agyn-gray)]" />

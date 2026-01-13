@@ -45,13 +45,14 @@ describe('writeDraft / readDraft', () => {
     expect(new Date(stored!.updatedAt).toString()).not.toBe('Invalid Date');
   });
 
-  it('truncates drafts to the message max length', () => {
+  it('retains full drafts beyond the message limit', () => {
     const longText = 'x'.repeat(THREAD_MESSAGE_MAX_LENGTH + 100);
     writeDraft(THREAD_ID, longText, USER_EMAIL);
 
     const stored = readDraft(THREAD_ID, USER_EMAIL);
 
-    expect(stored?.text.length).toBe(THREAD_MESSAGE_MAX_LENGTH);
+    expect(stored?.text.length).toBe(longText.length);
+    expect(stored?.text).toBe(longText);
   });
 
   it('clears storage when writing an empty draft', () => {

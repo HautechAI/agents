@@ -104,6 +104,16 @@ describe('AgentsThreadsController POST /api/agents/threads/:threadId/messages', 
     });
   });
 
+  it('rejects when message exceeds limit', async () => {
+    const { controller } = await setup();
+    const overLimit = 'a'.repeat(100001);
+
+    await expect(controller.sendThreadMessage('thread-1', { text: overLimit })).rejects.toMatchObject({
+      status: 400,
+      response: { error: 'bad_message_payload' },
+    });
+  });
+
   it('returns not found when thread does not exist', async () => {
     const { controller } = await setup({ thread: null, latestAgentNodeId: null });
     expect.assertions(2);

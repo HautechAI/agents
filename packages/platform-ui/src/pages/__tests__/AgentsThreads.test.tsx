@@ -9,6 +9,7 @@ import { TestProviders, server, abs } from '../../../__tests__/integration/testU
 import type { PersistedGraph } from '@agyn/shared';
 import type { TemplateSchema } from '@/api/types/graph';
 import type { MarkdownComposerProps } from '../../components/MarkdownComposer';
+import { THREAD_MESSAGE_MAX_LENGTH } from '@/utils/draftStorage';
 
 const notifyMocks = vi.hoisted(() => ({
   success: vi.fn(),
@@ -64,6 +65,8 @@ vi.mock('../../components/MarkdownComposer', () => {
 
   return { MarkdownComposer: MockMarkdownComposer };
 });
+
+const MESSAGE_LIMIT_PROMPT = `Please enter a message up to ${THREAD_MESSAGE_MAX_LENGTH.toLocaleString()} characters.`;
 
 function t(offsetMs: number) {
   return new Date(1700000000000 + offsetMs).toISOString();
@@ -935,10 +938,15 @@ describe('AgentsThreads page', () => {
       });
 
       overwriteComposer(editor, '');
-      overwriteComposer(editor, 'a'.repeat(8001));
+      const overLimitText = 'a'.repeat(THREAD_MESSAGE_MAX_LENGTH + 1);
+      const limitLabel = THREAD_MESSAGE_MAX_LENGTH.toLocaleString();
+      const overLimitLabel = (THREAD_MESSAGE_MAX_LENGTH + 1).toLocaleString();
+      const warningMessage = `Message exceeds the ${limitLabel} character limit (current: ${overLimitLabel} characters).`;
+      overwriteComposer(editor, overLimitText);
       await waitFor(() => {
-        expect(getComposerText(editor).length).toBeLessThanOrEqual(8000);
+        expect(getComposerText(editor).length).toBe(overLimitText.length);
       });
+      await screen.findByText(warningMessage);
       await waitFor(() => {
         expect(sendButton).toBeDisabled();
       });
@@ -1066,7 +1074,7 @@ describe('AgentsThreads page', () => {
     });
 
     it.each([
-      { status: 400, code: 'bad_message_payload', message: 'Please enter a message up to 8000 characters.' },
+      { status: 400, code: 'bad_message_payload', message: MESSAGE_LIMIT_PROMPT },
       { status: 404, code: 'parent_not_found', message: 'Parent thread not found. It may have been removed.' },
       { status: 503, code: 'agent_unavailable', message: 'Agent is not currently available for new threads.' },
       { status: 503, code: 'agent_unready', message: 'Agent is starting up. Try again shortly.' },

@@ -113,7 +113,7 @@ describe('AgentsThreadsController POST /api/agents/threads', () => {
     const { controller, createThreadWithInitialMessage } = await setup();
 
     await expect(
-      controller.createThread({ text: 'a'.repeat(8001), agentNodeId: 'agent-1' } as any),
+      controller.createThread({ text: 'a'.repeat(100001), agentNodeId: 'agent-1' } as any),
     ).rejects.toMatchObject({
       status: 400,
       response: { error: 'bad_message_payload' },
