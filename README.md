@@ -173,6 +173,7 @@ Key environment variables (server) from packages/platform-server/.env.example an
   - NCPS_URL_SERVER, NCPS_URL_CONTAINER (default http://ncps:8501)
   - NCPS_PUBKEY_PATH (default /pubkey), fetch/refresh/backoff settings
   - NIX_ALLOWED_CHANNELS, NIX_* cache limits
+  - `/api/nix/resolve-repo` supports public GitHub repositories only; private repositories are not supported.
 - CORS:
   - CORS_ORIGINS — comma-separated allowed origins
 - Misc:

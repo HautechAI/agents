@@ -273,15 +273,8 @@ export class NixRepoController {
 
   private async execGit(args: string[], signal: AbortSignal): Promise<string> {
     const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
-    const token = this.config.githubToken?.trim();
-    const finalArgs = [...args];
-    if (token) {
-      const header = `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-      finalArgs.unshift(`http.extraHeader=${header}`);
-      finalArgs.unshift('-c');
-    }
     return new Promise((resolve, reject) => {
-      execFile('git', finalArgs, { signal, env, windowsHide: true, maxBuffer: 5 * 1024 * 1024 }, (error, stdout, stderr) => {
+      execFile('git', args, { signal, env, windowsHide: true, maxBuffer: 5 * 1024 * 1024 }, (error, stdout, stderr) => {
         if (error) {
           const abortName = (error as Error).name;
           const abortCode = (error as NodeJS.ErrnoException).code;
