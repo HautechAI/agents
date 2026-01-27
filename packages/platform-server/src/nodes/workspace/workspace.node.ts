@@ -98,8 +98,24 @@ export class WorkspaceNode extends Node<ContainerProviderStaticConfig> {
   }
 
   async provide(threadId: string): Promise<WorkspaceHandle> {
-    const selected = this.config?.platform as string | undefined;
-    const platform: Platform | undefined = selected === 'auto' ? undefined : (selected ?? DEFAULT_PLATFORM);
+    const rawSelection = (this.config as Record<string, unknown> | undefined)?.platform;
+
+    let platform: Platform | undefined;
+    if (rawSelection === undefined) {
+      platform = DEFAULT_PLATFORM;
+    } else if (rawSelection === 'auto') {
+      platform = undefined;
+    } else if (typeof rawSelection === 'string') {
+      const supported = (SUPPORTED_PLATFORMS as readonly string[]).includes(rawSelection);
+      if (!supported) {
+        throw new Error(
+          `Unsupported workspace platform override: ${rawSelection}. Expected one of ${SUPPORTED_PLATFORMS.join(', ')} or 'auto'.`,
+        );
+      }
+      platform = rawSelection as Platform;
+    } else {
+      throw new Error('Workspace platform override must be a string.');
+    }
     const networkName = this.configService.workspaceNetworkName;
 
     const { spec, nixConfigInjected } = await this.buildWorkspaceSpec(threadId, networkName);

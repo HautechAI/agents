@@ -63,6 +63,15 @@ describe('WorkspaceNode platform selection', () => {
     expect(provider.ensureCalls[0]?.key.platform).toBe('linux/amd64');
   });
 
+  it('propagates explicit linux/arm64 override', async () => {
+    const { node, provider } = await createWorkspaceNode({ platform: 'linux/arm64' });
+
+    await node.provide('thread-arm64');
+
+    expect(provider.ensureCalls).toHaveLength(1);
+    expect(provider.ensureCalls[0]?.key.platform).toBe('linux/arm64');
+  });
+
   it('omits platform override when auto is selected', async () => {
     const { node, provider } = await createWorkspaceNode({}, 'auto');
 
@@ -70,5 +79,14 @@ describe('WorkspaceNode platform selection', () => {
 
     expect(provider.ensureCalls).toHaveLength(1);
     expect(provider.ensureCalls[0]?.key.platform).toBeUndefined();
+  });
+
+  it('throws when platform selection is invalid', async () => {
+    const { node, provider } = await createWorkspaceNode({}, 'windows/amd64');
+
+    await expect(node.provide('thread-invalid')).rejects.toThrowError(
+      /Unsupported workspace platform override: windows\/amd64/,
+    );
+    expect(provider.ensureCalls).toHaveLength(0);
   });
 });
