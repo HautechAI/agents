@@ -318,6 +318,9 @@ export class AgentsThreadsController {
       if (error instanceof ThreadParentNotFoundError || (error instanceof Error && error.message === 'parent_not_found')) {
         throw new NotFoundException({ error: 'parent_not_found' });
       }
+      if (error instanceof Error && error.message === 'thread_parent_owner_mismatch') {
+        throw new NotFoundException({ error: 'parent_not_found' });
+      }
       if (error instanceof Error && (error.message === 'thread_alias_required' || error.message === 'agent_node_id_required')) {
         throw new BadRequestException({ error: 'bad_message_payload' });
       }

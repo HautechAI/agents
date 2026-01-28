@@ -141,4 +141,19 @@ describe('AgentsThreadsController POST /api/agents/threads', () => {
       response: { error: 'parent_not_found' },
     });
   });
+
+  it('maps thread_parent_owner_mismatch errors to parent_not_found', async () => {
+    const createThreadWithInitialMessage = vi.fn(async () => {
+      throw new Error('thread_parent_owner_mismatch');
+    });
+    const getThreadById = vi.fn(async () => ({ id: 'parent', ownerUserId: principal.userId }));
+    const { controller } = await setup({ createThreadWithInitialMessage, getThreadById });
+
+    await expect(
+      controller.createThread({ text: 'hello', agentNodeId: 'agent-1', parentId: 'parent-1' } as any, principal),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: { error: 'parent_not_found' },
+    });
+  });
 });
